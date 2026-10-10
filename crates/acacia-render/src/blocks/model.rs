@@ -21,6 +21,8 @@ pub const BED: &str = "geometry.acacia.bed";
 pub const MOB_HEAD: [&str; 2] = ["geometry.acacia.mob_head", "geometry.acacia.mob_head.wall"];
 pub const PLAYER_HEAD: [&str; 2] = ["geometry.acacia.player_head", "geometry.acacia.player_head.wall"];
 pub const DRAGON_HEAD: [&str; 2] = ["geometry.acacia.dragon_head", "geometry.acacia.dragon_head.wall"];
+/// Java's `PiglinHeadModel`: the pack has no geometry for it.
+pub const PIGLIN_HEAD: [&str; 2] = ["geometry.acacia.piglin_head", "geometry.acacia.piglin_head.wall"];
 /// Standing and on a wall.
 pub const BANNERS: [&str; 2] = ["geometry.acacia.banner", "geometry.acacia.banner.wall"];
 /// An item frame's back plate and the wooden border drawn with it: on a wall, on a floor and
@@ -179,6 +181,7 @@ pub fn classify(state: &BlockState) -> Option<BlockModel> {
         "creeper_head" => (MOB_HEAD, "skulls/creeper"),
         "player_head" => (PLAYER_HEAD, "steve"),
         "dragon_head" => (DRAGON_HEAD, "dragon/dragon"),
+        "piglin_head" => (PIGLIN_HEAD, "piglin/piglin"),
         _ => return None,
     };
     let facing = int("facing_direction");

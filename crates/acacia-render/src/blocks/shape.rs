@@ -45,11 +45,9 @@ pub struct ModelFace {
 }
 
 const INVISIBLE: &[&str] = &[
-    "air", "light_block", "structure_void", "barrier", "bubble_column", "tripwire",
+    "air", "light_block", "structure_void", "barrier", "bubble_column",
     "frame", "glow_frame", "moving_block", "piston_arm_collision", "sticky_piston_arm_collision",
 ];
-/// Rendered as nothing for now: it needs a model of its own.
-const UNSUPPORTED: &[&str] = &["piglin_head"];
 /// Blocks that cling to the faces `multi_face_direction_bits` names.
 const SPREADING: &[&str] = &["glow_lichen", "sculk_vein", "resin_clump"];
 
@@ -87,9 +85,6 @@ pub fn classify(state: &BlockState) -> Shape {
     if !state.boxes.is_empty() {
         return Shape::Boxes(state.boxes.iter().map(|b| to_box16(b.min, b.max)).collect());
     }
-    if UNSUPPORTED.iter().any(|n| name.contains(n)) {
-        return Shape::None;
-    }
     let flat = |h: u8| Shape::Boxes(Box::new([[0, 0, 0, 16, h, 16]]));
     let bits = |key: &str| state.property(key).and_then(|v| v.parse::<u8>().ok()).unwrap_or(0);
     let bit = |bits: u8, n: u8| bits >> n & 1 == 1;
@@ -104,6 +99,8 @@ pub fn classify(state: &BlockState) -> Shape {
             let b = bits("multi_face_direction_bits");
             sheets([bit(b, 0), bit(b, 1), bit(b, 4), bit(b, 2), bit(b, 3), bit(b, 5)])
         }
+        // A string a pixel over the floor, both ways across the block: which way it runs is not read.
+        "trip_wire" | "tripwire" => Shape::Boxes(Box::new([[0, 1, 7, 16, 1, 9], [7, 1, 0, 9, 1, 16]])),
         "lever" => Shape::Boxes(Box::new(lever(state.property("lever_direction").unwrap_or("up_north_south")))),
         "powder_snow" | "end_gateway" => Shape::Cube,
         // Sheets without thickness: edges would show as seams between a portal's blocks.

@@ -9,7 +9,7 @@ use glam::{Mat4, Vec3, Vec4};
 
 use super::bake::{self, Mesh};
 use super::geometry::{self, Geometry};
-use crate::blocks::model::{BANNER_TEXTURE, BANNERS, BED, CHEST, DOUBLE_CHEST, DRAGON_HEAD, FRAME, FRAME_BORDER_TEXTURE, FRAME_TEXTURES, FRAME_TILTS, HANGING_SIGNS, MOB_HEAD, PLAYER_HEAD, SIGN, WALL_SIGN};
+use crate::blocks::model::{BANNER_TEXTURE, BANNERS, BED, CHEST, DOUBLE_CHEST, DRAGON_HEAD, FRAME, FRAME_BORDER_TEXTURE, FRAME_TEXTURES, FRAME_TILTS, HANGING_SIGNS, MOB_HEAD, PIGLIN_HEAD, PLAYER_HEAD, SIGN, WALL_SIGN};
 
 const BUILT_IN: &str = include_str!("block_models.json");
 /// Signs and banners are drawn at two thirds of their model.
@@ -39,6 +39,9 @@ pub(super) fn meshes(pack: &HashMap<String, Geometry>) -> Vec<(&'static str, Mes
     for id in BANNERS {
         add(id, built_in.get(id), sign);
     }
+    // Built on the floor already; on a wall it hangs as the pack's heads do.
+    add(PIGLIN_HEAD[0], built_in.get(PIGLIN_HEAD[0]), Mat4::IDENTITY);
+    add(PIGLIN_HEAD[1], built_in.get(PIGLIN_HEAD[0]), Mat4::from_translation(Vec3::new(0.0, 0.25, 0.25)));
     for (ids, tilt) in FRAME.into_iter().zip(FRAME_TILTS) {
         for (id, source) in ids.into_iter().zip(FRAME[0]) {
             add(id, built_in.get(source), crate::item::framed::tilted(tilt));
