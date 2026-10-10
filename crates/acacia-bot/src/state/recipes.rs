@@ -104,6 +104,11 @@ impl RecipeBook {
         self.multi.get(uuid).copied()
     }
 
+    /// Every multi recipe's UUID and network id.
+    pub fn multi_recipes(&self) -> impl Iterator<Item = (&str, u32)> {
+        self.multi.iter().map(|(uuid, id)| (uuid.as_str(), *id))
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &Recipe> {
         self.recipes.iter()
     }
