@@ -30,13 +30,16 @@ pub(super) fn draw(list: &mut DrawList, skin: &mut Skin, lang: &Lang, screen: &S
     }
     let cursor = inventory.cursor.as_ref().and_then(|s| skin.item(s));
     let mut picks = picks(skin, inventory);
+    // A list longer than its window shows how far it is scrolled.
+    let hidden = picks.len().saturating_sub(layout.picks().map_or(usize::MAX, |p| p.columns * p.rows));
+    let scrolled = (hidden > 0).then(|| first as f32 / hidden as f32);
     picks.drain(..first.min(picks.len()));
     let shown = picked.map(|p| p.and_then(|i| i.checked_sub(first)));
     for stack in creative.iter().flat_map(|(stacks, ..)| *stacks) {
         picks.push(Pick { icons: skin.icon(stack).map(|icon| (icon, 1, 1.0)).into_iter().collect(), label: String::new() });
     }
     let note = inventory.cost.filter(|_| inventory.bench == Some(Bench::Anvil)).map(|levels| format!("Enchantment Cost: {levels}"));
-    let contents = Contents { slot: &|slot| icons.get(&slot).copied(), cursor, progress: inventory.progress, picks: &picks, picked: shown, name, note: note.as_deref(), creative: creative.map(|(_, tab, scrolled)| (tab, scrolled)) };
+    let contents = Contents { slot: &|slot| icons.get(&slot).copied(), cursor, progress: inventory.progress, picks: &picks, picked: shown, scrolled, name, note: note.as_deref(), creative: creative.map(|(_, tab, scrolled)| (tab, scrolled)) };
     let title = match (&inventory.trade, &inventory.container) {
         _ if creative.is_some() => inventory::TABS[creative.map_or(0, |c| c.1)].to_owned(),
         (Some(trade), _) => lang.translate(&trade.title, &[]),

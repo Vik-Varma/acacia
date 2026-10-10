@@ -67,6 +67,16 @@ impl Layout {
         }
     }
 
+    /// A pick list's scroller: its top-left at rest, its size and how far down it travels
+    /// (Java's `StonecutterScreen` and `MerchantScreen`).
+    fn scroller(self) -> Option<([f32; 2], [f32; 2], f32)> {
+        match self {
+            Layout::Bench(Bench::Stonecutter) => Some(([119.0, 15.0], [12.0, 15.0], 39.0)),
+            Layout::Trade => Some(([94.0, 18.0], [6.0, 27.0], 113.0)),
+            _ => None,
+        }
+    }
+
     pub fn height(self) -> f32 {
         match self {
             Layout::Player => 166.0,
@@ -201,6 +211,8 @@ pub struct Contents<'a> {
     /// What a bench with a pick list offers, and the ones chosen (a beacon has two powers).
     pub picks: &'a [Pick],
     pub picked: [Option<usize>; 2],
+    /// How far a pick list longer than its window is scrolled, 0 to 1.
+    pub scrolled: Option<f32>,
     /// The text in a bench's name box, up to the caret and after it.
     pub name: Option<(&'a str, &'a str)>,
     /// A line under a bench's result (an anvil's level cost).

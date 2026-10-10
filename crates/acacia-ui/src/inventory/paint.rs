@@ -64,6 +64,11 @@ pub fn draw(list: &mut DrawList, theme: &Theme, layout: Layout, title: &str, con
         list.fill(theme.atlas.white(), [x - 2.0, oy + 67.0, right, oy + 79.0], [0, 0, 0, 0x4F]);
         font.draw(list, note, x, oy + 69.0, 0x80FF20, 1.0, true);
     }
+    if let (Some(scrolled), Some(([x, y], [w, h], travel))) = (contents.scrolled, layout.scroller()) {
+        let (left, top) = (ox + x, oy + y + travel * scrolled.clamp(0.0, 1.0));
+        list.fill(theme.atlas.white(), [left, top, left + w, top + h], [0x55, 0x55, 0x55, 0xFF]);
+        list.fill(theme.atlas.white(), [left + 1.0, top + 1.0, left + w - 1.0, top + h - 1.0], [0xC6, 0xC6, 0xC6, 0xFF]);
+    }
     if let Some((open, scrolled)) = contents.creative {
         let skin = theme.widgets.skin();
         for (i, rect) in tab_rects(layout, size).into_iter().enumerate() {
