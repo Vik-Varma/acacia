@@ -203,6 +203,8 @@ pub struct Contents<'a> {
     pub picked: [Option<usize>; 2],
     /// The text in a bench's name box, up to the caret and after it.
     pub name: Option<(&'a str, &'a str)>,
+    /// A line under a bench's result (an anvil's level cost).
+    pub note: Option<&'a str>,
     /// The creative inventory's open tab and how far its items are scrolled, 0 to 1.
     pub creative: Option<(usize, f32)>,
 }

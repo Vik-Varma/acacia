@@ -89,6 +89,8 @@ pub struct Inventory {
     pub craftable: Vec<Stack>,
     /// What the crafting grid's or the bench's slots make; filled by [`crafted`].
     pub crafted: Option<Stack>,
+    /// The levels an anvil asks for it.
+    pub cost: Option<i32>,
     /// The open workstation whose slots are the player's UI slots.
     pub bench: Option<Bench>,
     /// What a stonecutter offers for its input: recipe ids and one cut's result.
@@ -174,6 +176,7 @@ pub fn inventory(bot: &Bot) -> Inventory {
         ui: inv.ui.iter().map(stack).collect(),
         craftable: Vec::new(),
         crafted: None,
+        cost: None,
         bench: bot.open_container().and_then(|c| crate::stations::bench(c.window_type)),
         patterns: bot.loom_choices().into_iter().map(|code| (code, bot.loom_result(code).and_then(|s| stack_of(bot, &s)))).collect(),
         enchants: bot.enchant_costs(),
@@ -198,15 +201,6 @@ pub struct Stack {
     pub banner: Option<std::sync::Arc<acacia_render::banner::Banner>>,
     /// A filled map's picture, once the server has sent it.
     pub map: Option<std::sync::Arc<acacia_bot::state::MapImage>>,
-}
-
-/// The text on the side of the sign whose editor the server opened, and whether that sign hangs;
-/// `None` without an editor.
-pub fn open_sign(bot: &Bot) -> Option<(String, bool)> {
-    let editor = bot.state().signs.editor?;
-    let entities = &bot.state().block_entities;
-    let hanging = entities.sign(editor.position).is_some_and(|nbt| matches!(nbt.value.get("id"), Some(acacia_bot::proto::nbt::Value::String(id)) if &**id == "HangingSign"));
-    Some((entities.sign_text(editor.position, editor.front).unwrap_or_default().to_owned(), hanging))
 }
 
 /// What a grid or workstation still holds goes back into the inventory first.
@@ -250,7 +244,7 @@ pub async fn apply(bot: &mut Bot, command: Command) {
         Command::DropCursor { one } => bot.drop_cursor(one).await,
         Command::AnswerForm(id, reply) => bot.answer_form_now(id, reply),
         Command::WriteSign(text) => {
-            let text = text.or_else(|| open_sign(bot).map(|(text, _)| text)).unwrap_or_default();
+            let text = text.or_else(|| crate::sign_text::open(bot).map(|(text, _)| text)).unwrap_or_default();
             bot.write_open_sign(&text)
         }
         Command::Controls(c) => {

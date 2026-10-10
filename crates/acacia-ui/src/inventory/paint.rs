@@ -58,6 +58,12 @@ pub fn draw(list: &mut DrawList, theme: &Theme, layout: Layout, title: &str, con
             }
         }
     }
+    if let (Some(note), Some(font)) = (contents.note, &theme.font) {
+        // AnvilScreen's cost line: right-aligned on a dark strip.
+        let (right, x) = (ox + layout.width() - 8.0, ox + layout.width() - 10.0 - font.width(note));
+        list.fill(theme.atlas.white(), [x - 2.0, oy + 67.0, right, oy + 79.0], [0, 0, 0, 0x4F]);
+        font.draw(list, note, x, oy + 69.0, 0x80FF20, 1.0, true);
+    }
     if let Some((open, scrolled)) = contents.creative {
         let skin = theme.widgets.skin();
         for (i, rect) in tab_rects(layout, size).into_iter().enumerate() {

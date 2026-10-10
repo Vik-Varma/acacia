@@ -25,6 +25,14 @@ impl Bot {
         self.workstation_craft(pos, WindowType::Anvil, &[Some(input), material], &slots, |state| anvil_plan(state, rename)).await
     }
 
+    /// The levels the open anvil asks for what is in its slots, renamed to `rename` if given;
+    /// `None` when it makes nothing (no change, too expensive, or above the player's level).
+    pub fn anvil_cost(&self, rename: Option<&str>) -> Option<i32> {
+        let item = occupied(&self.state, SlotRef::Ui(ui::ANVIL_INPUT)).ok()?;
+        let material = occupied(&self.state, SlotRef::Ui(ui::ANVIL_MATERIAL)).ok();
+        anvil_outcome(&self.state, item, material, rename).ok().map(|outcome| outcome.level)
+    }
+
     /// Opens the station, moves each `inputs[i]` stack into `slots[i]`, sends the craft `plan`
     /// builds, moves leftovers back and closes.
     pub(super) async fn workstation_craft(

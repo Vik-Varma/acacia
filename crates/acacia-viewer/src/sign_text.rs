@@ -23,6 +23,15 @@ pub struct Sign {
 /// The written signs by block position.
 pub type Texts = HashMap<[i32; 3], Sign>;
 
+/// The text on the side of the sign whose editor the server opened, and whether that sign hangs;
+/// `None` without an editor.
+pub fn open(bot: &acacia_bot::Bot) -> Option<(String, bool)> {
+    let editor = bot.state().signs.editor?;
+    let entities = &bot.state().block_entities;
+    let hanging = entities.sign(editor.position).is_some_and(|nbt| matches!(nbt.value.get("id"), Some(Value::String(id)) if &**id == "HangingSign"));
+    Some((entities.sign_text(editor.position, editor.front).unwrap_or_default().to_owned(), hanging))
+}
+
 pub fn snapshot(entities: &BlockEntities) -> Texts {
     entities.iter().filter_map(|(pos, nbt)| Some((*pos, sign(nbt)?))).collect()
 }

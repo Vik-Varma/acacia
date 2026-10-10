@@ -209,7 +209,7 @@ async fn run(
                         inventory = now.clone();
                         let table = now.workbench.is_some();
                         let (craftable, crafted) = (control::craftable(&bot, table), control::crafted(&bot, name.as_deref()));
-                        send(NetEvent::Inventory(control::Inventory { craftable, crafted, ..now }))?;
+                        send(NetEvent::Inventory(control::Inventory { craftable, crafted, cost: bot.anvil_cost(name.as_deref()), ..now }))?;
                     }
                     if creative != bot.state().creative.items().len() {
                         creative = bot.state().creative.items().len();
@@ -225,7 +225,7 @@ async fn run(
                         form = open;
                         send(NetEvent::Form(bot.state().forms.latest().cloned()))?;
                     }
-                    let editing = control::open_sign(&bot);
+                    let editing = crate::sign_text::open(&bot);
                     if editing.is_some() != sign_open {
                         sign_open = editing.is_some();
                         send(NetEvent::SignEditor(editing))?;
