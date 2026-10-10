@@ -51,7 +51,7 @@ unit or pack tests only.
 | HUD | Chat with translations (rawtext and keys), Tab list, sidebar, F3 | live |
 | Screens | Inventory with the player's figure, chests, recipe book and crafting by click | live |
 | Screens | Crafting by hand: the 2×2 grid and the crafting table's 3×3; a click takes the result onto the cursor, Shift into the inventory | table live; live |
-| Screens | Anvil with its name box, smithing table, stonecutter, enchanting table | live |
+| Screens | Anvil with its name box and level cost, smithing table, stonecutter, enchanting table | live (the cost: both looks, a rename; "Too Expensive!" is not shown, the result just stays empty) |
 | Screens | Grindstone, cartography table (no renaming) | tests only, never opened live |
 | Screens | Sign editor: the board with its four lines, Done or Esc writes; a hanging sign's smaller board and narrower lines | live (Java look) |
 | Screens | Books: a right-click opens the held book's pages; a book and quill takes typing at a page's end and new pages, and is signed under a title | live |
@@ -66,7 +66,7 @@ unit or pack tests only.
 ## Not done
 
 - **Screens:** the loom's large banner preview; the beacon's own art and which powers its pyramid allows; trader levels; a
-  cartography table's name box, the anvil's level cost; a scroll bar on the stonecutter's and
+  cartography table's name box; a scroll bar on the stonecutter's and
   trader's lists (the wheel scrolls them); enchanting hints and the galactic text; a book's
   art and a caret inside its text; the creative inventory's search, its survival-inventory tab and
   deleting items into it.
