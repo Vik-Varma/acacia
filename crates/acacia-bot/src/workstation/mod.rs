@@ -25,6 +25,7 @@ mod hand;
 mod loom;
 mod pick;
 mod repair;
+mod shield;
 mod smithing;
 mod trade;
 

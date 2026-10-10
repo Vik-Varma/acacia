@@ -3,8 +3,9 @@
 //! stands at a spot facing north, leashes a cow it summons beside itself, looms a patterned
 //! banner into its main hand, then sneaks with a shield in its off hand (Bedrock's way to block)
 //! for a minute.
-//! With `pace` it walks east and back instead of sneaking.
-//! `cargo run -p acacia-bot --example props -- <server> [x y z of its feet] [pace]`
+//! With `pace` it walks east and back instead of sneaking; with `shield` it crafts the banner
+//! onto a shield and holds that.
+//! `cargo run -p acacia-bot --example props -- <server> [x y z of its feet] [pace|shield]`
 use acacia_bot::client::Client;
 use acacia_bot::client::auth::login::Skin;
 use acacia_bot::items::SlotRef;
@@ -57,7 +58,7 @@ async fn main() -> Result<(), Error> {
     bot.interact_entity(cow).await?;
     bot.wait_ticks(10).await?;
     println!("leashed cow {cow}");
-    banner(&mut bot, [x - 2, y, z]).await?;
+    banner(&mut bot, [x - 2, y, z], args.get(4).is_some_and(|a| a == "shield")).await?;
     println!("holding {:?}", bot.state().inventory_summary());
     // Turned back to face north after aiming at the cow and the loom.
     bot.client().command(&format!("/tp @s {} {y} {} 180 0", x as f32 + 0.5, z as f32 + 0.5));
@@ -80,9 +81,9 @@ fn caped() -> Skin {
     Skin::classic_with_cape(64, 32, &(0..64 * 32).flat_map(texel).collect::<Vec<u8>>())
 }
 
-/// Looms a patterned banner at a loom set at `loom` and holds it in the main hand: no command
-/// makes one.
-async fn banner(bot: &mut Bot, loom: [i32; 3]) -> Result<(), Error> {
+/// Looms a patterned banner at a loom set at `loom` and holds it in the main hand with a shield
+/// in the other, or crafts it `onto_shield` and holds that: no command makes either.
+async fn banner(bot: &mut Bot, loom: [i32; 3], onto_shield: bool) -> Result<(), Error> {
     let setup = [format!("/setblock {} {} {} loom", loom[0], loom[1], loom[2]), "/clear @s".to_owned(), "/give @s banner 1 15".to_owned()];
     for command in &setup {
         bot.client().command(command);
@@ -94,13 +95,24 @@ async fn banner(bot: &mut Bot, loom: [i32; 3]) -> Result<(), Error> {
         bot.loom(loom, cloth, dye, pattern, None).await?;
         bot.wait_ticks(10).await?;
     }
-    let cloth = find(bot, "banner").await?;
-    if cloth != SlotRef::Main(0) {
-        bot.move_item(cloth, SlotRef::Main(0), 1).await?;
+    let held = if onto_shield {
+        bot.client().command("/give @s shield");
+        let (shield, cloth) = (find(bot, "shield").await?, find(bot, "banner").await?);
+        bot.decorate_shield(shield, cloth).await?;
+        bot.wait_ticks(10).await?;
+        "shield"
+    } else {
+        bot.client().command("/replaceitem entity @s slot.weapon.offhand 0 shield");
+        "banner"
+    };
+    let slot = find(bot, held).await?;
+    if slot != SlotRef::Main(0) {
+        bot.move_item(slot, SlotRef::Main(0), 1).await?;
     }
     bot.select_hotbar(0)?;
-    bot.client().command("/replaceitem entity @s slot.weapon.offhand 0 shield");
-    Ok(bot.wait_ticks(10).await?)
+    bot.wait_ticks(10).await?;
+    println!("held: {:?}", bot.state().held_item().nbt.as_ref().map(|nbt| &nbt.value));
+    Ok(())
 }
 
 /// The slot of item `name`, waiting up to three seconds for the server to hand it over.

@@ -96,7 +96,7 @@ impl Bot {
 
     /// Opens the own inventory screen for several requests; true if it was opened here. BDS may
     /// not confirm the open, so the screen is then recorded as open locally.
-    async fn hold_own_inventory_screen(&mut self) -> Result<bool, ActionError> {
+    pub(super) async fn hold_own_inventory_screen(&mut self) -> Result<bool, ActionError> {
         let opened = self.open_own_inventory_screen().await?;
         if opened && self.state.containers.open.is_none() {
             self.state.containers.open = Some(Container {
