@@ -15,7 +15,7 @@ const PIVOT: Vec3 = Vec3::new(8.0, 1.0, 8.0);
 /// `[u0, v0, u1, v1]` it shows, corner 0 at its bottom left.
 fn face(corners: [Vec3; 3], [u0, v0, u1, v1]: [f32; 4], texture: u16, material: Material) -> ModelFace {
     ModelFace {
-        corners: corners.map(Vec3::to_array),
+        corners: corners.map(|corner| corner.to_array()),
         uv: [[u0, v1], [u1, v1], [u0, v0]],
         texture,
         tint: Tint::None,
