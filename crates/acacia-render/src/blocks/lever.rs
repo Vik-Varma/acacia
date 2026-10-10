@@ -58,7 +58,7 @@ fn turned(direction: &str, [x, y, z]: [f32; 3]) -> ([f32; 3], bool) {
 /// `plate` and `handle` are the atlas layers of cobblestone and of the lever's image.
 pub(super) fn faces(direction: &str, thrown: bool, plate: u16, handle: u16) -> Arc<[ModelFace]> {
     let base = cuboid(Vec3::new(5.0, 0.0, 4.0), Vec3::new(11.0, 3.0, 12.0), [5.0, 13.0, 11.0, 16.0], [5.0, 4.0, 11.0, 12.0], plate, Material::Opaque);
-    let tilt = Mat3::from_rotation_x(if thrown { 45f32 } else { -45f32 }.to_radians());
+    let tilt = Mat3::from_rotation_x(if thrown { -45f32 } else { 45f32 }.to_radians());
     let stick = cuboid(Vec3::new(7.0, 1.0, 7.0), Vec3::new(9.0, 11.0, 9.0), [7.0, 6.0, 9.0, 16.0], [7.0, 6.0, 9.0, 8.0], handle, Material::Cutout);
     let tilted = stick.map(|f| ModelFace { corners: f.corners.map(|c| (PIVOT + tilt * (Vec3::from(c) - PIVOT)).to_array()), ..f });
     let placed = |f: ModelFace| {
@@ -92,9 +92,10 @@ mod tests {
                 assert!(normal(f).dot(Vec3::from(f.corners[0]) - middle) > 0.0, "{direction}: {f:?}");
             }
         }
-        // On a north wall the plate is against the block to the south; thrown, the handle's end is high.
+        // On a north wall the plate is against the block to the south; the handle's end is high
+        // at rest and low thrown, as the Java look's own model has it.
         let end = |thrown| faces("north", thrown, 1, 2)[6].corners[0];
         assert!(faces("north", false, 1, 2)[..6].iter().all(|f| f.corners.iter().all(|c| c[2] >= 13.0)));
-        assert!(end(true)[1] > 8.0 && end(false)[1] < 8.0, "{:?} {:?}", end(true), end(false));
+        assert!(end(false)[1] > 8.0 && end(true)[1] < 8.0, "{:?} {:?}", end(false), end(true));
     }
 }
