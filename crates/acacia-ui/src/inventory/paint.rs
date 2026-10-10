@@ -7,7 +7,7 @@ use crate::widget::{State, Widget};
 const SHADE: [u8; 4] = [0x10, 0x10, 0x10, 0xC8];
 const TITLE: u32 = 0x404040;
 /// What the creative tabs' 48-pixel buttons say.
-const TAB_BUTTONS: [&str; 4] = ["Build", "Nature", "Tools", "Items"];
+const TAB_BUTTONS: [&str; 5] = ["Build", "Nature", "Tools", "Items", "Self"];
 
 /// `title` names a container (the player's screen shows "Crafting").
 pub fn draw(list: &mut DrawList, theme: &Theme, layout: Layout, title: &str, contents: &Contents, mouse: [f32; 2], size: [f32; 2]) {
@@ -77,8 +77,10 @@ pub fn draw(list: &mut DrawList, theme: &Theme, layout: Layout, title: &str, con
         }
         // CreativeModeInventoryScreen's scroller: 12×15 in a 112-pixel track.
         let top = oy + 18.0 + (112.0 - 15.0) * scrolled.clamp(0.0, 1.0);
-        list.fill(theme.atlas.white(), [ox + 175.0, top, ox + 187.0, top + 15.0], [0x55, 0x55, 0x55, 0xFF]);
-        list.fill(theme.atlas.white(), [ox + 176.0, top + 1.0, ox + 186.0, top + 14.0], [0xC6, 0xC6, 0xC6, 0xFF]);
+        if layout == Layout::Creative {
+            list.fill(theme.atlas.white(), [ox + 175.0, top, ox + 187.0, top + 15.0], [0x55, 0x55, 0x55, 0xFF]);
+            list.fill(theme.atlas.white(), [ox + 176.0, top + 1.0, ox + 186.0, top + 14.0], [0xC6, 0xC6, 0xC6, 0xFF]);
+        }
     }
     let over = hit_pick(layout, size, contents.picks.len(), mouse);
     for (i, (rect, item)) in pick_rects(layout, size, contents.picks.len()).into_iter().zip(contents.picks).enumerate() {

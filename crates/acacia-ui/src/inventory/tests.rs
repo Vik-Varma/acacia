@@ -94,8 +94,11 @@ fn the_creative_inventory_has_tabs_a_grid_and_the_hotbar() {
     assert_eq!(hit(creative, size, [ox + 9.0 + 18.0 * 8.0 + 1.0, oy + 113.0]), Some(Slot::Main(8)));
     assert_eq!(hit_pick(creative, size, 45, [ox + 9.0 + 18.0 * 8.0 + 1.0, oy + 18.0 + 18.0 * 4.0 + 1.0]), Some(44));
     assert_eq!(pick_rects(creative, size, 500).len(), 45);
-    assert_eq!(hit_tab(creative, size, [ox + 49.0 * 3.0 + 2.0, oy - 10.0]), Some(3));
-    assert_eq!(hit_tab(Layout::Player, size, [ox + 2.0, oy - 10.0]), None);
+    assert_eq!(hit_tab(creative, size, [ox + 39.0 * 3.0 + 2.0, oy - 10.0]), Some(3));
+    // The last tab shows the player's own screen, which keeps the buttons centred over it.
+    let [px, py] = origin(Layout::Player, size);
+    assert_eq!(hit_tab(Layout::Player, size, [px - 10.0 + 39.0 * 4.0 + 2.0, py - 10.0]), Some(SURVIVAL_TAB));
+    assert_eq!(hit_tab(Layout::Rows(3), size, [ox + 2.0, oy - 10.0]), None);
 }
 
 #[test]

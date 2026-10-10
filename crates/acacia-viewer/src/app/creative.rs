@@ -21,7 +21,8 @@ impl App {
 
     /// The items the creative screen shows now, its tab, and how far it is scrolled (0 to 1).
     pub(super) fn creative_view(&self) -> Option<(Vec<Stack>, usize, f32)> {
-        let (tab, row) = self.shown.creative.filter(|_| self.layout() == Layout::Creative)?;
+        // The last tab shows the player's screen: no items, only the tab buttons.
+        let (tab, row) = self.shown.creative.filter(|_| matches!(self.layout(), Layout::Creative | Layout::Player))?;
         let shown = self.creative_tab().skip(row * GRID[0]).take(GRID[0] * GRID[1]).map(|e| e.stack.clone()).collect();
         Some((shown, tab, row as f32 / self.creative_rows().max(1) as f32))
     }

@@ -39,7 +39,11 @@ pub enum Layout {
 }
 
 /// The creative inventory's tabs.
-pub const TABS: [&str; 4] = ["Construction", "Nature", "Equipment", "Items"];
+pub const TABS: [&str; 5] = ["Construction", "Nature", "Equipment", "Items", "Inventory"];
+/// The tab that shows the player's own screen instead of items to take.
+pub const SURVIVAL_TAB: usize = 4;
+/// A tab button and the gap after it.
+const TAB_STEP: f32 = 39.0;
 /// Columns and rows of a creative tab's items.
 pub const CREATIVE_GRID: [usize; 2] = [9, 5];
 
@@ -182,13 +186,15 @@ pub fn hit_pick(layout: Layout, size: [f32; 2], count: usize, mouse: [f32; 2]) -
     pick_rects(layout, size, count).iter().position(|r| (r[0]..r[2]).contains(&mouse[0]) && (r[1]..r[3]).contains(&mouse[1]))
 }
 
-/// The creative inventory's tab buttons, above the panel.
+/// The creative inventory's tab buttons, above the panel: its own, or the player's screen that
+/// the last tab ([`SURVIVAL_TAB`]) shows.
 fn tab_rects(layout: Layout, size: [f32; 2]) -> Vec<[f32; 4]> {
-    if layout != Layout::Creative {
+    if !matches!(layout, Layout::Creative | Layout::Player) {
         return Vec::new();
     }
     let [ox, oy] = origin(layout, size);
-    (0..TABS.len()).map(|i| [ox + 49.0 * i as f32, oy - 19.0, ox + 49.0 * i as f32 + 48.0, oy - 1.0]).collect()
+    let left = ox + ((layout.width() - TAB_STEP * TABS.len() as f32) / 2.0).floor();
+    (0..TABS.len()).map(|i| [left + TAB_STEP * i as f32, oy - 19.0, left + TAB_STEP * i as f32 + TAB_STEP - 1.0, oy - 1.0]).collect()
 }
 
 /// The tab button under `mouse`.

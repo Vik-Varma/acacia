@@ -97,7 +97,8 @@ impl App {
         if self.inventory.trade.is_some() {
             return Layout::Trade;
         }
-        if self.shown.creative.is_some() && self.inventory.container.is_none() && self.inventory.bench.is_none() {
+        // The creative inventory's last tab is the player's own screen.
+        if self.shown.creative.is_some_and(|(tab, _)| tab != inventory::SURVIVAL_TAB) && self.inventory.container.is_none() && self.inventory.bench.is_none() {
             return Layout::Creative;
         }
         match (self.inventory.station, &self.inventory.container) {
@@ -162,6 +163,9 @@ impl App {
             _ => return,
         };
         let layout = self.layout();
+        if let Some(tab) = inventory::hit_tab(layout, size, at).filter(|_| self.shown.creative.is_some() && layout == Layout::Player) {
+            return self.shown.creative = Some((tab, 0));
+        }
         let book = layout.has_book().then(|| recipes::hit(layout, size, self.inventory.craftable.len(), at)).flatten();
         if let Some(i) = book {
             let name = self.inventory.craftable[i].name.clone();
