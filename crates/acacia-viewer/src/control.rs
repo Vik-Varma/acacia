@@ -62,6 +62,8 @@ pub enum Command {
     Creative { id: u32, count: u8 },
     /// A click outside the screen: throws the held stack, or one of it.
     DropCursor { one: bool },
+    /// A click on the creative items with a stack held: it is gone.
+    DestroyCursor,
     /// The player's answer to open form `id`.
     AnswerForm(u32, FormReply),
     /// The open sign editor closed with this text, or (`None`) with the side's text unchanged.
@@ -242,6 +244,7 @@ pub async fn apply(bot: &mut Bot, command: Command) {
         Command::Click(slot, click) => bot.click_slot(slot, click).await,
         Command::Craft { name, table } => bot.craft(&name, 1, table).await.map(|_| ()),
         Command::DropCursor { one } => bot.drop_cursor(one).await,
+        Command::DestroyCursor => bot.destroy_cursor().await,
         Command::AnswerForm(id, reply) => bot.answer_form_now(id, reply),
         Command::WriteSign(text) => {
             let text = text.or_else(|| crate::sign_text::open(bot).map(|(text, _)| text)).unwrap_or_default();

@@ -51,9 +51,13 @@ impl App {
             self.shown.creative = Some((picked, 0));
         } else if let Some(i) = inventory::hit_pick(layout, size, GRID[0] * GRID[1], at) {
             let entry = self.shown.items.iter().filter(|e| e.tab == tab).nth(row * GRID[0] + i);
-            if let Some(entry) = entry {
-                let _ = self.net.commands.send(Command::Creative { id: entry.id, count: if click == Click::Shift { 64 } else { 1 } });
-            }
+            // A stack carried onto the items is thrown away, whatever lies under it.
+            let command = match (&self.inventory.cursor, entry) {
+                (Some(_), _) => Command::DestroyCursor,
+                (None, Some(entry)) => Command::Creative { id: entry.id, count: if click == Click::Shift { 64 } else { 1 } },
+                (None, None) => return,
+            };
+            let _ = self.net.commands.send(command);
         } else if let Some(slot) = inventory::hit(layout, size, at) {
             let _ = self.net.commands.send(Command::Click(slot_ref(slot), click));
         } else if !inventory::inside(layout, size, at) {

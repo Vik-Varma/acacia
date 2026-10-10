@@ -52,4 +52,12 @@ impl Bot {
         let count = if one { 1 } else { u8::try_from(held).unwrap_or(u8::MAX) };
         self.drop_item(SlotRef::Cursor, count).await
     }
+
+    /// A creative player's click on the creative items with a stack on the cursor: destroys it.
+    pub async fn destroy_cursor(&mut self) -> Result<(), ActionError> {
+        match u8::try_from(self.state().inventory.cursor().count).unwrap_or(u8::MAX) {
+            0 => Ok(()),
+            held => self.destroy_item(SlotRef::Cursor, held).await,
+        }
+    }
 }
