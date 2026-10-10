@@ -59,7 +59,7 @@ pub(super) fn draw(list: &mut DrawList, skin: &mut Skin, lang: &Lang, screen: &S
 fn picks(skin: &mut Skin, inventory: &Inventory) -> Vec<Pick> {
     let mut at = |s: &Stack, x: f32| skin.icon(s).map(|icon| (icon, s.count, x));
     let mut picks: Vec<Pick> = inventory.picks.iter().map(|(_, s)| Pick { icons: at(&Stack { count: 1, ..s.clone() }, 0.0).into_iter().collect(), label: String::new() }).collect();
-    picks.extend(inventory.enchants.iter().enumerate().map(|(i, level)| Pick { icons: Vec::new(), label: format!("{}  Level {level}", i + 1) }));
+    picks.extend(inventory.enchants.iter().map(|&(level, hint)| Pick { icons: Vec::new(), label: crate::enchant_names::option(level, hint) }));
     for offer in inventory.trade.iter().flat_map(|t| &t.offers) {
         let prices = [(Some(&offer.price), PRICE[0]), (offer.second_price.as_ref(), PRICE[1]), (Some(&offer.goods), GOODS)];
         let icons = prices.into_iter().filter_map(|(stack, x)| at(stack?, x)).collect();

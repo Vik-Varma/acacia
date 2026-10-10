@@ -33,9 +33,10 @@ impl Bot {
 
     /// The level each of the enchanting table's options needs, cheapest first; none without an
     /// item in its slot.
-    pub fn enchant_costs(&self) -> Vec<u8> {
+    /// Each with its hint: the first enchantment the option gives, as `(id, level)`.
+    pub fn enchant_costs(&self) -> Vec<(u8, Option<(u8, u8)>)> {
         match occupied(&self.state, SlotRef::Ui(ui::ENCHANTING_INPUT)) {
-            Ok(_) => self.state.stations.enchant_options.iter().map(|o| o.cost).collect(),
+            Ok(_) => self.state.stations.enchant_options.iter().map(|o| (o.cost, o.enchants.first().copied())).collect(),
             Err(_) => Vec::new(),
         }
     }

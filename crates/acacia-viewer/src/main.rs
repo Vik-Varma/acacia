@@ -27,6 +27,7 @@ mod entities;
 mod forms;
 #[cfg(feature = "profile")]
 mod heap;
+mod enchant_names;
 mod facts;
 mod frames;
 mod held_map;

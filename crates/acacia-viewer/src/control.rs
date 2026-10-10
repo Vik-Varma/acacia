@@ -97,8 +97,8 @@ pub struct Inventory {
     pub picks: Vec<(u32, Stack)>,
     /// The patterns an open loom offers, each with the banner it makes.
     pub patterns: Vec<(&'static str, Option<Stack>)>,
-    /// The level each option of an enchanting table needs.
-    pub enchants: Vec<u8>,
+    /// The level each option of an enchanting table needs, and the enchantment it hints at.
+    pub enchants: Vec<(u8, Option<(u8, u8)>)>,
     /// An open trading screen.
     pub trade: Option<crate::stations::Trade>,
 }
