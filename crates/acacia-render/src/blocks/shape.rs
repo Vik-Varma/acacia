@@ -58,27 +58,6 @@ fn sheets(on: [bool; 6]) -> Shape {
     Shape::Boxes(SHEETS.into_iter().zip(on).filter_map(|(sheet, on)| on.then_some(sheet)).collect())
 }
 
-/// A lever's plate against the block it is on and its handle in two steps, leaning one way or,
-/// `thrown`, the other. `lever_direction` names the face the handle points out of.
-fn lever(direction: &str, thrown: bool) -> [Box16; 3] {
-    let lean = if thrown { 10 } else { 4 };
-    let on_a_floor: [Box16; 3] = [[5, 0, 4, 11, 3, 12], [7, 3, 7, 9, 8, 9], [7, 8, lean, 9, 13, lean + 2]];
-    let turned = |[x, y, z]: [u8; 3]| match direction {
-        "north" => [x, z, 16 - y],
-        "south" => [x, z, y],
-        "east" => [y, z, x],
-        "west" => [16 - y, z, x],
-        "up_east_west" => [z, y, x],
-        "down_east_west" => [z, 16 - y, x],
-        "down_north_south" => [x, 16 - y, z],
-        _ => [x, y, z],
-    };
-    on_a_floor.map(|[x0, y0, z0, x1, y1, z1]| {
-        let (a, b) = (turned([x0, y0, z0]), turned([x1, y1, z1]));
-        [a[0].min(b[0]), a[1].min(b[1]), a[2].min(b[2]), a[0].max(b[0]), a[1].max(b[1]), a[2].max(b[2])]
-    })
-}
-
 pub fn classify(state: &BlockState) -> Shape {
     let name = short_name(state.name);
     if state.is_air() || INVISIBLE.iter().any(|n| name == *n || name.starts_with("light_block")) {
@@ -109,7 +88,6 @@ pub fn classify(state: &BlockState) -> Shape {
         }
         // A string a pixel over the floor, both ways across the block: which way it runs is not read.
         "trip_wire" | "tripwire" => Shape::Boxes(Box::new([[0, 1, 7, 16, 1, 9], [7, 1, 0, 9, 1, 16]])),
-        "lever" => Shape::Boxes(Box::new(lever(state.property("lever_direction").unwrap_or("up_north_south"), bits("open_bit") == 1))),
         "powder_snow" | "end_gateway" => Shape::Cube,
         // Sheets without thickness: edges would show as seams between a portal's blocks.
         "portal" if state.property("portal_axis") == Some("z") => Shape::Boxes(Box::new([[8, 0, 0, 8, 16, 16]])),
@@ -159,9 +137,6 @@ fn collisionless_blocks_that_are_not_plants_get_boxes() {
     // A vine on the south and east faces; lichen on the floor and the north face.
     assert_eq!(shape("vine", &["vine_direction_bits=9"]), Shape::Boxes(Box::new([[0, 0, 15, 16, 16, 15], [15, 0, 0, 15, 16, 16]])));
     assert_eq!(shape("glow_lichen", &["multi_face_direction_bits=17"]), Shape::Boxes(Box::new([[0, 1, 0, 16, 1, 16], [0, 0, 1, 16, 16, 1]])));
-    assert_eq!(shape("lever", &["lever_direction=up_north_south", "open_bit=0"]), Shape::Boxes(Box::new([[5, 0, 4, 11, 3, 12], [7, 3, 7, 9, 8, 9], [7, 8, 4, 9, 13, 6]])));
-    // Thrown on a wall facing north: the plate on the block to the south, the handle's end high.
-    assert_eq!(shape("lever", &["lever_direction=north", "open_bit=1"]), Shape::Boxes(Box::new([[5, 4, 13, 11, 12, 16], [7, 7, 8, 9, 9, 13], [7, 10, 3, 9, 12, 8]])));
 }
 
 /// Rounds to 1/16 and clamps to the block (fence and wall collision reaches 1.5 high).

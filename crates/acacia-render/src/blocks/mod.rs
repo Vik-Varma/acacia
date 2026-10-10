@@ -1,5 +1,6 @@
 //! Per-runtime-id render data: shape, render layer, texture-array layer and tint per face.
 
+mod lever;
 pub mod model;
 pub mod placed;
 pub mod shape;
@@ -188,6 +189,14 @@ fn build_block(state: &BlockState, faces: Option<[String; 6]>, textures: &mut Te
     let name = short_name(state.name);
     let model = model::classify(state).map(Arc::new);
     let shape = if model.is_some() { Shape::None } else { shape::classify(state) };
+    // A lever takes two images: its model is built here, where they resolve.
+    let shape = match name {
+        "lever" => {
+            let (direction, thrown) = (state.property("lever_direction").unwrap_or_default(), state.property("open_bit") == Some("1"));
+            Shape::Model(lever::faces(direction, thrown, textures.resolve("cobblestone").layer, textures.resolve("lever").layer))
+        }
+        _ => shape,
+    };
     let resolved = match faces {
         Some(f) if shape != Shape::None => f.map(|t| textures.resolve(&t)),
         _ => [Resolved::MISSING; 6],
