@@ -51,7 +51,7 @@ unit or pack tests only.
 | HUD | Chat with translations (rawtext and keys), Tab list, sidebar, F3 | live |
 | Screens | Inventory with the player's figure, chests, recipe book and crafting by click | live |
 | Screens | Crafting by hand: the 2×2 grid and the crafting table's 3×3; a click takes the result onto the cursor, Shift into the inventory | table live; live |
-| Screens | Anvil with its name box and level cost, smithing table, stonecutter, enchanting table | live (the cost: both looks, a rename; "Too Expensive!" is not shown, the result just stays empty) |
+| Screens | Anvil with its name box and level cost, smithing table, stonecutter, enchanting table | live (the cost: both looks, a rename). A cost above the player's levels is red, and 40 or more reads "Too Expensive!": the red line by its pixels in a testbox shot (a levelless rename, image not looked at), "Too Expensive!" by the bot's tests only; the result stays empty in both cases |
 | Screens | A scroller on the stonecutter's and the trader's lists when they are longer than their window; the wheel moves them a row | live for the stonecutter (Java look); the trader's by the same code, unseen |
 | Screens | Grindstone, cartography table (no renaming) | tests only, never opened live |
 | Screens | Sign editor: the board with its four lines, Done or Esc writes; a hanging sign's smaller board and narrower lines | live (Java look) |
