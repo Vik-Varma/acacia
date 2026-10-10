@@ -52,6 +52,7 @@ unit or pack tests only.
 | Screens | Inventory with the player's figure, chests, recipe book and crafting by click | live |
 | Screens | Crafting by hand: the 2×2 grid and the crafting table's 3×3; a click takes the result onto the cursor, Shift into the inventory | table live; live |
 | Screens | Anvil with its name box and level cost, smithing table, stonecutter, enchanting table | live (the cost: both looks, a rename; "Too Expensive!" is not shown, the result just stays empty) |
+| Screens | A scroller on the stonecutter's and the trader's lists when they are longer than their window; the wheel moves them a row | live for the stonecutter (Java look); the trader's by the same code, unseen |
 | Screens | Grindstone, cartography table (no renaming) | tests only, never opened live |
 | Screens | Sign editor: the board with its four lines, Done or Esc writes; a hanging sign's smaller board and narrower lines | live (Java look) |
 | Screens | Books: a right-click opens the held book's pages; a book and quill takes typing at a page's end and new pages, and is signed under a title | live |
@@ -66,8 +67,7 @@ unit or pack tests only.
 ## Not done
 
 - **Screens:** the loom's large banner preview; the beacon's own art and which powers its pyramid allows; trader levels; a
-  cartography table's name box; a scroll bar on the stonecutter's and
-  trader's lists (the wheel scrolls them); enchanting hints and the galactic text; a book's
+  cartography table's name box; enchanting hints and the galactic text; a book's
   art and a caret inside its text; the creative inventory's search, its survival-inventory tab and
   deleting items into it.
 - **Dimensions:** a nether portal was walked through in the viewer (2026-10-10, creative, to a
@@ -96,7 +96,8 @@ unit or pack tests only.
 - `ACACIA_COMMANDS="tp @s 20 -60 20;wait 3;summon zombie ~ ~ ~4"`: operator commands, `wait secs`
   between them (`src/net/setup.rs`). A summon right after a far teleport fails: wait first.
 - `ACACIA_KEYS="5 +W; 9 -W; 12 +Use; 15 click 640 300; 16 type Hello"`: scripted input
-  (`src/keyscript.rs`).
+  (`src/keyscript.rs`). Its clock starts at the player's first tick, `ACACIA_SHOT_AFTER`'s at
+  launch (4 to 9 s earlier): leave that much between the last step and the shot.
 - `/enchant @s ...` sent through `ACACIA_COMMANDS` had no effect (2026-10-09, no output either);
   written to the BDS console fifo (`echo "enchant <name> sharpness 1" > work/bds-forms/console`)
   it works. Armour is put on by holding it and `ACACIA_KEYS="18 +Use; 18.3 -Use"`.
