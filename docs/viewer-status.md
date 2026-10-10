@@ -12,6 +12,7 @@ unit or pack tests only.
 |---|---|---|
 | World | Both looks' blocks, biomes' colours, lighting, liquids, block-entity models | live; Java blocks by `lookbake java-check` |
 | World | Vines, glow lichen, sculk veins and resin clumps on the faces they cling to; levers | live, both looks. In the Bedrock look a lever is a rough plate and handle from its one image (the Java look has the game's model), and neither look shows a lever thrown |
+| World | Piglin heads (Java's model: the pack ships no geometry for it) on floors and walls; tripwire as a string over the floor | live, both looks. In the Bedrock look tripwire is drawn both ways across its block whichever way it runs |
 | World | Nether portal blocks: a translucent sheet across the frame, with the pack's swirl | live, both looks (a frame lit with fire) |
 | Sky | Sun, moon, stars, sky disc, sunrise glow, fancy and fast clouds (Options) | live (fast clouds: Java look) |
 | Weather | Rain, storm sky and clouds, lightning bolts and flash | live |
