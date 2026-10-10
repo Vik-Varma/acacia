@@ -6,7 +6,7 @@ use acacia_client::proto::types::{
 use super::*;
 use crate::items::{ui, SlotRef};
 use crate::workstation::anvil::anvil_plan;
-use crate::workstation::anvil_cost::anvil_outcome;
+use crate::workstation::anvil_cost::{anvil_outcome, anvil_priced, AnvilCost};
 use crate::workstation::enchants::{enchants, with_enchant_list};
 use crate::workstation::grindstone::{grindstone_plan, grindstone_result};
 use crate::ActionError;
@@ -87,6 +87,8 @@ fn anvil_cost_and_repair_cost_follow_bds() {
     // Too expensive, above the bot's level, or nothing to do: the server makes no result.
     assert!(refused(anvil_outcome(&state, &sword(37), Some(&diamonds), None)), "40 levels");
     assert!(refused(anvil_outcome(&anvil_state(5), &sword(3), Some(&diamonds), None)), "needs 6");
+    let asked = |state: &GameState, rc| anvil_priced(state, &sword(rc), Some(&diamonds), None).unwrap().1;
+    assert_eq!((asked(&state, 37), asked(&anvil_state(5), 3), asked(&state, 3)), (AnvilCost::TooExpensive, AnvilCost::Short(6), AnvilCost::Levels(6)));
     let whole = stack("minecraft:diamond_sword", 1, 41);
     assert!(refused(anvil_outcome(&state, &whole, Some(&diamonds), Some("x"))), "an undamaged item with its material");
     assert!(refused(anvil_outcome(&state, &whole, Some(&stack("minecraft:stone", 1, 43)), None)), "unrelated material");

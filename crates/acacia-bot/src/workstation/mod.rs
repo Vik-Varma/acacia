@@ -32,6 +32,7 @@ mod trade;
 #[cfg(test)]
 mod tests;
 
+pub use anvil_cost::AnvilCost;
 pub use beacon::BeaconEffect;
 pub use craft::CraftMode;
 

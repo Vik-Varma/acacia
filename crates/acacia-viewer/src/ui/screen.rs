@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 
+use acacia_bot::workstation::AnvilCost;
 use acacia_ui::DrawList;
 use acacia_ui::inventory::{self, Bench, Contents, Pick, Slot};
 use acacia_ui::lang::Lang;
@@ -38,8 +39,12 @@ pub(super) fn draw(list: &mut DrawList, skin: &mut Skin, lang: &Lang, screen: &S
     for stack in creative.iter().flat_map(|(stacks, ..)| *stacks) {
         picks.push(Pick { icons: skin.icon(stack).map(|icon| (icon, 1, 1.0)).into_iter().collect(), label: String::new() });
     }
-    let note = inventory.cost.filter(|_| inventory.bench == Some(Bench::Anvil)).map(|levels| format!("Enchantment Cost: {levels}"));
-    let contents = Contents { slot: &|slot| icons.get(&slot).copied(), cursor, progress: inventory.progress, picks: &picks, picked: shown, scrolled, name, note: note.as_deref(), creative: creative.map(|(_, tab, scrolled)| (tab, scrolled)) };
+    let note = inventory.cost.filter(|_| inventory.bench == Some(Bench::Anvil)).map(|cost| match cost {
+        AnvilCost::Levels(levels) => (format!("Enchantment Cost: {levels}"), true),
+        AnvilCost::Short(levels) => (format!("Enchantment Cost: {levels}"), false),
+        AnvilCost::TooExpensive => ("Too Expensive!".to_owned(), false),
+    });
+    let contents = Contents { slot: &|slot| icons.get(&slot).copied(), cursor, progress: inventory.progress, picks: &picks, picked: shown, scrolled, name, note: note.as_ref().map(|(text, payable)| (text.as_str(), *payable)), creative: creative.map(|(_, tab, scrolled)| (tab, scrolled)) };
     let title = match (&inventory.trade, &inventory.container) {
         _ if creative.is_some() => inventory::TABS[creative.map_or(0, |c| c.1)].to_owned(),
         (Some(trade), _) => lang.translate(&trade.title, &[]),

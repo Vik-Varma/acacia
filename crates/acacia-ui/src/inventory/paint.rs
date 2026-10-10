@@ -58,11 +58,11 @@ pub fn draw(list: &mut DrawList, theme: &Theme, layout: Layout, title: &str, con
             }
         }
     }
-    if let (Some(note), Some(font)) = (contents.note, &theme.font) {
-        // AnvilScreen's cost line: right-aligned on a dark strip.
+    if let (Some((note, payable)), Some(font)) = (contents.note, &theme.font) {
+        // AnvilScreen's cost line: right-aligned on a dark strip, red when it cannot be paid.
         let (right, x) = (ox + layout.width() - 8.0, ox + layout.width() - 10.0 - font.width(note));
         list.fill(theme.atlas.white(), [x - 2.0, oy + 67.0, right, oy + 79.0], [0, 0, 0, 0x4F]);
-        font.draw(list, note, x, oy + 69.0, 0x80FF20, 1.0, true);
+        font.draw(list, note, x, oy + 69.0, if payable { 0x80FF20 } else { 0xFF6060 }, 1.0, true);
     }
     if let (Some(scrolled), Some(([x, y], [w, h], travel))) = (contents.scrolled, layout.scroller()) {
         let (left, top) = (ox + x, oy + y + travel * scrolled.clamp(0.0, 1.0));

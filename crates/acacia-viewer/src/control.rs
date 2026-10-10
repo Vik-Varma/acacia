@@ -91,8 +91,8 @@ pub struct Inventory {
     pub craftable: Vec<Stack>,
     /// What the crafting grid's or the bench's slots make; filled by [`crafted`].
     pub crafted: Option<Stack>,
-    /// The levels an anvil asks for it.
-    pub cost: Option<i32>,
+    /// What an anvil asks for it.
+    pub cost: Option<acacia_bot::workstation::AnvilCost>,
     /// The open workstation whose slots are the player's UI slots.
     pub bench: Option<Bench>,
     /// What a stonecutter offers for its input: recipe ids and one cut's result.

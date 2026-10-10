@@ -24,8 +24,28 @@ pub(crate) struct AnvilOutcome {
     pub level: i32,
 }
 
+/// What an anvil asks of the player for what is in its slots.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnvilCost {
+    /// Levels the player has.
+    Levels(i32),
+    /// Levels the player lacks.
+    Short(i32),
+    TooExpensive,
+}
+
 /// What the anvil makes of `item` with `material` and an optional new name (`""` clears one).
 pub(crate) fn anvil_outcome(state: &GameState, item: &ItemStack, material: Option<&ItemStack>, rename: Option<&str>) -> Result<AnvilOutcome, ActionError> {
+    let (outcome, cost) = anvil_priced(state, item, material, rename)?;
+    match cost {
+        AnvilCost::Levels(_) => Ok(outcome),
+        AnvilCost::Short(level) => Err(ActionError::NotPossible(format!("the anvil craft needs level {level}"))),
+        AnvilCost::TooExpensive => Err(ActionError::NotPossible(format!("too expensive ({} levels)", outcome.level))),
+    }
+}
+
+/// [`anvil_outcome`] whether or not the player can pay for it, and what it asks.
+pub(crate) fn anvil_priced(state: &GameState, item: &ItemStack, material: Option<&ItemStack>, rename: Option<&str>) -> Result<(AnvilOutcome, AnvilCost), ActionError> {
     let not_possible = |why: &str| ActionError::NotPossible(why.to_owned());
     let base = nbt_int(item, "RepairCost") + material.map_or(0, |m| nbt_int(m, "RepairCost"));
     let mut result = item.clone();
@@ -58,15 +78,15 @@ pub(crate) fn anvil_outcome(state: &GameState, item: &ItemStack, material: Optio
     let total = base + cost;
     let rename_only = cost == rename_cost;
     let level = if rename_only { total.min(TOO_EXPENSIVE - 1) } else { total };
-    if !creative && !rename_only && total >= TOO_EXPENSIVE {
-        return Err(not_possible(&format!("too expensive ({total} levels)")));
-    }
-    if !creative && level > state.player.xp_level {
-        return Err(not_possible(&format!("the anvil craft needs level {level}")));
-    }
+    let cost = match () {
+        () if creative => AnvilCost::Levels(level),
+        () if level >= TOO_EXPENSIVE => AnvilCost::TooExpensive,
+        () if level > state.player.xp_level => AnvilCost::Short(level),
+        () => AnvilCost::Levels(level),
+    };
     let kept = nbt_int(item, "RepairCost").max(material.map_or(0, |m| nbt_int(m, "RepairCost")));
     set_nbt(&mut result, "RepairCost", Value::Int(if rename_only { kept } else { kept * 2 + 1 }));
-    Ok(AnvilOutcome { result, material_used, level })
+    Ok((AnvilOutcome { result, material_used, level }, cost))
 }
 
 /// Repairs or combines `result` (a copy of `item`) with `added`; returns the cost and the
