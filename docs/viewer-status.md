@@ -67,7 +67,8 @@ unit or pack tests only.
 ## Not done
 
 - **Screens:** the loom's large banner preview; the beacon's own art and which powers its pyramid allows; trader levels; a
-  cartography table's name box; enchanting hints and the galactic text; a book's
+  cartography table's name box; the enchanting table's galactic text (each option says its
+  level and the enchantment it hints at, which the game keeps for the tooltip); a book's
   art and a caret inside its text; the creative inventory's search, its survival-inventory tab and
   deleting items into it.
 - **Dimensions:** a nether portal was walked through in the viewer (2026-10-10, creative, to a
