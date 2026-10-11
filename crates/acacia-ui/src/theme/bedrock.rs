@@ -2,6 +2,8 @@
 //! canonical sprites, and the classic `textures/gui/icons.png` sheet for what `textures/ui` lacks.
 //! The pack has no font; the caller passes a Java asset root to borrow its (the same) one.
 
+mod book;
+
 use std::path::Path;
 
 use image::{RgbaImage, imageops};
@@ -70,6 +72,9 @@ pub fn load(root: &Path, java_root: Option<&Path>) -> Theme {
         if let Some(image) = ui(&effects::bedrock_file(name)) {
             atlas.add(&effects::sprite(name), &image);
         }
+    }
+    if let Some(art) = book::art(&ui) {
+        atlas.add(crate::book::ART, &art);
     }
     // 1937×333 does not fit the atlas; drawn about 150 GUI pixels wide.
     if let Some(logo) = ui("title") {
