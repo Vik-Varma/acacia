@@ -31,7 +31,10 @@ impl RideLog {
     pub fn tick(&mut self, bot: &Bot) {
         let moved_back = bot.movement().map_or((0, 0), |m| (m.corrections, m.teleports));
         if std::mem::replace(&mut self.moved_back, moved_back) != moved_back {
-            tracing::info!(target: "moves", corrections = moved_back.0, teleports = moved_back.1, feet = ?bot.movement().and_then(|m| m.position()), "the server moved the player");
+            let feet = bot.movement().and_then(|m| m.position());
+            // The blocks from two below the feet to one above: a correction on the spot is often a block the client's collision gets wrong.
+            let column = feet.map(|[x, y, z]| [-2, -1, 0, 1].map(|dy| bot.block_name([x.floor() as i32, y.floor() as i32 + dy, z.floor() as i32]).unwrap_or("?")));
+            tracing::info!(target: "moves", corrections = moved_back.0, teleports = moved_back.1, ?feet, ?column, "the server moved the player");
         }
         self.ticks += 1;
         let now = std::time::Instant::now();

@@ -97,12 +97,14 @@ unit or pack tests only.
 - **Movement on the dev machine (Windows, 37 ms to the server):** felt wrong to the user
   (2026-10-11, "teleported around"). Measured there: 20 ticks took 1.0 to 1.8 s with stalls of
   several hundred ms, and the server corrected the player 13, 3 and 0 times in three like walks.
-  The tick schedule no longer slides when a wake-up is late (`acacia-bot/src/cadence.rs`). One
-  run with it there: 20 ticks in 1.0 to 1.1 s throughout, the longest gap 64 to 128 ms, and no
-  correction in 16 s of sprinting, jumping and strafing. One run does not rule out the
-  corrections, which came and went before the change too, and the machine's load differed; the
-  user has not yet said how it feels. `RUST_LOG=moves=debug,keys=debug` logs every correction,
-  the position and longest tick gap each 20 ticks, and each scripted key.
+  The tick schedule no longer slides when a wake-up is late (`acacia-bot/src/cadence.rs`): in
+  eight runs with it there, 20 ticks took 1.0 to 1.1 s throughout, the longest gap mostly 64 to
+  136 ms. Corrections still come and go, cause unknown: of five walks with sprint-jumping, three
+  had none, one had one and one had five, each in mid-jump (the same route run again had none,
+  so it is not a block on the way); and once, standing where it joined, the player was
+  corrected 19 times in 6 s (two later joins: none). The user has not yet said how it feels.
+  `RUST_LOG=moves=debug,keys=debug` logs every correction with the blocks under the feet, the
+  position and longest tick gap each 20 ticks, and each scripted key.
 - **Performance:** on a GPU only a light scene was measured (2026-10-11, Intel Arc integrated,
   Vulkan, 2560×1440, vsync off, the flat test world at radius 8: 257 sections, about 2k quads):
   166 to 375 fps over 45 s, 420 MB resident. No terrain-heavy world, no frame-time spread, no
