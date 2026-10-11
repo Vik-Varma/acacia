@@ -1,7 +1,8 @@
 //! A book's page (Java's `BookViewScreen` layout: a 192-pixel page area at the top, 14 lines of
 //! 114 pixels, the page number above them, the turn buttons under them and Done below). A book and
 //! quill has Sign beside Done; signing swaps the page for the title prompt of Java's
-//! `BookSignScreen`. The page is Java's `book.png` where the look has it, else flat parchment.
+//! `BookSignScreen`. The page is the look's art (Java's `book.png`, or Bedrock's cover and page from
+//! `theme/bedrock/book.rs`), else flat parchment.
 
 use crate::draw::DrawList;
 use crate::font::Font;

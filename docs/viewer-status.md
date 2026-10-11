@@ -57,9 +57,9 @@ unit or pack tests only.
 | Screens | Grindstone | live (Java look): an enchanted sword put in, the plain one shown as the result, taken into the hotbar with its experience |
 | Screens | The name of the stack under the mouse, in Java's tooltip box, while no stack is carried: slots, creative items, a stonecutter's cuts | live over a hotbar slot (Java look), with an enchanted sword's two enchantments in grey under its name. An anvil's name (italic) and lore lines by the same code, unseen. None on recipe-book results, trades or patterns; no attribute or durability lines |
 | Screens | Cartography table, with a name box where the title would be (Bedrock's table renames; Java's has no box, so the place is ours) | live (Java look): a map put in and named, the result shown; taking it and the paper and pane recipes unseen. The box was moved 3 pixels down after the shot |
-| Screens | Sign editor: the board with its four lines, Done or Esc writes; a hanging sign's smaller board and narrower lines | live (Java look) |
+| Screens | Sign editor: the board with its four lines, Done or Esc writes; a hanging sign's smaller board and narrower lines | live, both looks |
 | Screens | Books: a right-click opens the held book's pages; a book and quill takes typing at its caret (arrows, Home and End move it; Backspace and Delete) and new pages (the page keys turn them), and is signed under a title | live; the caret inside a word seen live (Java look), no Up or Down |
-| Screens | Loom: patterns as buttons (the pattern item's one, else the plain 32); the result shows the banner it makes, and so does a large preview in the frame above it (the result's icon at twice its size, not Java's banner model) | live (Java look) |
+| Screens | Loom: patterns as buttons (the pattern item's one, else the plain 32); the result shows the banner it makes, and so does a large preview in the frame above it (the result's icon at twice its size, not Java's banner model) | live, both looks |
 | Screens | Beacon: Java's screen in both looks (its sheet and button sprites in the Java look, plain panel and cells in the Bedrock look), each power a button with its effect's icon; a power the pyramid under it is too small for is disabled | live, both looks (a two-layer pyramid: four powers open, three disabled, haste picked). No Cancel button (Esc closes), no payment-item pictures, level II shows "II" for the power's icon. The Bedrock look's headings were made dark after the shot |
 | Screens | Creative inventory (E in creative mode): four tabs, a click takes one, Shift a stack; a stack carried onto the items is destroyed; a fifth tab ("Self") shows the player's own screen under the tab buttons; a sixth ("Find") lists every tab's items whose identifier holds the typed text | live (the search: "diamond s" left the sword, spear and shovel); the fifth tab by tests and by pixels sampled from a shot on testbox (the image was not looked at). The search reads identifiers, not the translated names, and has no text box art |
 | Screens | Trading: the offers of a villager or wandering trader, a click trades once; a villager's level beside its name, later levels' offers crossed out ; its experience bar under the name | live (wandering trader; a villager: "Mason - Apprentice" after 16 trades, its bar a tenth full and only its two levels' offers open, Java look). acacia-proto reads `UpdateTrade`'s tier and unique ids as plain varints though they are zigzag; the bot undoes that (`state/stations.rs`) until the generated reader is fixed |
@@ -70,9 +70,9 @@ unit or pack tests only.
 
 ## Not done
 
-- **Screens:** Bedrock's own beacon screen; the
-  Bedrock look's book art (the Java look draws `book.png`, seen live; its turn buttons are plain
-  buttons; a look baked before 2026-10-11 lacks it).
+- **Screens:** Bedrock's own beacon screen and its two-page book (the Bedrock look puts the pack's
+  cover and page under Java's one-page layout, seen live; the Java look draws `book.png`, seen
+  live; both looks' turn buttons are plain buttons; a look baked before 2026-10-11 lacks the art).
 - **Dimensions:** a nether portal was walked through in the viewer (2026-10-10, creative, to a
   crimson forest), and an end portal block into the End (2026-10-11: the dimension change in
   the log, the dragon's bar in the shot) and back out of it (a portal block on the End's platform: the
