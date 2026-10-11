@@ -62,14 +62,14 @@ unit or pack tests only.
 | Screens | Loom: patterns as buttons (the pattern item's one, else the plain 32); the result shows the banner it makes, and so does a large preview in the frame above it (the result's icon at twice its size, not Java's banner model) | live (Java look) |
 | Screens | Beacon: powers, second power and confirm as buttons (not either game's own screen); a power the pyramid under it is too small for stands in brackets and cannot be picked | live (a two-layer pyramid: four powers open, three in brackets; "(Strength)" touches its button's edge) |
 | Screens | Creative inventory (E in creative mode): four tabs, a click takes one, Shift a stack; a stack carried onto the items is destroyed; a fifth tab ("Self") shows the player's own screen under the tab buttons; a sixth ("Find") lists every tab's items whose identifier holds the typed text | live (the search: "diamond s" left the sword, spear and shovel); the fifth tab by tests and by pixels sampled from a shot on testbox (the image was not looked at). The search reads identifiers, not the translated names, and has no text box art |
-| Screens | Trading: the offers of a villager or wandering trader, a click trades once; a villager's level beside its name, later levels' offers crossed out ; its experience bar under the name | live (wandering trader; villagers: "Fisherman - Novice" and "Mason - Novice" with one trade made, Java look). The bar's track was seen, its fill was not: it stayed empty after that one trade, so whether the villager's `TradeExperience` reaches the viewer is unchecked (the share itself is unit-tested) |
+| Screens | Trading: the offers of a villager or wandering trader, a click trades once; a villager's level beside its name, later levels' offers crossed out ; its experience bar under the name | live (wandering trader; a villager: "Mason - Apprentice" after 16 trades, its bar a tenth full and only its two levels' offers open, Java look). acacia-proto reads `UpdateTrade`'s tier and unique ids as plain varints though they are zigzag; the bot undoes that (`state/stations.rs`) until the generated reader is fixed |
 | Screens | Furnace family, hopper, dispenser/dropper, brewing stand | live (acacia-46) |
 | Screens | Server forms, pause, options (two columns), death and respawn | live |
 | Sound | Each look's own samples: Bedrock `.fsb` (FADPCM), Java `.ogg` | logs (testbox has no audio device) |
 
 ## Not done
 
-- **Screens:** the beacon's own art; a filled trader's experience bar (see the table); the
+- **Screens:** the beacon's own art; the
   Bedrock look's book art (the Java look draws `book.png`, seen live; its turn buttons are plain
   buttons; a look baked before 2026-10-11 lacks it).
 - **Dimensions:** a nether portal was walked through in the viewer (2026-10-10, creative, to a
