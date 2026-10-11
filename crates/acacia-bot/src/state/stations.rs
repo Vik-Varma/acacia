@@ -54,6 +54,9 @@ pub struct TradeWindow {
     pub window_id: i32,
     /// Unique id of the villager or wandering trader.
     pub trader: i64,
+    /// The packet's two unique ids (`villager`, `entity`): which of them names the trader's
+    /// entity differs between servers, so a lookup tries both.
+    pub ids: [i64; 2],
     pub display_name: String,
     /// The trader's current level (0 = novice).
     pub tier: i32,
@@ -84,6 +87,7 @@ impl Stations {
                 self.trade = Some(TradeWindow {
                     window_id: p.window_id.to_raw() as i32,
                     trader: p.entity_unique_id as i64,
+                    ids: [p.villager_unique_id as i64, p.entity_unique_id as i64],
                     display_name: p.display_name,
                     tier: p.trade_tier as i32,
                     offers,

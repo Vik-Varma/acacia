@@ -94,8 +94,9 @@ pub fn trade(bot: &Bot) -> Option<Trade> {
         Some(Offer { price: item(&o.buy_a)?, second_price: o.buy_b.as_ref().and_then(item), goods: item(&o.sell)?, open: !o.is_disabled() && o.tier <= window.tier })
     });
     let level = level(window.tier, window.offers.iter().map(|o| o.tier));
-    let xp = bot.state().entities.by_unique(window.trader).map_or(0, |trader| trader.metadata.int(acacia_bot::proto::types::MetadataDictionaryItemKey::TradeExperience));
-    tracing::debug!(target: "trade", xp, tier = window.tier, known = bot.state().entities.by_unique(window.trader).is_some(), "trader");
+    let trader = window.ids.iter().find_map(|id| bot.state().entities.by_unique(*id).filter(|e| !e.is_player()));
+    let xp = trader.map_or(0, |trader| trader.metadata.int(acacia_bot::proto::types::MetadataDictionaryItemKey::TradeExperience));
+    tracing::debug!(target: "trade", xp, tier = window.tier, ids = ?window.ids, known = trader.is_some(), "trader");
     Some(Trade { title: window.display_name.clone(), level, progress: level.and_then(|_| level_progress(window.tier, xp)), offers: offers.collect() })
 }
 
