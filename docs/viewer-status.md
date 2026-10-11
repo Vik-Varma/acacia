@@ -53,6 +53,7 @@ unit or pack tests only.
 | Screens | Crafting by hand: the 2×2 grid and the crafting table's 3×3; a click takes the result onto the cursor, Shift into the inventory | table live; live |
 | Screens | Anvil with its name box and level cost, smithing table, stonecutter, enchanting table | live (the cost: both looks, a rename). A cost above the player's levels is red, and 40 or more reads "Too Expensive!": the red line by its pixels in a testbox shot (a levelless rename, image not looked at), "Too Expensive!" by the bot's tests only; the result stays empty in both cases |
 | Screens | A scroller on the stonecutter's and the trader's lists when they are longer than their window; the wheel moves them a row | live (Java look): the stonecutter's moved by the wheel, the trader's seen at rest |
+| Screens | Enchanting options: the server's words in the galactic alphabet (Java's `ascii_sga.png`, also in the Bedrock look), and under them the level and the enchantment hinted at | live, both looks. A Java look baked before 2026-10-11 lacks the alphabet: run `lookbake java` again |
 | Screens | Grindstone | tests only, never opened live |
 | Screens | Cartography table, with a name box where the title would be (Bedrock's table renames; Java's has no box, so the place is ours) | live (Java look): a map put in and named, the result shown; taking it and the paper and pane recipes unseen. The box was moved 3 pixels down after the shot |
 | Screens | Sign editor: the board with its four lines, Done or Esc writes; a hanging sign's smaller board and narrower lines | live (Java look) |
@@ -67,8 +68,8 @@ unit or pack tests only.
 
 ## Not done
 
-- **Screens:** the beacon's own art; a trader's experience bar; the enchanting table's galactic text (each option says its
-  level and the enchantment it hints at, which the game keeps for the tooltip); a book's
+- **Screens:** the beacon's own art; a trader's experience bar; tooltips (an enchanting
+  option writes its hint under its galactic words instead); a book's
   art and a caret inside its text.
 - **Dimensions:** a nether portal was walked through in the viewer (2026-10-10, creative, to a
   crimson forest); the way back and the end portal were checked in the bot's drill only. An
