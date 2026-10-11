@@ -40,8 +40,10 @@ pub struct Page<'a> {
     pub text: &'a str,
     pub page: usize,
     pub pages: usize,
-    /// A book and quill: the text ends in a caret, and the last page turns to a new one.
+    /// A book and quill: the text has a caret, and the last page turns to a new one.
     pub writing: bool,
+    /// Bytes of `text` before the caret.
+    pub caret: usize,
     /// The title typed so far, while the book is being signed.
     pub signing: Option<&'a str>,
 }
@@ -106,12 +108,23 @@ pub fn draw(list: &mut DrawList, theme: &Theme, page: Page, mouse: [f32; 2], siz
     }
     let number = format!("Page {} of {}", page.page + 1, page.pages.max(1));
     font.draw(list, &number, left + NUMBER_AT[0] - font.width(&number), TOP + NUMBER_AT[1], 0x000000, 1.0, false);
-    let caret = if page.writing { "_" } else { "" };
-    let lines = page.text.split('\n').flat_map(|line| if line.is_empty() { vec![String::new()] } else { font.wrap(line, TEXT_WIDTH) });
-    let lines: Vec<String> = lines.take(LINES).collect();
-    for (i, line) in lines.iter().enumerate() {
-        let end = if i + 1 == lines.len() { caret } else { "" };
-        font.draw(list, &format!("{line}{end}"), left + TEXT_AT[0], TOP + TEXT_AT[1] + i as f32 * LINE_HEIGHT, 0x000000, 1.0, false);
+    let wrapped = |text: &str| -> Vec<String> {
+        let lines = text.split('\n').flat_map(|line| if line.is_empty() { vec![String::new()] } else { font.wrap(line, TEXT_WIDTH) });
+        lines.take(LINES).collect()
+    };
+    let at = |row: usize| TOP + TEXT_AT[1] + row as f32 * LINE_HEIGHT;
+    for (i, line) in wrapped(page.text).iter().enumerate() {
+        font.draw(list, line, left + TEXT_AT[0], at(i), 0x000000, 1.0, false);
+    }
+    if page.writing {
+        // The caret stands where the text before it ends; in a word that the rest of the page
+        // wraps onto the next line, that is still the end of its old line.
+        let before = wrapped(page.text.get(..page.caret).unwrap_or(page.text));
+        let (x, y) = (left + TEXT_AT[0] + before.last().map_or(0.0, |line| font.width(line)), at(before.len().saturating_sub(1)));
+        match page.caret >= page.text.len() {
+            true => _ = font.draw(list, "_", x, y, 0x000000, 1.0, false),
+            false => list.fill(white, [x, y - 1.0, x + 1.0, y + 8.0], [0, 0, 0, 0xFF]),
+        }
     }
 }
 
@@ -133,7 +146,7 @@ mod tests {
     fn turn_buttons_show_only_where_a_page_follows() {
         let size = [426.0, 240.0];
         let (back, forward, done) = ([165.0, 165.0], [240.0, 165.0], [213.0, 200.0]);
-        let first = Page { text: "", page: 0, pages: 3, writing: false, signing: None };
+        let first = Page { text: "", page: 0, pages: 3, writing: false, caret: 0, signing: None };
         assert_eq!((hit(first, size, back), hit(first, size, forward), hit(first, size, done)), (None, Some(Hit::Forward), Some(Hit::Done)));
         let last = Page { page: 2, ..first };
         assert_eq!((hit(last, size, back), hit(last, size, forward)), (Some(Hit::Back), None));
@@ -144,7 +157,7 @@ mod tests {
     fn a_book_and_quill_signs_from_the_left_button() {
         let size = [426.0, 240.0];
         let (left, right) = ([150.0, 200.0], [280.0, 200.0]);
-        let quill = Page { text: "", page: 0, pages: 1, writing: true, signing: None };
+        let quill = Page { text: "", page: 0, pages: 1, writing: true, caret: 0, signing: None };
         assert_eq!((hit(quill, size, left), hit(quill, size, right)), (Some(Hit::Sign), Some(Hit::Done)));
         let signing = Page { signing: Some("Title"), ..quill };
         assert_eq!((hit(signing, size, left), hit(signing, size, right)), (Some(Hit::Finalize), Some(Hit::Cancel)));
