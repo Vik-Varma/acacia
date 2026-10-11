@@ -41,7 +41,19 @@ pub struct Trade {
     pub title: String,
     /// A villager's level; a wandering trader has none.
     pub level: Option<&'static str>,
+    /// How far a villager is to its next level, 0 to 1; none for a master.
+    pub progress: Option<f32>,
     pub offers: Vec<Offer>,
+}
+
+/// The experience at which a villager reaches each level.
+const LEVEL_XP: [i32; 5] = [0, 10, 70, 150, 250];
+
+/// The share of level `tier`'s experience a villager with `xp` has gathered.
+fn level_progress(tier: i32, xp: i32) -> Option<f32> {
+    let tier = usize::try_from(tier).ok()?;
+    let (from, to) = (*LEVEL_XP.get(tier)?, *LEVEL_XP.get(tier + 1)?);
+    Some(((xp - from) as f32 / (to - from) as f32).clamp(0.0, 1.0))
 }
 
 /// Java's `merchant.level.1` to `.5`.
@@ -59,6 +71,7 @@ fn level(tier: i32, offer_tiers: impl Iterator<Item = i32>) -> Option<&'static s
 fn only_a_trader_with_later_offers_has_a_level() {
     assert_eq!((level(0, [0, 0, 1].into_iter()), level(4, [0, 4].into_iter())), (Some("Novice"), Some("Master")));
     assert_eq!((level(0, [0, 0].into_iter()), level(0, [].into_iter())), (None, None));
+    assert_eq!((level_progress(0, 5), level_progress(1, 70), level_progress(2, 60), level_progress(4, 300)), (Some(0.5), Some(1.0), Some(0.0), None));
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -80,7 +93,9 @@ pub fn trade(bot: &Bot) -> Option<Trade> {
     let offers = window.offers.iter().filter_map(|o| {
         Some(Offer { price: item(&o.buy_a)?, second_price: o.buy_b.as_ref().and_then(item), goods: item(&o.sell)?, open: !o.is_disabled() && o.tier <= window.tier })
     });
-    Some(Trade { title: window.display_name.clone(), level: level(window.tier, window.offers.iter().map(|o| o.tier)), offers: offers.collect() })
+    let level = level(window.tier, window.offers.iter().map(|o| o.tier));
+    let xp = bot.state().entities.by_unique(window.trader).map_or(0, |trader| trader.metadata.int(acacia_bot::proto::types::MetadataDictionaryItemKey::TradeExperience));
+    Some(Trade { title: window.display_name.clone(), level, progress: level.and_then(|_| level_progress(window.tier, xp)), offers: offers.collect() })
 }
 
 /// The beacon screen's buttons: the five powers, the two second powers, and the confirm.

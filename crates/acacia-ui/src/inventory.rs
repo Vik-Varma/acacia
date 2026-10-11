@@ -223,6 +223,8 @@ pub struct Contents<'a> {
     pub scrolled: Option<f32>,
     /// The text in a bench's name box, up to the caret and after it.
     pub name: Option<(&'a str, &'a str)>,
+    /// A trader's experience toward its next level, 0 to 1.
+    pub experience: Option<f32>,
     /// A line under a bench's result (an anvil's level cost), and whether the player can pay it.
     pub note: Option<(&'a str, bool)>,
     /// The creative inventory's open tab and how far its items are scrolled, 0 to 1.

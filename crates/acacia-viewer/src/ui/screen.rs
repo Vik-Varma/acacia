@@ -44,7 +44,7 @@ pub(super) fn draw(list: &mut DrawList, skin: &mut Skin, lang: &Lang, screen: &S
         AnvilCost::Short(levels) => (format!("Enchantment Cost: {levels}"), false),
         AnvilCost::TooExpensive => ("Too Expensive!".to_owned(), false),
     });
-    let contents = Contents { slot: &|slot| icons.get(&slot).copied(), cursor, progress: inventory.progress, picks: &picks, picked: shown, scrolled, name, note: note.as_ref().map(|(text, payable)| (text.as_str(), *payable)), creative: creative.map(|(_, tab, scrolled)| (tab, scrolled)) };
+    let contents = Contents { slot: &|slot| icons.get(&slot).copied(), cursor, progress: inventory.progress, picks: &picks, picked: shown, scrolled, name, experience: inventory.trade.as_ref().and_then(|t| t.progress), note: note.as_ref().map(|(text, payable)| (text.as_str(), *payable)), creative: creative.map(|(_, tab, scrolled)| (tab, scrolled)) };
     let title = match (&inventory.trade, &inventory.container) {
         _ if creative.is_some_and(|c| c.1 == inventory::SEARCH_TAB) => name.map_or_else(String::new, |(before, after)| format!("Search: {before}_{after}")),
         _ if creative.is_some() => inventory::TABS[creative.map_or(0, |c| c.1)].to_owned(),

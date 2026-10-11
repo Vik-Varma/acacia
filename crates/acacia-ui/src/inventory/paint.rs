@@ -60,6 +60,12 @@ pub fn draw(list: &mut DrawList, theme: &Theme, layout: Layout, title: &str, con
             }
         }
     }
+    if let (Layout::Trade, Some(share)) = (layout, contents.experience) {
+        // MerchantScreen's experience bar: 102×5 under the trader's name.
+        let (white, [x, y]) = (theme.atlas.white(), [ox + 136.0, oy + 16.0]);
+        list.fill(white, [x, y, x + 102.0, y + 5.0], [0x2B, 0x2B, 0x2B, 0xFF]);
+        list.fill(white, [x + 1.0, y + 1.0, x + 1.0 + 100.0 * share.clamp(0.0, 1.0), y + 4.0], [0x80, 0xFF, 0x20, 0xFF]);
+    }
     if let (Some((note, payable)), Some(font)) = (contents.note, &theme.font) {
         // AnvilScreen's cost line: right-aligned on a dark strip, red when it cannot be paid.
         let (right, x) = (ox + layout.width() - 8.0, ox + layout.width() - 10.0 - font.width(note));
