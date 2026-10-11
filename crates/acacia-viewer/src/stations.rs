@@ -39,7 +39,26 @@ pub fn station(window: WindowType) -> Option<Station> {
 pub struct Trade {
     /// The trader's name as the server sent it (may be a translation key).
     pub title: String,
+    /// A villager's level; a wandering trader has none.
+    pub level: Option<&'static str>,
     pub offers: Vec<Offer>,
+}
+
+/// Java's `merchant.level.1` to `.5`.
+const LEVELS: [&str; 5] = ["Novice", "Apprentice", "Journeyman", "Expert", "Master"];
+
+/// The name of level `tier` (0 = novice) for a trader whose offers show it has levels: a
+/// villager lists its later levels' offers from the start, a wandering trader has one level.
+fn level(tier: i32, offer_tiers: impl Iterator<Item = i32>) -> Option<&'static str> {
+    let levelled = offer_tiers.max().is_some_and(|highest| highest > 0);
+    LEVELS.get(usize::try_from(tier).ok()?).copied().filter(|_| levelled)
+}
+
+#[cfg(test)]
+#[test]
+fn only_a_trader_with_later_offers_has_a_level() {
+    assert_eq!((level(0, [0, 0, 1].into_iter()), level(4, [0, 4].into_iter())), (Some("Novice"), Some("Master")));
+    assert_eq!((level(0, [0, 0].into_iter()), level(0, [].into_iter())), (None, None));
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -61,7 +80,7 @@ pub fn trade(bot: &Bot) -> Option<Trade> {
     let offers = window.offers.iter().filter_map(|o| {
         Some(Offer { price: item(&o.buy_a)?, second_price: o.buy_b.as_ref().and_then(item), goods: item(&o.sell)?, open: !o.is_disabled() && o.tier <= window.tier })
     });
-    Some(Trade { title: window.display_name.clone(), offers: offers.collect() })
+    Some(Trade { title: window.display_name.clone(), level: level(window.tier, window.offers.iter().map(|o| o.tier)), offers: offers.collect() })
 }
 
 /// The beacon screen's buttons: the five powers, the two second powers, and the confirm.

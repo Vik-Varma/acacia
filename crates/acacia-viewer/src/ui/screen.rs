@@ -48,7 +48,8 @@ pub(super) fn draw(list: &mut DrawList, skin: &mut Skin, lang: &Lang, screen: &S
     let title = match (&inventory.trade, &inventory.container) {
         _ if creative.is_some_and(|c| c.1 == inventory::SEARCH_TAB) => name.map_or_else(String::new, |(before, after)| format!("Search: {before}_{after}")),
         _ if creative.is_some() => inventory::TABS[creative.map_or(0, |c| c.1)].to_owned(),
-        (Some(trade), _) => lang.translate(&trade.title, &[]),
+        // MerchantScreen: "Farmer - Novice".
+        (Some(trade), _) => trade.level.map_or_else(|| lang.translate(&trade.title, &[]), |level| format!("{} - {level}", lang.translate(&trade.title, &[]))),
         (_, Some(container)) => container.title.clone(),
         _ => String::new(),
     };
