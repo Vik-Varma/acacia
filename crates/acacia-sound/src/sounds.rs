@@ -121,13 +121,18 @@ fn read(roots: &[PathBuf], path: &str) -> Option<Pcm> {
 mod tests {
     use super::*;
 
-    /// Needs assets/vanilla (tools/fetch-vanilla-pack.sh); skipped without it.
+    /// Needs assets/vanilla (tools/fetch-vanilla-pack.sh) and a Java look baked with
+    /// `LOOKBAKE_MUSIC=1` (the Bedrock pack has no music files); skipped without them.
     #[test]
     fn a_music_track_decodes_to_minutes_of_sound() {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/vanilla");
-        let defs = Definitions::load(&root);
+        let assets = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets");
+        let roots = [assets.join("vanilla"), assets.join("looks/java")];
+        let defs = Definitions::load(&roots[0]);
         let Some(def) = defs.definition("music.game") else { return };
-        let pcm = read(&[root], &def.files[0].path).expect("the first track decodes");
+        if !roots.iter().any(|root| root.join(format!("{}.ogg", def.files[0].path)).is_file()) {
+            return println!("no music files");
+        }
+        let pcm = read(&roots, &def.files[0].path).expect("the first track decodes");
         let seconds = pcm.samples.len() as f32 / (pcm.sample_rate as f32 * f32::from(pcm.channels));
         println!("music track {}: {seconds:.0} s, {} Hz, {} channels", def.files[0].path, pcm.sample_rate, pcm.channels);
         assert!(seconds > 30.0 && pcm.samples.iter().any(|&s| s != 0), "{seconds} s");

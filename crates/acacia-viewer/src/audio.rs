@@ -191,7 +191,8 @@ impl Audio {
         }
         if self.sounds.as_ref().is_none_or(|(l, _)| *l != look) {
             let roots = match look {
-                LookChoice::Bedrock => vec![self.bedrock.clone()],
+                // The Bedrock pack has no music files: those come from the Java look's.
+                LookChoice::Bedrock => vec![self.bedrock.clone(), self.java.clone()],
                 LookChoice::Java => vec![self.java.clone(), self.bedrock.clone()],
             };
             self.sounds = Some((look, Sounds::new(&self.bedrock, roots)));
