@@ -87,7 +87,9 @@ impl Stations {
                 self.trade = Some(TradeWindow {
                     window_id: p.window_id.to_raw() as i32,
                     trader: p.entity_unique_id as i64,
-                    ids: [p.villager_unique_id as i64, p.entity_unique_id as i64],
+                    // The packet's ids are zigzag varints the generated reader takes as plain ones
+                    // (measured on BDS: 25769798189 for the villager -12884899095).
+                    ids: [p.villager_unique_id, p.entity_unique_id].map(|v| (v >> 1) as i64 ^ -((v & 1) as i64)),
                     display_name: p.display_name,
                     tier: p.trade_tier as i32,
                     offers,
