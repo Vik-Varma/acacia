@@ -94,6 +94,12 @@ unit or pack tests only.
 - **Sound:** ambience, and Java's event mapping where a Bedrock sound has no Java file. Music
   plays by dimension only (no biome sets, no menu music), has no volume of its own, and counts
   its pause from four minutes after a track starts, not from its end.
+- **Movement on the dev machine (Windows, 37 ms to the server):** felt wrong to the user
+  (2026-10-11, "teleported around"). Measured there: 20 ticks took 1.0 to 1.8 s with stalls of
+  several hundred ms, and the server corrected the player 13, 3 and 0 times in three like walks.
+  The tick schedule no longer slides when a wake-up is late (`acacia-bot/src/cadence.rs`), not
+  yet measured on that machine: it was short of memory. `RUST_LOG=moves=debug,keys=debug` logs
+  every correction, the position and longest tick gap each 20 ticks, and each scripted key.
 - **Performance:** on a GPU only a light scene was measured (2026-10-11, Intel Arc integrated,
   Vulkan, 2560×1440, vsync off, the flat test world at radius 8: 257 sections, about 2k quads):
   166 to 375 fps over 45 s, 420 MB resident. No terrain-heavy world, no frame-time spread, no
