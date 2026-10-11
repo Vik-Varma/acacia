@@ -65,7 +65,7 @@ unit or pack tests only.
 | Screens | Trading: the offers of a villager or wandering trader, a click trades once; a villager's level beside its name, later levels' offers crossed out ; its experience bar under the name | live (wandering trader; a villager: "Mason - Apprentice" after 16 trades, its bar a tenth full and only its two levels' offers open, Java look). acacia-proto reads `UpdateTrade`'s tier and unique ids as plain varints though they are zigzag; the bot undoes that (`state/stations.rs`) until the generated reader is fixed |
 | Screens | Furnace family, hopper, dispenser/dropper, brewing stand | live (acacia-46) |
 | Screens | Server forms, pause, options (two columns), death and respawn | live |
-| Sound | Each look's own samples: Bedrock `.fsb` (FADPCM), Java `.ogg` | logs (testbox has no audio device) |
+| Sound | Each look's own samples: Bedrock `.fsb` (FADPCM), Java `.ogg` | logs; played into a real audio device once (2026-10-11, the dev machine, Bedrock look: 47 sounds mixed in 45 s, steps and hits among them), with nobody listening |
 | Sound | Music: a track of the dimension's set five seconds after joining (the creative set in creative mode), then the pack's pause before the next; decoded on its own thread | the first track's start in the log (`RUST_LOG=music=info`), and a pack test decodes a track (261 s of stereo); never heard (no audio device). Neither asset set ships music: bake the Java look with `LOOKBAKE_MUSIC=1` (248 MB), which both looks then play. Bedrock's numbered tracks are found under Java's titles (`acacia-sound/src/java_names.rs`), the pairing unchecked by ear |
 
 ## Not done
@@ -94,9 +94,10 @@ unit or pack tests only.
 - **Sound:** ambience, and Java's event mapping where a Bedrock sound has no Java file. Music
   plays by dimension only (no biome sets, no menu music), has no volume of its own, and counts
   its pause from four minutes after a track starts, not from its end.
-- **Performance:** only measured on lavapipe (CPU, 25 to 40 fps at 1280×720 on testbox); no GPU
-  frame times recorded. The dev machine has an Intel Arc but too little free memory to build the
-  viewer beside the other sessions (2026-10-10).
+- **Performance:** on a GPU only a light scene was measured (2026-10-11, Intel Arc integrated,
+  Vulkan, 2560×1440, vsync off, the flat test world at radius 8: 257 sections, about 2k quads):
+  166 to 375 fps over 45 s, 420 MB resident. No terrain-heavy world, no frame-time spread, no
+  comparison with the game. On lavapipe (CPU) testbox gives 25 to 40 fps at 1280×720.
 
 ## Testing it
 
