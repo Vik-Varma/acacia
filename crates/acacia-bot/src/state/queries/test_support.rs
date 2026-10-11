@@ -161,7 +161,8 @@ pub fn update_trade(recipes: Vec<Value>) -> UpdateTrade {
         window_id: WindowID::First,
         window_type: WindowType::Trading,
         size: 0,
-        trade_tier: 1,
+        // Tier 1, zigzag (see `stations::unzigzag`).
+        trade_tier: 2,
         villager_unique_id: 0,
         entity_unique_id: 77,
         display_name: "entity.villager.librarian".into(),

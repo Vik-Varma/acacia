@@ -63,6 +63,13 @@ pub struct TradeWindow {
     pub offers: Vec<TradeOffer>,
 }
 
+/// `UpdateTrade`'s tier and unique ids are zigzag varints that the generated reader takes as
+/// plain ones (measured on BDS 2026-10-11: 25769798189 for villager -12884899095, tier 2 for an
+/// apprentice).
+fn unzigzag(v: u64) -> i64 {
+    (v >> 1) as i64 ^ -((v & 1) as i64)
+}
+
 #[derive(Debug, Default)]
 pub struct Stations {
     pub enchant_options: Vec<EnchantOption>,
@@ -87,11 +94,9 @@ impl Stations {
                 self.trade = Some(TradeWindow {
                     window_id: p.window_id.to_raw() as i32,
                     trader: p.entity_unique_id as i64,
-                    // The packet's ids are zigzag varints the generated reader takes as plain ones
-                    // (measured on BDS: 25769798189 for the villager -12884899095).
-                    ids: [p.villager_unique_id, p.entity_unique_id].map(|v| (v >> 1) as i64 ^ -((v & 1) as i64)),
+                    ids: [p.villager_unique_id, p.entity_unique_id].map(unzigzag),
                     display_name: p.display_name,
-                    tier: p.trade_tier as i32,
+                    tier: unzigzag(u64::from(p.trade_tier)) as i32,
                     offers,
                 });
             }
