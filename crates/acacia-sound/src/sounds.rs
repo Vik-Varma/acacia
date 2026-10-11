@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::defs::{Cue, Definitions};
+use crate::defs::{Cue, Definitions, File};
 use crate::fsb::{self, Pcm};
 use crate::ogg;
 use crate::player::{Listener, Output, Voice};
@@ -51,47 +51,70 @@ impl Sounds {
         };
         self.seed = seed;
         let Some(cue) = cue else { return };
-        let Some(def) = self.defs.definition(&cue.sound).cloned() else {
-            tracing::debug!(sound = cue.sound, "no sound definition");
-            return;
-        };
-        let total: u32 = def.files.iter().map(|f| f.weight.max(1)).sum();
-        let mut pick = (roll(&mut self.seed) * total as f32) as u32;
-        let Some(file) = def.files.iter().find(|f| {
-            let hit = pick < f.weight.max(1);
-            pick = pick.saturating_sub(f.weight.max(1));
-            hit
-        }) else {
-            return;
-        };
+        let Some((file, max_distance)) = self.pick(&cue.sound) else { return };
         let Some(pcm) = self.load(&file.path) else { return };
         tracing::debug!(sound = cue.sound, file = file.path, samples = pcm.samples.len(), "play");
         let volume = volume * cue.volume * file.volume;
-        let range = def.max_distance.unwrap_or(DEFAULT_RANGE) * volume.max(1.0);
+        let range = max_distance.unwrap_or(DEFAULT_RANGE) * volume.max(1.0);
         self.output.play(Voice { pcm, volume, pitch: pitch * cue.pitch * file.pitch, position: at, range }, listener);
+    }
+
+    /// Plays one of a definition's long samples (music) everywhere: it is read and decoded on a
+    /// thread of its own, so the caller does not wait for it, and is not kept afterwards.
+    pub fn stream(&mut self, sound: &str, volume: f32) {
+        let Some((file, _)) = self.pick(sound) else { return };
+        let Some(mixer) = self.output.mixer() else { return };
+        let roots = self.roots.clone();
+        std::thread::spawn(move || {
+            if let Some(pcm) = read(&roots, &file.path) {
+                tracing::debug!(file = file.path, samples = pcm.samples.len(), "stream");
+                crate::player::mix(&mixer, &pcm, (volume * file.volume).min(1.0), file.pitch, [1.0, 1.0]);
+            }
+        });
+    }
+
+    /// One of the files of the definition `sound`, by weight, and the definition's range.
+    fn pick(&mut self, sound: &str) -> Option<(File, Option<f32>)> {
+        let Some(def) = self.defs.definition(sound) else {
+            tracing::debug!(sound, "no sound definition");
+            return None;
+        };
+        let total: u32 = def.files.iter().map(|f| f.weight.max(1)).sum();
+        let mut pick = (roll(&mut self.seed) * total as f32) as u32;
+        let file = def.files.iter().find(|f| {
+            let hit = pick < f.weight.max(1);
+            pick = pick.saturating_sub(f.weight.max(1));
+            hit
+        })?;
+        Some((file.clone(), def.max_distance))
     }
 
     fn load(&mut self, path: &str) -> Option<Arc<Pcm>> {
         if let Some(cached) = self.cache.get(path) {
             return cached.clone();
         }
-        let pcm = self.roots.iter().find_map(|root| {
-            let ogg_file = root.join(format!("{path}.ogg"));
-            if let Ok(bytes) = std::fs::read(&ogg_file) {
-                tracing::debug!(file = %ogg_file.display(), "ogg");
-                return ogg::decode(&bytes).inspect_err(|e| tracing::debug!(%e, file = %ogg_file.display(), "ogg")).ok();
-            }
-            let fsb_file = root.join(format!("{path}.fsb"));
-            let bytes = std::fs::read(&fsb_file).ok()?;
-            fsb::decode(&bytes).inspect_err(|e| tracing::debug!(%e, file = %fsb_file.display(), "fsb")).ok()
-        });
-        if pcm.is_none() {
-            tracing::debug!(path, "sound file missing or undecodable");
-        }
-        let pcm = pcm.map(Arc::new);
+        let pcm = read(&self.roots, path).map(Arc::new);
         self.cache.insert(path.to_owned(), pcm.clone());
         pcm
     }
+}
+
+/// The sample `path` from the first root that has it, `.ogg` before the pack's `.fsb`.
+fn read(roots: &[PathBuf], path: &str) -> Option<Pcm> {
+    let pcm = roots.iter().find_map(|root| {
+        let ogg_file = root.join(format!("{path}.ogg"));
+        if let Ok(bytes) = std::fs::read(&ogg_file) {
+            tracing::debug!(file = %ogg_file.display(), "ogg");
+            return ogg::decode(&bytes).inspect_err(|e| tracing::debug!(%e, file = %ogg_file.display(), "ogg")).ok();
+        }
+        let fsb_file = root.join(format!("{path}.fsb"));
+        let bytes = std::fs::read(&fsb_file).ok()?;
+        fsb::decode(&bytes).inspect_err(|e| tracing::debug!(%e, file = %fsb_file.display(), "fsb")).ok()
+    });
+    if pcm.is_none() {
+        tracing::debug!(path, "sound file missing or undecodable");
+    }
+    pcm
 }
 
 /// xorshift64: 0 to 1.

@@ -28,6 +28,7 @@ mod forms;
 #[cfg(feature = "profile")]
 mod heap;
 mod creative_items;
+mod music;
 mod enchant_names;
 mod facts;
 mod frames;

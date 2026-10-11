@@ -6,6 +6,7 @@ use std::num::NonZero;
 use std::sync::Arc;
 
 use rodio::buffer::SamplesBuffer;
+use rodio::mixer::Mixer;
 use rodio::source::ChannelVolume;
 use rodio::{MixerDeviceSink, Source};
 
@@ -42,15 +43,25 @@ impl Output {
 
     pub fn play(&self, voice: Voice, listener: &Listener) {
         let Some(sink) = &self.sink else { return };
-        let (gain, [left, right]) = place(&voice, listener);
-        if gain <= 0.0 || voice.pcm.samples.is_empty() {
-            return;
-        }
-        let (Some(channels), Some(rate)) = (NonZero::new(voice.pcm.channels.max(1)), NonZero::new(voice.pcm.sample_rate.max(1))) else { return };
-        let samples: Vec<f32> = voice.pcm.samples.iter().map(|&s| f32::from(s) / 32768.0).collect();
-        let source = SamplesBuffer::new(channels, rate, samples).speed(voice.pitch.clamp(0.5, 2.0)).amplify(gain);
-        sink.mixer().add(ChannelVolume::new(source, vec![left, right]));
+        let (gain, ears) = place(&voice, listener);
+        mix(sink.mixer(), &voice.pcm, gain, voice.pitch, ears);
     }
+
+    /// The device's mixer, for a thread that decodes a long sample and then plays it with [`mix`].
+    pub fn mixer(&self) -> Option<Mixer> {
+        self.sink.as_ref().map(|sink| sink.mixer().clone())
+    }
+}
+
+/// Starts `pcm` at `gain`, each ear at its share.
+pub fn mix(mixer: &Mixer, pcm: &Pcm, gain: f32, pitch: f32, [left, right]: [f32; 2]) {
+    if gain <= 0.0 || pcm.samples.is_empty() {
+        return;
+    }
+    let (Some(channels), Some(rate)) = (NonZero::new(pcm.channels.max(1)), NonZero::new(pcm.sample_rate.max(1))) else { return };
+    let samples: Vec<f32> = pcm.samples.iter().map(|&s| f32::from(s) / 32768.0).collect();
+    let source = SamplesBuffer::new(channels, rate, samples).speed(pitch.clamp(0.5, 2.0)).amplify(gain);
+    mixer.add(ChannelVolume::new(source, vec![left, right]));
 }
 
 /// Overall gain and the two channels' share.

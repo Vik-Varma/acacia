@@ -21,6 +21,8 @@ pub enum Cue {
     Block { block: String, event: String, at: [f64; 3] },
     Entity { kind: String, event: String, at: [f64; 3] },
     World { event: String, at: [f64; 3] },
+    /// A track of this music event (`music.rs`).
+    Music(&'static str),
 }
 
 pub fn cue(bot: &Bot, packet: &RawPacket) -> Option<Cue> {
@@ -66,6 +68,7 @@ pub struct Own {
     mining_ticks: u32,
     /// The block being mined: where, its name and runtime id.
     mined: Option<(glam::IVec3, &'static str, u32)>,
+    music: crate::music::Music,
 }
 
 /// A tick's own effects.
@@ -80,6 +83,11 @@ impl Own {
     /// Called once a tick.
     pub fn tick(&mut self, bot: &Bot) -> OwnTick {
         let mut out = OwnTick { sounds: self.steps(bot), broken: None };
+        let player = &bot.state().player;
+        if let Some(event) = self.music.tick(player.dimension, player.game_mode == acacia_bot::proto::types::GameMode::Creative) {
+            tracing::info!(target: "music", event, "track");
+            out.sounds.push(Cue::Music(event));
+        }
         match bot.mining_progress() {
             Some((pos, _)) => {
                 let p = glam::IVec3::from_array(pos);
@@ -196,6 +204,7 @@ impl Audio {
             Cue::Block { block, event, at } => sounds.play(Event::Block { block, event }, Some(*at), master, 1.0, &listener),
             Cue::Entity { kind, event, at } => sounds.play(Event::Entity { kind, event }, Some(*at), master, 1.0, &listener),
             Cue::World { event, at } => sounds.play(Event::World(event), Some(*at), master, 1.0, &listener),
+            Cue::Music(event) => sounds.stream(event, master),
         }
     }
 }
