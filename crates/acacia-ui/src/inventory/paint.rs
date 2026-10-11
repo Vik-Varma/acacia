@@ -34,7 +34,9 @@ pub fn draw(list: &mut DrawList, theme: &Theme, layout: Layout, title: &str, con
             }
             Layout::Bench(bench) => {
                 let [x, y] = bench.title_at();
-                font.draw(list, bench.title(), ox + x, oy + y, TITLE, 1.0, false);
+                if !(bench.name_hides_title() && contents.name.is_some()) {
+                    font.draw(list, bench.title(), ox + x, oy + y, TITLE, 1.0, false);
+                }
                 font.draw(list, "Inventory", ox + 8.0, oy + height - 94.0, TITLE, 1.0, false)
             }
             // MerchantScreen: the trader's name over the right part, "Trades" over the offers.

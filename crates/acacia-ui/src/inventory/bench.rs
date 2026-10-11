@@ -114,7 +114,17 @@ impl Bench {
 
     /// Where the box for the result's new name is (110×16), for a bench that renames.
     pub fn name_box(self) -> Option<[f32; 2]> {
-        (self == Bench::Anvil).then_some([59.0, 20.0])
+        match self {
+            Bench::Anvil => Some([59.0, 20.0]),
+            // Java's table cannot rename; Bedrock's can: the box takes the title's place.
+            Bench::Cartography => Some([33.0, 1.0]),
+            _ => None,
+        }
+    }
+
+    /// Whether the name box stands where the title would.
+    pub(super) fn name_hides_title(self) -> bool {
+        self == Bench::Cartography
     }
 
     /// The crafting table's result slot is the 26-pixel one.
