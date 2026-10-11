@@ -75,8 +75,9 @@ unit or pack tests only.
   buttons; a look baked before 2026-10-11 lacks it).
 - **Dimensions:** a nether portal was walked through in the viewer (2026-10-10, creative, to a
   crimson forest), and an end portal block into the End (2026-10-11: the dimension change in
-  the log, the dragon's bar in the shot). The ways back were checked in the bot's drill only:
-  three tries at returning from the End in the viewer were spoiled by the test setup. An
+  the log, the dragon's bar in the shot) and back out of it (a portal block on the End's platform: the
+  credits skipped, the respawn at the world's spawn in the log and the shot). The way back
+  through a nether portal was checked in the bot's drill only. An
   arrival can take one correction when the server lags (docs/DESIGN.md "Dimension travel").
   The end portal's surface is the Bedrock pack's still image in both looks (seen live; the
   Java game draws it with a shader). A Java look baked before 2026-10-10 lacks it: run
@@ -98,6 +99,8 @@ unit or pack tests only.
 
 ## Testing it
 
+- `tools/viewer-shot.sh` prints only the last 15 lines of the viewer's log: pass `LOG=<file>` to
+  keep all of it (2026-10-11: three runs misread because the dimension lines had scrolled out).
 - `tools/testbox-shot.sh out.png` with `NAME=<yours>` (same-name runs kick each other) and a BDS
   port. Env: `ACACIA_PLAY`, `ACACIA_LOOK`, `ACACIA_SETTINGS`, `ACACIA_SHOT_AFTER`.
 - `ACACIA_COMMANDS="tp @s 20 -60 20;wait 3;summon zombie ~ ~ ~4"`: operator commands, `wait secs`
