@@ -54,7 +54,8 @@ unit or pack tests only.
 | Screens | Anvil with its name box and level cost, smithing table, stonecutter, enchanting table | live (the cost: both looks, a rename). A cost above the player's levels is red, and 40 or more reads "Too Expensive!": the red line by its pixels in a testbox shot (a levelless rename, image not looked at), "Too Expensive!" by the bot's tests only; the result stays empty in both cases |
 | Screens | A scroller on the stonecutter's and the trader's lists when they are longer than their window; the wheel moves them a row | live (Java look): the stonecutter's moved by the wheel, the trader's seen at rest |
 | Screens | Enchanting options: the server's words in the galactic alphabet (Java's `ascii_sga.png`, also in the Bedrock look), and under them the level and the enchantment hinted at | live, both looks. A Java look baked before 2026-10-11 lacks the alphabet: run `lookbake java` again |
-| Screens | Grindstone | tests only, never opened live |
+| Screens | Grindstone | opened live (Java look), empty; its result by tests only |
+| Screens | The name of the stack under the mouse, in Java's tooltip box, while no stack is carried: slots, creative items, a stonecutter's cuts | live over a hotbar slot (Java look); the name only, no enchantments or other lines, and none on recipe-book results, trades or patterns |
 | Screens | Cartography table, with a name box where the title would be (Bedrock's table renames; Java's has no box, so the place is ours) | live (Java look): a map put in and named, the result shown; taking it and the paper and pane recipes unseen. The box was moved 3 pixels down after the shot |
 | Screens | Sign editor: the board with its four lines, Done or Esc writes; a hanging sign's smaller board and narrower lines | live (Java look) |
 | Screens | Books: a right-click opens the held book's pages; a book and quill takes typing at its caret (arrows, Home and End move it; Backspace and Delete) and new pages (the page keys turn them), and is signed under a title | live; the caret inside a word seen live (Java look), no Up or Down |
@@ -68,8 +69,8 @@ unit or pack tests only.
 
 ## Not done
 
-- **Screens:** the beacon's own art; a trader's experience bar; tooltips (an enchanting
-  option writes its hint under its galactic words instead); the
+- **Screens:** the beacon's own art; a trader's experience bar; a tooltip's lines after the name (an
+  enchanting option writes its hint under its galactic words instead); the
   Bedrock look's book art (the Java look draws `book.png`, seen live; its turn buttons are plain
   buttons; a look baked before 2026-10-11 lacks it).
 - **Dimensions:** a nether portal was walked through in the viewer (2026-10-10, creative, to a
