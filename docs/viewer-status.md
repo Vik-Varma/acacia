@@ -74,7 +74,9 @@ unit or pack tests only.
   Bedrock look's book art (the Java look draws `book.png`, seen live; its turn buttons are plain
   buttons; a look baked before 2026-10-11 lacks it).
 - **Dimensions:** a nether portal was walked through in the viewer (2026-10-10, creative, to a
-  crimson forest); the way back and the end portal were checked in the bot's drill only. An
+  crimson forest), and an end portal block into the End (2026-10-11: the dimension change in
+  the log, the dragon's bar in the shot). The ways back were checked in the bot's drill only:
+  three tries at returning from the End in the viewer were spoiled by the test setup. An
   arrival can take one correction when the server lags (docs/DESIGN.md "Dimension travel").
   The end portal's surface is the Bedrock pack's still image in both looks (seen live; the
   Java game draws it with a shader). A Java look baked before 2026-10-10 lacks it: run
