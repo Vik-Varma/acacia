@@ -39,7 +39,9 @@ impl KeyScript {
         let start = *self.start.get_or_insert(now);
         let mut out = Vec::new();
         while self.steps.last().is_some_and(|s| start + s.0 <= now) {
-            out.push(self.steps.pop().expect("checked").1);
+            let step = self.steps.pop().expect("checked").1;
+            tracing::debug!(target: "keys", ?step, "scripted");
+            out.push(step);
         }
         out
     }

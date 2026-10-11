@@ -20,6 +20,10 @@ pub struct RideLog {
     riding: bool,
     /// The server's corrections and teleports of the player so far.
     moved_back: (u32, u32),
+    ticks: u32,
+    /// When the last tick came, and the longest wait for one since the last log line.
+    last: Option<std::time::Instant>,
+    longest: u128,
 }
 
 impl RideLog {
@@ -28,6 +32,13 @@ impl RideLog {
         let moved_back = bot.movement().map_or((0, 0), |m| (m.corrections, m.teleports));
         if std::mem::replace(&mut self.moved_back, moved_back) != moved_back {
             tracing::info!(target: "moves", corrections = moved_back.0, teleports = moved_back.1, feet = ?bot.movement().and_then(|m| m.position()), "the server moved the player");
+        }
+        self.ticks += 1;
+        let now = std::time::Instant::now();
+        let gap = self.last.replace(now).map_or(0, |last| (now - last).as_millis());
+        self.longest = self.longest.max(gap);
+        if self.ticks.is_multiple_of(20) {
+            tracing::debug!(target: "moves", feet = ?bot.movement().and_then(|m| m.position()), longest_gap_ms = std::mem::take(&mut self.longest), "twenty ticks");
         }
         let Some(vehicle) = bot.vehicle() else {
             if std::mem::take(&mut self.riding) {

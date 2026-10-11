@@ -12,6 +12,8 @@ use tokio::time::Instant;
 const PERIOD: Duration = Duration::from_millis(51);
 /// Each tick fires up to this long after its slot; gaps then spread triangularly over ±JITTER.
 const JITTER_MS: u64 = 36;
+/// Lateness the schedule absorbs: a few timer wake-ups, well under a frame hitch.
+const SLACK: Duration = Duration::from_millis(100);
 /// One slot in this many is skipped and its tick sent with the next (vanilla: ~1 in 150).
 const BURST_ONE_IN: u64 = 150;
 
@@ -33,9 +35,13 @@ impl Cadence {
         Self { slot: Duration::ZERO, rng: seed }
     }
 
-    /// The next firing after `now`; a late caller slides the schedule rather than catching up.
+    /// The next firing after `now`. A caller late by more than [`SLACK`] slides the schedule
+    /// rather than catching up; one late by less keeps it, or a coarse timer (Windows wakes
+    /// sleepers up to 16 ms late) would stretch every period and run the client at 16 ticks a
+    /// second (measured 2026-10-11).
     pub fn next(&mut self, now: Duration) -> Fire {
-        self.slot = (self.slot + PERIOD).max(now);
+        let due = self.slot + PERIOD;
+        self.slot = if now > due + SLACK { now } else { due };
         let mut ticks = 1;
         if self.random().is_multiple_of(BURST_ONE_IN) {
             self.slot += PERIOD;
@@ -127,6 +133,20 @@ mod tests {
         assert!((25..=40).contains(&pct(10)) && (45..=56).contains(&pct(50)) && (60..=80).contains(&pct(90)));
         let bursts = fires.iter().filter(|f| f.ticks == 2).count();
         assert!((60..=220).contains(&bursts), "{bursts} bursts");
+    }
+
+    #[test]
+    fn a_coarse_timer_does_not_slow_the_ticks() {
+        // Every wake-up comes 16 ms after its firing was due.
+        let mut cadence = Cadence::new(3);
+        let (mut now, mut ticks) = (Duration::ZERO, 0);
+        for _ in 0..2_000 {
+            let fire = cadence.next(now);
+            now = fire.at.max(now) + Duration::from_millis(16);
+            ticks += fire.ticks;
+        }
+        let mean = now.as_millis() as f64 / f64::from(ticks);
+        assert!((50.5..52.5).contains(&mean), "mean {mean}");
     }
 
     #[test]
