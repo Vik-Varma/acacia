@@ -5,7 +5,8 @@ use acacia_ui::inventory::{self, CREATIVE_GRID as GRID, Layout};
 
 use super::App;
 use super::screen::slot_ref;
-use crate::control::{Command, CreativeEntry, Stack};
+use crate::control::{Command, Stack};
+use crate::creative_items::CreativeEntry;
 
 /// Whether an item's identifier, without its namespace, holds the `sought` text.
 fn named(identifier: &str, sought: &str) -> bool {

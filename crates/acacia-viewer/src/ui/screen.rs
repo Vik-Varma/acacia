@@ -66,7 +66,9 @@ pub(super) fn draw(list: &mut DrawList, skin: &mut Skin, lang: &Lang, screen: &S
     let over = over.or_else(|| creative.and_then(|(stacks, ..)| stacks.get(inventory::hit_pick(layout, gui, stacks.len(), mouse)?)));
     let over = over.or_else(|| inventory.picks.get(first + inventory::hit_pick(layout, gui, inventory.picks.len().saturating_sub(first), mouse)?).map(|p| &p.1));
     if let Some(stack) = over.filter(|_| inventory.cursor.is_none()) {
-        acacia_ui::tooltip::draw(list, &skin.theme, &[lang.item_name(&stack.name)], mouse, gui);
+        let name = stack.title.as_ref().map_or_else(|| lang.item_name(&stack.name), |given| format!("§o{given}"));
+        let lines: Vec<String> = std::iter::once(name).chain(stack.notes.iter().cloned()).collect();
+        acacia_ui::tooltip::draw(list, &skin.theme, &lines, mouse, gui);
     }
 }
 

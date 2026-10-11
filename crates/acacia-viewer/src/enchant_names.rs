@@ -21,6 +21,17 @@ pub fn option(level: u8, hint: Option<(u8, u8)>) -> String {
     format!("{level}: {short}{cut} {}...", ROMAN.get(usize::from(rank).saturating_sub(1)).copied().unwrap_or("?"))
 }
 
+/// A tooltip's lines under a stack's name: each enchantment in grey (curses red), then its lore.
+pub fn notes(stack: &acacia_bot::state::ItemStack) -> Vec<String> {
+    let enchantment = |(id, rank): (i16, i16)| {
+        let name = usize::try_from(id).ok().and_then(|id| NAMES.get(id))?;
+        let rank = usize::try_from(rank - 1).ok().and_then(|r| ROMAN.get(r)).map_or_else(|| rank.to_string(), |r| (*r).to_owned());
+        Some(format!("§{}{name} {rank}", if name.starts_with("Curse") { 'c' } else { '7' }))
+    };
+    let lore = stack.lore.iter().map(|line| format!("§5§o{line}"));
+    stack.enchantments().into_iter().filter_map(enchantment).chain(lore).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

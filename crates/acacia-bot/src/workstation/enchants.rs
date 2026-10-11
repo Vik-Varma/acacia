@@ -75,6 +75,13 @@ fn compatible(a: i16, b: i16) -> bool {
     a == b || !EXCLUSIVE.iter().any(|set| set.contains(&a) && set.contains(&b))
 }
 
+impl ItemStack {
+    /// `(id, level)` of every enchantment it carries.
+    pub fn enchantments(&self) -> Vec<(i16, i16)> {
+        enchants(self)
+    }
+}
+
 /// `(id, level)` of every enchantment in the stack's `ench` list.
 pub(crate) fn enchants(stack: &ItemStack) -> Vec<(i16, i16)> {
     let Some(Value::List(list)) = stack.nbt.as_ref().and_then(|n| n.value.get("ench")) else { return Vec::new() };

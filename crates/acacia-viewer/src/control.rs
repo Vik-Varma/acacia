@@ -135,21 +135,7 @@ pub fn block_of(bot: &Bot, s: &ItemStack) -> u32 {
 pub fn stack_of(bot: &Bot, s: &ItemStack) -> Option<Stack> {
     let name = bot.state().item_name(s).filter(|_| !s.is_empty())?.to_owned();
     let (banner, map) = (crate::item_look::banner(&name, s), s.map_id().and_then(|id| bot.state().maps.get(id).cloned()));
-    Some(Stack { name, aux: s.metadata, count: s.count, block: block_of(bot, s), enchanted: s.is_enchanted(), dye: s.custom_color(), banner, map })
-}
-
-/// One entry of the creative inventory: its id, the item, and its tab (an index into acacia-ui's
-/// `TABS`).
-#[derive(Debug, Clone, PartialEq)]
-pub struct CreativeEntry {
-    pub id: u32,
-    pub stack: Stack,
-    pub tab: usize,
-}
-
-pub fn creative(bot: &Bot) -> Vec<CreativeEntry> {
-    let entry = |i: &acacia_bot::state::CreativeItem| Some(CreativeEntry { id: i.entry_id, stack: stack_of(bot, &i.stack)?, tab: i.tab as usize });
-    bot.state().creative.items().iter().filter_map(entry).collect()
+    Some(Stack { name, aux: s.metadata, count: s.count, block: block_of(bot, s), enchanted: s.is_enchanted(), dye: s.custom_color(), banner, map, title: s.custom_name.clone(), notes: crate::enchant_names::notes(s) })
 }
 
 /// The player list's names, sorted.
@@ -206,6 +192,10 @@ pub struct Stack {
     pub banner: Option<std::sync::Arc<acacia_render::banner::Banner>>,
     /// A filled map's picture, once the server has sent it.
     pub map: Option<std::sync::Arc<acacia_bot::state::MapImage>>,
+    /// The name an anvil gave it.
+    pub title: Option<String>,
+    /// A tooltip's lines under the name: enchantments, then lore.
+    pub notes: Vec<String>,
 }
 
 /// What a grid or workstation still holds goes back into the inventory first.

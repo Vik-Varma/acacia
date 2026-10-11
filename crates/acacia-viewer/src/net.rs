@@ -54,7 +54,7 @@ pub enum NetEvent {
     /// The player's slots, when they changed.
     Inventory(control::Inventory),
     /// The creative inventory's items, once the server sent them.
-    Creative(Vec<control::CreativeEntry>),
+    Creative(Vec<crate::creative_items::CreativeEntry>),
     /// The server form now open, when that changed (`None`: it closed).
     Form(Option<acacia_bot::forms::Form>),
     /// The server opened a sign's editor, on this text (and whether the sign hangs); `None`: it closed.
@@ -213,7 +213,7 @@ async fn run(
                     }
                     if creative != bot.state().creative.items().len() {
                         creative = bot.state().creative.items().len();
-                        send(NetEvent::Creative(control::creative(&bot)))?;
+                        send(NetEvent::Creative(crate::creative_items::creative(&bot)))?;
                     }
                     let names = control::player_names(&bot);
                     if names != players {

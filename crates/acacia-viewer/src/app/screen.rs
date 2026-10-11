@@ -12,7 +12,8 @@ use winit::keyboard::KeyCode;
 use super::App;
 
 mod book;
-use crate::control::{Command, CreativeEntry, Inventory};
+use crate::control::{Command, Inventory};
+use crate::creative_items::CreativeEntry;
 
 /// An anvil takes names this long.
 pub(super) const NAME_MAX: usize = 30;
