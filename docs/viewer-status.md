@@ -69,8 +69,9 @@ unit or pack tests only.
 ## Not done
 
 - **Screens:** the beacon's own art; a trader's experience bar; tooltips (an enchanting
-  option writes its hint under its galactic words instead); a book's
-  art.
+  option writes its hint under its galactic words instead); the
+  Bedrock look's book art (the Java look draws `book.png`, seen live; its turn buttons are plain
+  buttons; a look baked before 2026-10-11 lacks it).
 - **Dimensions:** a nether portal was walked through in the viewer (2026-10-10, creative, to a
   crimson forest); the way back and the end portal were checked in the bot's drill only. An
   arrival can take one correction when the server lags (docs/DESIGN.md "Dimension travel").
