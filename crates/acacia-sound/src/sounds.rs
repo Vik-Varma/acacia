@@ -117,6 +117,23 @@ fn read(roots: &[PathBuf], path: &str) -> Option<Pcm> {
     pcm
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Needs assets/vanilla (tools/fetch-vanilla-pack.sh); skipped without it.
+    #[test]
+    fn a_music_track_decodes_to_minutes_of_sound() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/vanilla");
+        let defs = Definitions::load(&root);
+        let Some(def) = defs.definition("music.game") else { return };
+        let pcm = read(&[root], &def.files[0].path).expect("the first track decodes");
+        let seconds = pcm.samples.len() as f32 / (pcm.sample_rate as f32 * f32::from(pcm.channels));
+        println!("music track {}: {seconds:.0} s, {} Hz, {} channels", def.files[0].path, pcm.sample_rate, pcm.channels);
+        assert!(seconds > 30.0 && pcm.samples.iter().any(|&s| s != 0), "{seconds} s");
+    }
+}
+
 /// xorshift64: 0 to 1.
 fn roll(seed: &mut u64) -> f32 {
     *seed ^= *seed << 13;
