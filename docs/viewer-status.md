@@ -53,7 +53,8 @@ unit or pack tests only.
 | Screens | Crafting by hand: the 2×2 grid and the crafting table's 3×3; a click takes the result onto the cursor, Shift into the inventory | table live; live |
 | Screens | Anvil with its name box and level cost, smithing table, stonecutter, enchanting table | live (the cost: both looks, a rename). A cost above the player's levels is red, and 40 or more reads "Too Expensive!": the red line by its pixels in a testbox shot (a levelless rename, image not looked at), "Too Expensive!" by the bot's tests only; the result stays empty in both cases |
 | Screens | A scroller on the stonecutter's and the trader's lists when they are longer than their window; the wheel moves them a row | live for the stonecutter (Java look); the trader's by the same code, unseen |
-| Screens | Grindstone, cartography table (no renaming) | tests only, never opened live |
+| Screens | Grindstone | tests only, never opened live |
+| Screens | Cartography table, with a name box where the title would be (Bedrock's table renames; Java's has no box, so the place is ours) | live (Java look): a map put in and named, the result shown; taking it and the paper and pane recipes unseen. The box was moved 3 pixels down after the shot |
 | Screens | Sign editor: the board with its four lines, Done or Esc writes; a hanging sign's smaller board and narrower lines | live (Java look) |
 | Screens | Books: a right-click opens the held book's pages; a book and quill takes typing at a page's end and new pages, and is signed under a title | live |
 | Screens | Loom: patterns as buttons (the pattern item's one, else the plain 32); the result shows the banner it makes | live |
@@ -66,8 +67,7 @@ unit or pack tests only.
 
 ## Not done
 
-- **Screens:** the loom's large banner preview; the beacon's own art and which powers its pyramid allows; trader levels; a
-  cartography table's name box; the enchanting table's galactic text (each option says its
+- **Screens:** the loom's large banner preview; the beacon's own art and which powers its pyramid allows; trader levels; the enchanting table's galactic text (each option says its
   level and the enchantment it hints at, which the game keeps for the tooltip); a book's
   art and a caret inside its text.
 - **Dimensions:** a nether portal was walked through in the viewer (2026-10-10, creative, to a

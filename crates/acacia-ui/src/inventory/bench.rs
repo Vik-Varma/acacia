@@ -117,7 +117,7 @@ impl Bench {
         match self {
             Bench::Anvil => Some([59.0, 20.0]),
             // Java's table cannot rename; Bedrock's can: the box takes the title's place.
-            Bench::Cartography => Some([33.0, 1.0]),
+            Bench::Cartography => Some([33.0, 4.0]),
             _ => None,
         }
     }
