@@ -101,7 +101,7 @@ impl Sounds {
 
 /// The sample `path` from the first root that has it, `.ogg` before the pack's `.fsb`.
 fn read(roots: &[PathBuf], path: &str) -> Option<Pcm> {
-    let pcm = roots.iter().find_map(|root| {
+    let at = |root: &PathBuf, path: &String| {
         let ogg_file = root.join(format!("{path}.ogg"));
         if let Ok(bytes) = std::fs::read(&ogg_file) {
             tracing::debug!(file = %ogg_file.display(), "ogg");
@@ -110,7 +110,9 @@ fn read(roots: &[PathBuf], path: &str) -> Option<Pcm> {
         let fsb_file = root.join(format!("{path}.fsb"));
         let bytes = std::fs::read(&fsb_file).ok()?;
         fsb::decode(&bytes).inspect_err(|e| tracing::debug!(%e, file = %fsb_file.display(), "fsb")).ok()
-    });
+    };
+    let names = crate::java_names::candidates(path);
+    let pcm = roots.iter().find_map(|root| names.iter().find_map(|name| at(root, name)));
     if pcm.is_none() {
         tracing::debug!(path, "sound file missing or undecodable");
     }
@@ -129,7 +131,8 @@ mod tests {
         let roots = [assets.join("vanilla"), assets.join("looks/java")];
         let defs = Definitions::load(&roots[0]);
         let Some(def) = defs.definition("music.game") else { return };
-        if !roots.iter().any(|root| root.join(format!("{}.ogg", def.files[0].path)).is_file()) {
+        let names = crate::java_names::candidates(&def.files[0].path);
+        if !roots.iter().any(|root| names.iter().any(|name| root.join(format!("{name}.ogg")).is_file())) {
             return println!("no music files");
         }
         let pcm = read(&roots, &def.files[0].path).expect("the first track decodes");

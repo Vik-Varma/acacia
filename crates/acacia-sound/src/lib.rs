@@ -4,6 +4,7 @@
 
 pub mod defs;
 pub mod fsb;
+mod java_names;
 mod ogg;
 pub mod player;
 mod sounds;
