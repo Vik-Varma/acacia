@@ -76,8 +76,9 @@ unit or pack tests only.
 - **Dimensions:** a nether portal was walked through in the viewer (2026-10-10, creative, to a
   crimson forest), and an end portal block into the End (2026-10-11: the dimension change in
   the log, the dragon's bar in the shot) and back out of it (a portal block on the End's platform: the
-  credits skipped, the respawn at the world's spawn in the log and the shot). The way back
-  through a nether portal was checked in the bot's drill only. An
+  credits skipped, the respawn at the world's spawn in the log and the shot), and back from the Nether through a
+  portal lit around the player there (the change to the overworld at eight times the
+  coordinates in the log, the shot in the overworld). An
   arrival can take one correction when the server lags (docs/DESIGN.md "Dimension travel").
   The end portal's surface is the Bedrock pack's still image in both looks (seen live; the
   Java game draws it with a shader). A Java look baked before 2026-10-10 lacks it: run
