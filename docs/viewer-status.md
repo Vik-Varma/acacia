@@ -57,7 +57,7 @@ unit or pack tests only.
 | Screens | Cartography table, with a name box where the title would be (Bedrock's table renames; Java's has no box, so the place is ours) | live (Java look): a map put in and named, the result shown; taking it and the paper and pane recipes unseen. The box was moved 3 pixels down after the shot |
 | Screens | Sign editor: the board with its four lines, Done or Esc writes; a hanging sign's smaller board and narrower lines | live (Java look) |
 | Screens | Books: a right-click opens the held book's pages; a book and quill takes typing at a page's end and new pages, and is signed under a title | live |
-| Screens | Loom: patterns as buttons (the pattern item's one, else the plain 32); the result shows the banner it makes | live |
+| Screens | Loom: patterns as buttons (the pattern item's one, else the plain 32); the result shows the banner it makes, and so does a large preview in the frame above it (the result's icon at twice its size, not Java's banner model) | live (Java look) |
 | Screens | Beacon: powers, second power and confirm as buttons (not either game's own screen); a power the pyramid under it is too small for stands in brackets and cannot be picked | live (a two-layer pyramid: four powers open, three in brackets; "(Strength)" touches its button's edge) |
 | Screens | Creative inventory (E in creative mode): four tabs, a click takes one, Shift a stack; a stack carried onto the items is destroyed; a fifth tab ("Self") shows the player's own screen under the tab buttons; a sixth ("Find") lists every tab's items whose identifier holds the typed text | live (the search: "diamond s" left the sword, spear and shovel); the fifth tab by tests and by pixels sampled from a shot on testbox (the image was not looked at). The search reads identifiers, not the translated names, and has no text box art |
 | Screens | Trading: the offers of a villager or wandering trader, a click trades once; a villager's level beside its name, later levels' offers crossed out | live (wandering trader; a villager: "Fisherman - Novice", Java look). No experience bar |
@@ -67,7 +67,7 @@ unit or pack tests only.
 
 ## Not done
 
-- **Screens:** the loom's large banner preview; the beacon's own art; a trader's experience bar; the enchanting table's galactic text (each option says its
+- **Screens:** the beacon's own art; a trader's experience bar; the enchanting table's galactic text (each option says its
   level and the enchantment it hints at, which the game keeps for the tooltip); a book's
   art and a caret inside its text.
 - **Dimensions:** a nether portal was walked through in the viewer (2026-10-10, creative, to a
