@@ -101,6 +101,8 @@ pub struct Inventory {
     pub patterns: Vec<(&'static str, Option<Stack>)>,
     /// The level each option of an enchanting table needs, and the enchantment it hints at.
     pub enchants: Vec<(u8, Option<(u8, u8)>)>,
+    /// Layers of the pyramid under an open beacon.
+    pub beacon: u8,
     /// An open trading screen.
     pub trade: Option<crate::stations::Trade>,
 }
@@ -182,6 +184,7 @@ pub fn inventory(bot: &Bot) -> Inventory {
         bench: bot.open_container().and_then(|c| crate::stations::bench(c.window_type)),
         patterns: bot.loom_choices().into_iter().map(|code| (code, bot.loom_result(code).and_then(|s| stack_of(bot, &s)))).collect(),
         enchants: bot.enchant_costs(),
+        beacon: bot.beacon_levels().unwrap_or(0),
         trade: crate::stations::trade(bot),
         picks: bot.stonecutter_choices().into_iter().filter_map(|(id, s)| Some((id, stack_of(bot, &s)?))).collect(),
     }

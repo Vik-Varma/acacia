@@ -74,7 +74,9 @@ fn picks(skin: &mut Skin, inventory: &Inventory) -> Vec<Pick> {
     }
     picks.extend(inventory.patterns.iter().map(|(code, _)| Pick { icons: skin.pattern(code).map(|icon| (icon, 1, -1.0)).into_iter().collect(), label: String::new() }));
     if inventory.bench == Some(Bench::Beacon) {
-        picks.extend(crate::stations::BEACON.iter().map(|label| Pick { icons: Vec::new(), label: (*label).into() }));
+        // A power the pyramid is too small for stands in brackets.
+        let label = |(i, label): (usize, &&str)| if crate::stations::beacon_allows(i, inventory.beacon) { (*label).to_owned() } else { format!("({label})") };
+        picks.extend(crate::stations::BEACON.iter().enumerate().map(|button| Pick { icons: Vec::new(), label: label(button) }));
     }
     picks
 }

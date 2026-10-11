@@ -26,7 +26,21 @@ pub enum BeaconEffect {
     Resistance = 11,
 }
 
+const BASES: [&str; 5] = ["minecraft:iron_block", "minecraft:gold_block", "minecraft:emerald_block", "minecraft:diamond_block", "minecraft:netherite_block"];
+
+/// Layers of a full pyramid under a beacon at `at` (0 to 4): layer `n` is a square of
+/// `2n + 1` base blocks, `n` below it.
+pub(crate) fn pyramid_levels(base: impl Fn(BlockPos) -> bool, [x, y, z]: BlockPos) -> u8 {
+    (1..=4).take_while(|&n| (-n..=n).all(|dx| (-n..=n).all(|dz| base([x + dx, y - n, z + dz])))).count() as u8
+}
+
 impl Bot {
+    /// Layers of the pyramid under the open beacon; `None` when no beacon is open.
+    pub fn beacon_levels(&self) -> Option<u8> {
+        let at = self.open_container().filter(|c| c.window_type == WindowType::Beacon)?.position.as_ref()?;
+        Some(pyramid_levels(|pos| self.block_name(pos).is_some_and(|name| BASES.contains(&name)), [at.x, at.y, at.z]))
+    }
+
     /// Sets the beacon at `pos` to `primary`, plus `secondary` on a full pyramid (regeneration, or
     /// the primary again for level II), paying one item from `payment` (iron, gold, emerald,
     /// diamond or netherite ingot).

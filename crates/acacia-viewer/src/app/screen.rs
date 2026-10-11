@@ -230,6 +230,7 @@ impl App {
     /// A beacon button: a power, one of the two second powers (again to drop it), or the confirm.
     fn beacon_click(&mut self, button: usize) {
         match button {
+            _ if !crate::stations::beacon_allows(button, self.inventory.beacon) => {}
             0..=4 => self.shown.pick[0] = Some(button),
             crate::stations::BEACON_DONE => {
                 if let Some((primary, secondary)) = crate::stations::beacon_powers(self.shown.pick) {

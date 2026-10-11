@@ -9,6 +9,18 @@ use crate::workstation::BeaconEffect;
 use crate::ActionError;
 
 #[test]
+fn a_pyramid_counts_its_full_layers() {
+    use crate::workstation::beacon::pyramid_levels;
+    // Two full layers under a beacon at y 10, the third missing a corner.
+    let base = |[x, y, z]: [i32; 3]| match 10 - y {
+        n @ 1..=2 => x.abs() <= n && z.abs() <= n,
+        3 => x.abs() <= 3 && z.abs() <= 3 && [x, z] != [3, 3],
+        _ => false,
+    };
+    assert_eq!((pyramid_levels(base, [0, 10, 0]), pyramid_levels(base, [1, 10, 0]), pyramid_levels(|_| true, [0, 0, 0])), (2, 0, 4));
+}
+
+#[test]
 fn beacon_payment_then_destroy() {
     let mut state = state(&[]);
     open(&mut state, WindowType::Beacon);

@@ -89,6 +89,12 @@ const POWERS: [BeaconEffect; 5] = [BeaconEffect::Speed, BeaconEffect::Haste, Bea
 const REGENERATION: usize = 5;
 pub const BEACON_DONE: usize = 7;
 
+/// Whether a pyramid of `levels` layers gives the button's power: two powers at one layer, two
+/// more at two, strength at three, a second power at four.
+pub fn beacon_allows(button: usize, levels: u8) -> bool {
+    levels >= [1, 1, 2, 2, 3, 4, 4].get(button).copied().unwrap_or(0)
+}
+
 /// The powers the picked buttons stand for: the second is regeneration or the first again.
 pub fn beacon_powers([first, second]: [Option<usize>; 2]) -> Option<(BeaconEffect, Option<BeaconEffect>)> {
     let primary = *POWERS.get(first?)?;
@@ -135,6 +141,8 @@ mod tests {
         assert_eq!(beacon_powers([Some(4), Some(5)]), Some((BeaconEffect::Strength, Some(BeaconEffect::Regeneration))));
         assert_eq!(beacon_powers([Some(0), Some(6)]), Some((BeaconEffect::Speed, Some(BeaconEffect::Speed))), "level II");
         assert_eq!(beacon_powers([None, Some(5)]), None);
+        let allowed = |levels| (0..BEACON.len()).filter(|&b| beacon_allows(b, levels)).collect::<Vec<_>>();
+        assert_eq!((allowed(0), allowed(2), allowed(4).len()), (vec![BEACON_DONE], vec![0, 1, 2, 3, BEACON_DONE], 8));
     }
 
     #[test]
