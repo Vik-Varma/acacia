@@ -15,7 +15,7 @@ mod book;
 use crate::control::{Command, CreativeEntry, Inventory};
 
 /// An anvil takes names this long.
-const NAME_MAX: usize = 30;
+pub(super) const NAME_MAX: usize = 30;
 
 /// What the open screen shows beyond its slots.
 pub(super) struct Shown {
@@ -117,7 +117,12 @@ impl App {
 
     /// Whether the open screen has a name box (an anvil's), which typed text goes into.
     pub(super) fn names(&self) -> bool {
-        self.screen_open && matches!(self.layout(), Layout::Bench(bench) if bench.name_box().is_some())
+        self.screen_open && (self.searching() || matches!(self.layout(), Layout::Bench(bench) if bench.name_box().is_some()))
+    }
+
+    /// Whether the creative inventory's search tab is open: typed text is what it looks for.
+    pub(super) fn searching(&self) -> bool {
+        self.shown.creative.is_some_and(|(tab, _)| tab == inventory::SEARCH_TAB) && self.layout() == Layout::Creative
     }
 
     /// Edits the name box and tells the bot loop, which works out the renamed result.
@@ -125,7 +130,9 @@ impl App {
         let before = self.shown.name.text();
         edit(&mut self.shown.name);
         let now = self.shown.name.text();
-        if now != before {
+        if now != before && self.searching() {
+            self.shown.creative = Some((inventory::SEARCH_TAB, 0));
+        } else if now != before {
             let _ = self.net.commands.send(Command::Name((!now.is_empty()).then_some(now)));
         }
     }
@@ -164,7 +171,7 @@ impl App {
         };
         let layout = self.layout();
         if let Some(tab) = inventory::hit_tab(layout, size, at).filter(|_| self.shown.creative.is_some() && layout == Layout::Player) {
-            return self.shown.creative = Some((tab, 0));
+            return self.open_tab(tab);
         }
         let book = layout.has_book().then(|| recipes::hit(layout, size, self.inventory.craftable.len(), at)).flatten();
         if let Some(i) = book {

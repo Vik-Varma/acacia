@@ -39,9 +39,11 @@ pub enum Layout {
 }
 
 /// The creative inventory's tabs.
-pub const TABS: [&str; 5] = ["Construction", "Nature", "Equipment", "Items", "Inventory"];
+pub const TABS: [&str; 6] = ["Construction", "Nature", "Equipment", "Items", "Inventory", "Search"];
 /// The tab that shows the player's own screen instead of items to take.
 pub const SURVIVAL_TAB: usize = 4;
+/// The tab that lists every tab's items whose name holds the typed text.
+pub const SEARCH_TAB: usize = 5;
 /// A tab button and the gap after it.
 const TAB_STEP: f32 = 39.0;
 /// Columns and rows of a creative tab's items.

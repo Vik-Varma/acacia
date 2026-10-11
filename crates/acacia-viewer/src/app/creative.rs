@@ -7,11 +7,30 @@ use super::App;
 use super::screen::slot_ref;
 use crate::control::{Command, CreativeEntry, Stack};
 
+/// Whether an item's identifier, without its namespace, holds the `sought` text.
+fn named(identifier: &str, sought: &str) -> bool {
+    identifier.rsplit(':').next().is_some_and(|name| name.contains(sought))
+}
+
+#[cfg(test)]
+#[test]
+fn a_search_reads_the_name_after_the_namespace() {
+    assert!(named("minecraft:diamond_sword", "diamond_s") && named("minecraft:stone", ""));
+    assert!(!named("minecraft:stone", "mine"));
+}
+
 impl App {
     /// The open creative tab's entries, in order.
     fn creative_tab(&self) -> impl Iterator<Item = &CreativeEntry> {
         let tab = self.shown.creative.map_or(0, |(tab, _)| tab);
-        self.shown.items.iter().filter(move |e| e.tab == tab)
+        let sought = self.shown.name.text().trim().to_lowercase().replace(' ', "_");
+        self.shown.items.iter().filter(move |e| if tab == inventory::SEARCH_TAB { named(&e.stack.name, &sought) } else { e.tab == tab })
+    }
+
+    /// Opens a tab at its top; the search starts empty.
+    pub(super) fn open_tab(&mut self, tab: usize) {
+        self.shown.creative = Some((tab, 0));
+        self.shown.name = acacia_ui::widget::TextEdit::new("", super::screen::NAME_MAX);
     }
 
     /// Rows the open tab can be scrolled by.
@@ -47,11 +66,11 @@ impl App {
     /// A click on the creative screen: a tab, an item (one, or a stack with Shift), or the hotbar.
     pub(super) fn creative_click(&mut self, click: Click, at: [f32; 2]) {
         let (layout, size) = (Layout::Creative, self.gui_size());
-        let Some((tab, row)) = self.shown.creative else { return };
+        let Some((_, row)) = self.shown.creative else { return };
         if let Some(picked) = inventory::hit_tab(layout, size, at) {
-            self.shown.creative = Some((picked, 0));
+            self.open_tab(picked);
         } else if let Some(i) = inventory::hit_pick(layout, size, GRID[0] * GRID[1], at) {
-            let entry = self.shown.items.iter().filter(|e| e.tab == tab).nth(row * GRID[0] + i);
+            let entry = self.creative_tab().nth(row * GRID[0] + i);
             // A stack carried onto the items is thrown away, whatever lies under it.
             let command = match (&self.inventory.cursor, entry) {
                 (Some(_), _) => Command::DestroyCursor,

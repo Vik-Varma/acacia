@@ -98,6 +98,7 @@ fn the_creative_inventory_has_tabs_a_grid_and_the_hotbar() {
     // The last tab shows the player's own screen, which keeps the buttons centred over it.
     let [px, py] = origin(Layout::Player, size);
     assert_eq!(hit_tab(Layout::Player, size, [px - 10.0 + 39.0 * 4.0 + 2.0, py - 10.0]), Some(SURVIVAL_TAB));
+    assert_eq!(hit_tab(creative, size, [ox - 20.0 + 39.0 * 5.0 + 2.0, oy - 10.0]), Some(SEARCH_TAB));
     assert_eq!(hit_tab(Layout::Rows(3), size, [ox + 2.0, oy - 10.0]), None);
 }
 

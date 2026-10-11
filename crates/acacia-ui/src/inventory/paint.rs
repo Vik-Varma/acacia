@@ -7,7 +7,7 @@ use crate::widget::{State, Widget};
 const SHADE: [u8; 4] = [0x10, 0x10, 0x10, 0xC8];
 const TITLE: u32 = 0x404040;
 /// What the creative tabs' 48-pixel buttons say.
-const TAB_BUTTONS: [&str; 5] = ["Build", "Nature", "Tools", "Items", "Self"];
+const TAB_BUTTONS: [&str; 6] = ["Build", "Nature", "Tools", "Items", "Self", "Find"];
 
 /// `title` names a container (the player's screen shows "Crafting").
 pub fn draw(list: &mut DrawList, theme: &Theme, layout: Layout, title: &str, contents: &Contents, mouse: [f32; 2], size: [f32; 2]) {
