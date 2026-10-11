@@ -37,7 +37,11 @@ pub fn draw(list: &mut DrawList, theme: &Theme, layout: Layout, title: &str, con
                 if !(bench.name_hides_title() && contents.name.is_some()) {
                     font.draw(list, bench.title(), ox + x, oy + y, TITLE, 1.0, false);
                 }
-                font.draw(list, "Inventory", ox + 8.0, oy + height - 94.0, TITLE, 1.0, false)
+                // BeaconScreen: two headings in light text, and no "Inventory".
+                for (heading, [middle, y]) in super::bench::BEACON_HEADINGS.into_iter().filter(|_| bench == Bench::Beacon) {
+                    font.draw(list, heading, ox + middle - (font.width(heading) / 2.0).floor(), oy + y, 0xE0E0E0, 1.0, true);
+                }
+                if bench == Bench::Beacon { 0.0 } else { font.draw(list, "Inventory", ox + 8.0, oy + height - 94.0, TITLE, 1.0, false) }
             }
             // MerchantScreen: the trader's name over the right part, "Trades" over the offers.
             Layout::Creative => font.draw(list, title, ox + 8.0, oy + 6.0, TITLE, 1.0, false),
@@ -92,7 +96,7 @@ pub fn draw(list: &mut DrawList, theme: &Theme, layout: Layout, title: &str, con
     }
     let over = hit_pick(layout, size, contents.picks.len(), mouse);
     for (i, (rect, item)) in pick_rects(layout, size, contents.picks.len()).into_iter().zip(contents.picks).enumerate() {
-        art.pick(list, rect, contents.picked.contains(&Some(i)), over == Some(i));
+        art.pick(list, rect, contents.picked.contains(&Some(i)), over == Some(i) && !item.closed, item.closed);
         let (inset, text) = (((rect[3] - rect[1] - 16.0) / 2.0).floor(), layout.picks().map_or(5.0, |p| p.text));
         for &(icon, count, x) in &item.icons {
             // Pick lists carry plain sprites: their stacks do not glint.

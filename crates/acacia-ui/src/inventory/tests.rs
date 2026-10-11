@@ -78,11 +78,15 @@ fn a_trade_screen_is_wider_with_the_offers_on_the_left() {
 }
 
 #[test]
-fn a_beacon_lists_its_powers_in_two_columns() {
+fn a_beacon_has_its_buttons_where_java_puts_them() {
     let (beacon, size) = (Layout::Bench(Bench::Beacon), [320.0, 240.0]);
     let [ox, oy] = origin(beacon, size);
-    assert_eq!(hit_pick(beacon, size, 8, [ox + 58.0 + 55.0 + 1.0, oy + 12.0 + 17.0 * 3.0 + 1.0]), Some(7), "the last button");
-    assert_eq!(hit(beacon, size, [ox + 27.0, oy + 39.0]), Some(Slot::Ui(27)), "the payment");
+    assert_eq!([ox, oy], [45.0, 10.0], "230 by 219");
+    assert_eq!(hit_pick(beacon, size, 8, [ox + 66.0, oy + 73.0]), Some(4), "strength, alone on the third layer");
+    assert_eq!(hit_pick(beacon, size, 8, [ox + 165.0, oy + 108.0]), Some(7), "the confirm");
+    assert_eq!(hit(beacon, size, [ox + 137.0, oy + 111.0]), Some(Slot::Ui(27)), "the payment");
+    let at = |s| slots(beacon).into_iter().find(|(slot, _)| *slot == s).unwrap().1;
+    assert_eq!([at(Slot::Main(9)), at(Slot::Main(0))], [[36.0, 137.0], [36.0, 195.0]]);
 }
 
 #[test]

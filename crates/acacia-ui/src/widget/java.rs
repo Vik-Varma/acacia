@@ -55,7 +55,12 @@ pub struct Kit {
 /// Workstation sheets under `textures/gui/container` and the panel's height in each.
 const STATION_SHEETS: [(&str, u32); 14] = [("loom", 166), ("crafting_table", 166), ("cartography_table", 166), ("enchanting_table", 166), ("stonecutter", 166), ("anvil", 166), ("smithing", 166), ("grindstone", 166), ("furnace", 166), ("blast_furnace", 166), ("smoker", 166), ("hopper", 133), ("dispenser", 166), ("brewing_stand", 166)];
 /// Progress sprites under `textures/gui/sprites/container`.
-const STATION_SPRITES: [&str; 18] = [
+const STATION_SPRITES: [&str; 23] = [
+    "beacon/button",
+    "beacon/button_selected",
+    "beacon/button_highlighted",
+    "beacon/button_disabled",
+    "beacon/confirm",
     "loom/pattern",
     "loom/pattern_selected",
     "loom/pattern_highlighted",
@@ -108,6 +113,10 @@ impl Kit {
             if let Some(sprite) = sheet(&format!("container/{name}"), [0, 0, 176, height], atlas) {
                 stations.insert(name.to_owned(), sprite);
             }
+        }
+        // The beacon's sheet is wider and taller than the others'.
+        if let Some(sprite) = sheet("container/beacon", [0, 0, 230, 219], atlas) {
+            stations.insert("beacon".to_owned(), sprite);
         }
         for name in STATION_SPRITES {
             if let Some(image) = crate::theme::png(&root.join(format!("textures/gui/sprites/container/{name}.png"))) {

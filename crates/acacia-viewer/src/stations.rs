@@ -101,7 +101,9 @@ pub fn trade(bot: &Bot) -> Option<Trade> {
 }
 
 /// The beacon screen's buttons: the five powers, the two second powers, and the confirm.
-pub const BEACON: [&str; 8] = ["Speed", "Haste", "Resist", "Jump", "Strength", "Regen", "Level II", "Done"];
+pub const BEACON: [&str; 8] = ["Speed", "Haste", "Resist", "Jump", "Strength", "Regen", "II", "OK"];
+/// Each button's image: an effect's icon, or an atlas sprite by name. Level II has none.
+pub const BEACON_ICONS: [&str; 8] = ["speed", "haste", "resistance", "jump_boost", "strength", "regeneration", "", "sprites/container/beacon/confirm"];
 const POWERS: [BeaconEffect; 5] = [BeaconEffect::Speed, BeaconEffect::Haste, BeaconEffect::Resistance, BeaconEffect::JumpBoost, BeaconEffect::Strength];
 const REGENERATION: usize = 5;
 pub const BEACON_DONE: usize = 7;

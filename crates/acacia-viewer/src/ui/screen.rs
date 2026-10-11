@@ -37,7 +37,7 @@ pub(super) fn draw(list: &mut DrawList, skin: &mut Skin, lang: &Lang, screen: &S
     picks.drain(..first.min(picks.len()));
     let shown = picked.map(|p| p.and_then(|i| i.checked_sub(first)));
     for stack in creative.iter().flat_map(|(stacks, ..)| *stacks) {
-        picks.push(Pick { icons: skin.icon(stack).map(|icon| (icon, 1, 1.0)).into_iter().collect(), label: String::new(), script: String::new() });
+        picks.push(Pick { icons: skin.icon(stack).map(|icon| (icon, 1, 1.0)).into_iter().collect(), label: String::new(), script: String::new(), closed: false });
     }
     let note = inventory.cost.filter(|_| inventory.bench == Some(Bench::Anvil)).map(|cost| match cost {
         AnvilCost::Levels(levels) => (format!("Enchantment Cost: {levels}"), true),
@@ -75,18 +75,22 @@ pub(super) fn draw(list: &mut DrawList, skin: &mut Skin, lang: &Lang, screen: &S
 /// The open screen's pick list: only one of the kinds is ever filled.
 fn picks(skin: &mut Skin, inventory: &Inventory) -> Vec<Pick> {
     let mut at = |s: &Stack, x: f32| skin.icon(s).map(|icon| (icon, s.count, x));
-    let mut picks: Vec<Pick> = inventory.picks.iter().map(|(_, s)| Pick { icons: at(&Stack { count: 1, ..s.clone() }, 0.0).into_iter().collect(), label: String::new(), script: String::new() }).collect();
-    picks.extend(inventory.enchants.iter().map(|(level, hint, words)| Pick { icons: Vec::new(), label: crate::enchant_names::option(*level, *hint), script: words.clone() }));
+    let mut picks: Vec<Pick> = inventory.picks.iter().map(|(_, s)| Pick { icons: at(&Stack { count: 1, ..s.clone() }, 0.0).into_iter().collect(), label: String::new(), script: String::new(), closed: false }).collect();
+    picks.extend(inventory.enchants.iter().map(|(level, hint, words)| Pick { icons: Vec::new(), label: crate::enchant_names::option(*level, *hint), script: words.clone(), closed: false }));
     for offer in inventory.trade.iter().flat_map(|t| &t.offers) {
         let prices = [(Some(&offer.price), PRICE[0]), (offer.second_price.as_ref(), PRICE[1]), (Some(&offer.goods), GOODS)];
         let icons = prices.into_iter().filter_map(|(stack, x)| at(stack?, x)).collect();
-        picks.push(Pick { icons, label: if offer.open { ">" } else { "x" }.into(), script: String::new() });
+        picks.push(Pick { icons, label: if offer.open { ">" } else { "x" }.into(), script: String::new(), closed: false });
     }
-    picks.extend(inventory.patterns.iter().map(|(code, _)| Pick { icons: skin.pattern(code).map(|icon| (icon, 1, -1.0)).into_iter().collect(), label: String::new(), script: String::new() }));
+    picks.extend(inventory.patterns.iter().map(|(code, _)| Pick { icons: skin.pattern(code).map(|icon| (icon, 1, -1.0)).into_iter().collect(), label: String::new(), script: String::new(), closed: false }));
     if inventory.bench == Some(Bench::Beacon) {
-        // A power the pyramid is too small for stands in brackets.
-        let label = |(i, label): (usize, &&str)| if crate::stations::beacon_allows(i, inventory.beacon) { (*label).to_owned() } else { format!("({label})") };
-        picks.extend(crate::stations::BEACON.iter().enumerate().map(|button| Pick { icons: Vec::new(), label: label(button), script: String::new() }));
+        // Each button shows its effect's icon (the confirm its tick), or its name where the look
+        // has no such image; a power the pyramid is too small for is closed.
+        for (i, (label, image)) in crate::stations::BEACON.iter().zip(crate::stations::BEACON_ICONS).enumerate() {
+            let icon = skin.theme.atlas.get(image).or_else(|| skin.theme.atlas.get(&acacia_ui::effects::sprite(image)));
+            let label = if icon.is_some() { String::new() } else { (*label).to_owned() };
+            picks.push(Pick { icons: icon.map(|icon| (icon, 1, 3.0)).into_iter().collect(), label, script: String::new(), closed: !crate::stations::beacon_allows(i, inventory.beacon) });
+        }
     }
     picks
 }

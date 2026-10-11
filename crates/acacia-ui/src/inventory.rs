@@ -54,13 +54,18 @@ impl Layout {
         match self {
             Layout::Trade => 276.0,
             Layout::Creative => 195.0,
+            Layout::Bench(Bench::Beacon) => 230.0,
             _ => WIDTH,
         }
     }
 
     /// Left edge of the player's slots.
     fn player_x(self) -> f32 {
-        if self == Layout::Trade { 108.0 } else { 8.0 }
+        match self {
+            Layout::Trade => 108.0,
+            Layout::Bench(Bench::Beacon) => 36.0,
+            _ => 8.0,
+        }
     }
 
     /// The results to pick from: a bench's, or the trader's offers.
@@ -88,6 +93,7 @@ impl Layout {
             Layout::Player => 166.0,
             Layout::Rows(rows) => 114.0 + SLOT * f32::from(rows),
             Layout::Station(station) => station.height(),
+            Layout::Bench(Bench::Beacon) => 219.0,
             Layout::Bench(_) | Layout::Trade => 166.0,
             Layout::Creative => 136.0,
         }
@@ -104,6 +110,7 @@ impl Layout {
             Layout::Player => 84.0,
             Layout::Rows(rows) => 103.0 + SLOT * (f32::from(rows) - 4.0),
             Layout::Station(station) => station.player_rows(),
+            Layout::Bench(Bench::Beacon) => 137.0,
             Layout::Bench(_) | Layout::Trade | Layout::Creative => 84.0,
         }
     }
@@ -175,6 +182,9 @@ pub fn hit(layout: Layout, size: [f32; 2], mouse: [f32; 2]) -> Option<Slot> {
 fn pick_rects(layout: Layout, size: [f32; 2], count: usize) -> Vec<[f32; 4]> {
     let Some(Picks { at, columns, rows, cell, .. }) = layout.picks() else { return Vec::new() };
     let [ox, oy] = origin(layout, size);
+    if layout == Layout::Bench(Bench::Beacon) {
+        return bench::BEACON_BUTTONS.iter().take(count).map(|[x, y]| [ox + x, oy + y, ox + x + cell[0], oy + y + cell[1]]).collect();
+    }
     (0..count.min(columns * rows))
         .map(|i| {
             let (x, y) = (ox + at[0] + (i % columns) as f32 * cell[0], oy + at[1] + (i / columns) as f32 * cell[1]);
@@ -240,6 +250,8 @@ pub struct Pick {
     pub label: String,
     /// Words in the galactic alphabet over the label (an enchanting option's).
     pub script: String,
+    /// Shown, but not to be picked (a beacon power its pyramid does not give).
+    pub closed: bool,
 }
 
 #[cfg(test)]

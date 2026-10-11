@@ -1,8 +1,8 @@
 //! Workstations whose slots are the player's own UI slots (Bedrock's window 124, by offset) and
 //! whose result is worked out, not stored: where Java's menus put them (`CraftingMenu`,
 //! `AnvilMenu`, `SmithingMenu`, `GrindstoneMenu`, `StonecutterMenu`,
-//! `CartographyTableMenu`, `EnchantmentMenu`, `LoomMenu`). The beacon is not Java's 230×219 screen: its
-//! powers are a pick list over the payment slot's panel.
+//! `CartographyTableMenu`, `EnchantmentMenu`, `LoomMenu`). The beacon is Java's 230×219
+//! `BeaconScreen`: its power buttons where that puts them, without the Cancel button.
 
 use super::{SLOT, Slot};
 
@@ -34,6 +34,12 @@ pub enum Bench {
     Loom,
 }
 
+/// The beacon's 22-pixel buttons: its five powers by pyramid layer, regeneration and level II,
+/// and the confirm.
+pub(super) const BEACON_BUTTONS: [[f32; 2]; 8] = [[53.0, 22.0], [77.0, 22.0], [53.0, 47.0], [77.0, 47.0], [65.0, 72.0], [156.0, 47.0], [180.0, 47.0], [164.0, 107.0]];
+/// The beacon's two headings and the middle of each.
+pub(super) const BEACON_HEADINGS: [(&str, [f32; 2]); 2] = [("Primary Power", [62.0, 10.0]), ("Secondary Power", [169.0, 10.0])];
+
 /// A bench's pick list: buttons in rows from `at`, each `cell` big.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Picks {
@@ -55,7 +61,8 @@ impl Bench {
             Bench::Stonecutter => "Stonecutter",
             Bench::Cartography => "Cartography Table",
             Bench::Enchanting => "Enchant",
-            Bench::Beacon => "Beacon",
+            // Its headings stand in for a title (`BEACON_HEADINGS`).
+            Bench::Beacon => "",
             Bench::Loom => "Loom",
         }
     }
@@ -71,8 +78,7 @@ impl Bench {
             Bench::Cartography => "cartography_table",
             Bench::Enchanting => "enchanting_table",
             Bench::Loom => "loom",
-            // No sheet of this size: the panel is drawn plain.
-            Bench::Beacon => "",
+            Bench::Beacon => "beacon",
         }
     }
 
@@ -92,7 +98,8 @@ impl Bench {
         match self {
             Bench::Stonecutter => Some(Picks { at: [52.0, 14.0], columns: 4, rows: 3, cell: [16.0, 18.0], text: 5.0 }),
             Bench::Enchanting => Some(Picks { at: [60.0, 14.0], columns: 1, rows: 3, cell: [108.0, 19.0], text: 5.0 }),
-            Bench::Beacon => Some(Picks { at: [58.0, 12.0], columns: 2, rows: 4, cell: [55.0, 17.0], text: 4.0 }),
+            // Not a grid: the buttons lie at `BEACON_BUTTONS`.
+            Bench::Beacon => Some(Picks { at: BEACON_BUTTONS[0], columns: BEACON_BUTTONS.len(), rows: 1, cell: [22.0, 22.0], text: 6.0 }),
             Bench::Loom => Some(Picks { at: [60.0, 13.0], columns: 4, rows: 4, cell: [14.0, 14.0], text: 5.0 }),
             _ => None,
         }
@@ -146,7 +153,7 @@ impl Bench {
             Bench::Stonecutter => ui(&[STONECUTTER], &[[20.0, 33.0]], [143.0, 33.0]),
             Bench::Cartography => ui(&CARTOGRAPHY, &[[15.0, 15.0], [15.0, 52.0]], [145.0, 39.0]),
             Bench::Enchanting => vec![(Slot::Ui(ENCHANTING[0]), [15.0, 47.0]), (Slot::Ui(ENCHANTING[1]), [35.0, 47.0])],
-            Bench::Beacon => vec![(Slot::Ui(BEACON), [26.0, 38.0])],
+            Bench::Beacon => vec![(Slot::Ui(BEACON), [136.0, 110.0])],
             Bench::Loom => ui(&LOOM, &[[13.0, 26.0], [33.0, 26.0], [23.0, 45.0]], [143.0, 58.0]),
         }
     }

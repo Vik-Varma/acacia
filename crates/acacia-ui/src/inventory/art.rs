@@ -168,7 +168,7 @@ impl<'a> Art<'a> {
     }
 
     /// A pick-list button: Java's stonecutter, loom or enchanting sprites, Bedrock's cell with its highlight.
-    pub(super) fn pick(&self, list: &mut DrawList, rect: [f32; 4], picked: bool, hover: bool) {
+    pub(super) fn pick(&self, list: &mut DrawList, rect: [f32; 4], picked: bool, hover: bool, closed: bool) {
         let flat = if picked { SLOT_FILL } else { PANEL };
         if self.creative {
             let [x, y] = [rect[0] + 1.0, rect[1] + 1.0];
@@ -185,6 +185,10 @@ impl<'a> Art<'a> {
             },
             Kind::Java(kit, ..) => {
                 let name = match (self.bench, picked, hover) {
+                    (Some(Bench::Beacon), ..) if closed => "beacon/button_disabled",
+                    (Some(Bench::Beacon), true, _) => "beacon/button_selected",
+                    (Some(Bench::Beacon), _, true) => "beacon/button_highlighted",
+                    (Some(Bench::Beacon), ..) => "beacon/button",
                     (Some(Bench::Enchanting), _, true) => "enchanting_table/enchantment_slot_highlighted",
                     (Some(Bench::Enchanting), ..) => "enchanting_table/enchantment_slot",
                     (Some(Bench::Loom), true, _) => "loom/pattern_selected",
@@ -206,6 +210,10 @@ impl<'a> Art<'a> {
                 }
             }
             Kind::Flat => bevel(list, self.white, rect, LIGHT, DARK, flat),
+        }
+        // Looks without a disabled button of their own darken the closed one.
+        if closed && !matches!(self.kind, Kind::Java(..)) {
+            list.fill(self.white, rect, [0x10, 0x10, 0x10, 0x90]);
         }
     }
 
