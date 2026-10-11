@@ -95,6 +95,7 @@ pub fn trade(bot: &Bot) -> Option<Trade> {
     });
     let level = level(window.tier, window.offers.iter().map(|o| o.tier));
     let xp = bot.state().entities.by_unique(window.trader).map_or(0, |trader| trader.metadata.int(acacia_bot::proto::types::MetadataDictionaryItemKey::TradeExperience));
+    tracing::debug!(target: "trade", xp, tier = window.tier, known = bot.state().entities.by_unique(window.trader).is_some(), "trader");
     Some(Trade { title: window.display_name.clone(), level, progress: level.and_then(|_| level_progress(window.tier, xp)), offers: offers.collect() })
 }
 
