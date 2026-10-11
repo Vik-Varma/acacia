@@ -27,5 +27,5 @@ pub fn theme(java_look: bool) -> Theme {
     } else {
         (Widgets::Bedrock(super::bedrock::Kit::load(none, &mut atlas)), bedrock::STYLE)
     };
-    Theme { atlas, font, style, widgets }
+    Theme { atlas, font, galactic: None, style, widgets }
 }

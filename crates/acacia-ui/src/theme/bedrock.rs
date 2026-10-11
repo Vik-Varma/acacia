@@ -77,8 +77,9 @@ pub fn load(root: &Path, java_root: Option<&Path>) -> Theme {
         atlas.add(crate::menu::LOGO, &imageops::resize(&logo, 512, height, imageops::FilterType::Triangle));
     }
     let font = java_root.and_then(|r| java_font(r, &mut atlas));
+    let galactic = java_root.and_then(|r| super::java_galactic(r, &mut atlas));
     let widgets = Widgets::Bedrock(Kit::load(root, &mut atlas));
-    Theme { atlas, font, style: STYLE, widgets }
+    Theme { atlas, font, galactic, style: STYLE, widgets }
 }
 
 /// The 182×22 bar: start cap, nine 20×22 slots, end cap.

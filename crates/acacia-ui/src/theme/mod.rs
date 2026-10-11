@@ -28,6 +28,8 @@ pub struct Theme {
     pub atlas: Atlas,
     /// `None` when no font was found: text is not drawn.
     pub font: Option<Font>,
+    /// The enchanting table's alphabet, where the look's files have it.
+    pub galactic: Option<Font>,
     pub style: Style,
     pub widgets: Widgets,
 }
@@ -50,6 +52,14 @@ pub(crate) fn java_font(root: &Path, atlas: &mut Atlas) -> Option<Font> {
     let page = atlas.add("font/ascii", &image);
     let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
     Some(Font::from_grid(&image, page, &rows))
+}
+
+/// Java's galactic page under `root`: its letters lie at their code points (`font/alt.json`).
+pub(crate) fn java_galactic(root: &Path, atlas: &mut Atlas) -> Option<Font> {
+    let image = png(&root.join("textures/font/ascii_sga.png"))?;
+    let page = atlas.add("font/ascii_sga", &image);
+    let rows = Font::code_page_rows();
+    Some(Font::from_grid(&image, page, &rows.iter().map(String::as_str).collect::<Vec<_>>()))
 }
 
 /// The `chars` of the bitmap provider drawing `ascii.png` in `font/include/default.json`.

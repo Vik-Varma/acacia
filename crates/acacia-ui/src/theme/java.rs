@@ -46,6 +46,7 @@ pub fn load(root: &Path) -> Theme {
         }
     }
     let font = java_font(root, &mut atlas);
+    let galactic = super::java_galactic(root, &mut atlas);
     let widgets = Widgets::Java(Kit::load(root, &mut atlas));
-    Theme { atlas, font, style: STYLE, widgets }
+    Theme { atlas, font, galactic, style: STYLE, widgets }
 }

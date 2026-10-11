@@ -6,7 +6,8 @@ use std::path::Path;
 
 use crate::download::Error;
 
-const COPIED: [&str; 10] = [
+const COPIED: [&str; 11] = [
+    "textures/font/ascii_sga.png",
     "textures/gui/sprites/hud",
     "textures/mob_effect",
     "textures/gui/sprites/boss_bar",

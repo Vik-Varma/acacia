@@ -236,6 +236,8 @@ pub struct Pick {
     /// Stacks and how far right of the button's edge each lies.
     pub icons: Vec<(crate::Sprite, u16, f32)>,
     pub label: String,
+    /// Words in the galactic alphabet over the label (an enchanting option's).
+    pub script: String,
 }
 
 #[cfg(test)]

@@ -167,7 +167,7 @@ mod tests {
     fn hotbar_and_hearts_sit_where_java_puts_them() {
         let mut atlas = atlas();
         let widgets = crate::widget::Widgets::Bedrock(crate::widget::bedrock::Kit::load(std::path::Path::new(""), &mut atlas));
-        let theme = Theme { atlas, font: None, style: crate::theme::java::STYLE, widgets };
+        let theme = Theme { atlas, font: None, galactic: None, style: crate::theme::java::STYLE, widgets };
         let atlas = &theme.atlas;
         let mut list = DrawList::new(1.0);
         draw(&mut list, &theme, &state(), [320.0, 240.0]);

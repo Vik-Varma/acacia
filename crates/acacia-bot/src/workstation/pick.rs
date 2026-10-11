@@ -41,6 +41,11 @@ impl Bot {
         }
     }
 
+    /// The words the server gave each of those options, which the game writes in galactic.
+    pub fn enchant_names(&self) -> Vec<String> {
+        self.state.stations.enchant_options.iter().map(|o| o.name.clone()).collect()
+    }
+
     /// The click on enchanting option `option`: the item in the table's slot is enchanted there.
     pub async fn take_enchant(&mut self, option: usize) -> Result<(), ActionError> {
         let (craft, ops) = enchant_plan(&self.state, option)?;

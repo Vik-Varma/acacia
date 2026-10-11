@@ -92,8 +92,16 @@ pub fn draw(list: &mut DrawList, theme: &Theme, layout: Layout, title: &str, con
             // Pick lists carry plain sprites: their stacks do not glint.
             stack(list, theme.font.as_ref(), Item { icon, count, glint: false }, rect[0] + x, rect[1] + inset);
         }
+        // An option with galactic words has two lines: the words, then what they stand for.
+        let runes = theme.galactic.as_ref().filter(|_| !item.script.is_empty());
+        if let Some(galactic) = runes {
+            let room = rect[2] - rect[0] - text - 2.0;
+            let fits = (0..=item.script.len()).rev().filter(|&end| item.script.is_char_boundary(end)).find(|&end| galactic.width(&item.script[..end]) <= room);
+            galactic.draw(list, &item.script[..fits.unwrap_or(0)], rect[0] + text, rect[1] + 1.0, art.pick_text(), 1.0, false);
+        }
         if let Some(font) = &theme.font {
-            font.draw(list, &item.label, rect[0] + text, rect[1] + inset + 4.0, art.pick_text(), 1.0, false);
+            let y = if runes.is_some() { rect[1] + 10.0 } else { rect[1] + inset + 4.0 };
+            font.draw(list, &item.label, rect[0] + text, y, art.pick_text(), 1.0, false);
         }
     }
     let hovered = hit(layout, size, mouse);

@@ -37,7 +37,7 @@ pub(super) fn draw(list: &mut DrawList, skin: &mut Skin, lang: &Lang, screen: &S
     picks.drain(..first.min(picks.len()));
     let shown = picked.map(|p| p.and_then(|i| i.checked_sub(first)));
     for stack in creative.iter().flat_map(|(stacks, ..)| *stacks) {
-        picks.push(Pick { icons: skin.icon(stack).map(|icon| (icon, 1, 1.0)).into_iter().collect(), label: String::new() });
+        picks.push(Pick { icons: skin.icon(stack).map(|icon| (icon, 1, 1.0)).into_iter().collect(), label: String::new(), script: String::new() });
     }
     let note = inventory.cost.filter(|_| inventory.bench == Some(Bench::Anvil)).map(|cost| match cost {
         AnvilCost::Levels(levels) => (format!("Enchantment Cost: {levels}"), true),
@@ -65,18 +65,18 @@ pub(super) fn draw(list: &mut DrawList, skin: &mut Skin, lang: &Lang, screen: &S
 /// The open screen's pick list: only one of the kinds is ever filled.
 fn picks(skin: &mut Skin, inventory: &Inventory) -> Vec<Pick> {
     let mut at = |s: &Stack, x: f32| skin.icon(s).map(|icon| (icon, s.count, x));
-    let mut picks: Vec<Pick> = inventory.picks.iter().map(|(_, s)| Pick { icons: at(&Stack { count: 1, ..s.clone() }, 0.0).into_iter().collect(), label: String::new() }).collect();
-    picks.extend(inventory.enchants.iter().map(|&(level, hint)| Pick { icons: Vec::new(), label: crate::enchant_names::option(level, hint) }));
+    let mut picks: Vec<Pick> = inventory.picks.iter().map(|(_, s)| Pick { icons: at(&Stack { count: 1, ..s.clone() }, 0.0).into_iter().collect(), label: String::new(), script: String::new() }).collect();
+    picks.extend(inventory.enchants.iter().map(|(level, hint, words)| Pick { icons: Vec::new(), label: crate::enchant_names::option(*level, *hint), script: words.clone() }));
     for offer in inventory.trade.iter().flat_map(|t| &t.offers) {
         let prices = [(Some(&offer.price), PRICE[0]), (offer.second_price.as_ref(), PRICE[1]), (Some(&offer.goods), GOODS)];
         let icons = prices.into_iter().filter_map(|(stack, x)| at(stack?, x)).collect();
-        picks.push(Pick { icons, label: if offer.open { ">" } else { "x" }.into() });
+        picks.push(Pick { icons, label: if offer.open { ">" } else { "x" }.into(), script: String::new() });
     }
-    picks.extend(inventory.patterns.iter().map(|(code, _)| Pick { icons: skin.pattern(code).map(|icon| (icon, 1, -1.0)).into_iter().collect(), label: String::new() }));
+    picks.extend(inventory.patterns.iter().map(|(code, _)| Pick { icons: skin.pattern(code).map(|icon| (icon, 1, -1.0)).into_iter().collect(), label: String::new(), script: String::new() }));
     if inventory.bench == Some(Bench::Beacon) {
         // A power the pyramid is too small for stands in brackets.
         let label = |(i, label): (usize, &&str)| if crate::stations::beacon_allows(i, inventory.beacon) { (*label).to_owned() } else { format!("({label})") };
-        picks.extend(crate::stations::BEACON.iter().enumerate().map(|button| Pick { icons: Vec::new(), label: label(button) }));
+        picks.extend(crate::stations::BEACON.iter().enumerate().map(|button| Pick { icons: Vec::new(), label: label(button), script: String::new() }));
     }
     picks
 }
