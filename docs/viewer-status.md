@@ -52,7 +52,7 @@ unit or pack tests only.
 | Screens | Inventory with the player's figure, chests, recipe book and crafting by click | live |
 | Screens | Crafting by hand: the 2×2 grid and the crafting table's 3×3; a click takes the result onto the cursor, Shift into the inventory | table live; live |
 | Screens | Anvil with its name box and level cost, smithing table, stonecutter, enchanting table | live (the cost: both looks, a rename). A cost above the player's levels is red, and 40 or more reads "Too Expensive!": the red line by its pixels in a testbox shot (a levelless rename, image not looked at), "Too Expensive!" by the bot's tests only; the result stays empty in both cases |
-| Screens | A scroller on the stonecutter's and the trader's lists when they are longer than their window; the wheel moves them a row | live for the stonecutter (Java look); the trader's by the same code, unseen |
+| Screens | A scroller on the stonecutter's and the trader's lists when they are longer than their window; the wheel moves them a row | live (Java look): the stonecutter's moved by the wheel, the trader's seen at rest |
 | Screens | Grindstone | tests only, never opened live |
 | Screens | Cartography table, with a name box where the title would be (Bedrock's table renames; Java's has no box, so the place is ours) | live (Java look): a map put in and named, the result shown; taking it and the paper and pane recipes unseen. The box was moved 3 pixels down after the shot |
 | Screens | Sign editor: the board with its four lines, Done or Esc writes; a hanging sign's smaller board and narrower lines | live (Java look) |
@@ -60,14 +60,14 @@ unit or pack tests only.
 | Screens | Loom: patterns as buttons (the pattern item's one, else the plain 32); the result shows the banner it makes | live |
 | Screens | Beacon: powers, second power and confirm as buttons (not either game's own screen) | live |
 | Screens | Creative inventory (E in creative mode): four tabs, a click takes one, Shift a stack; a stack carried onto the items is destroyed; a fifth tab ("Self") shows the player's own screen under the tab buttons; a sixth ("Find") lists every tab's items whose identifier holds the typed text | live (the search: "diamond s" left the sword, spear and shovel); the fifth tab by tests and by pixels sampled from a shot on testbox (the image was not looked at). The search reads identifiers, not the translated names, and has no text box art |
-| Screens | Trading: the offers of a villager or wandering trader, a click trades once | live (wandering trader) |
+| Screens | Trading: the offers of a villager or wandering trader, a click trades once; a villager's level beside its name, later levels' offers crossed out | live (wandering trader; a villager: "Fisherman - Novice", Java look). No experience bar |
 | Screens | Furnace family, hopper, dispenser/dropper, brewing stand | live (acacia-46) |
 | Screens | Server forms, pause, options (two columns), death and respawn | live |
 | Sound | Each look's own samples: Bedrock `.fsb` (FADPCM), Java `.ogg` | logs (testbox has no audio device) |
 
 ## Not done
 
-- **Screens:** the loom's large banner preview; the beacon's own art and which powers its pyramid allows; trader levels; the enchanting table's galactic text (each option says its
+- **Screens:** the loom's large banner preview; the beacon's own art and which powers its pyramid allows; a trader's experience bar; the enchanting table's galactic text (each option says its
   level and the enchantment it hints at, which the game keeps for the tooltip); a book's
   art and a caret inside its text.
 - **Dimensions:** a nether portal was walked through in the viewer (2026-10-10, creative, to a
@@ -108,7 +108,11 @@ unit or pack tests only.
 - A second player: `cargo run -p acacia-bot --example props -- <server> [x y z]` stands there
   in a cape (`ClientBuilder::skin`), facing north, leashes a cow, looms a patterned banner into its hand and sneaks with a shield
   for a minute.
-- `RUST_LOG=chat=debug` logs each chat line's raw packet.
+- `RUST_LOG=chat=debug` logs each chat line's raw packet. A setup command's syntax error is not
+  sent back: write the command to the BDS console fifo and read `bds.log` (the BDS on 19174 runs
+  in `work/bds-render`).
+- A villager with trades: `summon villager x y z 0 0 minecraft:spawn_farmer` (`villager_v2` is
+  not a name this BDS takes).
 - The action-test pack (BDS 19174) rebuilds its scene around wherever the player joins, which
   is where it last left: stay there, summon on a stage some 40 blocks off and shoot it with
   `ACACIA_AT`. A charged creeper left near the join point blows up at the next join.
