@@ -45,6 +45,10 @@ pub fn load(root: &Path) -> Theme {
             atlas.add(&effects::sprite(name), &image);
         }
     }
+    // `book.png` holds the open book in its top-left 192 pixels.
+    if let Some(sheet) = png(&root.join("textures/gui/book.png")) {
+        atlas.add(crate::book::ART, &image::imageops::crop_imm(&sheet, 0, 0, 192, 192).to_image());
+    }
     let font = java_font(root, &mut atlas);
     let galactic = super::java_galactic(root, &mut atlas);
     let widgets = Widgets::Java(Kit::load(root, &mut atlas));

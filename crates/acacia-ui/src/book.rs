@@ -1,7 +1,7 @@
 //! A book's page (Java's `BookViewScreen` layout: a 192-pixel page area at the top, 14 lines of
 //! 114 pixels, the page number above them, the turn buttons under them and Done below). A book and
 //! quill has Sign beside Done; signing swaps the page for the title prompt of Java's
-//! `BookSignScreen`. The page is flat parchment: neither look's book art is drawn.
+//! `BookSignScreen`. The page is Java's `book.png` where the look has it, else flat parchment.
 
 use crate::draw::DrawList;
 use crate::font::Font;
@@ -10,6 +10,8 @@ use crate::widget::{State, Widget, contains};
 
 const SHADE: [u8; 4] = [0x10, 0x10, 0x10, 0xC8];
 const AREA: f32 = 192.0;
+/// The atlas name of the look's open-book image, 192 pixels square, where it has one.
+pub const ART: &str = "book";
 const TOP: f32 = 2.0;
 /// The parchment within the 192-pixel area.
 const PAGE: [f32; 4] = [20.0, 1.0, 166.0, 181.0];
@@ -95,8 +97,13 @@ pub fn draw(list: &mut DrawList, theme: &Theme, page: Page, mouse: [f32; 2], siz
     list.fill(white, [0.0, 0.0, size[0], size[1]], SHADE);
     let left = ((size[0] - AREA) / 2.0).floor();
     let paper = [left + PAGE[0], TOP + PAGE[1], left + PAGE[2], TOP + PAGE[3]];
-    list.fill(white, paper, PAPER_EDGE);
-    list.fill(white, [paper[0] + 1.0, paper[1] + 1.0, paper[2] - 1.0, paper[3] - 1.0], PAPER);
+    match theme.atlas.get(ART) {
+        Some(art) => list.sprite(art, left, TOP, [0xFF; 4]),
+        None => {
+            list.fill(white, paper, PAPER_EDGE);
+            list.fill(white, [paper[0] + 1.0, paper[1] + 1.0, paper[2] - 1.0, paper[3] - 1.0], PAPER);
+        }
+    }
     let over = hit(page, size, mouse);
     for (button, rect, text) in buttons(page, size) {
         let state = State { hover: over == Some(button), ..State::default() };
