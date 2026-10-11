@@ -37,9 +37,10 @@ pub fn draw(list: &mut DrawList, theme: &Theme, layout: Layout, title: &str, con
                 if !(bench.name_hides_title() && contents.name.is_some()) {
                     font.draw(list, bench.title(), ox + x, oy + y, TITLE, 1.0, false);
                 }
-                // BeaconScreen: two headings in light text, and no "Inventory".
+                // BeaconScreen: two headings and no "Inventory"; light text on Java's dark boxes.
+                let (colour, shadow) = if matches!(theme.widgets, crate::widget::Widgets::Java(_)) { (0xE0E0E0, true) } else { (TITLE, false) };
                 for (heading, [middle, y]) in super::bench::BEACON_HEADINGS.into_iter().filter(|_| bench == Bench::Beacon) {
-                    font.draw(list, heading, ox + middle - (font.width(heading) / 2.0).floor(), oy + y, 0xE0E0E0, 1.0, true);
+                    font.draw(list, heading, ox + middle - (font.width(heading) / 2.0).floor(), oy + y, colour, 1.0, shadow);
                 }
                 if bench == Bench::Beacon { 0.0 } else { font.draw(list, "Inventory", ox + 8.0, oy + height - 94.0, TITLE, 1.0, false) }
             }
