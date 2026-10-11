@@ -18,11 +18,17 @@ pub fn carrying_yaw(bot: &Bot) -> Option<f32> {
 pub struct RideLog {
     seated_ticks: u32,
     riding: bool,
+    /// The server's corrections and teleports of the player so far.
+    moved_back: (u32, u32),
 }
 
 impl RideLog {
     /// Call once per tick.
     pub fn tick(&mut self, bot: &Bot) {
+        let moved_back = bot.movement().map_or((0, 0), |m| (m.corrections, m.teleports));
+        if std::mem::replace(&mut self.moved_back, moved_back) != moved_back {
+            tracing::info!(target: "moves", corrections = moved_back.0, teleports = moved_back.1, feet = ?bot.movement().and_then(|m| m.position()), "the server moved the player");
+        }
         let Some(vehicle) = bot.vehicle() else {
             if std::mem::take(&mut self.riding) {
                 tracing::info!(eye = ?bot.eye_position(), "left the vehicle");
