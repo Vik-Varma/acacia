@@ -66,6 +66,7 @@ unit or pack tests only.
 | Screens | Furnace family, hopper, dispenser/dropper, brewing stand | live (acacia-46) |
 | Screens | Server forms, pause, options (two columns), death and respawn | live |
 | Sound | Each look's own samples: Bedrock `.fsb` (FADPCM), Java `.ogg` | logs (testbox has no audio device) |
+| Sound | Music: a track of the dimension's set five seconds after joining (the creative set in creative mode), then the pack's pause before the next; decoded on its own thread | the first track's start in the log (`RUST_LOG=music=info`); never heard, and its decoding never ran (no audio device) |
 
 ## Not done
 
@@ -86,7 +87,9 @@ unit or pack tests only.
   forest was seen live, before it landed).
 - **Bedrock look:** weather, clouds, sky colours and first-person poses use Java's rules; Bedrock's
   own are unmeasured.
-- **Sound:** music, ambience, and Java's event mapping where a Bedrock sound has no Java file.
+- **Sound:** ambience, and Java's event mapping where a Bedrock sound has no Java file. Music
+  plays by dimension only (no biome sets, no menu music), has no volume of its own, and counts
+  its pause from four minutes after a track starts, not from its end.
 - **Performance:** only measured on lavapipe (CPU, 25 to 40 fps at 1280×720 on testbox); no GPU
   frame times recorded. The dev machine has an Intel Arc but too little free memory to build the
   viewer beside the other sessions (2026-10-10).
