@@ -66,7 +66,7 @@ unit or pack tests only.
 | Screens | Furnace family, hopper, dispenser/dropper, brewing stand | live (acacia-46) |
 | Screens | Server forms, pause, options (two columns), death and respawn | live |
 | Sound | Each look's own samples: Bedrock `.fsb` (FADPCM), Java `.ogg` | logs (testbox has no audio device) |
-| Sound | Music: a track of the dimension's set five seconds after joining (the creative set in creative mode), then the pack's pause before the next; decoded on its own thread | the first track's start in the log (`RUST_LOG=music=info`); never heard, and its decoding never ran (no audio device) |
+| Sound | Music: a track of the dimension's set five seconds after joining (the creative set in creative mode), then the pack's pause before the next; decoded on its own thread | the first track's start in the log (`RUST_LOG=music=info`), and a pack test decodes a track (261 s of stereo); never heard (no audio device). Neither asset set ships music: bake the Java look with `LOOKBAKE_MUSIC=1` (248 MB), which both looks then play. Bedrock's numbered tracks are found under Java's titles (`acacia-sound/src/java_names.rs`), the pairing unchecked by ear |
 
 ## Not done
 
