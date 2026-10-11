@@ -74,18 +74,28 @@ pub(crate) struct Ticker {
     start: Instant,
     cadence: Cadence,
     next: Fire,
+    /// `ACACIA_TICK_LAG_MS`: each wake-up comes up to this late, to try a coarse or busy
+    /// machine's timing where the timer is exact.
+    lag: Option<u64>,
+    lag_rng: u64,
 }
 
 impl Ticker {
     pub fn new() -> Self {
         let mut cadence = Cadence::new(seed());
         let next = cadence.next(Duration::ZERO);
-        Self { start: Instant::now(), cadence, next }
+        let lag = std::env::var("ACACIA_TICK_LAG_MS").ok().and_then(|ms| ms.parse().ok());
+        Self { start: Instant::now(), cadence, next, lag, lag_rng: seed() }
     }
 
     /// Waits for the next firing and returns how many ticks to run. Cancel-safe.
     pub async fn wait(&mut self) -> u32 {
         tokio::time::sleep_until(self.start + self.next.at).await;
+        if let Some(lag) = self.lag {
+            // One wake-up in fifty hangs for twenty times the usual lateness.
+            let late = splitmix(&mut self.lag_rng) % (lag + 1) * if splitmix(&mut self.lag_rng).is_multiple_of(50) { 20 } else { 1 };
+            tokio::time::sleep(Duration::from_millis(late)).await;
+        }
         let ticks = self.next.ticks;
         self.next = self.cadence.next(self.start.elapsed());
         ticks
