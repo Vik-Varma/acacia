@@ -112,6 +112,10 @@ pub fn draw(list: &mut DrawList, theme: &Theme, layout: Layout, title: &str, con
             art.hover(list, x, y);
         }
     }
+    if let (Layout::Bench(Bench::Loom), Some(made)) = (layout, (contents.slot)(Slot::Result)) {
+        // LoomScreen shows the banner the pattern makes, large, above the result.
+        list.icon(made.icon, [ox + 135.0, oy + 12.0, ox + 167.0, oy + 44.0], false);
+    }
     if let Some(item) = contents.cursor {
         stack(list, theme.font.as_ref(), item, mouse[0] - 8.0, mouse[1] - 8.0);
     }
