@@ -18,14 +18,14 @@ const GOODS: f32 = 68.0;
 pub(super) fn draw(list: &mut DrawList, skin: &mut Skin, lang: &Lang, screen: &Screen, mouse: [f32; 2], gui: [f32; 2]) {
     let Screen { inventory, layout, picked, first, name, creative } = *screen;
     let mut icons = HashMap::new();
+    // A pick list's result is the picked one.
+    let shown_in = |slot: Slot| match slot {
+        Slot::Result if !inventory.picks.is_empty() => picked[0].and_then(|i| inventory.picks.get(i)).map(|p| &p.1),
+        Slot::Result if !inventory.patterns.is_empty() => picked[0].and_then(|i| inventory.patterns.get(i)).and_then(|p| p.1.as_ref()),
+        _ => stack_in(inventory, slot),
+    };
     for (slot, _) in inventory::slots(layout) {
-        // A pick list's result is the picked one.
-        let shown = match slot {
-            Slot::Result if !inventory.picks.is_empty() => picked[0].and_then(|i| inventory.picks.get(i)).map(|p| &p.1),
-            Slot::Result if !inventory.patterns.is_empty() => picked[0].and_then(|i| inventory.patterns.get(i)).and_then(|p| p.1.as_ref()),
-            _ => stack_in(inventory, slot),
-        };
-        if let Some(item) = shown.and_then(|s| skin.item(s)) {
+        if let Some(item) = shown_in(slot).and_then(|s| skin.item(s)) {
             icons.insert(slot, item);
         }
     }
@@ -59,6 +59,14 @@ pub(super) fn draw(list: &mut DrawList, skin: &mut Skin, lang: &Lang, screen: &S
         let blank = |s: &Stack, skin: &Skin| acacia_ui::hud::Item { icon: skin.theme.atlas.white(), count: s.count, glint: false };
         let results: Vec<_> = inventory.craftable.iter().map(|s| skin.item(s).unwrap_or_else(|| blank(s, skin))).collect();
         acacia_ui::recipes::draw(list, &skin.theme, layout, &results, mouse, gui);
+    }
+    // The name of the stack under the mouse, while none is carried: a slot's, a creative item's
+    // or a stonecutter's cut.
+    let over = inventory::hit(layout, gui, mouse).and_then(shown_in);
+    let over = over.or_else(|| creative.and_then(|(stacks, ..)| stacks.get(inventory::hit_pick(layout, gui, stacks.len(), mouse)?)));
+    let over = over.or_else(|| inventory.picks.get(first + inventory::hit_pick(layout, gui, inventory.picks.len().saturating_sub(first), mouse)?).map(|p| &p.1));
+    if let Some(stack) = over.filter(|_| inventory.cursor.is_none()) {
+        acacia_ui::tooltip::draw(list, &skin.theme, &[lang.item_name(&stack.name)], mouse, gui);
     }
 }
 
