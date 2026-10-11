@@ -58,7 +58,7 @@ unit or pack tests only.
 | Screens | Books: a right-click opens the held book's pages; a book and quill takes typing at a page's end and new pages, and is signed under a title | live |
 | Screens | Loom: patterns as buttons (the pattern item's one, else the plain 32); the result shows the banner it makes | live |
 | Screens | Beacon: powers, second power and confirm as buttons (not either game's own screen) | live |
-| Screens | Creative inventory (E in creative mode): four tabs, a click takes one, Shift a stack; a stack carried onto the items is destroyed; a fifth tab ("Self") shows the player's own screen under the tab buttons | live; the fifth tab by tests and by pixels sampled from a shot on testbox (the image was not looked at) |
+| Screens | Creative inventory (E in creative mode): four tabs, a click takes one, Shift a stack; a stack carried onto the items is destroyed; a fifth tab ("Self") shows the player's own screen under the tab buttons; a sixth ("Find") lists every tab's items whose identifier holds the typed text | live (the search: "diamond s" left the sword, spear and shovel); the fifth tab by tests and by pixels sampled from a shot on testbox (the image was not looked at). The search reads identifiers, not the translated names, and has no text box art |
 | Screens | Trading: the offers of a villager or wandering trader, a click trades once | live (wandering trader) |
 | Screens | Furnace family, hopper, dispenser/dropper, brewing stand | live (acacia-46) |
 | Screens | Server forms, pause, options (two columns), death and respawn | live |
@@ -69,7 +69,7 @@ unit or pack tests only.
 - **Screens:** the loom's large banner preview; the beacon's own art and which powers its pyramid allows; trader levels; a
   cartography table's name box; the enchanting table's galactic text (each option says its
   level and the enchantment it hints at, which the game keeps for the tooltip); a book's
-  art and a caret inside its text; the creative inventory's search.
+  art and a caret inside its text.
 - **Dimensions:** a nether portal was walked through in the viewer (2026-10-10, creative, to a
   crimson forest); the way back and the end portal were checked in the bot's drill only. An
   arrival can take one correction when the server lags (docs/DESIGN.md "Dimension travel").
