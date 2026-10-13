@@ -40,7 +40,7 @@ pub use goal::Goal;
 pub use goto::{GotoOpts, NavStatus, Navigator};
 pub use kit::{DEFAULT_SCAFFOLD, Kit};
 pub use moves::MoveKind;
-pub use node::Momentum;
+pub use node::{Entry, Mode, Momentum, NodeKey};
 pub use rollout::Body;
 pub use snapshot::WorldBlocks;
 pub use terrain::{Blocks, Cell, Spot, SpotKind, Terrain};
@@ -58,4 +58,6 @@ pub struct PathNode {
     pub wet: bool,
     /// World changes the move needs first, done from the previous node.
     pub work: Work,
+    /// The motion the node is reached with.
+    pub entry: Entry,
 }

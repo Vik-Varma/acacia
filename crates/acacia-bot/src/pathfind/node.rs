@@ -1,8 +1,48 @@
 //! Search node state beyond the block position: the player's motion at a node, quantized so nodes
 //! reached at nearly the same speed share a cache entry.
 
+use std::collections::HashMap;
+use std::hash::BuildHasherDefault;
+
 use acacia_physics::constants::{JUMP_DELAY_TICKS, SNEAKING_PLAYER_HEIGHT};
 use acacia_physics::{BlockPos, PlayerState, Vec3};
+
+use super::terrain::PosHasher;
+
+/// How the player moves at a node.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum Mode {
+    #[default]
+    Ground,
+}
+
+/// The motion a node is entered with.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum Entry {
+    /// Standing (classic and work moves end here).
+    #[default]
+    Rest,
+    /// Running along direction index 0..8 (`moves::DIRS`).
+    Run(u8),
+    /// In the air; the search start only.
+    Air,
+}
+
+/// The A* key: a block position with how the player is there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct NodeKey {
+    pub pos: BlockPos,
+    pub mode: Mode,
+    pub entry: Entry,
+}
+
+impl NodeKey {
+    pub fn rest(pos: BlockPos) -> Self {
+        Self { pos, mode: Mode::Ground, entry: Entry::Rest }
+    }
+}
+
+pub(crate) type KeyMap<V> = HashMap<NodeKey, V, BuildHasherDefault<PosHasher>>;
 
 /// Feet offset steps per block.
 const OFF_Q: f32 = 1024.0;

@@ -10,7 +10,8 @@ use acacia_physics::{BlockPos, Vec3};
 use super::goal::Goal;
 use super::kit::Kit;
 use super::moves::{self, Ctx, Edge, MoveKind};
-use super::terrain::{Blocks, EPS, PosMap, Spot, Terrain};
+use super::node::{KeyMap, NodeKey};
+use super::terrain::{Blocks, EPS, Spot, Terrain};
 use super::work::Work;
 use super::PathNode;
 
@@ -63,7 +64,7 @@ pub struct Path {
 
 #[derive(Clone, Copy)]
 struct Rec {
-    pos: BlockPos,
+    key: NodeKey,
     spot: Spot,
     kind: MoveKind,
     parent: u32,
@@ -128,13 +129,14 @@ pub fn search<B: Blocks>(t: &Terrain<B>, feet: Vec3, goal: &Goal, opts: &SearchO
     if goal.success(start) {
         return empty(true);
     }
-    let mut recs = vec![Rec { pos: start, spot, kind: MoveKind::Walk, parent: u32::MAX, g: 0.0, placed: 0, work: NO_WORK }];
+    let start = NodeKey::rest(start);
+    let mut recs = vec![Rec { key: start, spot, kind: MoveKind::Walk, parent: u32::MAX, g: 0.0, placed: 0, work: NO_WORK }];
     let mut works: Vec<Work> = Vec::new();
-    let mut index = PosMap::default();
+    let mut index = KeyMap::default();
     index.insert(start, 0u32);
     let mut open = BinaryHeap::from([Open { f: 0.0, g: 0.0, index: 0 }]);
     let mut best = [0u32; 7];
-    let mut best_score = [goal.heuristic(start); 7];
+    let mut best_score = [goal.heuristic(start.pos); 7];
     let mut edges: Vec<Edge> = Vec::with_capacity(32);
     let mut visited = 0;
     let mut ctx = Ctx {
@@ -151,7 +153,7 @@ pub fn search<B: Blocks>(t: &Terrain<B>, feet: Vec3, goal: &Goal, opts: &SearchO
         if g > rec.g {
             continue;
         }
-        if goal.success(rec.pos) {
+        if goal.success(rec.key.pos) {
             return Path { nodes: reconstruct(&recs, &works, i), complete: true, cost: g, visited };
         }
         visited += 1;
@@ -161,11 +163,12 @@ pub fn search<B: Blocks>(t: &Terrain<B>, feet: Vec3, goal: &Goal, opts: &SearchO
         edges.clear();
         let placed = rec.placed;
         ctx.blocks_left = opts.kit.blocks.saturating_sub(placed);
-        moves::successors(t, rec.pos, rec.spot, &ctx, &mut edges);
+        moves::successors(t, rec.key.pos, rec.spot, &ctx, &mut edges);
         for e in &edges {
             let g2 = g + e.cost;
-            let mut next = Rec { pos: e.pos, spot: e.spot, kind: e.kind, parent: i, g: g2, placed: placed + e.work.places(), work: NO_WORK };
-            let j = match index.entry(e.pos) {
+            let key = NodeKey::rest(e.pos);
+            let mut next = Rec { key, spot: e.spot, kind: e.kind, parent: i, g: g2, placed: placed + e.work.places(), work: NO_WORK };
+            let j = match index.entry(key) {
                 Entry::Occupied(o) => {
                     let j = *o.get();
                     if recs[j as usize].g <= g2 {
@@ -204,7 +207,7 @@ fn reconstruct(recs: &[Rec], works: &[Work], mut i: u32) -> Vec<PathNode> {
     let mut nodes = Vec::new();
     while let Some(r) = recs.get(i as usize).filter(|r| r.parent != u32::MAX) {
         let work = works.get(r.work as usize).copied().unwrap_or_default();
-        nodes.push(PathNode { pos: r.pos, feet: r.spot.feet, kind: r.kind, wet: r.spot.wet, work });
+        nodes.push(PathNode { pos: r.key.pos, feet: r.spot.feet, kind: r.kind, wet: r.spot.wet, work, entry: r.key.entry });
         i = r.parent;
     }
     nodes.reverse();
