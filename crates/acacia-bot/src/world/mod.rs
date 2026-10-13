@@ -9,6 +9,7 @@ mod near;
 mod tests;
 
 pub use adapter::PhysicsWorld;
+pub(crate) use adapter::block_physics;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, Weak};

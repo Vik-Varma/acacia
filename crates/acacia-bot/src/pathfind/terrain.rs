@@ -132,6 +132,10 @@ impl<'r, B: Blocks> Terrain<'r, B> {
         Cell { boxes: state.boxes, flags: state_flags(state) | liquid_flags, block, liquid }
     }
 
+    pub(crate) fn registry(&self) -> &'r BlockRegistry {
+        self.registry
+    }
+
     pub(crate) fn state(&self, p: BlockPos) -> Option<&'r BlockState> {
         self.registry.get(self.cell(p).block)
     }
