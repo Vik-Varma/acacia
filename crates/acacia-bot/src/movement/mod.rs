@@ -4,13 +4,16 @@
 mod auth_input;
 pub(crate) mod equipment;
 mod flight;
+mod fork;
 mod glide;
 mod idle;
+mod keys;
 mod lifecycle;
 mod rewind;
 #[cfg(test)]
 mod tests;
 
+pub use fork::Rollout;
 pub use idle::Idle;
 
 use acacia_client::proto::packets::{
@@ -20,9 +23,10 @@ use acacia_client::proto::packets::{
 use acacia_client::proto::types::{InputData, MovementEffectType};
 use acacia_client::proto::{DecodeError, Packet, RawPacket};
 use acacia_physics::constants::FREEZE_SPEED_MODIFIER;
-use acacia_physics::{self as physics, Effects, Equipment, Input, PlayerState, Vec3, WorldView};
+use acacia_physics::{self as physics, Effects, Equipment, PlayerState, Vec3, WorldView};
 
 use crate::state::Me;
+use keys::KeyLatch;
 use rewind::{Correction, History};
 
 /// Players' wire positions are eye positions this far above the feet.
@@ -34,8 +38,6 @@ const EFFECT_JUMP_BOOST: i32 = 8;
 const EFFECT_LEVITATION: i32 = 24;
 const EFFECT_SLOW_FALLING: i32 = 27;
 const EFFECT_WEAVING: i32 = 33;
-/// Window for double-tapping forward to sprint.
-const DOUBLE_TAP_TICKS: u32 = 7;
 
 /// The server's state of a vehicle the bot drives (`CorrectPlayerMovePrediction` type Vehicle).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -125,17 +127,11 @@ pub struct Movement {
     ack_teleport: bool,
     /// The queued teleport is a BDS one, which applies liquid currents on its hold tick.
     current_on_landing: bool,
-    /// Ticks left in which pressing forward again starts a sprint (double tap).
-    sprint_trigger: u32,
-    prev_impulse: bool,
-    /// The sprint was started by a double tap, so it outlives the (unheld) sprint key.
-    tapped_sprint: bool,
+    keys: KeyLatch,
     effects: Effects,
     equipment: Equipment,
     /// The flying flag of the server's last `UpdateAbilities` (see `set_abilities`).
     server_flying: Option<bool>,
-    /// Ticks left of the jump double tap toggling the flight (`flight::fly_jump`).
-    fly_taps: u8,
     history: History,
     /// Replay only: the recorded `WantDown` (bot traces before 2026-10-02 never sent it), else it follows sneak.
     pub(crate) recorded_want_down: Option<bool>,
@@ -172,14 +168,11 @@ impl Movement {
             prev_jump: false,
             ack_teleport: false,
             current_on_landing: false,
-            sprint_trigger: 0,
             recorded_want_down: None,
-            prev_impulse: false,
-            tapped_sprint: false,
+            keys: KeyLatch::default(),
             effects: Effects::default(),
             equipment: Equipment::default(),
             server_flying: None,
-            fly_taps: 0,
             history: History::default(),
         }
     }
@@ -376,50 +369,13 @@ impl Movement {
     pub fn tick(&mut self, world: &impl WorldView) -> Option<PlayerAuthInput> {
         let st = self.physics.as_mut()?;
         let c = self.controls;
-        // Simulated with the rotation as sent, so a replay of the packet reproduces the tick exactly.
-        let (yaw, pitch) = auth_input::wire_rotation(c.yaw, c.pitch);
         let replayed = self.history.apply(st, world);
         if replayed > 0 {
             tracing::debug!(tick = self.tick, replayed, "rewound");
         }
         st.equipment = self.equipment;
-        // Pressing forward again within DOUBLE_TAP_TICKS of the last press sprints: BDS runs this client
-        // rule on the raw key flags, so the simulation must too. A press is the forward impulse reaching
-        // full strength: sneaking scales it down on land (not in water, where it means sink), so releasing
-        // sneak there with forward held counts. Presses while sneaking never count, and only presses on
-        // the ground or in water do (vanilla client captures, strict BDS fuzz). A press with the sprint key
-        // held starts no tap window (as in Java's `aiStep`).
-        let forward = key(c.forward) > 0.0;
-        let in_water = physics::touching_water(st, world);
-        let sneaking = c.sneak || st.sneaking;
-        let impulse = forward && !(sneaking && !in_water);
-        self.sprint_trigger = self.sprint_trigger.saturating_sub(1);
-        let mut double_tap = false;
-        let grounded = st.on_ground || in_water;
-        if impulse && !self.prev_impulse && !sneaking && grounded {
-            if self.sprint_trigger > 0 {
-                double_tap = true;
-            } else if !c.sprint {
-                self.sprint_trigger = DOUBLE_TAP_TICKS;
-            }
-        }
-        self.prev_impulse = impulse;
-        self.tapped_sprint = (self.tapped_sprint && st.sprinting || double_tap) && !c.sprint;
-        let jump = flight::fly_jump(&mut self.fly_taps, &c, &st.flight);
-        let input = Input {
-            move_vector: keys(c.strafe, c.forward),
-            yaw,
-            pitch,
-            jump,
-            sneak: c.sneak,
-            want_down: self.recorded_want_down.unwrap_or(c.sneak),
-            // Strict BDS 1.26.52 ends a key sprint when the key is released (fuzz: 94% of such ticks were
-            // corrected); a double-tap sprint has no key and lasts while forward is held.
-            sprint: c.sprint || double_tap || (self.tapped_sprint && st.sprinting && forward),
-            using_item: self.using_item,
-            glide: c.glide,
-            ..Input::default()
-        };
+        let input = self.keys.advance(&c, st, world, self.using_item, self.recorded_want_down.unwrap_or(c.sneak));
+        let jump = input.jump;
         let (was_sprinting, was_sneaking, was_swimming, was_gliding) = (st.sprinting, st.sneaking, st.swimming, st.gliding);
         let was_flying = st.flight.flying;
         let knockback = st.knockback;
@@ -467,18 +423,6 @@ impl Movement {
 
 impl Default for Movement {
     fn default() -> Self { Self::new() }
-}
-
-/// The move vector of held keys: the client normalizes diagonals, so they move at the same 0.98 of full
-/// speed as one key does (the simulation's own cap would let them reach 1.0).
-fn keys(strafe: f32, forward: f32) -> [f32; 2] {
-    let [s, f] = [key(strafe), key(forward)];
-    if s != 0.0 && f != 0.0 { [s * std::f32::consts::FRAC_1_SQRT_2, f * std::f32::consts::FRAC_1_SQRT_2] } else { [s, f] }
-}
-
-/// A movement axis as a key press: -1, 0 or 1.
-fn key(axis: f32) -> f32 {
-    if axis > 0.0 { 1.0 } else if axis < 0.0 { -1.0 } else { 0.0 }
 }
 
 fn feet(eye: &acacia_client::proto::types::Vec3f) -> Vec3 {

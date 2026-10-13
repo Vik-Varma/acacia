@@ -29,6 +29,8 @@ pub struct Cell {
     pub flags: u16,
     /// Layer-0 runtime id (`u32::MAX` when not loaded).
     pub block: u32,
+    /// Layer-1 (liquid) runtime id (`u32::MAX` when not loaded).
+    pub liquid: u32,
 }
 
 impl Cell {

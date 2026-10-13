@@ -126,10 +126,10 @@ impl<'r, B: Blocks> Terrain<'r, B> {
 
     fn classify(&self, p: BlockPos) -> Cell {
         const SOLID: &[Aabb] = &[Aabb::FULL];
-        let Some((block, liquid)) = self.blocks.ids(p) else { return Cell { boxes: SOLID, flags: UNLOADED, block: u32::MAX } };
-        let Some(state) = self.registry.get(block) else { return Cell { boxes: SOLID, flags: 0, block } };
-        let liquid = self.registry.get(liquid).map_or(0, |s| state_flags(s) & (WATER | LIQUID | AVOID | DANGER_NEAR));
-        Cell { boxes: state.boxes, flags: state_flags(state) | liquid, block }
+        let Some((block, liquid)) = self.blocks.ids(p) else { return Cell { boxes: SOLID, flags: UNLOADED, block: u32::MAX, liquid: u32::MAX } };
+        let Some(state) = self.registry.get(block) else { return Cell { boxes: SOLID, flags: 0, block, liquid } };
+        let liquid_flags = self.registry.get(liquid).map_or(0, |s| state_flags(s) & (WATER | LIQUID | AVOID | DANGER_NEAR));
+        Cell { boxes: state.boxes, flags: state_flags(state) | liquid_flags, block, liquid }
     }
 
     pub(crate) fn state(&self, p: BlockPos) -> Option<&'r BlockState> {

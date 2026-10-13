@@ -8,12 +8,6 @@ pub struct PhysicsWorld<'a> {
     pub registry: &'a BlockRegistry,
 }
 
-impl PhysicsWorld<'_> {
-    fn state(&self, runtime_id: u32) -> Option<&BlockState> {
-        self.registry.get(runtime_id)
-    }
-}
-
 fn liquid_of(state: &BlockState) -> Option<Liquid> {
     let kind = if state.is_water() {
         LiquidKind::Water
@@ -32,59 +26,64 @@ fn is_fence_or_wall(name: &str) -> bool {
     base.ends_with("_fence") || base.ends_with("_fence_gate") || (base.ends_with("_wall") && !base.contains("sign") && !base.contains("banner") && !base.contains("torch") && !base.contains("head") && !base.contains("skull") && !base.contains("fan"))
 }
 
+/// A cell's physics from its layer-0 runtime id and, read only when needed, its layer-1 id.
+pub(crate) fn block_physics(registry: &BlockRegistry, block: u32, liquid_layer: impl FnOnce() -> u32) -> BlockPhysics {
+    let Some(s) = registry.get(block) else { return BlockPhysics::AIR };
+    // BDS ignores flowing water in the second layer (spread into a fence or onto soul sand) for movement
+    // (fuzz 161505-1); whether it ignores still water there too is untested. It ignores any layer-2 water
+    // in a full cube (stone filled over a pool) or under air (left by a removed block), which otherwise bends
+    // a neighbour's current (strict BDS fuzz).
+    // A bubble column is water (its layer-2 water is flowing_water, which the rule above would drop).
+    let column_water = s.flags.contains(BlockFlags::BUBBLE_COLUMN).then_some(Liquid { kind: LiquidKind::Water, depth: 8, falling: false });
+    let liquid = liquid_of(s).or(column_water).or_else(|| {
+        (!s.is_full_cube() && !s.is_air()).then(|| registry.get(liquid_layer())).flatten().filter(|l| !l.name.ends_with("flowing_water")).and_then(liquid_of)
+    });
+    if s.is_air() && liquid.is_none() {
+        return BlockPhysics::AIR;
+    }
+    let f = s.flags;
+    let has = |flag: BlockFlags| f.contains(flag);
+    let soul_sand = has(BlockFlags::SOUL_SAND);
+    BlockPhysics {
+        air: false,
+        friction: if s.friction > 0.0 { s.friction } else { 0.6 },
+        acceleration_friction_multiplier: if soul_sand { SOUL_SAND_ACCELERATION } else { 1.0 },
+        soul_speed_neutralizes: soul_sand,
+        climbable: has(BlockFlags::CLIMBABLE),
+        cobweb: has(BlockFlags::COBWEB),
+        honey: has(BlockFlags::HONEY),
+        bounce: if has(BlockFlags::SLIME) { Bounce::Slime } else if has(BlockFlags::BED) { Bounce::Bed } else { Bounce::None },
+        inside: if has(BlockFlags::SWEET_BERRY) {
+            InsideMovement::SweetBerryBush
+        } else if has(BlockFlags::POWDER_SNOW) {
+            InsideMovement::PowderSnow
+        } else {
+            InsideMovement::None
+        },
+        traversal: if has(BlockFlags::SCAFFOLDING) {
+            Traversal::Scaffolding
+        } else if has(BlockFlags::POWDER_SNOW) {
+            Traversal::PowderSnow
+        } else {
+            Traversal::None
+        },
+        fence_or_wall: is_fence_or_wall(s.name),
+        liquid,
+        // Approximation for liquid flow: only full cubes block it on every face.
+        solid_faces: if s.is_full_cube() { 0x3f } else { 0 },
+        bubble_column: has(BlockFlags::BUBBLE_COLUMN).then(|| BubbleColumn { downward: has(BlockFlags::BUBBLE_DRAG), surface: None }),
+    }
+}
+
 impl WorldView for PhysicsWorld<'_> {
     fn block_collisions(&self, [x, y, z]: BlockPos, out: &mut Vec<Aabb>) {
-        if let Some(s) = self.state(self.view.block(x, y, z)) {
+        if let Some(s) = self.registry.get(self.view.block(x, y, z)) {
             out.extend(s.boxes.iter().map(|b| Aabb { min: b.min, max: b.max }));
         }
     }
 
     fn block(&self, [x, y, z]: BlockPos) -> BlockPhysics {
-        let Some(s) = self.state(self.view.block(x, y, z)) else { return BlockPhysics::AIR };
-        // BDS ignores flowing water in the second layer (spread into a fence or onto soul sand) for movement
-        // (fuzz 161505-1); whether it ignores still water there too is untested. It ignores any layer-2 water
-        // in a full cube (stone filled over a pool) or under air (left by a removed block), which otherwise bends
-        // a neighbour's current (strict BDS fuzz).
-        // A bubble column is water (its layer-2 water is flowing_water, which the rule above would drop).
-        let column_water = s.flags.contains(BlockFlags::BUBBLE_COLUMN).then_some(Liquid { kind: LiquidKind::Water, depth: 8, falling: false });
-        let liquid = liquid_of(s).or(column_water).or_else(|| {
-            (!s.is_full_cube() && !s.is_air()).then(|| self.state(self.view.liquid(x, y, z))).flatten().filter(|l| !l.name.ends_with("flowing_water")).and_then(liquid_of)
-        });
-        if s.is_air() && liquid.is_none() {
-            return BlockPhysics::AIR;
-        }
-        let f = s.flags;
-        let has = |flag: BlockFlags| f.contains(flag);
-        let soul_sand = has(BlockFlags::SOUL_SAND);
-        BlockPhysics {
-            air: false,
-            friction: if s.friction > 0.0 { s.friction } else { 0.6 },
-            acceleration_friction_multiplier: if soul_sand { SOUL_SAND_ACCELERATION } else { 1.0 },
-            soul_speed_neutralizes: soul_sand,
-            climbable: has(BlockFlags::CLIMBABLE),
-            cobweb: has(BlockFlags::COBWEB),
-            honey: has(BlockFlags::HONEY),
-            bounce: if has(BlockFlags::SLIME) { Bounce::Slime } else if has(BlockFlags::BED) { Bounce::Bed } else { Bounce::None },
-            inside: if has(BlockFlags::SWEET_BERRY) {
-                InsideMovement::SweetBerryBush
-            } else if has(BlockFlags::POWDER_SNOW) {
-                InsideMovement::PowderSnow
-            } else {
-                InsideMovement::None
-            },
-            traversal: if has(BlockFlags::SCAFFOLDING) {
-                Traversal::Scaffolding
-            } else if has(BlockFlags::POWDER_SNOW) {
-                Traversal::PowderSnow
-            } else {
-                Traversal::None
-            },
-            fence_or_wall: is_fence_or_wall(s.name),
-            liquid,
-            // Approximation for liquid flow: only full cubes block it on every face.
-            solid_faces: if s.is_full_cube() { 0x3f } else { 0 },
-            bubble_column: has(BlockFlags::BUBBLE_COLUMN).then(|| BubbleColumn { downward: has(BlockFlags::BUBBLE_DRAG), surface: None }),
-        }
+        block_physics(self.registry, self.view.block(x, y, z), || self.view.liquid(x, y, z))
     }
 
     fn is_area_loaded(&self, area: &Aabb) -> bool {
