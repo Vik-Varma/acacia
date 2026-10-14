@@ -37,12 +37,14 @@ pub struct GotoOpts {
     pub tolerance: f32,
     /// Item identifiers of the throwaway blocks bridging and pillaring may use, in preference order.
     pub scaffold: Vec<String>,
+    /// Run straight at nodes further on over flat ground instead of the path's 8-direction staircase.
+    pub shortcuts: bool,
 }
 
 impl Default for GotoOpts {
     fn default() -> Self {
         let scaffold = DEFAULT_SCAFFOLD.iter().map(|s| s.to_string()).collect();
-        Self { search: SearchOpts::default(), max_replans: 10, tolerance: 0.25, scaffold }
+        Self { search: SearchOpts::default(), max_replans: 10, tolerance: 0.25, scaffold, shortcuts: true }
     }
 }
 
@@ -237,7 +239,8 @@ impl Navigator {
         }
         self.partial = !path.complete;
         self.diverged_in_air = false;
-        self.follower = Some(Follower::new(path.nodes, pos, self.opts.tolerance));
+        let shortcuts = self.opts.shortcuts.then_some(self.opts.search.profile);
+        self.follower = Some(Follower::new(path.nodes, pos, self.opts.tolerance).shortcuts(shortcuts));
         Ok(())
     }
 

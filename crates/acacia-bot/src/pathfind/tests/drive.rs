@@ -41,10 +41,16 @@ pub struct Outcome {
 }
 
 /// Follows `path` from `m` towards `goal`; `nudge` may disturb the bot each tick.
-pub fn drive(g: &Grid, m: &mut Movement, path: Vec<PathNode>, goal: &Goal, opts: &SearchOpts, mut nudge: impl FnMut(u32, &mut Movement)) -> Outcome {
+pub fn drive(g: &Grid, m: &mut Movement, path: Vec<PathNode>, goal: &Goal, opts: &SearchOpts, nudge: impl FnMut(u32, &mut Movement)) -> Outcome {
+    drive_with(g, m, path, goal, opts, false, nudge)
+}
+
+/// [`drive`], taking any-angle shortcuts if `shortcuts`.
+pub fn drive_with(g: &Grid, m: &mut Movement, path: Vec<PathNode>, goal: &Goal, opts: &SearchOpts, shortcuts: bool, mut nudge: impl FnMut(u32, &mut Movement)) -> Outcome {
     let world = g.physics();
     let start = m.position().expect("started");
-    let mut follower = Follower::new(path, start, 0.25);
+    let new_follower = |path, at| Follower::new(path, at, 0.25).shortcuts(shortcuts.then_some(opts.profile));
+    let mut follower = new_follower(path, start);
     let mut out = Outcome { reports: Vec::new(), diverged: 0, held: true, ticks: 0, end: start };
     for tick in 0..600 {
         nudge(tick, m);
@@ -64,7 +70,7 @@ pub fn drive(g: &Grid, m: &mut Movement, path: Vec<PathNode>, goal: &Goal, opts:
                 out.held &= m.controls.forward != 0.0;
                 let path = plan(g, m, goal, opts);
                 assert!(path.complete, "no path from {:?}", s.pos);
-                follower = Follower::new(path.nodes, s.pos, 0.25);
+                follower = new_follower(path.nodes, s.pos);
             }
             other => panic!("tick {tick}: {other:?} at {:?}, next {:?}", s.pos, follower.ahead().first()),
         }

@@ -8,4 +8,5 @@ mod leaps;
 mod leaps_shaped;
 mod rollout;
 mod search;
+mod shortcuts;
 mod sim;

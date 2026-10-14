@@ -6,7 +6,7 @@ use std::cell::Cell;
 use acacia_physics::{BlockPos, PlayerState};
 
 use super::cell::AVOID;
-use super::control::Macro;
+use super::mac::Macro;
 use super::costs::{DANGER_NEAR, HUMAN_JUMP, RISK, RISK_MARGIN};
 use super::hop;
 use super::leap::JumpAt;

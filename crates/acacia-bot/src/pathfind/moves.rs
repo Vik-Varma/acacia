@@ -8,7 +8,7 @@ use acacia_physics::constants::STEP_HEIGHT;
 
 use super::alter;
 use super::cell::{CLIMB as CLIMBABLE, Rect};
-use super::control::Macro;
+use super::mac::Macro;
 use super::costs::{self, CENTER_AFTER_FALL, CLIMB, DANGER_NEAR, ENTER_WATER, JUMP_PENALTY, LONG_JUMP_PENALTY, SPRINT, SWIM, WALK_OFF};
 use super::kit::Kit;
 use super::macros::{self, Macros};

@@ -1,10 +1,9 @@
-//! Controllers: one per macro move. The planner runs it in rollouts and the follower runs the same one
-//! live (`follow_macro`), so what was planned is what runs.
+//! Controllers: one per macro move (the leap's is in `leap`, the shortcut's in `shortcut`). The planner runs
+//! it in rollouts and the follower runs the same one live (`follow_macro`), so what was planned is what runs.
 
 use acacia_physics::BlockPos;
 
-use super::leap::LeapCtl;
-use super::profile::{Aim, MovementProfile};
+use super::profile::Aim;
 use super::rollout::Body;
 use crate::movement::Controls;
 
@@ -66,30 +65,5 @@ impl Controller for RunCtl {
         (c.strafe, c.sneak, c.jump, c.pitch, c.forward, c.sprint) = (0.0, false, false, 0.0, 1.0, true);
         c.yaw = self.aim.turn(b.yaw, yaw_to(b, centre(self.target)));
         Phase::Going
-    }
-}
-
-/// A macro move's controller as stored on its path node.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Macro {
-    Leap(LeapCtl),
-    Run(RunCtl),
-}
-
-impl Macro {
-    pub fn profile(&self) -> MovementProfile {
-        match self {
-            Macro::Leap(l) => l.aim.profile,
-            Macro::Run(r) => r.aim.profile,
-        }
-    }
-}
-
-impl Controller for Macro {
-    fn step(&mut self, b: &Body, peek: &mut dyn FnMut(&Controls) -> Body, c: &mut Controls) -> Phase {
-        match self {
-            Macro::Leap(l) => l.step(b, peek, c),
-            Macro::Run(r) => r.step(b, peek, c),
-        }
     }
 }

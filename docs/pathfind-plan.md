@@ -127,6 +127,11 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
     straight at nodes up to ~20 ahead, take the fastest clean rollout that reaches the path; removes
     8-direction staircasing. Test: 30-block diagonal ticks drop vs 6; Optimal predicted == executed.
 7. Cache + rollout budget; perf guard (flat 100×100, 80 blocks, ≤2× macros off).
+   As built: `shortcut.rs` (`ShortcutCtl`, `find`), tried once per node index with nothing running; spans of
+   flat Walk/Run/Hop nodes at the bot's level; k ∈ {20,15,10,5,4,3,2}, styles {sprint, sprint-jump until
+   1 or 3 blocks}; taken when its ticks beat the span's polyline at sprint (hop) speed. Runs as an `Exec` like
+   any macro (same tolerance, same report). `Macro` moved to `mac.rs` (control ↔ leap/shortcut cycle).
+   `GotoOpts::shortcuts` (default on); `Follower::shortcuts(profile)`.
 8. Human complete: aim on all segments incl. walk, perturbations, risk cost; 5 seeds, 0 Diverged failures.
 9. `tests/speed.rs`: ticks-to-goal macros on vs off (flat, diagonal, gaps, stairs); on ≤ off.
 10. `examples/course.rs` parkour legs (gap3, gap4, up1, down2, diag, stones, sprint40), `--profile`, `--macros off`; dedicated strict testbox BDS, 0 corrections both profiles; evidence in `docs/DESIGN.md`.

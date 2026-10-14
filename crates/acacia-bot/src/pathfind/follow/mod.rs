@@ -1,12 +1,15 @@
 //! Per-tick path following: turns a path into [`Controls`], network-free so it can run against the
 //! physics simulation headlessly.
 
+mod steer;
 mod work;
 
 use acacia_physics::{Vec3, WorldView};
 
 use super::follow_macro::{MacroReport, MacroRunner, MacroStep};
 use super::moves::MoveKind;
+use super::profile::MovementProfile;
+use super::shortcut;
 use super::PathNode;
 use crate::movement::{Controls, Rollout};
 
@@ -15,10 +18,6 @@ const STUCK_TICKS: u32 = 20;
 const MIN_PROGRESS: f32 = 0.05;
 /// Farther than this from the current segment (horizontally) means knocked off the path.
 const OFF_PATH: f32 = 1.5;
-/// Ground drag per tick (block friction 0.6 × 0.91): coasting from speed `v` covers `v·k/(1-k)`.
-const GROUND_DRAG: f32 = 0.546;
-/// Straight nodes ahead before sprinting pays off.
-const SPRINT_RUN: usize = 3;
 
 /// What the follower knows about the player this tick.
 #[derive(Debug, Clone, Copy)]
@@ -53,6 +52,10 @@ pub struct Follower {
     since_progress: u32,
     tolerance: f32,
     macros: MacroRunner,
+    /// Take any-angle shortcuts, moving like this.
+    shortcuts: Option<MovementProfile>,
+    /// Path index a shortcut was last looked for from.
+    tried: Option<usize>,
 }
 
 fn center(n: &PathNode) -> Vec3 {
@@ -70,7 +73,15 @@ fn dir(a: Vec3, b: Vec3) -> (i32, i32) {
 impl Follower {
     /// `tolerance`: how close (horizontally, blocks) to the final node's centre counts as arrived.
     pub fn new(path: Vec<PathNode>, start: Vec3, tolerance: f32) -> Self {
-        Self { path, index: 0, worked: false, origin: start, last_pos: None, best_dist: f32::INFINITY, since_progress: 0, tolerance, macros: MacroRunner::default() }
+        let macros = MacroRunner::default();
+        Self { path, index: 0, worked: false, origin: start, last_pos: None, best_dist: f32::INFINITY, since_progress: 0, tolerance, macros, shortcuts: None, tried: None }
+    }
+
+    /// On flat ground, run straight at nodes further on when that beats following the nodes between
+    /// (moving like `profile`; `None`: never).
+    pub fn shortcuts(mut self, profile: Option<MovementProfile>) -> Self {
+        self.shortcuts = profile;
+        self
     }
 
     /// How the last finished macro move went, once.
@@ -110,11 +121,15 @@ impl Follower {
         }
         // A finished macro move hands over to the next one on the same tick.
         loop {
+            self.try_shortcut(live, w);
             match self.macros.tick(&self.path, self.index, live, w, c) {
                 MacroStep::Idle => break,
                 MacroStep::Going => return FollowStatus::Moving,
                 MacroStep::Diverged => return FollowStatus::Diverged,
-                MacroStep::Done => self.pass_node(),
+                MacroStep::Done(last) => {
+                    self.index = last;
+                    self.pass_node();
+                }
             }
         }
         c.pitch = 0.0;
@@ -152,70 +167,15 @@ impl Follower {
         FollowStatus::Moving
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn steer(&self, s: &Sense, c: &mut Controls, node: &PathNode, target: Vec3, dist: f32, speed: f32, last: bool) {
-        let (dx, dz) = (target[0] - s.pos[0], target[2] - s.pos[2]);
-        if dist > 0.05 {
-            c.yaw = (-dx).atan2(dz).to_degrees();
+    /// Once per node, with nothing running: start a shortcut to a node further on if one beats the nodes between.
+    fn try_shortcut(&mut self, live: Option<&Rollout>, w: &dyn WorldView) {
+        let (Some(profile), Some(live)) = (self.shortcuts, live) else { return };
+        if self.macros.active() || self.tried.replace(self.index) == Some(self.index) {
+            return;
         }
-        c.strafe = 0.0;
-        c.sneak = false;
-        c.forward = if last {
-            // Bedrock ground friction lets the bot coast: release the key once coasting covers the rest.
-            let coast = speed * GROUND_DRAG / (1.0 - GROUND_DRAG);
-            if dist < coast + 0.05 { 0.0 } else { 1.0 }
-        } else if matches!(node.kind, MoveKind::ClimbUp | MoveKind::ClimbDown | MoveKind::Pillar | MoveKind::Down) && dist < 0.15 {
-            0.0
-        } else {
-            1.0
-        };
-        let rise = node.feet - s.pos[1];
-        c.jump = match node.kind {
-            MoveKind::Ascend => rise > 0.3 && dist < 1.3,
-            MoveKind::ClimbUp => true,
-            MoveKind::Parkour => s.on_ground && self.along(s.pos) > 0.35,
-            _ if s.in_water => rise > -0.3,
-            _ => false,
-        };
-        let wanted = !s.in_water
-            && match node.kind {
-                MoveKind::Parkour | MoveKind::Run | MoveKind::Hop => true,
-                MoveKind::Walk => self.straight_run() >= SPRINT_RUN || self.runs_into_macro(),
-                _ => false,
-            };
-        // The sprint key only starts a sprint; Movement keeps it going until forward is released.
-        c.sprint = wanted;
-    }
-
-    /// Distance travelled from the segment origin along the segment direction.
-    fn along(&self, pos: Vec3) -> f32 {
-        let t = center(&self.path[self.index]);
-        let (sx, sz) = (t[0] - self.origin[0], t[2] - self.origin[2]);
-        let len = sx.hypot(sz).max(1e-3);
-        ((pos[0] - self.origin[0]) * sx + (pos[2] - self.origin[2]) * sz) / len
-    }
-
-    /// Consecutive walk nodes from the current one heading the same way.
-    fn straight_run(&self) -> usize {
-        let mut prev = self.origin;
-        let heading = dir(prev, center(&self.path[self.index]));
-        let mut run = 0;
-        for n in &self.path[self.index..] {
-            if n.kind != MoveKind::Walk || !n.work.is_empty() || dir(prev, center(n)) != heading {
-                break;
-            }
-            prev = center(n);
-            run += 1;
+        if let Some((ctl, predicted, last)) = shortcut::find(&self.path, self.index, live, w, profile) {
+            self.macros.begin(ctl, predicted, last);
         }
-        run
-    }
-
-    /// The next node is a macro move heading on the way the bot walks now: arriving at speed is a run-up.
-    fn runs_into_macro(&self) -> bool {
-        let Some(next) = self.path.get(self.index + 1).filter(|n| n.mac.is_some()) else { return false };
-        let here = center(&self.path[self.index]);
-        let unit = |(x, z): (i32, i32)| (x.signum(), z.signum());
-        unit(dir(self.origin, here)) == unit(dir(here, center(next)))
     }
 
     /// Moves on to the next node, if any.

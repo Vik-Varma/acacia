@@ -4,13 +4,15 @@
 use acacia_physics::{BlockPos, Vec3, WorldView};
 
 use super::PathNode;
-use super::control::{Controller, Macro, Phase};
+use super::control::{Controller, Phase};
+use super::mac::Macro;
 use super::rollout::{self, Body};
+use super::shortcut::ShortcutCtl;
 use super::solve::{STRAIGHT, Solver, WIDE, live_hazard};
 use crate::movement::{Controls, Rollout};
 
 /// Prediction horizon; controllers fail long before it.
-const MAX_TICKS: u32 = 60;
+const MAX_TICKS: u32 = 120;
 
 /// How a finished macro move went, for tests and logs.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -30,8 +32,8 @@ pub(super) enum MacroStep {
     /// The current node is no macro move (or has no live state to run one): steer classically.
     Idle,
     Going,
-    /// The move finished on the current node this tick.
-    Done,
+    /// The move finished this tick, on the path node of this index.
+    Done(usize),
     Diverged,
 }
 
@@ -58,25 +60,34 @@ impl MacroRunner {
         self.report.take()
     }
 
-    /// Runs (starting if due) the macro move of `path[index]`, setting `c` for the tick after `live`.
+    /// Runs a shortcut the follower found, predicted as `predicted`, ending on path index `last`.
+    pub fn begin(&mut self, ctl: ShortcutCtl, predicted: Vec<Body>, last: usize) {
+        let report = MacroReport { predicted: predicted.len() - 1, executed: 0, max_error: 0.0, repredicted: 0, resolved: false };
+        let tolerance = ctl.aim.profile.tolerance();
+        self.exec = Some(Exec { ctl: Macro::Shortcut(ctl), predicted, t: 0, tolerance, want: [0.0; 3], last, report });
+    }
+
+    /// Runs the move under way, else starts the macro move of `path[index]` if due, setting `c` for the tick
+    /// after `live`.
     pub fn tick(&mut self, path: &[PathNode], index: usize, live: Option<&Rollout>, w: &dyn WorldView, c: &mut Controls) -> MacroStep {
-        let (Some(live), Some(mac)) = (live, path[index].mac) else { return MacroStep::Idle };
-        if self.done == Some(index) {
-            return MacroStep::Idle;
-        }
+        let Some(live) = live else { return MacroStep::Idle };
         let exec = match &mut self.exec {
             Some(e) => e,
-            None => match Exec::start(mac, path[index].mom.velocity(), live, *c, w) {
-                Some(e) => self.exec.insert(e),
-                None => return MacroStep::Diverged,
-            },
+            None => {
+                let Some(mac) = path[index].mac.filter(|_| self.done != Some(index)) else { return MacroStep::Idle };
+                match Exec::start(mac, path[index].mom.velocity(), index, live, *c, w) {
+                    Some(e) => self.exec.insert(e),
+                    None => return MacroStep::Diverged,
+                }
+            }
         };
         match exec.tick(live, w, c) {
             Phase::Going => MacroStep::Going,
             Phase::Done => {
-                (self.report, self.done) = (Some(exec.report), Some(index));
+                let last = exec.last;
+                (self.report, self.done) = (Some(exec.report), Some(last));
                 self.exec = None;
-                MacroStep::Done
+                MacroStep::Done(last)
             }
             Phase::Failed => {
                 self.exec = None;
@@ -94,6 +105,8 @@ struct Exec {
     tolerance: f32,
     /// The planned arrival velocity.
     want: Vec3,
+    /// The path index the move ends on.
+    last: usize,
     report: MacroReport,
 }
 
@@ -103,7 +116,7 @@ const ARRIVAL_SLOP: f32 = 0.03;
 impl Exec {
     /// Predicts `ctl` from the live state; solves it again if it does not finish from there, or arrives
     /// too far from the planned velocity `want`.
-    fn start(ctl: Macro, want: Vec3, live: &Rollout, c: Controls, w: &dyn WorldView) -> Option<Self> {
+    fn start(ctl: Macro, want: Vec3, last: usize, live: &Rollout, c: Controls, w: &dyn WorldView) -> Option<Self> {
         let off = |p: &(Macro, Vec<Body>)| {
             let end = p.1[p.1.len() - 1].vel;
             (end[0] - want[0]).hypot(end[2] - want[2])
@@ -114,7 +127,7 @@ impl Exec {
             None => (resolve(&ctl, want, live, c, w).or_else(|| predict(ctl, live, c, w))?, true),
         };
         let report = MacroReport { predicted: predicted.len() - 1, executed: 0, max_error: 0.0, repredicted: 0, resolved };
-        Some(Self { ctl, predicted, t: 0, tolerance: ctl.profile().tolerance(), want, report })
+        Some(Self { ctl, predicted, t: 0, tolerance: ctl.profile().tolerance(), want, last, report })
     }
 
     /// Steps the controller on the live body, predicting again from it when it left the tolerance.
@@ -158,6 +171,6 @@ fn resolve(ctl: &Macro, want: Vec3, live: &Rollout, held: Controls, w: &dyn Worl
             let found = s.retry(l, live, STRAIGHT, want).or_else(|| (!l.airborne()).then(|| s.retry(l, live, WIDE, want)).flatten());
             found.map(|(l, b)| (Macro::Leap(l), b))
         }
-        Macro::Run(_) => None,
+        Macro::Run(_) | Macro::Shortcut(_) => None,
     }
 }

@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use acacia_physics::{BlockPos, PlayerState, Vec3};
 
-use super::control::Macro;
+use super::mac::Macro;
 use super::costs;
 use super::goal::{Goal, Speed};
 use super::kit::Kit;
