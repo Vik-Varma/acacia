@@ -21,6 +21,8 @@ const LOOKAHEAD: usize = 6;
 /// A search that finishes within this runs inline, before the next tick (azalea's instant path).
 const QUICK_NODES: usize = 5_000;
 const QUICK_BUDGET: Duration = Duration::from_millis(10);
+/// Divergences in a row that re-plan for free; each one past it counts against `max_replans`.
+const MAX_DIVERGED: u32 = 5;
 
 #[derive(Debug, Clone)]
 pub struct GotoOpts {
@@ -62,11 +64,14 @@ pub struct Navigator {
     pending: Option<JoinHandle<Path>>,
     replans: u32,
     teleports: Option<u32>,
+    /// Macro moves diverged in a row; free re-plans up to `MAX_DIVERGED`.
+    diverged: u32,
+    diverged_in_air: bool,
 }
 
 impl Navigator {
     pub fn new(goal: Goal, opts: GotoOpts) -> Self {
-        Self { goal, opts, follower: None, partial: false, pending: None, replans: 0, teleports: None }
+        Self { goal, opts, follower: None, partial: false, pending: None, replans: 0, teleports: None, diverged: 0, diverged_in_air: false }
     }
 
     pub fn goal(&self) -> &Goal {
@@ -158,14 +163,34 @@ impl Navigator {
             self.follower = None;
         }
         let Some(follower) = &mut self.follower else {
-            movement.controls.stop();
+            // After a divergence the controls carry the bot on through the air while it re-plans.
+            if !self.diverged_in_air || movement.on_ground() {
+                movement.controls.stop();
+            }
             self.plan(&terrain, view, registry, pos, kit)?;
             return Ok(NavStatus::Searching);
         };
         let feet = [pos[0].floor() as i32, pos[1].floor() as i32, pos[2].floor() as i32];
         let sense = Sense { pos, on_ground: movement.on_ground(), in_water: terrain.cell(feet).is_water() };
-        match follower.tick(&sense, &mut movement.controls) {
-            FollowStatus::Moving => {}
+        let live = movement.fork();
+        match follower.tick(&sense, live.as_ref(), &terrain, &mut movement.controls) {
+            FollowStatus::Moving => {
+                if follower.index() > 0 {
+                    self.diverged = 0;
+                }
+            }
+            FollowStatus::Diverged => {
+                tracing::debug!(?pos, "macro move diverged; re-planning in place");
+                self.diverged += 1;
+                if self.diverged > MAX_DIVERGED {
+                    self.count_replan(format!("diverged {} times in a row", self.diverged))?;
+                    self.diverged = 0;
+                }
+                self.follower = None;
+                self.diverged_in_air = !movement.on_ground();
+                // TODO: search from the live Momentum (Run entry) once macro edges exist (plan step 6).
+                self.plan(&terrain, view, registry, pos, kit)?;
+            }
             FollowStatus::Work => return Ok(NavStatus::Working),
             FollowStatus::Arrived if !self.partial => return Ok(NavStatus::Arrived),
             FollowStatus::Arrived => self.follower = None,
@@ -200,6 +225,7 @@ impl Navigator {
             self.count_replan("no path".into())?;
         }
         self.partial = !path.complete;
+        self.diverged_in_air = false;
         self.follower = Some(Follower::new(path.nodes, pos, self.opts.tolerance));
         Ok(())
     }

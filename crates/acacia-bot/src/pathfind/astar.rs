@@ -207,7 +207,7 @@ fn reconstruct(recs: &[Rec], works: &[Work], mut i: u32) -> Vec<PathNode> {
     let mut nodes = Vec::new();
     while let Some(r) = recs.get(i as usize).filter(|r| r.parent != u32::MAX) {
         let work = works.get(r.work as usize).copied().unwrap_or_default();
-        nodes.push(PathNode { pos: r.key.pos, feet: r.spot.feet, kind: r.kind, wet: r.spot.wet, work, entry: r.key.entry });
+        nodes.push(PathNode { pos: r.key.pos, feet: r.spot.feet, kind: r.kind, wet: r.spot.wet, work, entry: r.key.entry, mac: None });
         i = r.parent;
     }
     nodes.reverse();

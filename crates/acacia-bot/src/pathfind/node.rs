@@ -76,11 +76,12 @@ impl Momentum {
     pub fn snap(st: &PlayerState, at: BlockPos) -> Self {
         let off = [0, 1, 2].map(|i| q(st.pos[i] - at[i] as f32, OFF_Q));
         let delay = st.jump_delay.min(JUMP_DELAY_TICKS) as u8;
-        let flags = u8::from(st.on_ground) * ON_GROUND
-            | u8::from(st.sprinting) * SPRINTING
-            | u8::from(st.sneaking) * SNEAKING
-            | u8::from(st.pressing_jump) * PRESSING_JUMP
-            | delay << DELAY_SHIFT;
+        let bit = |on: bool, flag: u8| if on { flag } else { 0 };
+        let flags = bit(st.on_ground, ON_GROUND)
+            | bit(st.sprinting, SPRINTING)
+            | bit(st.sneaking, SNEAKING)
+            | bit(st.pressing_jump, PRESSING_JUMP)
+            | (delay << DELAY_SHIFT);
         Self { off, vel: st.vel.map(|v| q(v, VEL_Q)), yaw_q: (st.yaw.rem_euclid(360.0) * YAW_Q) as u16, flags }
     }
 

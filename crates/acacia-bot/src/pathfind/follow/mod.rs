@@ -1,11 +1,14 @@
 //! Per-tick path following: turns a path into [`Controls`], network-free so it can run against the
 //! physics simulation headlessly.
 
-use acacia_physics::Vec3;
+mod work;
 
+use acacia_physics::{Vec3, WorldView};
+
+use super::follow_macro::{MacroReport, MacroRunner, MacroStep};
 use super::moves::MoveKind;
 use super::PathNode;
-use crate::movement::Controls;
+use crate::movement::{Controls, Rollout};
 
 /// No progress towards the current node for this long means stuck (1 s).
 const STUCK_TICKS: u32 = 20;
@@ -25,11 +28,6 @@ pub struct Sense {
     pub in_water: bool,
 }
 
-/// Within this of the segment start (horizontally), the bot does a move's work from where it is.
-const WORK_RADIUS: f32 = 0.5;
-/// Horizontal speed (blocks per tick) below which the bot counts as standing for work.
-const SETTLED: f32 = 0.05;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FollowStatus {
     Moving,
@@ -39,6 +37,8 @@ pub enum FollowStatus {
     /// Standing at the start of a move whose [`Work`](super::Work) must be done first: do
     /// [`Follower::pending_work`], then call [`Follower::work_done`].
     Work,
+    /// A macro move cannot finish from here: re-plan without stopping (the controls are left as they were).
+    Diverged,
 }
 
 pub struct Follower {
@@ -52,6 +52,7 @@ pub struct Follower {
     best_dist: f32,
     since_progress: u32,
     tolerance: f32,
+    macros: MacroRunner,
 }
 
 fn center(n: &PathNode) -> Vec3 {
@@ -69,27 +70,12 @@ fn dir(a: Vec3, b: Vec3) -> (i32, i32) {
 impl Follower {
     /// `tolerance`: how close (horizontally, blocks) to the final node's centre counts as arrived.
     pub fn new(path: Vec<PathNode>, start: Vec3, tolerance: f32) -> Self {
-        Self { path, index: 0, worked: false, origin: start, last_pos: None, best_dist: f32::INFINITY, since_progress: 0, tolerance }
+        Self { path, index: 0, worked: false, origin: start, last_pos: None, best_dist: f32::INFINITY, since_progress: 0, tolerance, macros: MacroRunner::default() }
     }
 
-    /// The node whose work is due before moving on, if any.
-    pub fn pending_work(&self) -> Option<&PathNode> {
-        self.has_pending(self.index).then(|| &self.path[self.index])
-    }
-
-    pub fn work_done(&mut self) {
-        self.worked = true;
-        (self.best_dist, self.since_progress) = (f32::INFINITY, 0);
-    }
-
-    fn has_pending(&self, i: usize) -> bool {
-        self.path.get(i).is_some_and(|n| !n.work.is_empty()) && !(i == self.index && self.worked)
-    }
-
-    /// The nodes ahead whose footing exists already: up to the first one waiting for work.
-    pub fn standing_ahead(&self) -> &[PathNode] {
-        let end = (self.index..self.path.len()).find(|&i| self.has_pending(i)).unwrap_or(self.path.len());
-        &self.path[self.index..end]
+    /// How the last finished macro move went, once.
+    pub fn take_macro_report(&mut self) -> Option<MacroReport> {
+        self.macros.take_report()
     }
 
     pub fn path(&self) -> &[PathNode] {
@@ -110,15 +96,25 @@ impl Follower {
         &self.path[self.index..]
     }
 
-    pub fn tick(&mut self, s: &Sense, c: &mut Controls) -> FollowStatus {
+    /// `live`: a fork of the live simulation, which macro moves need (without it they are steered
+    /// classically); `w` the world it runs in.
+    pub fn tick(&mut self, s: &Sense, live: Option<&Rollout>, w: &dyn WorldView, c: &mut Controls) -> FollowStatus {
         let vel = self.last_pos.map_or([0.0; 3], |l| [s.pos[0] - l[0], s.pos[1] - l[1], s.pos[2] - l[2]]);
         self.last_pos = Some(s.pos);
-        c.pitch = 0.0;
         if self.path.is_empty() {
             c.stop();
             return FollowStatus::Arrived;
         }
-        self.advance(s);
+        if !self.macros.active() {
+            self.advance(s);
+        }
+        match self.macros.tick(&self.path, self.index, live, w, c) {
+            MacroStep::Idle => {}
+            MacroStep::Going => return FollowStatus::Moving,
+            MacroStep::Diverged => return FollowStatus::Diverged,
+            MacroStep::Done => self.pass_node(),
+        }
+        c.pitch = 0.0;
         let node = self.path[self.index];
         let target = center(&node);
         if self.off_path(s.pos, target) {
@@ -146,23 +142,6 @@ impl Follower {
             }
         }
         self.steer(s, c, &node, target, dist, speed, last);
-        FollowStatus::Moving
-    }
-
-    /// Work is done from the segment start: walk back there if needed and come to a stop.
-    fn approach_work(&mut self, s: &Sense, c: &mut Controls, speed: f32) -> FollowStatus {
-        let d = hdist(s.pos, self.origin);
-        c.stop();
-        c.sneak = false;
-        if d < WORK_RADIUS && s.on_ground {
-            return if speed < SETTLED { FollowStatus::Work } else { FollowStatus::Moving };
-        }
-        self.since_progress += 1;
-        if self.since_progress > STUCK_TICKS {
-            return FollowStatus::Stuck;
-        }
-        c.yaw = (s.pos[0] - self.origin[0]).atan2(self.origin[2] - s.pos[2]).to_degrees();
-        c.forward = 1.0;
         FollowStatus::Moving
     }
 
@@ -224,6 +203,15 @@ impl Follower {
         run
     }
 
+    /// Moves on to the next node, if any.
+    fn pass_node(&mut self) {
+        if self.index + 1 < self.path.len() {
+            self.origin = center(&self.path[self.index]);
+            (self.index, self.worked) = (self.index + 1, false);
+            (self.best_dist, self.since_progress) = (f32::INFINITY, 0);
+        }
+    }
+
     fn advance(&mut self, s: &Sense) {
         let before = self.index;
         while self.index + 1 < self.path.len() && !self.has_pending(self.index) {
@@ -233,9 +221,7 @@ impl Follower {
             if !self.reached(&node, s, if straight { 0.45 } else { 0.25 }) {
                 break;
             }
-            self.origin = center(&node);
-            self.index += 1;
-            self.worked = false;
+            self.pass_node();
         }
         // Overshot onto a later node (momentum, a fall): continue from there, but not past work.
         let end = self.index + self.standing_ahead().len();

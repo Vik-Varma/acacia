@@ -59,6 +59,16 @@ pub(crate) const START_SLEEP: Range = (400, 650);
 /// Server `Animate WakeUp` to `PlayerAction StopSleeping` (n=1: 105 ms).
 pub(crate) const WAKE_REPLY: Range = (80, 160);
 
+// Movement aim (pathfind `MovementProfile::Human`): placeholders until a vanilla capture fits them.
+/// Share of the remaining yaw error turned per tick.
+pub(crate) const AIM_EASE: f32 = 0.5;
+/// Fastest turn per tick, degrees.
+pub(crate) const AIM_MAX_TURN_DEG: f32 = 30.0;
+/// Per-tick aim noise, degrees (uniform ±).
+pub(crate) const AIM_JITTER_DEG: f32 = 1.5;
+/// How far (blocks) a move's start may sit from where the plan put it.
+pub(crate) const START_SLOP: f32 = 0.05;
+
 pub(crate) struct Human {
     rng: u64,
 }

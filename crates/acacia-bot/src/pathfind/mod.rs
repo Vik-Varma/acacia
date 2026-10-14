@@ -16,9 +16,11 @@
 mod alter;
 mod astar;
 mod cell;
+mod control;
 mod costs;
 mod execute;
 mod follow;
+mod follow_macro;
 mod goal;
 mod goto;
 mod kit;
@@ -26,6 +28,7 @@ mod maneuver;
 mod moves;
 mod node;
 mod physview;
+mod profile;
 mod rollout;
 mod snapshot;
 mod terrain;
@@ -35,13 +38,16 @@ mod work;
 mod tests;
 
 pub use astar::{Path, SearchOpts, search, start_node};
+pub use control::{Controller, JumpAt, LeapCtl, Macro, Phase};
 pub use follow::{FollowStatus, Follower, Sense};
+pub use follow_macro::MacroReport;
 pub use goal::Goal;
 pub use goto::{GotoOpts, NavStatus, Navigator};
 pub use kit::{DEFAULT_SCAFFOLD, Kit};
 pub use moves::MoveKind;
 pub use node::{Entry, Mode, Momentum, NodeKey};
-pub use rollout::Body;
+pub use profile::{Aim, MovementProfile, Perturbation};
+pub use rollout::{Body, Trace, peek, run};
 pub use snapshot::WorldBlocks;
 pub use terrain::{Blocks, Cell, Spot, SpotKind, Terrain};
 pub use work::{Step, Work};
@@ -60,4 +66,6 @@ pub struct PathNode {
     pub work: Work,
     /// The motion the node is reached with.
     pub entry: Entry,
+    /// The controller that reaches the node from the previous one, for macro moves.
+    pub mac: Option<Macro>,
 }
