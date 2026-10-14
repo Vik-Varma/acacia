@@ -2,6 +2,8 @@
 //! navigator's default). Without shortcuts macros never lose and win clearly on flat ground (`Optimal`) and
 //! over gaps. Shortcuts already sprint-jump flat ground, so with them on macros win over gaps and may lose a
 //! few ticks of hop discretization elsewhere.
+//! ~150 s in debug, so ignored by default:
+//! `cargo test --release -p acacia-bot --lib macros_never_slow -- --ignored --nocapture`.
 
 use acacia_physics::{BlockPos, Vec3};
 
@@ -63,6 +65,7 @@ fn ticks(c: &Course, g: &Grid, opts: &SearchOpts, shortcuts: bool) -> f32 {
 }
 
 #[test]
+#[ignore = "slow in debug; run in release"]
 fn macros_never_slow_the_bot_down() {
     let mut rows = Vec::new();
     for c in &COURSES {

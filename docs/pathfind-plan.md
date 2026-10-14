@@ -176,7 +176,8 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
    on ≥12). Deviations: Human gains nothing on flat (hops do not pay, step 6); with shortcuts on, flat and stairs
    Optimal lose 1–3 ticks to the hop chain's discretization (the shortcut already sprint-jumps), allowed ≤4.
    Shortcut tweaks: rollout cap by distance (4 t/b + 20, a hop node spans ~4 blocks) and a from-rest startup
-   term (`MACRO_STARTUP`) in the take-it comparison. The test takes ~150 s in debug on testbox.
+   term (`MACRO_STARTUP`) in the take-it comparison. The test takes ~150 s in debug on testbox, so it is
+   `#[ignore]`d (default `--lib` 22 s): `cargo test --release -p acacia-bot --lib macros_never_slow -- --ignored --nocapture`.
 10. `examples/course.rs` parkour legs (gap3, gap4, up1, down2, diag, stones, sprint40), `--profile`, `--macros off`; dedicated strict testbox BDS, 0 corrections both profiles; evidence in `docs/DESIGN.md`.
 11. Stretch: neo jumps (Optimal), ladder jumps.
 
