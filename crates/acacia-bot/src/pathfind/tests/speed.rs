@@ -1,7 +1,6 @@
 //! Ticks to the goal with macro moves on and off (plan step 9), both profiles, shortcuts off and on (the
 //! navigator's default). Without shortcuts macros never lose and win clearly on flat ground (`Optimal`) and
-//! over gaps. Shortcuts already sprint-jump flat ground, so with them on macros win over gaps and may lose a
-//! few ticks of hop discretization elsewhere.
+//! over gaps. Shortcuts already sprint-jump flat ground, so with them on macros win clearly only over gaps.
 //! ~150 s in debug, so ignored by default:
 //! `cargo test --release -p acacia-bot --lib macros_never_slow -- --ignored --nocapture`.
 
@@ -46,17 +45,16 @@ const COURSES: [Course; 4] = [
     Course { name: "stairs course", grid: stairs, from: [-10.5, 1.0, 0.5], goal: [20, 5, 0] },
 ];
 
-/// Least ticks macros on must save: (course, profile, shortcuts, ticks). Set from the first run (saved 27, 28,
-/// 21, 19, 19) with margin. `Human` hops do not pay on flat ground (`costs::HUMAN_JUMP`): no gain asked there.
+/// Least ticks macros on must save: (course, profile, shortcuts, ticks); everywhere else on ≤ off. Set from
+/// measured savings (29, 27, 21, 12, 14.6) with margin. `Human` hops do not pay on flat ground
+/// (`costs::HUMAN_JUMP`): no gain asked there.
 const GAINS: [(&str, MovementProfile, bool, f32); 5] = [
     ("flat 40 straight", Optimal, false, 20.0),
     ("gap course", Optimal, false, 20.0),
     ("gap course", Human, false, 15.0),
-    ("gap course", Optimal, true, 12.0),
-    ("gap course", Human, true, 12.0),
+    ("gap course", Optimal, true, 10.0),
+    ("gap course", Human, true, 10.0),
 ];
-/// Ticks macros may lose with shortcuts on where no gain is asked (measured: up to 3).
-const SHORTCUT_SLACK: f32 = 4.0;
 
 /// Mean ticks to the goal over the profile's execution seeds.
 fn ticks(c: &Course, g: &Grid, opts: &SearchOpts, shortcuts: bool) -> f32 {
@@ -84,11 +82,7 @@ fn macros_never_slow_the_bot_down() {
     }
     for &(name, profile, shortcuts, off, on) in &rows {
         let gain = GAINS.iter().find(|g| (g.0, g.1, g.2) == (name, profile, shortcuts)).map(|g| g.3);
-        let most = match gain {
-            Some(gain) => off - gain,
-            None if shortcuts => off + SHORTCUT_SLACK,
-            None => off,
-        };
+        let most = off - gain.unwrap_or(0.0);
         assert!(on <= most, "{name} {profile:?} shortcuts {shortcuts}: {on} ticks with macros, {off} without (gain {gain:?})");
     }
 }

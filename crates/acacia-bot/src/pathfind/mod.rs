@@ -87,4 +87,6 @@ pub struct PathNode {
     pub mom: Momentum,
     /// The controller that reaches the node from the previous one, for macro moves.
     pub mac: Option<Macro>,
+    /// The move's planned cost: ticks (simulated for macro moves) plus the profile's penalties.
+    pub cost: f32,
 }

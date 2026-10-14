@@ -273,7 +273,8 @@ fn reconstruct(recs: &[Rec], works: &[Work], macs: &[Macro], mut i: u32) -> Vec<
     while let Some(r) = recs.get(i as usize).filter(|r| r.parent != NONE) {
         let work = works.get(r.work as usize).copied().unwrap_or_default();
         let mac = macs.get(r.mac as usize).copied();
-        nodes.push(PathNode { pos: r.key.pos, feet: r.spot.feet, kind: r.kind, wet: r.spot.wet, work, entry: r.key.entry, mom: r.mom, mac });
+        let cost = r.g - recs[r.parent as usize].g;
+        nodes.push(PathNode { pos: r.key.pos, feet: r.spot.feet, kind: r.kind, wet: r.spot.wet, work, entry: r.key.entry, mom: r.mom, mac, cost });
         i = r.parent;
     }
     nodes.reverse();

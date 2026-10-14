@@ -173,10 +173,19 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
    Optimal 154→127, Human 154→154; diagonal 30×11 149→117 / 149.6→144.2; gaps 109→81 / 115.4→94.4; stairs
    145→141 / 145→145. Shortcuts on: flat 126→127 / 126→126; diagonal 122→111 / 130.4→111; gaps 100→81 /
    107.8→88.4; stairs 137→140 / 141→141. Strict gains asserted: flat Optimal, gaps both (shortcuts off ≥20/15,
-   on ≥12). Deviations: Human gains nothing on flat (hops do not pay, step 6); with shortcuts on, flat and stairs
-   Optimal lose 1–3 ticks to the hop chain's discretization (the shortcut already sprint-jumps), allowed ≤4.
-   Shortcut tweaks: rollout cap by distance (4 t/b + 20, a hop node spans ~4 blocks) and a from-rest startup
-   term (`MACRO_STARTUP`) in the take-it comparison. The test takes ~150 s in debug on testbox, so it is
+   on ≥12). Deviations: Human gains nothing on flat (hops do not pay, step 6). Shortcut tweaks: rollout cap by
+   distance (4 t/b + 20, a hop node spans ~4 blocks) and a from-rest startup term (`MACRO_STARTUP`) in the
+   take-it comparison.
+   Fixed after: with shortcuts on, Optimal flat (126→127) and stairs (137→140) lost to macros off. Not the plan:
+   (a) the take-it comparison charged a whole span at hop speed when any node in it was a hop, so on stairs the
+   shortcut stopped short of the stair foot and the bot walked the rest (sprint dropped); (b) the fixed
+   `AHEAD` steps never targeted the last flat node of a short macro path; (c) final-node settling released
+   forward from a friction estimate, overshot the centre, turned back and walked. Now `PathNode::cost` carries
+   each edge's planned cost; a span costs its macro nodes' simulated ticks plus walked segments at sprint
+   speed (+ startup from standing); the span's last node is tried first; settling releases once a simulated
+   coast (`Follower::coast_end`) ends inside the tolerance. Shortcuts on (off → on): flat 125→124 / 125→125,
+   diagonal 116→111 / 125→113.4, gaps 94→82 / 101.6→87, stairs 137→137 / 142.4→142.4. Asserted: on ≤ off
+   everywhere, gaps on ≥10 with shortcuts. The test takes ~150 s in debug on testbox, so it is
    `#[ignore]`d (default `--lib` 22 s): `cargo test --release -p acacia-bot --lib macros_never_slow -- --ignored --nocapture`.
 10. `examples/course.rs` parkour legs (gap3, gap4, up1, down2, diag, stones, sprint40), `--profile`, `--macros off`; dedicated strict testbox BDS, 0 corrections both profiles; evidence in `docs/DESIGN.md`.
 11. Stretch: neo jumps (Optimal), ladder jumps.

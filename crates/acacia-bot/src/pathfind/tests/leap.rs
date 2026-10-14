@@ -25,7 +25,7 @@ fn gap() -> Grid {
 }
 
 fn node(pos: BlockPos, kind: MoveKind, mac: Option<Macro>) -> PathNode {
-    PathNode { pos, feet: pos[1] as f32, kind, wet: false, work: Work::default(), entry: Entry::Rest, mom: Momentum::rest(pos[1] as f32, pos), mac }
+    PathNode { pos, feet: pos[1] as f32, kind, wet: false, work: Work::default(), entry: Entry::Rest, mom: Momentum::rest(pos[1] as f32, pos), mac, cost: 0.0 }
 }
 
 /// A leap from the run-up over the gap, then walking on to the goal, with the coast picked by hand.

@@ -1,14 +1,19 @@
 //! Classic steering: the controls that walk, jump and sprint towards the current node.
 
-use acacia_physics::Vec3;
+use acacia_physics::{Vec3, WorldView};
 
-use super::{Follower, Sense, center, dir};
-use crate::movement::Controls;
+use super::{Follower, SETTLED, Sense, center, dir, hdist};
+use crate::movement::{Controls, Rollout};
 use crate::pathfind::PathNode;
 use crate::pathfind::moves::MoveKind;
+use crate::pathfind::rollout::Spend;
 
 /// Ground drag per tick (block friction 0.6 × 0.91): coasting from speed `v` covers `v·k/(1-k)`.
 const GROUND_DRAG: f32 = 0.546;
+/// A coast must end this far inside the arrival tolerance.
+const SETTLE_MARGIN: f32 = 0.05;
+/// Ticks a coast is simulated for at most.
+const COAST_TICKS: u32 = 40;
 /// Straight nodes ahead before sprinting pays off.
 const SPRINT_RUN: usize = 3;
 /// Facing farther than this (degrees) off the final node, stop walking until turned.
@@ -16,7 +21,8 @@ const SETTLE_AIM_DEG: f32 = 30.0;
 
 impl Follower {
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn steer(&mut self, s: &Sense, c: &mut Controls, node: &PathNode, target: Vec3, dist: f32, speed: f32, last: bool) {
+    /// `coast`: on the final node, where releasing every key now comes to rest (simulated).
+    pub(super) fn steer(&mut self, s: &Sense, c: &mut Controls, node: &PathNode, target: Vec3, dist: f32, speed: f32, last: bool, coast: Option<Vec3>) {
         let (dx, dz) = (target[0] - s.pos[0], target[2] - s.pos[2]);
         let want = (-dx).atan2(dz).to_degrees();
         if dist > 0.05 {
@@ -26,10 +32,13 @@ impl Follower {
         c.strafe = 0.0;
         c.sneak = false;
         c.forward = if last {
-            // Bedrock ground friction lets the bot coast: release the key once coasting covers the rest.
-            let coast = speed * GROUND_DRAG / (1.0 - GROUND_DRAG);
+            // Ground friction lets the bot coast: release the key once coasting ends within the tolerance.
+            let stops = match coast {
+                Some(end) => hdist(end, target) < self.tolerance - SETTLE_MARGIN,
+                None => dist < speed * GROUND_DRAG / (1.0 - GROUND_DRAG) + 0.05,
+            };
             // An eased aim lagging the bearing would circle the goal: turn first.
-            if dist < coast + 0.05 || aim_off > SETTLE_AIM_DEG { 0.0 } else { 1.0 }
+            if stops || aim_off > SETTLE_AIM_DEG { 0.0 } else { 1.0 }
         } else if matches!(node.kind, MoveKind::ClimbUp | MoveKind::ClimbDown | MoveKind::Pillar | MoveKind::Down) && dist < 0.15 {
             0.0
         } else {
@@ -51,6 +60,24 @@ impl Follower {
             };
         // The sprint key only starts a sprint; Movement keeps it going until forward is released.
         c.sprint = wanted;
+    }
+
+    /// Where `live` comes to rest with every key released, if the budget allows simulating it.
+    pub(super) fn coast_end(live: &Rollout, c: &Controls, w: &dyn WorldView, spend: &mut Spend) -> Option<Vec3> {
+        if !spend.affords(u64::from(COAST_TICKS)) {
+            return None;
+        }
+        let (mut r, mut keys) = (live.clone(), *c);
+        keys.stop();
+        for _ in 0..COAST_TICKS {
+            let before = r.st.pos;
+            r.step(&keys, w);
+            spend.ticks += 1;
+            if r.st.on_ground && hdist(before, r.st.pos) < SETTLED {
+                return Some(r.st.pos);
+            }
+        }
+        None
     }
 
     /// Distance travelled from the segment origin along the segment direction.

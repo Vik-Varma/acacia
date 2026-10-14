@@ -6,7 +6,7 @@ use acacia_physics::{BlockPos, WorldView};
 
 use super::PathNode;
 use super::control::{Controller, LAND_EPS, Phase, centre, standing_on, yaw_to};
-use super::costs::{COST_HEURISTIC, HOP_SPEED, MACRO_STARTUP};
+use super::costs::{COST_HEURISTIC, MACRO_STARTUP};
 use super::leap_moves::RUNNING;
 use super::moves::MoveKind;
 use super::profile::Aim;
@@ -68,12 +68,11 @@ pub(super) fn find(path: &[PathNode], index: usize, live: &Rollout, w: &dyn Worl
     let held = Controls { yaw: live.st.yaw, ..Controls::default() };
     let mut solver = Solver::new(w, &avoid, &|_| false, aim.profile, false, held);
     solver.budget = spend.left();
-    // From standing, following the nodes pays the run-up too.
-    let startup = if live.st.vel[0].hypot(live.st.vel[2]) < RUNNING { MACRO_STARTUP } else { 0.0 };
-    let found = AHEAD.into_iter().filter(|&k| k < reach).find_map(|k| {
+    // The span's last node first: a fixed step would stop short of it, and the rest is walked.
+    let last = Some(reach - 1).filter(|&k| (2..=AHEAD[0]).contains(&k) && !AHEAD.contains(&k));
+    let found = last.into_iter().chain(AHEAD).filter(|&k| k < reach).find_map(|k| {
         let j = index + k;
-        let along = polyline(live, &path[index..=j]);
-        let per_block = if path[index..=j].iter().any(|n| n.kind == MoveKind::Hop) { 1.0 / HOP_SPEED } else { COST_HEURISTIC };
+        let (along, planned) = planned(live, &path[index..=j]);
         // By distance, not node count: a hop node spans four blocks.
         let max = (4.0 * along) as u16 + 20;
         let best = STYLES
@@ -87,20 +86,24 @@ pub(super) fn find(path: &[PathNode], index: usize, live: &Rollout, w: &dyn Worl
                 clean.then_some((ctl, bodies))
             })
             .min_by_key(|(_, b)| b.len());
-        best.filter(|(_, b)| ((b.len() - 1) as f32) < along * per_block + startup).map(|(ctl, bodies)| (ctl, bodies, j))
+        best.filter(|(_, b)| ((b.len() - 1) as f32) < planned).map(|(ctl, bodies)| (ctl, bodies, j))
     });
     spend.charge(&solver);
     found
 }
 
-/// Blocks from the live position through the nodes' centres.
-fn polyline(live: &Rollout, nodes: &[PathNode]) -> f32 {
+/// Blocks from the live position through the nodes' centres, and the ticks following them takes: macro moves
+/// as planned (simulated), walked segments at sprint speed plus the run-up when starting one from standing.
+fn planned(live: &Rollout, nodes: &[PathNode]) -> (f32, f32) {
     let mut at = [live.st.pos[0], live.st.pos[2]];
-    let mut len = 0.0;
+    let standing = live.st.vel[0].hypot(live.st.vel[2]) < RUNNING;
+    let (mut len, mut ticks) = (0.0, if standing && nodes[0].mac.is_none() { MACRO_STARTUP } else { 0.0 });
     for n in nodes {
         let c = centre(n.pos);
-        len += (c[0] - at[0]).hypot(c[1] - at[1]);
+        let d = (c[0] - at[0]).hypot(c[1] - at[1]);
+        len += d;
+        ticks += if n.mac.is_some() { n.cost } else { d * COST_HEURISTIC };
         at = c;
     }
-    len
+    (len, ticks)
 }

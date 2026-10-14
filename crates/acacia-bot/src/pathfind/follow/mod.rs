@@ -21,6 +21,8 @@ pub const ROLLOUT_BUDGET: u64 = 1_500;
 /// No progress towards the current node for this long means stuck (1 s).
 const STUCK_TICKS: u32 = 20;
 const MIN_PROGRESS: f32 = 0.05;
+/// Moving less than this (blocks per tick) on the final node counts as stopped there.
+const SETTLED: f32 = 0.03;
 /// Farther than this from the current segment (horizontally) means knocked off the path.
 const OFF_PATH: f32 = 1.5;
 
@@ -180,7 +182,7 @@ impl Follower {
         if self.has_pending(self.index) {
             return self.approach_work(s, c, speed);
         }
-        if last && dist < self.tolerance && speed < 0.03 && self.reached(&node, s, self.tolerance) {
+        if last && dist < self.tolerance && speed < SETTLED && self.reached(&node, s, self.tolerance) {
             c.stop();
             return FollowStatus::Arrived;
         }
@@ -194,7 +196,8 @@ impl Follower {
                 return FollowStatus::Stuck;
             }
         }
-        self.steer(s, c, &node, target, dist, speed, last);
+        let coast = live.filter(|_| last).and_then(|l| Self::coast_end(l, c, w, spend));
+        self.steer(s, c, &node, target, dist, speed, last, coast);
         FollowStatus::Moving
     }
 
