@@ -95,6 +95,26 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
 ### Cache and budget (`pathfind/cache.rs`)
 - Key `(family, params, dir, Momentum, corridor signature hash)`; caches failures too.
 - `SearchOpts` gains `profile`, `macros`, `hops`, `max_rollout_ticks` (400k); spent → classic only.
+- As built (step 7): no corridor hash in the key. Key = (Momentum, family params); each result stores the
+  cells its computation read (`Terrain::record`, `memo.rs`) as relative (pos, block+liquid id), reused where
+  all read the same (≤32 per key, failing read moved first). Results stored relative, shifted in f32 (≤ float
+  rounding off a fresh rollout). `Navigator` keeps one `RolloutCache` across re-plans (dropped on another
+  profile/player state, or past 50k results). Quick inline search: 1000 rollout ticks; a plan cut by the
+  budget goes to `spawn_blocking`. Budget checked between moves (one solve may overrun).
+- Pruning: edge jump first, short ⇒ whole yaw short; else bisect the first reaching takeoff (reused); dry
+  landing not below takeoff over >4 gap cells in a row is skipped (no jump/speed effect); no leaps back
+  (dot ≤ 0) from a running node (≥0.12 b/t); wide retry only after `Miss::Other`; a dry leap fails once
+  falling below its target's floor; last-failing perturbation judged first. `Human` drops hops no faster
+  than sprinting to the landing (+`HUMAN_JUMP`): it never chose hop chains (flat 5–60 blocks), and these
+  were most of its refusal cost. Physics per tick also got a cell front cache and memoized `block_physics`.
+- Measured (release, testbox at load ~24/12 cores, best of 5, `tests::perf::perf_report`): flat 80 Optimal
+  56→24 ms, Human 2498→51 ms (path found); gap course Optimal 26→11 ms, Human 227→70 ms; 5-gap refusal
+  Human 297→35 ms; diagonal 30×11 313→29 / 131→5 ms. Re-plans: 1–20 ms. Gap-course Human misses 30 ms:
+  11.5k simulated ticks at ~5 µs (near-gap results do not translate, 59% hits); refusal misses 20 ms on
+  430 nodes' cache checks. ~8% of rollout time is libm `floorf`/`ceilf` calls (baseline x86-64 target).
+- Known issue (item 7): classic costs ignore acceleration, but plans under-run by a near-constant 8–11
+  ticks classic and 6–12 macro (5–60 blocks, `tests::perf::cost_skew_report`): no measurable skew, so
+  classic costs are not calibrated.
 
 ### Follower (`pathfind/follow_macro.rs`)
 - `Follower::tick(&mut self, s, live: Option<Rollout>, w: &dyn WorldView, c)`; hands off to
@@ -126,7 +146,8 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
 6b. Any-angle follower shortcut (azalea-style): on Ground segments, simulate sprint / sprint-jump
     straight at nodes up to ~20 ahead, take the fastest clean rollout that reaches the path; removes
     8-direction staircasing. Test: 30-block diagonal ticks drop vs 6; Optimal predicted == executed.
-7. Cache + rollout budget; perf guard (flat 100×100, 80 blocks, ≤2× macros off).
+7. Cache + rollout budget; perf guard (flat 100×100, 80 blocks, ≤2× macros off). As built: see "Cache and
+   budget"; guard = rollout/hit-rate bounds per case (`tests::cache`), not timings.
    As built: `shortcut.rs` (`ShortcutCtl`, `find`), tried once per node index with nothing running; spans of
    flat Walk/Run/Hop nodes at the bot's level; k ∈ {20,15,10,5,4,3,2}, styles {sprint, sprint-jump until
    1 or 3 blocks}; taken when its ticks beat the span's polyline at sprint (hop) speed. Runs as an `Exec` like
