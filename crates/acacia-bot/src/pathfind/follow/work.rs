@@ -42,7 +42,7 @@ impl Follower {
         if self.since_progress > STUCK_TICKS {
             return FollowStatus::Stuck;
         }
-        c.yaw = (s.pos[0] - self.origin[0]).atan2(self.origin[2] - s.pos[2]).to_degrees();
+        c.yaw = self.aim.turn(c.yaw, (s.pos[0] - self.origin[0]).atan2(self.origin[2] - s.pos[2]).to_degrees());
         c.forward = 1.0;
         FollowStatus::Moving
     }

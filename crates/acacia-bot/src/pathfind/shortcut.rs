@@ -8,10 +8,10 @@ use super::PathNode;
 use super::control::{Controller, LAND_EPS, Phase, centre, standing_on, yaw_to};
 use super::costs::{COST_HEURISTIC, HOP_SPEED};
 use super::moves::MoveKind;
-use super::profile::{Aim, MovementProfile};
-use super::rollout::Body;
+use super::profile::Aim;
+use super::rollout::{Body, Spend};
 use super::retry::live_hazard;
-use super::solve::{AIM_SEED, Solver};
+use super::solve::Solver;
 use crate::movement::{Controls, Rollout};
 
 /// Nodes ahead tried, farthest first.
@@ -56,8 +56,8 @@ fn flat(n: &PathNode, level: f32) -> bool {
 }
 
 /// The shortcut from the live state to a node after `path[index]`: its controller, predicted bodies and the
-/// index it lands on. Only taken when faster than following the nodes between.
-pub(super) fn find(path: &[PathNode], index: usize, live: &Rollout, w: &dyn WorldView, profile: MovementProfile) -> Option<(ShortcutCtl, Vec<Body>, usize)> {
+/// index it lands on. Only taken when faster than following the nodes between; looked for within `spend`.
+pub(super) fn find(path: &[PathNode], index: usize, live: &Rollout, w: &dyn WorldView, aim: Aim, spend: &mut Spend) -> Option<(ShortcutCtl, Vec<Body>, usize)> {
     let level = live.st.pos[1];
     if !live.st.on_ground || !path.get(index).is_some_and(|n| flat(n, level)) {
         return None;
@@ -65,24 +65,28 @@ pub(super) fn find(path: &[PathNode], index: usize, live: &Rollout, w: &dyn Worl
     let reach = path[index..].iter().take_while(|n| flat(n, level)).count();
     let avoid = |p: BlockPos| live_hazard(w, p);
     let held = Controls { yaw: live.st.yaw, ..Controls::default() };
-    let mut solver = Solver::new(w, &avoid, &|_| false, profile, false, held);
-    for k in AHEAD.into_iter().filter(|&k| k < reach) {
+    let mut solver = Solver::new(w, &avoid, &|_| false, aim.profile, false, held);
+    solver.budget = spend.left();
+    let found = AHEAD.into_iter().filter(|&k| k < reach).find_map(|k| {
         let j = index + k;
         let along = polyline(live, &path[index..=j]);
         let per_block = if path[index..=j].iter().any(|n| n.kind == MoveKind::Hop) { 1.0 / HOP_SPEED } else { COST_HEURISTIC };
+        let max = 4 * k as u16 + 20;
         let best = STYLES
             .iter()
             .filter_map(|&(jump, stop_jump)| {
-                let ctl = ShortcutCtl { target: path[j].pos, feet: path[j].feet, jump, stop_jump, aim: Aim::new(profile, AIM_SEED), max: 4 * k as u16 + 20, t: 0 };
+                let ctl = ShortcutCtl { target: path[j].pos, feet: path[j].feet, jump, stop_jump, aim, max, t: 0 };
+                if !solver.affords(u64::from(max)) {
+                    return None;
+                }
                 let (bodies, _, clean) = solver.run(live, &mut { ctl }, false);
                 clean.then_some((ctl, bodies))
             })
             .min_by_key(|(_, b)| b.len());
-        if let Some((ctl, bodies)) = best.filter(|(_, b)| ((b.len() - 1) as f32) < along * per_block) {
-            return Some((ctl, bodies, j));
-        }
-    }
-    None
+        best.filter(|(_, b)| ((b.len() - 1) as f32) < along * per_block).map(|(ctl, bodies)| (ctl, bodies, j))
+    });
+    spend.charge(&solver);
+    found
 }
 
 /// Blocks from the live position through the nodes' centres.

@@ -11,20 +11,25 @@ use crate::pathfind::moves::MoveKind;
 const GROUND_DRAG: f32 = 0.546;
 /// Straight nodes ahead before sprinting pays off.
 const SPRINT_RUN: usize = 3;
+/// Facing farther than this (degrees) off the final node, stop walking until turned.
+const SETTLE_AIM_DEG: f32 = 30.0;
 
 impl Follower {
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn steer(&self, s: &Sense, c: &mut Controls, node: &PathNode, target: Vec3, dist: f32, speed: f32, last: bool) {
+    pub(super) fn steer(&mut self, s: &Sense, c: &mut Controls, node: &PathNode, target: Vec3, dist: f32, speed: f32, last: bool) {
         let (dx, dz) = (target[0] - s.pos[0], target[2] - s.pos[2]);
+        let want = (-dx).atan2(dz).to_degrees();
         if dist > 0.05 {
-            c.yaw = (-dx).atan2(dz).to_degrees();
+            c.yaw = self.aim.turn(c.yaw, want);
         }
+        let aim_off = ((want - c.yaw + 180.0).rem_euclid(360.0) - 180.0).abs();
         c.strafe = 0.0;
         c.sneak = false;
         c.forward = if last {
             // Bedrock ground friction lets the bot coast: release the key once coasting covers the rest.
             let coast = speed * GROUND_DRAG / (1.0 - GROUND_DRAG);
-            if dist < coast + 0.05 { 0.0 } else { 1.0 }
+            // An eased aim lagging the bearing would circle the goal: turn first.
+            if dist < coast + 0.05 || aim_off > SETTLE_AIM_DEG { 0.0 } else { 1.0 }
         } else if matches!(node.kind, MoveKind::ClimbUp | MoveKind::ClimbDown | MoveKind::Pillar | MoveKind::Down) && dist < 0.15 {
             0.0
         } else {

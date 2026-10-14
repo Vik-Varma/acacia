@@ -8,11 +8,16 @@ use acacia_physics::{Vec3, WorldView};
 
 use super::follow_macro::{MacroReport, MacroRunner, MacroStep};
 use super::moves::MoveKind;
-use super::profile::MovementProfile;
+use super::profile::{Aim, MovementProfile};
+use super::rollout::Spend;
 use super::shortcut;
 use super::PathNode;
+use crate::cadence::splitmix;
 use crate::movement::{Controls, Rollout};
 
+/// Rollout ticks one follower tick may simulate (~5 µs each in release): live re-solves and shortcut
+/// searches stop there, and a move that cannot be solved within it diverges into a background re-plan.
+pub const ROLLOUT_BUDGET: u64 = 1_500;
 /// No progress towards the current node for this long means stuck (1 s).
 const STUCK_TICKS: u32 = 20;
 const MIN_PROGRESS: f32 = 0.05;
@@ -52,10 +57,16 @@ pub struct Follower {
     since_progress: u32,
     tolerance: f32,
     macros: MacroRunner,
-    /// Take any-angle shortcuts, moving like this.
-    shortcuts: Option<MovementProfile>,
+    /// Classic steering's aim; its profile is the follower's.
+    aim: Aim,
+    /// Jitter streams for shortcuts.
+    rng: u64,
+    /// Take any-angle shortcuts.
+    shortcuts: bool,
     /// Path index a shortcut was last looked for from.
     tried: Option<usize>,
+    /// What the last tick simulated.
+    spend: Spend,
 }
 
 fn center(n: &PathNode) -> Vec3 {
@@ -73,15 +84,28 @@ fn dir(a: Vec3, b: Vec3) -> (i32, i32) {
 impl Follower {
     /// `tolerance`: how close (horizontally, blocks) to the final node's centre counts as arrived.
     pub fn new(path: Vec<PathNode>, start: Vec3, tolerance: f32) -> Self {
-        let macros = MacroRunner::default();
-        Self { path, index: 0, worked: false, origin: start, last_pos: None, best_dist: f32::INFINITY, since_progress: 0, tolerance, macros, shortcuts: None, tried: None }
+        let (macros, aim, spend) = (MacroRunner::default(), Aim::new(MovementProfile::Optimal, 0), Spend::default());
+        Self { path, index: 0, worked: false, origin: start, last_pos: None, best_dist: f32::INFINITY, since_progress: 0, tolerance, macros, aim, rng: 0, shortcuts: false, tried: None, spend }
     }
 
-    /// On flat ground, run straight at nodes further on when that beats following the nodes between
-    /// (moving like `profile`; `None`: never).
-    pub fn shortcuts(mut self, profile: Option<MovementProfile>) -> Self {
-        self.shortcuts = profile;
+    /// Moves like `profile` (default `Optimal`), every aim jittered from `seed` for `Human`.
+    pub fn moving(mut self, profile: MovementProfile, seed: u64) -> Self {
+        let mut rng = seed;
+        self.aim = Aim::new(profile, splitmix(&mut rng));
+        self.macros.rng = splitmix(&mut rng);
+        self.rng = rng;
         self
+    }
+
+    /// On flat ground, run straight at nodes further on when that beats following the nodes between.
+    pub fn shortcuts(mut self, on: bool) -> Self {
+        self.shortcuts = on;
+        self
+    }
+
+    /// Rollout ticks the last tick simulated (at most [`ROLLOUT_BUDGET`]), and whether it went without one.
+    pub fn spend(&self) -> Spend {
+        self.spend
     }
 
     /// How the last finished macro move went, once.
@@ -110,6 +134,13 @@ impl Follower {
     /// `live`: a fork of the live simulation, which macro moves need (without it they are steered
     /// classically); `w` the world it runs in.
     pub fn tick(&mut self, s: &Sense, live: Option<&Rollout>, w: &dyn WorldView, c: &mut Controls) -> FollowStatus {
+        let mut spend = Spend::new(ROLLOUT_BUDGET);
+        let status = self.tick_within(s, live, w, c, &mut spend);
+        self.spend = spend;
+        status
+    }
+
+    fn tick_within(&mut self, s: &Sense, live: Option<&Rollout>, w: &dyn WorldView, c: &mut Controls, spend: &mut Spend) -> FollowStatus {
         let vel = self.last_pos.map_or([0.0; 3], |l| [s.pos[0] - l[0], s.pos[1] - l[1], s.pos[2] - l[2]]);
         self.last_pos = Some(s.pos);
         if self.path.is_empty() {
@@ -121,8 +152,8 @@ impl Follower {
         }
         // A finished macro move hands over to the next one on the same tick.
         loop {
-            self.try_shortcut(live, w);
-            match self.macros.tick(&self.path, self.index, live, w, c) {
+            self.try_shortcut(live, w, spend);
+            match self.macros.tick(&self.path, self.index, live, w, c, spend) {
                 MacroStep::Idle => break,
                 MacroStep::Going => return FollowStatus::Moving,
                 MacroStep::Diverged => return FollowStatus::Diverged,
@@ -168,12 +199,13 @@ impl Follower {
     }
 
     /// Once per node, with nothing running: start a shortcut to a node further on if one beats the nodes between.
-    fn try_shortcut(&mut self, live: Option<&Rollout>, w: &dyn WorldView) {
-        let (Some(profile), Some(live)) = (self.shortcuts, live) else { return };
+    fn try_shortcut(&mut self, live: Option<&Rollout>, w: &dyn WorldView, spend: &mut Spend) {
+        let Some(live) = live.filter(|_| self.shortcuts) else { return };
         if self.macros.active() || self.tried.replace(self.index) == Some(self.index) {
             return;
         }
-        if let Some((ctl, predicted, last)) = shortcut::find(&self.path, self.index, live, w, profile) {
+        let aim = self.aim.reseeded(splitmix(&mut self.rng));
+        if let Some((ctl, predicted, last)) = shortcut::find(&self.path, self.index, live, w, aim, spend) {
             self.macros.begin(ctl, predicted, last);
         }
     }
@@ -229,13 +261,19 @@ impl Follower {
         }
     }
 
+    /// Far from the current segment and from the next one (a jump that carried on past its node is not off).
     fn off_path(&self, pos: Vec3, target: Vec3) -> bool {
-        let (ax, az) = (self.origin[0], self.origin[2]);
-        let (sx, sz) = (target[0] - ax, target[2] - az);
-        let len2 = sx * sx + sz * sz;
-        let t = if len2 > 0.0 { (((pos[0] - ax) * sx + (pos[2] - az) * sz) / len2).clamp(0.0, 1.0) } else { 0.0 };
-        let off = (pos[0] - ax - sx * t).hypot(pos[2] - az - sz * t);
+        let next = self.path.get(self.index + 1).map_or(target, center);
+        let off = seg_dist(pos, self.origin, target).min(seg_dist(pos, target, next));
         let (lo, hi) = (self.origin[1].min(target[1]), self.origin[1].max(target[1]));
         off > OFF_PATH || pos[1] < lo - 1.5 || pos[1] > hi + 2.5
     }
+}
+
+/// Horizontal distance from `pos` to the segment `a`–`b`.
+fn seg_dist(pos: Vec3, a: Vec3, b: Vec3) -> f32 {
+    let (sx, sz) = (b[0] - a[0], b[2] - a[2]);
+    let len2 = sx * sx + sz * sz;
+    let t = if len2 > 0.0 { (((pos[0] - a[0]) * sx + (pos[2] - a[2]) * sz) / len2).clamp(0.0, 1.0) } else { 0.0 };
+    (pos[0] - a[0] - sx * t).hypot(pos[2] - a[2] - sz * t)
 }

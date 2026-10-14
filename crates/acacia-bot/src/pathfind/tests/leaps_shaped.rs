@@ -2,9 +2,9 @@
 
 use acacia_physics::BlockPos;
 
-use super::drive::{macro_opts, plan, standing};
+use super::drive::{PROFILES, macro_opts, plan, plan_and_follow, standing};
 use super::grid::Grid;
-use super::leaps::{PROFILES, gap_course, leap_and_follow};
+use super::leaps::{gap_course, leap_and_follow};
 use crate::pathfind::{Goal, MoveKind, MovementProfile};
 
 const START: [f32; 3] = [-0.5, 1.0, 0.5];
@@ -40,15 +40,8 @@ fn leaps_down_into_water() {
     g.fill([-12, 0, -2], [0, 5, 2], "stone").fill([2, -2, -3], [14, -2, 3], "stone");
     g.fill_state([2, -1, -2], [8, 0, 2], "water", "liquid_depth=0").fill([9, -1, -2], [14, 0, 2], "stone");
     for profile in PROFILES {
-        let mut m = standing([-0.5, 6.0, 0.5]);
-        let path = plan(&g, &m, &Goal::Block([12, 1, 0]), &macro_opts(profile));
-        assert!(path.complete, "{profile:?}");
+        let (path, _) = plan_and_follow(&g, [-0.5, 6.0, 0.5], [12, 1, 0], &macro_opts(profile), false).expect("plan");
         assert!(path.nodes.iter().any(|n| n.kind == MoveKind::Parkour && n.wet), "{profile:?}: {:?}", path.nodes);
-        let o = super::drive::drive(&g, &mut m, path.nodes, &Goal::Block([12, 1, 0]), &macro_opts(profile), |_, _| {});
-        super::drive::assert_arrived(&o, [12, 1, 0]);
-        if profile == MovementProfile::Optimal {
-            super::drive::assert_exact(&o);
-        }
     }
 }
 

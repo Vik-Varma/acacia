@@ -1,13 +1,12 @@
-//! Planned leaps (plan steps 4–5): found by rollout, executed live exactly as predicted (`Optimal`), and
-//! refused by `Human` where only a pixel-perfect jump lands.
+//! Planned leaps (plan steps 4–5): found by rollout, executed live exactly as predicted (`Optimal`) or under
+//! every `Human` aim seed, and refused by `Human` where only a pixel-perfect jump lands.
 
 use acacia_physics::BlockPos;
 
-use super::drive::{assert_arrived, assert_exact, drive, macro_nodes, macro_opts, plan, standing};
+use super::drive::{PROFILES, Style, assert_arrived, assert_exact, drive, macro_nodes, macro_opts, plan, plan_and_follow, seeds, standing};
 use super::grid::Grid;
+use crate::movement::Movement;
 use crate::pathfind::{Goal, MoveKind, MovementProfile};
-
-pub const PROFILES: [MovementProfile; 2] = [MovementProfile::Optimal, MovementProfile::Human];
 
 /// Floor up to x = 0, `gap` cells of void, floor again; a 5-wide lane.
 pub fn gap_course(gap: i32) -> Grid {
@@ -16,24 +15,10 @@ pub fn gap_course(gap: i32) -> Grid {
     g
 }
 
-/// Plans from rest at `from` to `goal` and follows the plan; asserts arrival and, for `Optimal`, that
-/// every macro move ran as predicted. `None` when no complete plan exists.
+/// Plans from rest at `from` to `goal` and follows the plan ([`plan_and_follow`]): the macro moves planned,
+/// `None` when no complete plan exists.
 pub fn leap_and_follow(g: &Grid, from: [f32; 3], goal: BlockPos, profile: MovementProfile) -> Option<Vec<(MoveKind, BlockPos)>> {
-    let mut m = standing(from);
-    let opts = macro_opts(profile);
-    let path = plan(g, &m, &Goal::Block(goal), &opts);
-    if !path.complete {
-        return None;
-    }
-    let macros = macro_nodes(&path);
-    let o = drive(g, &mut m, path.nodes, &Goal::Block(goal), &opts, |_, _| {});
-    eprintln!("{profile:?} to {goal:?}: {} ticks, macros {macros:?}, reports {:?}", o.ticks, o.reports);
-    assert_arrived(&o, goal);
-    assert_eq!(o.diverged, 0, "{profile:?}");
-    if profile == MovementProfile::Optimal {
-        assert_exact(&o);
-    }
-    Some(macros)
+    plan_and_follow(g, from, goal, &macro_opts(profile), false).map(|(p, _)| macro_nodes(&p))
 }
 
 /// Gaps 1–4 from `from`: one leap each; `Human` refuses the four-gap, which only a pixel-perfect jump lands.
@@ -63,25 +48,37 @@ fn leaps_gaps_after_a_run_up() {
     leaps_gaps_from([-5.5, 1.0, 0.5]);
 }
 
-/// A plan made while sprinting at the gap starts from that momentum and runs exactly as planned.
-#[test]
-fn plans_a_leap_from_live_momentum() {
-    let g = gap_course(3);
+/// Sprinting at a three-gap from x = -6.5, stopped at x = -2.
+fn sprinting(g: &Grid) -> Movement {
     let world = g.physics();
     let mut m = standing([-6.5, 1.0, 0.5]);
     (m.controls.forward, m.controls.sprint) = (1.0, true);
     while m.position().unwrap()[0] < -2.0 {
         m.tick(&world);
     }
+    m
+}
+
+/// A plan made while sprinting at the gap starts from that momentum and runs as planned (`Optimal` exactly).
+#[test]
+fn plans_a_leap_from_live_momentum() {
+    let g = gap_course(3);
     let goal = Goal::Block([7, 1, 0]);
-    let opts = macro_opts(MovementProfile::Optimal);
-    let path = plan(&g, &m, &goal, &opts);
-    let standing_there = plan(&g, &standing(m.position().unwrap()), &goal, &opts);
-    assert!(path.complete && path.cost <= standing_there.cost, "{} vs {}: {:?}", path.cost, standing_there.cost, path.nodes);
-    let o = drive(&g, &mut m, path.nodes, &goal, &opts, |_, _| {});
-    assert_arrived(&o, [7, 1, 0]);
-    assert_exact(&o);
-    assert!(o.reports.iter().all(|r| !r.resolved), "{:?}", o.reports);
+    for profile in PROFILES {
+        let opts = macro_opts(profile);
+        let path = plan(&g, &sprinting(&g), &goal, &opts);
+        let standing_there = plan(&g, &standing(sprinting(&g).position().unwrap()), &goal, &opts);
+        assert!(path.complete && path.cost <= standing_there.cost, "{profile:?}: {} vs {}: {:?}", path.cost, standing_there.cost, path.nodes);
+        for &seed in seeds(profile) {
+            let o = drive(&g, &mut sprinting(&g), path.nodes.clone(), &goal, &opts, Style { seed, shortcuts: false }, |_, _| {});
+            assert_arrived(&o, [7, 1, 0]);
+            assert_eq!(o.diverged, 0, "{profile:?} seed {seed}");
+            if profile == MovementProfile::Optimal {
+                assert_exact(&o);
+                assert!(o.reports.iter().all(|r| !r.resolved), "{:?}", o.reports);
+            }
+        }
+    }
 }
 
 /// A four-gap next to a one-deep pit: `Optimal` leaps it, `Human` walks through the pit.

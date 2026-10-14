@@ -72,6 +72,8 @@ pub(crate) struct Solver<'a, W: WorldView + ?Sized> {
     pub ticks: u64,
     /// Ticks it may simulate: callers check [`Solver::spent`] between moves.
     pub budget: u64,
+    /// A rollout was skipped for want of budget ([`Solver::affords`]).
+    pub starved: bool,
     /// Index of the perturbation that last failed a judgement.
     pub(super) fails_first: usize,
 }
@@ -97,11 +99,18 @@ impl Attempt {
 
 impl<'a, W: WorldView + ?Sized> Solver<'a, W> {
     pub fn new(w: &'a W, avoid: &'a dyn Fn(BlockPos) -> bool, safe: &'a dyn Fn(BlockPos) -> bool, profile: MovementProfile, perturb: bool, held: Controls) -> Self {
-        Self { w, avoid, pad: profile.hazard_pad(), safe, profile, perturb, held, rollouts: 0, ticks: 0, budget: u64::MAX, fails_first: 0 }
+        Self { w, avoid, pad: profile.hazard_pad(), safe, profile, perturb, held, rollouts: 0, ticks: 0, budget: u64::MAX, starved: false, fails_first: 0 }
     }
 
     pub fn spent(&self) -> bool {
         self.ticks >= self.budget
+    }
+
+    /// A rollout of up to `n` more ticks stays within the budget (a hard cap, unlike [`Solver::spent`]).
+    pub fn affords(&mut self, n: u64) -> bool {
+        let fits = self.ticks + n <= self.budget;
+        self.starved |= !fits;
+        fits
     }
 }
 
@@ -209,7 +218,7 @@ impl<W: WorldView + ?Sized> Solver<'_, W> {
     /// The earliest takeoff tick whose jump is not short of the target, `None` if even the jump at the edge
     /// is. A later takeoff has more run-up nearer the gap, so it flies farther: bisection finds it.
     /// Also returns that takeoff's attempt when the bisection ran it.
-    fn first_reaching(&mut self, start: &Rollout, ctl: LeapCtl) -> Option<(u8, Option<Attempt>)> {
+    pub(super) fn first_reaching(&mut self, start: &Rollout, ctl: LeapCtl) -> Option<(u8, Option<Attempt>)> {
         let reaches = |this: &mut Self, jump: JumpAt| {
             let mut c = ctl;
             c.jump = jump;
@@ -236,7 +245,7 @@ impl<W: WorldView + ?Sized> Solver<'_, W> {
 
     /// `a` if it landed, else the coast that lands it when it went long (binary search: a later coast
     /// flies farther). `Err(true)`: it fell short.
-    fn land(&mut self, start: &Rollout, a: Attempt) -> Result<Attempt, bool> {
+    pub(super) fn land(&mut self, start: &Rollout, a: Attempt) -> Result<Attempt, bool> {
         if a.clean {
             return Ok(a);
         }

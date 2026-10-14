@@ -22,6 +22,17 @@ impl Macro {
             Macro::Shortcut(s) => s.aim.profile,
         }
     }
+
+    /// Runs on the jitter stream `seed` instead of the one it was planned with.
+    pub fn reseeded(mut self, seed: u64) -> Self {
+        let aim = match &mut self {
+            Macro::Leap(l) => &mut l.aim,
+            Macro::Run(r) => &mut r.aim,
+            Macro::Shortcut(s) => &mut s.aim,
+        };
+        *aim = aim.reseeded(seed);
+        self
+    }
 }
 
 impl Controller for Macro {

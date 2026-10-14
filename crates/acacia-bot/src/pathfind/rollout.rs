@@ -30,6 +30,32 @@ pub fn run(r: &mut Rollout, ctl: &mut impl Controller, mut c: Controls, max: u32
     }
 }
 
+/// Rollout ticks one follower tick may simulate, and those it has.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Spend {
+    pub ticks: u64,
+    pub limit: u64,
+    /// Something was not simulated for want of budget.
+    pub short: bool,
+}
+
+impl Spend {
+    pub fn new(limit: u64) -> Self {
+        Self { ticks: 0, limit, short: false }
+    }
+
+    pub fn left(&self) -> u64 {
+        self.limit.saturating_sub(self.ticks)
+    }
+
+    /// A rollout of up to `n` ticks fits; marks the spend short if not.
+    pub fn affords(&mut self, n: u64) -> bool {
+        let fits = self.ticks + n <= self.limit;
+        self.short |= !fits;
+        fits
+    }
+}
+
 /// The body one tick after `r` with `c` held; `r` is left as it was.
 pub fn peek(r: &Rollout, c: &Controls, w: &(impl WorldView + ?Sized)) -> Body {
     let mut f = r.clone();

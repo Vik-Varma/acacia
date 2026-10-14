@@ -84,6 +84,11 @@ impl Aim {
         Self { profile, bias: 0.0, rng: seed }
     }
 
+    /// The same aim on another jitter stream: a live execution's, not the plan's.
+    pub fn reseeded(self, seed: u64) -> Self {
+        Self { rng: seed, ..self }
+    }
+
     /// The yaw to send this tick when facing `from` and wanting `to` (degrees); a `Human` aim advances its
     /// jitter stream.
     pub fn turn(&mut self, from: f32, to: f32) -> f32 {

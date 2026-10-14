@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use acacia_physics::{BlockPos, PlayerState, Vec3};
+use acacia_physics::{PlayerState, Vec3};
 use acacia_world::{BlockRegistry, ChunkView};
 use tokio::task::JoinHandle;
 
@@ -15,6 +15,7 @@ use super::goal::Goal;
 use super::kit::{DEFAULT_SCAFFOLD, Kit};
 use super::snapshot::WorldBlocks;
 use super::terrain::{Blocks, Terrain};
+use crate::cadence::{seed, splitmix};
 use crate::{ActionError, Bot};
 
 /// Nodes ahead re-checked every tick for world changes.
@@ -75,12 +76,14 @@ pub struct Navigator {
     diverged_in_air: bool,
     /// Macro-move results kept across re-plans; the blocking search takes it along.
     cache: Arc<Mutex<RolloutCache>>,
+    /// Seeds each follower's aim jitter.
+    rng: u64,
 }
 
 impl Navigator {
     pub fn new(goal: Goal, opts: GotoOpts) -> Self {
         let cache = Arc::default();
-        Self { goal, opts, follower: None, partial: false, pending: None, replans: 0, teleports: None, diverged: 0, diverged_in_air: false, cache }
+        Self { goal, opts, follower: None, partial: false, pending: None, replans: 0, teleports: None, diverged: 0, diverged_in_air: false, cache, rng: seed() }
     }
 
     pub fn goal(&self) -> &Goal {
@@ -178,7 +181,7 @@ impl Navigator {
             if !self.diverged_in_air || movement.on_ground() {
                 movement.controls.stop();
             }
-            self.plan(&terrain, view, registry, live_state, opts)?;
+            self.plan(&terrain, view, registry, live_state, opts, true)?;
             return Ok(NavStatus::Searching);
         };
         let feet = [pos[0].floor() as i32, pos[1].floor() as i32, pos[2].floor() as i32];
@@ -191,7 +194,9 @@ impl Navigator {
                 }
             }
             FollowStatus::Diverged => {
-                tracing::debug!(?pos, "macro move diverged; re-planning in place");
+                // Out of rollout budget this tick: no inline search on top.
+                let inline = !follower.spend().short;
+                tracing::debug!(?pos, inline, "macro move diverged; re-planning in place");
                 self.diverged += 1;
                 if self.diverged > MAX_DIVERGED {
                     self.count_replan(format!("diverged {} times in a row", self.diverged))?;
@@ -199,7 +204,7 @@ impl Navigator {
                 }
                 self.follower = None;
                 self.diverged_in_air = !movement.on_ground();
-                self.plan(&terrain, view, registry, live_state, opts)?;
+                self.plan(&terrain, view, registry, live_state, opts, inline)?;
             }
             FollowStatus::Work => return Ok(NavStatus::Working),
             FollowStatus::Arrived if !self.partial => return Ok(NavStatus::Arrived),
@@ -214,13 +219,15 @@ impl Navigator {
     }
 
     /// Searches from the live state, so the plan starts with the momentum the bot has (a re-plan after a
-    /// divergence keeps running).
-    fn plan(&mut self, terrain: &Terrain<&ChunkView>, view: &ChunkView, registry: &Arc<BlockRegistry>, live: PlayerState, opts: SearchOpts) -> Result<(), ActionError> {
-        let quick_opts = SearchOpts { max_nodes: QUICK_NODES, budget: QUICK_BUDGET, max_rollout_ticks: QUICK_ROLLOUT_TICKS, ..opts.clone() };
-        let quick = search_cached(terrain, &live, &self.goal, &quick_opts, &mut lock(&self.cache));
-        // A plan whose macro budget ran out may have missed faster macro moves: search again in full.
-        if quick.complete && !quick.macro_stats.exhausted {
-            return self.accept(quick, live.pos);
+    /// divergence keeps running). `inline`: try a quick search before the tick ends, else only in the background.
+    fn plan(&mut self, terrain: &Terrain<&ChunkView>, view: &ChunkView, registry: &Arc<BlockRegistry>, live: PlayerState, opts: SearchOpts, inline: bool) -> Result<(), ActionError> {
+        if inline {
+            let quick_opts = SearchOpts { max_nodes: QUICK_NODES, budget: QUICK_BUDGET, max_rollout_ticks: QUICK_ROLLOUT_TICKS, ..opts.clone() };
+            let quick = search_cached(terrain, &live, &self.goal, &quick_opts, &mut lock(&self.cache));
+            // A plan whose macro budget ran out may have missed faster macro moves: search again in full.
+            if quick.complete && !quick.macro_stats.exhausted {
+                return self.accept(quick, live.pos);
+            }
         }
         let (world, registry, goal, cache) = (view.world().clone(), registry.clone(), self.goal.clone(), self.cache.clone());
         self.pending = Some(tokio::task::spawn_blocking(move || {
@@ -247,8 +254,8 @@ impl Navigator {
         }
         self.partial = !path.complete;
         self.diverged_in_air = false;
-        let shortcuts = self.opts.shortcuts.then_some(self.opts.search.profile);
-        self.follower = Some(Follower::new(path.nodes, pos, self.opts.tolerance).shortcuts(shortcuts));
+        let follower = Follower::new(path.nodes, pos, self.opts.tolerance).moving(self.opts.search.profile, splitmix(&mut self.rng));
+        self.follower = Some(follower.shortcuts(self.opts.shortcuts));
         Ok(())
     }
 
@@ -269,30 +276,4 @@ fn lock(cache: &Mutex<RolloutCache>) -> MutexGuard<'_, RolloutCache> {
 /// comes from that work).
 fn still_valid<B: Blocks>(terrain: &Terrain<B>, f: &Follower) -> bool {
     f.standing_ahead().iter().take(LOOKAHEAD).all(|n| terrain.spot(n.pos).is_some_and(|s| (s.feet - n.feet).abs() < 0.01))
-}
-
-impl Bot {
-    /// Walks to `goal` (physics bots only). See [`Navigator`] for step-wise control.
-    pub async fn goto(&mut self, goal: Goal) -> Result<(), ActionError> {
-        self.goto_with(goal, GotoOpts::default()).await
-    }
-
-    pub async fn goto_with(&mut self, goal: Goal, opts: GotoOpts) -> Result<(), ActionError> {
-        let mut nav = Navigator::new(goal, opts);
-        while nav.tick(self).await? != NavStatus::Arrived {}
-        Ok(())
-    }
-
-    /// Releases the movement controls, e.g. after dropping a `goto` future or a [`Navigator`].
-    pub fn stop_pathing(&mut self) {
-        if let Some(c) = self.controls() {
-            c.stop();
-        }
-    }
-
-    /// Feet block position of a physics bot (for building goals).
-    pub fn block_position(&self) -> Option<BlockPos> {
-        let p = self.movement.as_ref()?.position()?;
-        Some([p[0].floor() as i32, (p[1] + 0.01).floor() as i32, p[2].floor() as i32])
-    }
 }

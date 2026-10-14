@@ -1,5 +1,6 @@
 //! Following a path in the headless simulation the way the navigator does: macro moves run live, and a
-//! divergence re-plans from the live state without stopping.
+//! divergence re-plans from the live state without stopping. Every run is checked against the follower's
+//! per-tick rollout budget.
 
 use std::time::{Duration, Instant};
 
@@ -8,7 +9,17 @@ use acacia_physics::{BlockPos, Vec3};
 use super::grid::Grid;
 use super::sim::sense;
 use crate::movement::Movement;
-use crate::pathfind::{FollowStatus, Follower, Goal, MacroReport, MovementProfile, Path, PathNode, SearchOpts, search_from};
+use crate::pathfind::{FollowStatus, Follower, Goal, MacroReport, MovementProfile, Path, PathNode, ROLLOUT_BUDGET, SearchOpts, search_from};
+
+pub const PROFILES: [MovementProfile; 2] = [MovementProfile::Optimal, MovementProfile::Human];
+
+/// Execution aim seeds: `Optimal` has no jitter and runs once, `Human` runs under five streams.
+pub fn seeds(profile: MovementProfile) -> &'static [u64] {
+    match profile {
+        MovementProfile::Optimal => &[0],
+        MovementProfile::Human => &[1, 2, 3, 4, 5],
+    }
+}
 
 pub fn macro_opts(profile: MovementProfile) -> SearchOpts {
     // Bounded by nodes, not time: debug builds simulate slowly, and a timed-out plan would be a flaky one.
@@ -31,6 +42,13 @@ pub fn plan(g: &Grid, m: &Movement, goal: &Goal, opts: &SearchOpts) -> Path {
     p
 }
 
+/// How the follower runs: its aim seed, and whether it takes shortcuts.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Style {
+    pub seed: u64,
+    pub shortcuts: bool,
+}
+
 pub struct Outcome {
     pub reports: Vec<MacroReport>,
     pub diverged: u32,
@@ -38,34 +56,37 @@ pub struct Outcome {
     pub held: bool,
     pub ticks: u32,
     pub end: Vec3,
+    /// Most rollout ticks one follower tick simulated.
+    pub max_spend: u64,
 }
 
-/// Follows `path` from `m` towards `goal`; `nudge` may disturb the bot each tick.
-pub fn drive(g: &Grid, m: &mut Movement, path: Vec<PathNode>, goal: &Goal, opts: &SearchOpts, nudge: impl FnMut(u32, &mut Movement)) -> Outcome {
-    drive_with(g, m, path, goal, opts, false, nudge)
-}
-
-/// [`drive`], taking any-angle shortcuts if `shortcuts`.
-pub fn drive_with(g: &Grid, m: &mut Movement, path: Vec<PathNode>, goal: &Goal, opts: &SearchOpts, shortcuts: bool, mut nudge: impl FnMut(u32, &mut Movement)) -> Outcome {
+/// Follows `path` from `m` towards `goal`; `nudge` may disturb the bot each tick. Asserts no follower tick
+/// simulates more than [`ROLLOUT_BUDGET`].
+pub fn drive(g: &Grid, m: &mut Movement, path: Vec<PathNode>, goal: &Goal, opts: &SearchOpts, style: Style, mut nudge: impl FnMut(u32, &mut Movement)) -> Outcome {
     let world = g.physics();
     let start = m.position().expect("started");
-    let new_follower = |path, at| Follower::new(path, at, 0.25).shortcuts(shortcuts.then_some(opts.profile));
+    let mut rng = style.seed;
+    let mut new_follower = |path, at| Follower::new(path, at, 0.25).moving(opts.profile, crate::cadence::splitmix(&mut rng)).shortcuts(style.shortcuts);
     let mut follower = new_follower(path, start);
-    let mut out = Outcome { reports: Vec::new(), diverged: 0, held: true, ticks: 0, end: start };
+    let mut out = Outcome { reports: Vec::new(), diverged: 0, held: true, ticks: 0, end: start, max_spend: 0 };
     for tick in 0..600 {
         nudge(tick, m);
         let s = sense(g, m);
         let live = m.fork();
         let status = follower.tick(&s, live.as_ref(), &g.terrain(), &mut m.controls);
+        let spend = follower.spend();
+        assert!(spend.ticks <= ROLLOUT_BUDGET, "tick {tick}: {spend:?}");
+        out.max_spend = out.max_spend.max(spend.ticks);
         out.reports.extend(follower.take_macro_report());
         match status {
             FollowStatus::Moving => {}
             FollowStatus::Arrived => {
+                eprintln!("SPEND arrived after {tick} ticks, {} diverged, max follower spend {} rollout ticks", out.diverged, out.max_spend);
                 (out.end, out.ticks) = (s.pos, tick);
                 return out;
             }
             FollowStatus::Diverged => {
-                eprintln!("tick {tick}: diverged at {:?}, controls {:?}", s.pos, m.controls);
+                eprintln!("tick {tick}: diverged at {:?}, controls {:?}, {spend:?}", s.pos, m.controls);
                 out.diverged += 1;
                 out.held &= m.controls.forward != 0.0;
                 let path = plan(g, m, goal, opts);
@@ -77,6 +98,27 @@ pub fn drive_with(g: &Grid, m: &mut Movement, path: Vec<PathNode>, goal: &Goal, 
         m.tick(&world);
     }
     panic!("not arrived: at {:?}, next {:?}", m.position(), follower.ahead().first());
+}
+
+/// Plans from standing at `from` and follows the plan once per seed of the profile, asserting arrival with
+/// no divergence and, for `Optimal`, every macro move exactly as predicted. `None` without a complete plan.
+pub fn plan_and_follow(g: &Grid, from: Vec3, goal: BlockPos, opts: &SearchOpts, shortcuts: bool) -> Option<(Path, Vec<Outcome>)> {
+    let to = Goal::Block(goal);
+    let path = plan(g, &standing(from), &to, opts);
+    if !path.complete {
+        return None;
+    }
+    let runs: Vec<Outcome> = seeds(opts.profile).iter().map(|&seed| {
+        let o = drive(g, &mut standing(from), path.nodes.clone(), &to, opts, Style { seed, shortcuts }, |_, _| {});
+        eprintln!("{:?} seed {seed} to {goal:?}: {} ticks, max spend {}, reports {:?}", opts.profile, o.ticks, o.max_spend, o.reports);
+        assert_arrived(&o, goal);
+        assert_eq!(o.diverged, 0, "{:?} seed {seed}", opts.profile);
+        if opts.profile == MovementProfile::Optimal {
+            assert_exact(&o);
+        }
+        o
+    }).collect();
+    Some((path, runs))
 }
 
 pub fn assert_arrived(o: &Outcome, goal: BlockPos) {

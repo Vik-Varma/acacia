@@ -15,6 +15,7 @@
 
 mod alter;
 mod astar;
+mod bot_goto;
 mod cache;
 mod cell;
 mod control;
@@ -55,7 +56,7 @@ pub use control::{Controller, Phase, RunCtl};
 pub use mac::Macro;
 pub use shortcut::ShortcutCtl;
 pub use leap::{JumpAt, LeapCtl};
-pub use follow::{FollowStatus, Follower, Sense};
+pub use follow::{FollowStatus, Follower, ROLLOUT_BUDGET, Sense};
 pub use follow_macro::MacroReport;
 pub use goal::Goal;
 pub use goto::{GotoOpts, NavStatus, Navigator};
@@ -63,7 +64,7 @@ pub use kit::{DEFAULT_SCAFFOLD, Kit};
 pub use moves::MoveKind;
 pub use node::{Entry, Mode, Momentum, NodeKey, speed_bin};
 pub use profile::{Aim, MovementProfile, Perturbation};
-pub use rollout::{Body, Trace, peek, run};
+pub use rollout::{Body, Spend, Trace, peek, run};
 pub use snapshot::WorldBlocks;
 pub use terrain::{Blocks, Cell, Spot, SpotKind, Terrain};
 pub use work::{Step, Work};

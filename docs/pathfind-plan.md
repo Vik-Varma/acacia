@@ -154,6 +154,19 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
    any macro (same tolerance, same report). `Macro` moved to `mac.rs` (control ↔ leap/shortcut cycle).
    `GotoOpts::shortcuts` (default on); `Follower::shortcuts(profile)`.
 8. Human complete: aim on all segments incl. walk, perturbations, risk cost; 5 seeds, 0 Diverged failures.
+   As built: `Follower::moving(profile, seed)` (Navigator seeds from `cadence::seed`); classic steering and the
+   work approach turn through the follower's `Aim`; each live macro runs `reseeded` on its own jitter stream (plan
+   stays on `AIM_SEED`), so Human execution differs from the plan and leans on the perturbation sets. Final-node
+   settling stops walking while the eased aim is >30° off (it circled the goal). Tests: `tests::drive`
+   `plan_and_follow`/`seeds` — Optimal once, Human seeds 1–5, every step 4–6b test, all with 0 Diverged.
+   Live re-solve budget: `follow::ROLLOUT_BUDGET` 1500 rollout ticks per follower tick (`Spend`, shortcut search
+   and re-solves share it, a rollout only starts if its cap fits); `retry` = takeoff bisection + coast search
+   (`Solver::first_reaching`/`land`), other coasts only to match velocity, stop within 0.03 b/t. Out of budget →
+   `Diverged` with `spend().short` → Navigator re-plans in the background only (no inline search that tick).
+   Not cached: live states are unquantized and the retry ranks by planned velocity, so `RolloutCache` keys do
+   not fit; the re-plan after it uses the cache. Max per-tick spend over the suite 2443 → 1271. Water landings
+   (Rest entry) no longer re-solve for an arrival velocity they never planned. `off_path` also accepts the next
+   segment (a classic gap jump that carries past its node). Bridging maneuvers (`maneuver.rs`) still snap.
 9. `tests/speed.rs`: ticks-to-goal macros on vs off (flat, diagonal, gaps, stairs); on ≤ off.
 10. `examples/course.rs` parkour legs (gap3, gap4, up1, down2, diag, stones, sprint40), `--profile`, `--macros off`; dedicated strict testbox BDS, 0 corrections both profiles; evidence in `docs/DESIGN.md`.
 11. Stretch: neo jumps (Optimal), ladder jumps.

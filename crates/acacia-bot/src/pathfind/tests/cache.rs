@@ -1,8 +1,7 @@
 //! The rollout cache and budget (plan step 7): cached plans equal uncached ones, re-plans simulate
 //! nothing, and a spent budget leaves classic moves. Bounds are counts, not times, so they hold in debug.
 
-use super::drive::macro_opts;
-use super::leaps::PROFILES;
+use super::drive::{PROFILES, macro_opts};
 use super::perf::{Case, cases, run};
 use crate::pathfind::{MovementProfile, Path, RolloutCache, SearchOpts};
 

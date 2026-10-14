@@ -84,7 +84,7 @@ fn cost_skew_report() {
                 let opts = SearchOpts { macros, ..macro_opts(profile) };
                 let mut m = standing([-20.5, 1.0, 0.5]);
                 let p = super::drive::plan(&g, &m, &goal, &opts);
-                let o = super::drive::drive(&g, &mut m, p.nodes.clone(), &goal, &opts, |_, _| {});
+                let o = super::drive::drive(&g, &mut m, p.nodes.clone(), &goal, &opts, super::drive::Style::default(), |_, _| {});
                 eprintln!("STAT {profile:?} macros {macros} {} blocks: cost {:.1}, executed {} ticks", to + 21, p.cost, o.ticks);
             }
         }
