@@ -2,7 +2,7 @@
 
 use acacia_physics::BlockPos;
 
-use super::control::{Controller, Phase, centre, standing_on, yaw_to};
+use super::control::{Controller, LAND_EPS, Phase, centre, standing_on, yaw_to};
 use super::profile::Aim;
 use super::rollout::Body;
 use crate::movement::Controls;
@@ -39,6 +39,8 @@ pub struct LeapCtl {
     pub yaw_off: f32,
     /// Keep turning at the target in the air (until coasting).
     pub air_aim: bool,
+    /// A hop on flat ground: coming down beside the target at its level is as good.
+    pub slack: bool,
     pub aim: Aim,
     t: u16,
     air: u16,
@@ -51,7 +53,7 @@ pub struct LeapCtl {
 impl LeapCtl {
     pub fn new(target: BlockPos, feet: f32, jump: JumpAt, coast: Option<u8>, aim: Aim) -> Self {
         let (t, air, grounded, jumped, origin, takeoff) = (0, 0, false, false, None, None);
-        Self { target, feet, wet: false, jump, coast, yaw_off: 0.0, air_aim: false, aim, t, air, grounded, jumped, origin, takeoff }
+        Self { target, feet, wet: false, jump, coast, yaw_off: 0.0, air_aim: false, slack: false, aim, t, air, grounded, jumped, origin, takeoff }
     }
 
     /// The tick the jump was pressed on, once it was.
@@ -67,6 +69,10 @@ impl LeapCtl {
     fn landed(&self, b: &Body) -> bool {
         if self.wet {
             return b.cell() == [self.target[0], self.target[2]] && b.pos[1] < (self.target[1] + 1) as f32;
+        }
+        if self.slack {
+            let [x, z] = b.cell();
+            return b.on_ground && (b.pos[1] - self.feet).abs() < LAND_EPS && (x - self.target[0]).abs() <= 1 && (z - self.target[2]).abs() <= 1;
         }
         standing_on(b, self.target, self.feet)
     }

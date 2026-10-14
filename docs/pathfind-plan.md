@@ -81,6 +81,16 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
   `Never` (run off the edge) for drops — a jumped down-2 falls 3.25 and is rejected (fall > 3). Takeoff yaws
   ±11.25/±22.5 + air aim only when a diagonal misses straight. Head-hitters: any ceiling contact rejects.
   Hazard pad is sideways and up, not below the feet (lava level with the floor is cleared).
+- As built (step 6): `hop.rs`. `Run` = `RunCtl` one cell onto a lane ≥4, or up to a gap's edge (≤3); from
+  `Run(d)` only along d. `Hop` = `LeapCtl` jumping at once along d, landing cell found by a free rollout, and
+  `slack` (coming down beside the cell on the level counts). A straight Walk from `Run(d)` along d keeps the
+  momentum (no free stop). Optimal also gets perturbations (start ±0.01) so quantized momentum (≤0.0013 drift)
+  cannot flip a pixel-perfect plan. Margin counts only sides with no floor beyond. Followers re-solve a leap
+  that would arrive >0.03 b/t off the planned velocity, picking the landing nearest it (keeps chains on plan).
+- Measured: steady hop 0.35633 b/t (12-tick hops) → heuristic 2.80 t/b Optimal, 3.27 Human
+  (`costs::macro_ticks_per_block`); plus a startup term from rest, min(4, (3.5638−tpb)·d), checked against
+  sprints from rest. Speed bins [0.12, 0.25, 0.30] (walk 0.216, sprint 0.281, hop landing 0.27–0.29).
+  Human hops rarely pay (HUMAN_JUMP 2 vs 15.2 classic ticks per 4.28 blocks): Human plans classic on short runs.
 
 ### Cache and budget (`pathfind/cache.rs`)
 - Key `(family, params, dir, Momentum, corridor signature hash)`; caches failures too.

@@ -23,6 +23,7 @@ const QUICK_NODES: usize = 5_000;
 const QUICK_BUDGET: Duration = Duration::from_millis(10);
 /// Divergences in a row that re-plan for free; each one past it counts against `max_replans`.
 const MAX_DIVERGED: u32 = 5;
+const HOP_MIN_FOOD: f32 = 6.0;
 
 #[derive(Debug, Clone)]
 pub struct GotoOpts {
@@ -148,6 +149,7 @@ impl Navigator {
     fn drive(&mut self, bot: &mut Bot) -> Result<NavStatus, ActionError> {
         let s = &self.opts.search;
         let kit = (s.allow_dig || s.allow_bridge).then(|| bot.path_kit(&self.opts.scaffold));
+        let opts = self.search_opts(kit, bot.state.player.hunger);
         let (Some(world), Some(movement)) = (bot.world.as_ref(), bot.movement.as_mut()) else {
             return Ok(NavStatus::Searching);
         };
@@ -168,7 +170,7 @@ impl Navigator {
             if !self.diverged_in_air || movement.on_ground() {
                 movement.controls.stop();
             }
-            self.plan(&terrain, view, registry, live_state, kit)?;
+            self.plan(&terrain, view, registry, live_state, opts)?;
             return Ok(NavStatus::Searching);
         };
         let feet = [pos[0].floor() as i32, pos[1].floor() as i32, pos[2].floor() as i32];
@@ -189,7 +191,7 @@ impl Navigator {
                 }
                 self.follower = None;
                 self.diverged_in_air = !movement.on_ground();
-                self.plan(&terrain, view, registry, live_state, kit)?;
+                self.plan(&terrain, view, registry, live_state, opts)?;
             }
             FollowStatus::Work => return Ok(NavStatus::Working),
             FollowStatus::Arrived if !self.partial => return Ok(NavStatus::Arrived),
@@ -205,11 +207,7 @@ impl Navigator {
 
     /// Searches from the live state, so the plan starts with the momentum the bot has (a re-plan after a
     /// divergence keeps running).
-    fn plan(&mut self, terrain: &Terrain<&ChunkView>, view: &ChunkView, registry: &Arc<BlockRegistry>, live: PlayerState, kit: Option<Kit>) -> Result<(), ActionError> {
-        let mut opts = self.opts.search.clone();
-        if let Some(kit) = kit {
-            opts.kit = kit;
-        }
+    fn plan(&mut self, terrain: &Terrain<&ChunkView>, view: &ChunkView, registry: &Arc<BlockRegistry>, live: PlayerState, opts: SearchOpts) -> Result<(), ActionError> {
         let quick = search_from(terrain, &live, &self.goal, &SearchOpts { max_nodes: QUICK_NODES, budget: QUICK_BUDGET, ..opts.clone() });
         if quick.complete {
             return self.accept(quick, live.pos);
@@ -219,6 +217,17 @@ impl Navigator {
             search_from(&Terrain::new(WorldBlocks::new(world), &registry), &live, &goal, &opts)
         }));
         Ok(())
+    }
+
+    /// The search settings for now: the inventory's kit, and no flat hops at food 6 or less (sprinting
+    /// stops there, and hops burn the most food).
+    pub(crate) fn search_opts(&self, kit: Option<Kit>, food: f32) -> SearchOpts {
+        let mut opts = self.opts.search.clone();
+        if let Some(kit) = kit {
+            opts.kit = kit;
+        }
+        opts.hops &= food > HOP_MIN_FOOD;
+        opts
     }
 
     fn accept(&mut self, path: Path, pos: Vec3) -> Result<(), ActionError> {

@@ -43,9 +43,10 @@ impl NodeKey {
     }
 }
 
-/// Upper edges (blocks/tick) of the `Entry::Run` speed bins below the top one: walking, sprinting on
-/// the ground, sprint-jumping. Placeholders until hop speeds are measured (plan step 6).
-const SPEED_BINS: [f32; 3] = [0.15, 0.25, 0.32];
+/// Upper edges (blocks/tick) of the `Entry::Run` speed bins below the top one, between measured speeds:
+/// starting off (< 0.12), walking 0.216 or a short run, ground sprint 0.281 and hop landings 0.27–0.29,
+/// just after a jump's push (0.30–0.33).
+const SPEED_BINS: [f32; 3] = [0.12, 0.25, 0.30];
 
 /// The `Entry::Run` bin (0..=3) of a horizontal speed.
 pub fn speed_bin(h_speed: f32) -> u8 {
@@ -118,6 +119,11 @@ impl Momentum {
         [0, 1, 2].map(|i| at[i] as f32 + self.off[i] as f32 / OFF_Q)
     }
 
+    /// Blocks per tick.
+    pub fn velocity(&self) -> Vec3 {
+        self.vel.map(|v| v as f32 / VEL_Q)
+    }
+
     pub fn has(&self, flag: u8) -> bool {
         self.flags & flag != 0
     }
@@ -126,7 +132,7 @@ impl Momentum {
     /// come from `base` (the live state), everything transient starts from rest.
     pub fn synth(&self, at: BlockPos, base: &PlayerState) -> PlayerState {
         let mut st = PlayerState::new(self.feet(at));
-        st.vel = self.vel.map(|v| v as f32 / VEL_Q);
+        st.vel = self.velocity();
         st.last_vel = st.vel;
         st.yaw = self.yaw_q as f32 / YAW_Q;
         st.on_ground = self.has(ON_GROUND);

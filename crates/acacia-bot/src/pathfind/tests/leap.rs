@@ -8,7 +8,7 @@ use acacia_physics::{BlockPos, Vec3};
 use super::drive::{Outcome, assert_arrived, assert_exact, drive, macro_opts, standing};
 use super::grid::Grid;
 use crate::movement::Movement;
-use crate::pathfind::{Aim, Entry, Goal, JumpAt, LeapCtl, Macro, MoveKind, MovementProfile, PathNode, Work, run};
+use crate::pathfind::{Aim, Entry, Goal, JumpAt, LeapCtl, Macro, Momentum, MoveKind, MovementProfile, PathNode, Work, run};
 use crate::state::Me;
 use crate::state::queries::test_support::raw;
 
@@ -25,7 +25,7 @@ fn gap() -> Grid {
 }
 
 fn node(pos: BlockPos, kind: MoveKind, mac: Option<Macro>) -> PathNode {
-    PathNode { pos, feet: pos[1] as f32, kind, wet: false, work: Work::default(), entry: Entry::Rest, mac }
+    PathNode { pos, feet: pos[1] as f32, kind, wet: false, work: Work::default(), entry: Entry::Rest, mom: Momentum::rest(pos[1] as f32, pos), mac }
 }
 
 /// A leap from the run-up over the gap, then walking on to the goal, with the coast picked by hand.

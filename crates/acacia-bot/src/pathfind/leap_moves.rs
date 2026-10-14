@@ -8,7 +8,7 @@ use acacia_physics::BlockPos;
 
 use super::cell::Rect;
 use super::moves::offset;
-use super::solve::{STRAIGHT, Shape, Solved, Solver, WIDE};
+use super::solve::{Miss, STRAIGHT, Shape, Solved, Solver, WIDE};
 use super::terrain::{Blocks, Spot, SpotKind, Terrain};
 use crate::movement::Rollout;
 
@@ -23,8 +23,14 @@ const MAX_WATER_DROP: i32 = 16;
 /// A landing column relative to the node and the cells the straight line to it crosses.
 struct Offset {
     to: (i32, i32),
+    /// `to` divided by its components' greatest common divisor: offsets on one line share it.
+    unit: (i32, i32),
     crossed: Vec<(i32, i32)>,
     diagonal: bool,
+}
+
+fn gcd(a: i32, b: i32) -> i32 {
+    if b == 0 { a.abs() } else { gcd(b, a % b) }
 }
 
 /// Every offset, nearest first, so a blocked cell is found before the targets it shadows.
@@ -33,7 +39,12 @@ static OFFSETS: LazyLock<Vec<Offset>> = LazyLock::new(|| {
     tos = tos.iter().flat_map(|&(a, b)| [(a, b), (b, a)]).flat_map(|(a, b)| [(a, b), (-a, b), (a, -b), (-a, -b)]).collect();
     tos.sort_by_key(|&(a, b)| (a * a + b * b, a, b));
     tos.dedup();
-    tos.into_iter().map(|to| Offset { to, crossed: crossed(to), diagonal: to.0 != 0 && to.1 != 0 }).collect()
+    tos.into_iter()
+        .map(|to| {
+            let g = gcd(to.0, to.1);
+            Offset { to, unit: (to.0 / g, to.1 / g), crossed: crossed(to), diagonal: to.0 != 0 && to.1 != 0 }
+        })
+        .collect()
 });
 
 /// Cells (besides both ends) the segment between the two cell centres passes through.
@@ -86,6 +97,8 @@ pub(crate) fn leaps<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, start: &
         cells.push(((dx, dz, diagonal), clear, gap));
         (clear, gap)
     };
+    // Lines (unit step, landing dy) on which a nearer leap fell short: farther ones would too.
+    let mut short: Vec<((i32, i32), i32)> = Vec::new();
     for off in OFFSETS.iter() {
         let mut gap = false;
         let clear = off.crossed.iter().all(|&c| {
@@ -98,11 +111,20 @@ pub(crate) fn leaps<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, start: &
         }
         let start = facing(start, off.to.0 as f32, off.to.1 as f32);
         for (q, to) in landings(t, offset(p, off.to.0, 0, off.to.1)) {
+            let line = (off.unit, q[1] - p[1]);
+            if short.contains(&line) {
+                continue;
+            }
             let straight = Shape { drop: to.wet || q[1] < p[1], ..STRAIGHT };
             let wide = Shape { drop: straight.drop, ..WIDE };
-            let solved = solver.solve(&start, q, to.feet, to.wet, straight);
-            if let Some(s) = solved.or_else(|| off.diagonal.then(|| solver.solve(&start, q, to.feet, to.wet, wide)).flatten()) {
-                found.push((q, to, s));
+            let mut solved = solver.solve(&start, q, to.feet, to.wet, straight);
+            if off.diagonal && solved.is_err() {
+                solved = solver.solve(&start, q, to.feet, to.wet, wide);
+            }
+            match solved {
+                Ok(s) => found.push((q, to, s)),
+                Err(Miss::Short) => short.push(line),
+                Err(Miss::Other) => {}
             }
         }
     }

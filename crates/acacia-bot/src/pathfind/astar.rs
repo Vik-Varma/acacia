@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use acacia_physics::{BlockPos, PlayerState, Vec3};
 
 use super::control::Macro;
+use super::costs;
 use super::goal::{Goal, Speed};
 use super::kit::Kit;
 use super::macros::Macros;
@@ -43,6 +44,8 @@ pub struct SearchOpts {
     pub profile: MovementProfile,
     /// Plan macro moves (leaps found by simulation) instead of the classic gap jump.
     pub macros: bool,
+    /// Sprint-jump along flat ground (macro moves). [`Bot::goto`](crate::Bot::goto) turns it off at food 6 or less.
+    pub hops: bool,
 }
 
 impl Default for SearchOpts {
@@ -57,13 +60,19 @@ impl Default for SearchOpts {
             kit: Kit::default(),
             profile: MovementProfile::Optimal,
             macros: true,
+            hops: true,
         }
     }
 }
 
 impl SearchOpts {
+    /// The heuristic's speed: macro moves sprint-jump, and change height on the way.
     pub(crate) fn speed(&self) -> Speed {
-        Speed::CLASSIC
+        if self.macros {
+            Speed { per_block: costs::macro_ticks_per_block(self.profile), startup: costs::MACRO_STARTUP, overlap: true }
+        } else {
+            Speed::CLASSIC
+        }
     }
 }
 
@@ -175,10 +184,10 @@ pub fn search_from<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal, o
     let mut open = BinaryHeap::from([Open { f: 0.0, g: 0.0, index: 0 }]);
     let speed = opts.speed();
     let mut best = [0u32; 7];
-    let mut best_score = [goal.estimate(start.pos, speed); 7];
+    let mut best_score = [goal.estimate(start.pos, speed, entry == Entry::Rest); 7];
     let mut edges: Vec<Edge> = Vec::with_capacity(32);
     let mut visited = 0;
-    let macros = opts.macros.then(|| Macros { profile: opts.profile, leaps: opts.parkour, base: live, rollouts: Cell::new(0) });
+    let macros = opts.macros.then(|| Macros { profile: opts.profile, leaps: opts.parkour, hops: opts.hops, base: live, rollouts: Cell::new(0) });
     let mut ctx = Ctx { parkour: opts.parkour, dig: opts.allow_dig, bridge: opts.allow_bridge, doors: opts.open_doors, kit: &opts.kit, blocks_left: 0, macros };
     let rollouts = |ctx: &Ctx| ctx.macros.as_ref().map_or(0, |m| m.rollouts.get());
 
@@ -191,7 +200,8 @@ pub fn search_from<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal, o
             return Path { nodes: reconstruct(&recs, &works, &macs, i), complete: true, cost: g, visited, rollouts: rollouts(&ctx) };
         }
         visited += 1;
-        if visited >= opts.max_nodes || (visited % 512 == 0 && started.elapsed() >= opts.budget) {
+        // Checked often: a node with macro moves costs many rollouts.
+        if visited >= opts.max_nodes || (visited % 8 == 0 && started.elapsed() >= opts.budget) {
             break;
         }
         edges.clear();
@@ -225,7 +235,7 @@ pub fn search_from<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal, o
                 macs.push(m);
             }
             recs[j as usize] = next;
-            let h = goal.estimate(e.pos, speed);
+            let h = goal.estimate(e.pos, speed, e.entry == Entry::Rest);
             open.push(Open { f: g2 + h, g: g2, index: j });
             for (k, c) in COEFFICIENTS.iter().enumerate() {
                 let score = h + g2 / c;
@@ -245,7 +255,7 @@ fn reconstruct(recs: &[Rec], works: &[Work], macs: &[Macro], mut i: u32) -> Vec<
     while let Some(r) = recs.get(i as usize).filter(|r| r.parent != NONE) {
         let work = works.get(r.work as usize).copied().unwrap_or_default();
         let mac = macs.get(r.mac as usize).copied();
-        nodes.push(PathNode { pos: r.key.pos, feet: r.spot.feet, kind: r.kind, wet: r.spot.wet, work, entry: r.key.entry, mac });
+        nodes.push(PathNode { pos: r.key.pos, feet: r.spot.feet, kind: r.kind, wet: r.spot.wet, work, entry: r.key.entry, mom: r.mom, mac });
         i = r.parent;
     }
     nodes.reverse();

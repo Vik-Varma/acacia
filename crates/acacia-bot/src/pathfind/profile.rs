@@ -24,6 +24,16 @@ impl Perturbation {
     pub const NOMINAL: Perturbation = Perturbation { jump: 0, yaw: 0.0, start: 0.0 };
 }
 
+/// `Optimal` plans from quantized momentum (`node::Momentum`, ≤ 0.0013 blocks off over 30 ticks): a macro
+/// move must also land from a start this far off, or the live run misses what the plan hit.
+const QUANTUM_SLOP: f32 = 0.01;
+
+const OPTIMAL_PERTURBATIONS: [Perturbation; 3] = [
+    Perturbation::NOMINAL,
+    Perturbation { start: QUANTUM_SLOP, ..Perturbation::NOMINAL },
+    Perturbation { start: -QUANTUM_SLOP, ..Perturbation::NOMINAL },
+];
+
 const HUMAN_PERTURBATIONS: [Perturbation; 7] = [
     Perturbation::NOMINAL,
     Perturbation { jump: 1, ..Perturbation::NOMINAL },
@@ -54,7 +64,7 @@ impl MovementProfile {
     /// The executions a macro move must survive to be planned.
     pub fn perturbations(self) -> &'static [Perturbation] {
         match self {
-            MovementProfile::Optimal => &[Perturbation::NOMINAL],
+            MovementProfile::Optimal => &OPTIMAL_PERTURBATIONS,
             MovementProfile::Human => &HUMAN_PERTURBATIONS,
         }
     }

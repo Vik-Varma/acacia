@@ -3,6 +3,8 @@
 
 use acacia_physics::constants::{CLIMB_SPEED, NORMAL_GRAVITY, NORMAL_GRAVITY_MULTIPLIER};
 
+use super::profile::MovementProfile;
+
 pub const WALK: f32 = 20.0 / 4.317;
 pub const SPRINT: f32 = 20.0 / 5.612;
 pub const WALK_OFF: f32 = WALK * 0.8;
@@ -17,6 +19,23 @@ pub const DANGER_NEAR: f32 = 20.0;
 pub const LONG_JUMP_PENALTY: f32 = 2.0;
 /// Sprint cost per block: turns heuristic distance into ticks (Baritone `costHeuristic`).
 pub const COST_HEURISTIC: f32 = 3.563;
+/// Steady sprint-jumping on flat ground: 0.35633 blocks per tick, one hop per 12 ticks (measured by
+/// `tests::hops::steady_hop_speed_bounds_the_heuristic`).
+pub const HOP_SPEED: f32 = 0.3563;
+pub const HOP_TICKS: f32 = 12.0;
+/// Least ticks a run from standing loses against steady hops over three blocks or more (measured 4.1 at the
+/// first landing; `tests::hops::steady_hop_speed_bounds_the_heuristic` checks the bound).
+pub const MACRO_STARTUP: f32 = 4.0;
+
+/// Fewest ticks per block any move achieves with macro moves on: steady hops (plus the `Human` jump
+/// hesitation, unless plain sprinting is faster), rounded down so the heuristic stays admissible.
+pub fn macro_ticks_per_block(profile: MovementProfile) -> f32 {
+    let hop = match profile {
+        MovementProfile::Optimal => 1.0 / HOP_SPEED,
+        MovementProfile::Human => ((HOP_TICKS + HUMAN_JUMP) / (HOP_TICKS * HOP_SPEED)).min(SPRINT),
+    };
+    (hop * 100.0).floor() / 100.0
+}
 /// Sneaking to an edge to bridge (Baritone `SNEAK_ONE_BLOCK_COST`).
 pub const SNEAK: f32 = 20.0 / 1.3;
 /// On top of the break time, for tool switches and the risk (Baritone `blockBreakAdditionalPenalty`).

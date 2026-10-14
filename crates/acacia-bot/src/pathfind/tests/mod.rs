@@ -1,6 +1,7 @@
 mod alter;
 mod alter_sim;
 mod grid;
+mod hops;
 mod drive;
 mod leap;
 mod leaps;

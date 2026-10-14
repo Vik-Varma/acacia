@@ -24,8 +24,12 @@ pub enum MoveKind {
     Ascend,
     /// Walk off an edge and fall.
     Descend,
-    /// Sprint-jump over a one- or two-block gap.
+    /// Sprint-jump over a gap (a leap when macro moves are on).
     Parkour,
+    /// Sprint a few cells to arrive running (macro).
+    Run,
+    /// Sprint-jump along flat ground from a run (macro).
+    Hop,
     ClimbUp,
     ClimbDown,
     Swim,
@@ -82,6 +86,7 @@ pub(crate) fn successors<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, at:
         let level = t.spot(side);
         if let Some(to) = level {
             horizontal(t, p, from, side, to, (dx, dz), out);
+            carry_run(&mut out[start..], at, (dx, dz));
         }
         let up = offset(side, 0, 1, 0);
         if let Some(to) = t.spot(up) {
@@ -98,6 +103,18 @@ pub(crate) fn successors<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, at:
     }
     vertical(t, p, from, out);
     alter::vertical(t, p, from, ctx, out);
+}
+
+/// Walking on along the direction of a run keeps the run's momentum (one block on): a running player
+/// cannot stop dead, and leaps from the next cell start from that speed.
+fn carry_run(edges: &mut [Edge], (entry, mom): (Entry, &Momentum), dir: (i32, i32)) {
+    let Entry::Run(d, _) = entry else { return };
+    if DIRS[usize::from(d)] != dir {
+        return;
+    }
+    for e in edges.iter_mut().filter(|e| e.kind == MoveKind::Walk && e.work.is_empty()) {
+        (e.entry, e.mom) = (entry, *mom);
+    }
 }
 
 fn horizontal<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, to_pos: BlockPos, to: Spot, (dx, dz): (i32, i32), out: &mut Vec<Edge>) {

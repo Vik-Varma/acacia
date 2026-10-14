@@ -23,6 +23,7 @@ mod follow;
 mod follow_macro;
 mod goal;
 mod goto;
+mod hop;
 mod kit;
 mod leap;
 mod leap_moves;
@@ -71,6 +72,8 @@ pub struct PathNode {
     pub work: Work,
     /// The motion the node is reached with.
     pub entry: Entry,
+    /// That motion as planned (the standing one for `Entry::Rest`).
+    pub mom: Momentum,
     /// The controller that reaches the node from the previous one, for macro moves.
     pub mac: Option<Macro>,
 }

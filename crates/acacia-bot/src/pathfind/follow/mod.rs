@@ -179,7 +179,7 @@ impl Follower {
         };
         let wanted = !s.in_water
             && match node.kind {
-                MoveKind::Parkour => true,
+                MoveKind::Parkour | MoveKind::Run | MoveKind::Hop => true,
                 MoveKind::Walk => self.straight_run() >= SPRINT_RUN || self.runs_into_macro(),
                 _ => false,
             };
@@ -265,7 +265,7 @@ impl Follower {
             MoveKind::Ascend => h < radius && dy > -0.25 && dy < 0.6,
             MoveKind::Parkour | MoveKind::Descend | MoveKind::Down => h < radius.max(0.35) && dy.abs() < 0.5 && (s.on_ground || s.in_water),
             MoveKind::Pillar => h < 0.5 && dy > -0.1 && dy < 0.6 && s.on_ground,
-            MoveKind::Walk | MoveKind::Swim => h < radius && dy.abs() < 0.6,
+            MoveKind::Walk | MoveKind::Swim | MoveKind::Run | MoveKind::Hop => h < radius && dy.abs() < 0.6,
         }
     }
 

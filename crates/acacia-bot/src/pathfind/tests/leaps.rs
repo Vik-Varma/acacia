@@ -76,7 +76,8 @@ fn plans_a_leap_from_live_momentum() {
     let goal = Goal::Block([7, 1, 0]);
     let opts = macro_opts(MovementProfile::Optimal);
     let path = plan(&g, &m, &goal, &opts);
-    assert!(path.complete && path.nodes[0].mac.is_some(), "{:?}", path.nodes);
+    let standing_there = plan(&g, &standing(m.position().unwrap()), &goal, &opts);
+    assert!(path.complete && path.cost <= standing_there.cost, "{} vs {}: {:?}", path.cost, standing_there.cost, path.nodes);
     let o = drive(&g, &mut m, path.nodes, &goal, &opts, |_, _| {});
     assert_arrived(&o, [7, 1, 0]);
     assert_exact(&o);

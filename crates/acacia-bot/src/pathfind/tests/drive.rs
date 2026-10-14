@@ -11,7 +11,8 @@ use crate::movement::Movement;
 use crate::pathfind::{FollowStatus, Follower, Goal, MacroReport, MovementProfile, Path, PathNode, SearchOpts, search_from};
 
 pub fn macro_opts(profile: MovementProfile) -> SearchOpts {
-    SearchOpts { max_nodes: 50_000, budget: Duration::from_secs(20), profile, ..SearchOpts::default() }
+    // Bounded by nodes, not time: debug builds simulate slowly, and a timed-out plan would be a flaky one.
+    SearchOpts { max_nodes: 20_000, budget: Duration::from_secs(3600), profile, ..SearchOpts::default() }
 }
 
 /// A movement standing at `feet`, facing +x.
