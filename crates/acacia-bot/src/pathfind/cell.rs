@@ -38,6 +38,11 @@ impl Cell {
         self.flags & flags != 0
     }
 
+    /// The block and liquid ids together: cells with equal ids are equal.
+    pub(crate) fn id(&self) -> u64 {
+        u64::from(self.block) << 32 | u64::from(self.liquid)
+    }
+
     pub fn is_water(&self) -> bool {
         self.has(WATER)
     }

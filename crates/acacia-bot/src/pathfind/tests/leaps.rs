@@ -95,14 +95,3 @@ fn human_detours_around_a_pixel_perfect_gap() {
     let human = leap_and_follow(&g, [0.5, 1.0, 0.5], goal, MovementProfile::Human).expect("human plan");
     assert!(human.iter().all(|(k, p)| *k != MoveKind::Parkour || p[0] < 5), "{human:?}");
 }
-
-#[test]
-fn perf_gap_course() {
-    let g = gap_course(3);
-    let m = standing([-8.5, 1.0, 0.5]);
-    for profile in PROFILES {
-        let p = plan(&g, &m, &Goal::Block([10, 1, 0]), &macro_opts(profile));
-        eprintln!("PERF gap course {profile:?}: visited {}, rollouts {}", p.visited, p.rollouts);
-        assert!(p.complete);
-    }
-}

@@ -15,6 +15,7 @@ use acacia_world::{Aabb, BlockAccess, BlockRegistry, BlockState, ChunkView};
 
 pub use super::cell::Cell;
 use super::cell::{AVOID, DANGER_NEAR, HURT_FLOOR, LIQUID, OPENABLE, Rect, UNLOADED, WATER, state_flags};
+use super::memo::CellMemo;
 
 pub(crate) const EPS: f32 = 1e-3;
 
@@ -105,23 +106,25 @@ impl Span {
 pub struct Terrain<'r, B> {
     blocks: B,
     registry: &'r BlockRegistry,
-    cells: RefCell<PosMap<Cell>>,
+    pub(crate) cells: CellMemo,
     spots: RefCell<PosMap<Option<Spot>>>,
     toggled: RefCell<HashMap<u32, Option<u32>>>,
 }
 
 impl<'r, B: Blocks> Terrain<'r, B> {
     pub fn new(blocks: B, registry: &'r BlockRegistry) -> Self {
-        Self { blocks, registry, cells: RefCell::default(), spots: RefCell::default(), toggled: RefCell::default() }
+        let (cells, spots, toggled) = Default::default();
+        Self { blocks, registry, cells, spots, toggled }
     }
 
     pub fn cell(&self, p: BlockPos) -> Cell {
-        if let Some(c) = self.cells.borrow().get(&p) {
-            return *c;
-        }
-        let c = self.classify(p);
-        self.cells.borrow_mut().insert(p, c);
-        c
+        self.cells.get(p, || self.classify(p))
+    }
+
+    /// Runs `f`, returning what it returned and every cell it read (directly or through a spot), as
+    /// ([`Cell::id`]) by position. Not reentrant.
+    pub(crate) fn record<R>(&self, f: impl FnOnce() -> R) -> (R, Vec<(BlockPos, u64)>) {
+        self.cells.record(f)
     }
 
     fn classify(&self, p: BlockPos) -> Cell {
@@ -153,6 +156,10 @@ impl<'r, B: Blocks> Terrain<'r, B> {
 
     /// Where the player can be with feet in cell `p`, if anywhere.
     pub fn spot(&self, p: BlockPos) -> Option<Spot> {
+        if self.cells.recording() {
+            // Every cell a spot depends on (support and body clearance), memoized or not.
+            (-2..=2).for_each(|dy| _ = self.cell([p[0], p[1] + dy, p[2]]));
+        }
         if let Some(s) = self.spots.borrow().get(&p) {
             return *s;
         }

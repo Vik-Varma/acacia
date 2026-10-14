@@ -10,7 +10,8 @@ use super::costs::{COST_HEURISTIC, HOP_SPEED};
 use super::moves::MoveKind;
 use super::profile::{Aim, MovementProfile};
 use super::rollout::Body;
-use super::solve::{AIM_SEED, Solver, live_hazard};
+use super::retry::live_hazard;
+use super::solve::{AIM_SEED, Solver};
 use crate::movement::{Controls, Rollout};
 
 /// Nodes ahead tried, farthest first.
@@ -64,7 +65,7 @@ pub(super) fn find(path: &[PathNode], index: usize, live: &Rollout, w: &dyn Worl
     let reach = path[index..].iter().take_while(|n| flat(n, level)).count();
     let avoid = |p: BlockPos| live_hazard(w, p);
     let held = Controls { yaw: live.st.yaw, ..Controls::default() };
-    let mut solver = Solver { w, avoid: &avoid, pad: profile.hazard_pad(), safe: &|_| false, profile, perturb: false, held, rollouts: 0 };
+    let mut solver = Solver::new(w, &avoid, &|_| false, profile, false, held);
     for k in AHEAD.into_iter().filter(|&k| k < reach) {
         let j = index + k;
         let along = polyline(live, &path[index..=j]);

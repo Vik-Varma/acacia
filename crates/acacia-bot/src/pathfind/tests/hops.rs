@@ -109,22 +109,3 @@ fn hunger_gate_drops_flat_hops_but_not_leaps() {
     assert!(p.complete && p.nodes.iter().all(|n| n.kind != MoveKind::Hop), "{:?}", p.nodes);
     assert!(p.nodes.iter().any(|n| n.kind == MoveKind::Parkour), "{:?}", p.nodes);
 }
-
-#[test]
-fn perf_flat_80_blocks() {
-    let g = Grid::floor(-32, 47);
-    let m = standing([-31.5, 1.0, 0.5]);
-    let goal = Goal::Block([47, 1, 0]);
-    // Human is capped: without step 7's rollout cache it does not finish in a debug build's patience.
-    for (name, opts) in [
-        ("macros off", SearchOpts { macros: false, ..macro_opts(MovementProfile::Optimal) }),
-        ("Optimal", macro_opts(MovementProfile::Optimal)),
-        ("Human (capped)", SearchOpts { max_nodes: 1500, ..macro_opts(MovementProfile::Human) }),
-    ] {
-        let t0 = std::time::Instant::now();
-        let p = plan(&g, &m, &goal, &opts);
-        let ms = t0.elapsed().as_secs_f32() * 1000.0;
-        eprintln!("PERF flat 80 {name}: visited {}, rollouts {}, {ms:.0} ms, cost {:.0}, complete {}", p.visited, p.rollouts, p.cost, p.complete);
-        assert!(p.complete || opts.profile == MovementProfile::Human, "{name}");
-    }
-}

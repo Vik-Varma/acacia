@@ -1,6 +1,6 @@
 //! A* over feet block positions with Baritone's best-partial-path fallback (azalea `astar/mod.rs`).
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::collections::hash_map::Entry as Slot;
@@ -12,7 +12,8 @@ use super::mac::Macro;
 use super::costs;
 use super::goal::{Goal, Speed};
 use super::kit::Kit;
-use super::macros::Macros;
+use super::cache::RolloutCache;
+use super::macros::{MacroStats, Macros};
 use super::moves::{self, Ctx, Edge, MoveKind};
 use super::node::{Entry, KeyMap, Momentum, NodeKey, run_entry};
 use super::profile::MovementProfile;
@@ -46,6 +47,8 @@ pub struct SearchOpts {
     pub macros: bool,
     /// Sprint-jump along flat ground (macro moves). [`Bot::goto`](crate::Bot::goto) turns it off at food 6 or less.
     pub hops: bool,
+    /// Rollout ticks the search may simulate for macro moves; once spent, nodes get classic moves only.
+    pub max_rollout_ticks: u64,
 }
 
 impl Default for SearchOpts {
@@ -61,6 +64,7 @@ impl Default for SearchOpts {
             profile: MovementProfile::Optimal,
             macros: true,
             hops: true,
+            max_rollout_ticks: 400_000,
         }
     }
 }
@@ -87,8 +91,7 @@ pub struct Path {
     pub cost: f32,
     /// Nodes expanded.
     pub visited: usize,
-    /// Macro-move simulations run.
-    pub rollouts: u32,
+    pub macro_stats: MacroStats,
 }
 
 #[derive(Clone, Copy)]
@@ -164,8 +167,14 @@ pub fn search<B: Blocks>(t: &Terrain<B>, feet: Vec3, goal: &Goal, opts: &SearchO
 /// Searches from the player's live state: its momentum is the start node's, and its attributes and
 /// effects shape every macro move.
 pub fn search_from<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal, opts: &SearchOpts) -> Path {
+    search_cached(t, live, goal, opts, &mut RolloutCache::default())
+}
+
+/// [`search_from`] reusing (and adding to) the macro-move results in `cache`; they are dropped first if
+/// they were found for another profile or player.
+pub fn search_cached<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal, opts: &SearchOpts, cache: &mut RolloutCache) -> Path {
     let started = Instant::now();
-    let empty = |complete| Path { nodes: Vec::new(), complete, cost: 0.0, visited: 0, rollouts: 0 };
+    let empty = |complete| Path { nodes: Vec::new(), complete, cost: 0.0, visited: 0, macro_stats: MacroStats::default() };
     let Some((start, spot)) = start_node(t, live.pos) else { return empty(false) };
     if goal.success(start) {
         return empty(true);
@@ -187,9 +196,18 @@ pub fn search_from<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal, o
     let mut best_score = [goal.estimate(start.pos, speed, entry == Entry::Rest); 7];
     let mut edges: Vec<Edge> = Vec::with_capacity(32);
     let mut visited = 0;
-    let macros = opts.macros.then(|| Macros { profile: opts.profile, leaps: opts.parkour, hops: opts.hops, base: live, rollouts: Cell::new(0) });
+    cache.claim(opts.profile, live);
+    let macros = opts.macros.then(|| Macros {
+        profile: opts.profile,
+        leaps: opts.parkour,
+        hops: opts.hops,
+        base: live,
+        cache: RefCell::new(cache),
+        budget: opts.max_rollout_ticks,
+        stats: Cell::default(),
+    });
     let mut ctx = Ctx { parkour: opts.parkour, dig: opts.allow_dig, bridge: opts.allow_bridge, doors: opts.open_doors, kit: &opts.kit, blocks_left: 0, macros };
-    let rollouts = |ctx: &Ctx| ctx.macros.as_ref().map_or(0, |m| m.rollouts.get());
+    let stats = |ctx: &Ctx| ctx.macros.as_ref().map_or_else(MacroStats::default, |m| m.stats.get());
 
     while let Some(Open { g, index: i, .. }) = open.pop() {
         let rec = recs[i as usize];
@@ -197,7 +215,7 @@ pub fn search_from<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal, o
             continue;
         }
         if goal.success(rec.key.pos) {
-            return Path { nodes: reconstruct(&recs, &works, &macs, i), complete: true, cost: g, visited, rollouts: rollouts(&ctx) };
+            return Path { nodes: reconstruct(&recs, &works, &macs, i), complete: true, cost: g, visited, macro_stats: stats(&ctx) };
         }
         visited += 1;
         // Checked often: a node with macro moves costs many rollouts.
@@ -247,7 +265,7 @@ pub fn search_from<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal, o
     }
     let pick = best.iter().copied().find(|&b| b != 0).unwrap_or(0);
     let cost = recs[pick as usize].g;
-    Path { nodes: reconstruct(&recs, &works, &macs, pick), complete: false, cost, visited, rollouts: rollouts(&ctx) }
+    Path { nodes: reconstruct(&recs, &works, &macs, pick), complete: false, cost, visited, macro_stats: stats(&ctx) }
 }
 
 fn reconstruct(recs: &[Rec], works: &[Work], macs: &[Macro], mut i: u32) -> Vec<PathNode> {

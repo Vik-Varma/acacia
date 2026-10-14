@@ -15,6 +15,7 @@
 
 mod alter;
 mod astar;
+mod cache;
 mod cell;
 mod control;
 mod costs;
@@ -24,16 +25,19 @@ mod follow_macro;
 mod goal;
 mod goto;
 mod hop;
+mod judge;
 mod kit;
 mod leap;
 mod leap_moves;
 mod mac;
 mod macros;
 mod maneuver;
+mod memo;
 mod moves;
 mod node;
 mod physview;
 mod profile;
+mod retry;
 mod rollout;
 mod shortcut;
 mod snapshot;
@@ -44,7 +48,9 @@ mod work;
 #[cfg(test)]
 mod tests;
 
-pub use astar::{Path, SearchOpts, search, search_from, start_node};
+pub use astar::{Path, SearchOpts, search, search_cached, search_from, start_node};
+pub use cache::RolloutCache;
+pub use macros::MacroStats;
 pub use control::{Controller, Phase, RunCtl};
 pub use mac::Macro;
 pub use shortcut::ShortcutCtl;

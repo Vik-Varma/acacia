@@ -5,9 +5,12 @@
 use std::sync::LazyLock;
 
 use acacia_physics::BlockPos;
+use acacia_physics::constants::DEFAULT_MOVEMENT_SPEED;
 
+use super::cache::{RolloutCache, feet_key};
 use super::cell::Rect;
 use super::moves::offset;
+use super::node::Momentum;
 use super::solve::{Miss, STRAIGHT, Shape, Solved, Solver, WIDE};
 use super::terrain::{Blocks, Spot, SpotKind, Terrain};
 use crate::movement::Rollout;
@@ -19,6 +22,11 @@ const DIAGONALS: [(i32, i32); 5] = [(2, 1), (2, 2), (3, 1), (3, 2), (4, 1)];
 const DRY_DY: [i32; 5] = [1, 0, -1, -2, -3];
 /// Deepest drop scanned for a water landing.
 const MAX_WATER_DROP: i32 = 16;
+/// Widest gap a sprint-jump clears onto a floor no lower than the takeoff, without speed or jump effects
+/// (`tests::leaps`: four lands, five never does).
+const MAX_FLAT_GAP: usize = 4;
+/// Horizontal speed (blocks per tick) from which a node counts as running (`node::speed_bin` 1 and up).
+const RUNNING: f32 = 0.12;
 
 /// A landing column relative to the node and the cells the straight line to it crosses.
 struct Offset {
@@ -81,46 +89,49 @@ fn landings<B: Blocks>(t: &Terrain<B>, c: BlockPos) -> Vec<(BlockPos, Spot)> {
 }
 
 /// The leaps from `p` (standing at `from`), solved from `start`.
-pub(crate) fn leaps<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, start: &Rollout, solver: &mut Solver<Terrain<B>>) -> Vec<(BlockPos, Spot, Solved)> {
+pub(crate) fn leaps<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, mom: &Momentum, start: &Rollout, solver: &mut Solver<Terrain<B>>, cache: &mut RolloutCache) -> Vec<(BlockPos, Spot, Solved)> {
     let mut found = Vec::new();
-    // Per crossed cell and lane shape: (body clear at takeoff and jump height, no floor at the start's level).
-    let mut cells: Vec<((i32, i32, bool), bool, bool)> = Vec::new();
-    let mut probe = |(dx, dz): (i32, i32), diagonal: bool| {
-        if let Some(&(_, clear, gap)) = cells.iter().find(|e| e.0 == (dx, dz, diagonal)) {
-            return (clear, gap);
-        }
+    // Per crossed cell: no floor at the start's level; per cell and lane shape: body clear at takeoff and jump height.
+    const W: i32 = 2 * MAX_CARDINAL + 1;
+    let at = |(dx, dz): (i32, i32)| ((dx + MAX_CARDINAL) * W + dz + MAX_CARDINAL) as usize;
+    let (mut gaps, mut clears) = ([None; (W * W) as usize], [[None; 2]; (W * W) as usize]);
+    let mut gap = |c: (i32, i32)| {
+        let q = offset(p, c.0, 0, c.1);
+        *gaps[at(c)].get_or_insert_with(|| t.spot(q).is_none() && t.spot(offset(q, 0, 1, 0)).is_none())
+    };
+    let mut clear = |(dx, dz): (i32, i32), diagonal: bool| {
         let q = offset(p, dx, 0, dz);
         // Cardinal lanes are crossed at the body's width, diagonal ones anywhere in the cell.
         let rect = if diagonal { Rect::lane(1, 1) } else { Rect::lane(dx.signum(), dz.signum()) };
-        let clear = t.body_clear(q, rect, from.feet) && t.body_clear(q, rect, from.feet + 1.0);
-        let gap = t.spot(q).is_none() && t.spot(offset(q, 0, 1, 0)).is_none();
-        cells.push(((dx, dz, diagonal), clear, gap));
-        (clear, gap)
+        *clears[at((dx, dz))][usize::from(diagonal)].get_or_insert_with(|| t.body_clear(q, rect, from.feet) && t.body_clear(q, rect, from.feet + 1.0))
     };
+    let plain = start.st.effects.jump_boost.is_none() && start.st.movement_attribute <= DEFAULT_MOVEMENT_SPEED;
     // Lines (unit step, landing dy) on which a nearer leap fell short: farther ones would too.
     let mut short: Vec<((i32, i32), i32)> = Vec::new();
+    let [vx, _, vz] = start.st.vel;
+    let running = vx.hypot(vz) >= RUNNING;
     for off in OFFSETS.iter() {
-        let mut gap = false;
-        let clear = off.crossed.iter().all(|&c| {
-            let (clear, g) = probe(c, off.diagonal);
-            gap |= g;
-            clear
-        });
-        if !clear || !gap {
+        // A runner leaps ahead or aside; a leap back starts from a stop, which the node standing here offers.
+        let back = running && vx * off.to.0 as f32 + vz * off.to.1 as f32 <= 0.0;
+        // Gaps first: open ground has none, and they are the cheaper probe.
+        if back || !off.crossed.iter().any(|&c| gap(c)) || !off.crossed.iter().all(|&c| clear(c, off.diagonal)) {
             continue;
         }
+        let too_wide = !off.diagonal && plain && widest_gap(&off.crossed, &mut gap) > MAX_FLAT_GAP;
         let start = facing(start, off.to.0 as f32, off.to.1 as f32);
         for (q, to) in landings(t, offset(p, off.to.0, 0, off.to.1)) {
             let line = (off.unit, q[1] - p[1]);
-            if short.contains(&line) {
+            if short.contains(&line) || solver.spent() || (too_wide && !to.wet && q[1] >= p[1]) {
                 continue;
             }
-            let straight = Shape { drop: to.wet || q[1] < p[1], ..STRAIGHT };
-            let wide = Shape { drop: straight.drop, ..WIDE };
-            let mut solved = solver.solve(&start, q, to.feet, to.wet, straight);
-            if off.diagonal && solved.is_err() {
-                solved = solver.solve(&start, q, to.feet, to.wet, wide);
-            }
+            let key = (*mom, ((off.to.0, off.to.1, q[1] - p[1]), feet_key(to.feet, p), to.wet));
+            let solved = cache.leaps.get_or(t, p, key, &mut cache.counts, || {
+                let straight = Shape { drop: to.wet || q[1] < p[1], ..STRAIGHT };
+                let wide = Shape { drop: straight.drop, ..WIDE };
+                let solved = solver.solve(&start, q, to.feet, to.wet, straight);
+                // Turning off the line adds no reach: a leap that fell short straight falls short wide too.
+                if off.diagonal && matches!(solved, Err(Miss::Other)) { solver.solve(&start, q, to.feet, to.wet, wide) } else { solved }
+            });
             match solved {
                 Ok(s) => found.push((q, to, s)),
                 Err(Miss::Short) => short.push(line),
@@ -129,6 +140,16 @@ pub(crate) fn leaps<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, start: &
         }
     }
     found
+}
+
+/// Most gap cells in a row along `crossed`.
+fn widest_gap(crossed: &[(i32, i32)], gap: &mut impl FnMut((i32, i32)) -> bool) -> usize {
+    let (mut run, mut widest) = (0, 0);
+    for &c in crossed {
+        run = if gap(c) { run + 1 } else { 0 };
+        widest = widest.max(run);
+    }
+    widest
 }
 
 /// `start` turned towards `(dx, dz)` if it stands still: a standing player faces where it goes next (a `Human`

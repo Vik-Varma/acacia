@@ -1,11 +1,13 @@
 mod alter;
 mod alter_sim;
+mod cache;
 mod grid;
 mod hops;
 mod drive;
 mod leap;
 mod leaps;
 mod leaps_shaped;
+mod perf;
 mod rollout;
 mod search;
 mod shortcuts;

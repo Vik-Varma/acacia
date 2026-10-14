@@ -8,7 +8,8 @@ use super::control::{Controller, Phase};
 use super::mac::Macro;
 use super::rollout::{self, Body};
 use super::shortcut::ShortcutCtl;
-use super::solve::{STRAIGHT, Solver, WIDE, live_hazard};
+use super::retry::live_hazard;
+use super::solve::{STRAIGHT, Solver, WIDE};
 use crate::movement::{Controls, Rollout};
 
 /// Prediction horizon; controllers fail long before it.
@@ -167,7 +168,7 @@ fn resolve(ctl: &Macro, want: Vec3, live: &Rollout, held: Controls, w: &dyn Worl
     match ctl {
         Macro::Leap(l) => {
             let profile = l.aim.profile;
-            let mut s = Solver { w, avoid: &avoid, pad: profile.hazard_pad(), safe: &|_| false, profile, perturb: false, held, rollouts: 0 };
+            let mut s = Solver::new(w, &avoid, &|_| false, profile, false, held);
             let found = s.retry(l, live, STRAIGHT, want).or_else(|| (!l.airborne()).then(|| s.retry(l, live, WIDE, want)).flatten());
             found.map(|(l, b)| (Macro::Leap(l), b))
         }

@@ -97,6 +97,10 @@ impl Controller for LeapCtl {
         if self.t >= MAX_LEAP_TICKS || b.pos[1] < self.feet - FELL {
             return Phase::Failed;
         }
+        // Falling below a dry target's floor in the air, it can no longer be reached.
+        if !self.wet && self.air > 0 && b.vel[1] < 0.0 && b.pos[1] < self.feet - LAND_EPS {
+            return Phase::Failed;
+        }
         let tick = self.t;
         self.t += 1;
         // Air before the first ground contact (a start still settling) is no leap.

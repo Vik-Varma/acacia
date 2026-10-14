@@ -1,13 +1,14 @@
 //! Async execution: plan, follow, re-plan on trouble (azalea `execute/`).
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use acacia_physics::{BlockPos, PlayerState, Vec3};
 use acacia_world::{BlockRegistry, ChunkView};
 use tokio::task::JoinHandle;
 
-use super::astar::{search_from, Path, SearchOpts};
+use super::astar::{search_cached, Path, SearchOpts};
+use super::cache::RolloutCache;
 use super::follow::{FollowStatus, Follower, Sense};
 use super::execute;
 use super::goal::Goal;
@@ -21,6 +22,8 @@ const LOOKAHEAD: usize = 6;
 /// A search that finishes within this runs inline, before the next tick (azalea's instant path).
 const QUICK_NODES: usize = 5_000;
 const QUICK_BUDGET: Duration = Duration::from_millis(10);
+/// Macro rollout ticks the inline search may simulate (~5 µs each in release).
+const QUICK_ROLLOUT_TICKS: u64 = 1_000;
 /// Divergences in a row that re-plan for free; each one past it counts against `max_replans`.
 const MAX_DIVERGED: u32 = 5;
 const HOP_MIN_FOOD: f32 = 6.0;
@@ -70,11 +73,14 @@ pub struct Navigator {
     /// Macro moves diverged in a row; free re-plans up to `MAX_DIVERGED`.
     diverged: u32,
     diverged_in_air: bool,
+    /// Macro-move results kept across re-plans; the blocking search takes it along.
+    cache: Arc<Mutex<RolloutCache>>,
 }
 
 impl Navigator {
     pub fn new(goal: Goal, opts: GotoOpts) -> Self {
-        Self { goal, opts, follower: None, partial: false, pending: None, replans: 0, teleports: None, diverged: 0, diverged_in_air: false }
+        let cache = Arc::default();
+        Self { goal, opts, follower: None, partial: false, pending: None, replans: 0, teleports: None, diverged: 0, diverged_in_air: false, cache }
     }
 
     pub fn goal(&self) -> &Goal {
@@ -210,13 +216,15 @@ impl Navigator {
     /// Searches from the live state, so the plan starts with the momentum the bot has (a re-plan after a
     /// divergence keeps running).
     fn plan(&mut self, terrain: &Terrain<&ChunkView>, view: &ChunkView, registry: &Arc<BlockRegistry>, live: PlayerState, opts: SearchOpts) -> Result<(), ActionError> {
-        let quick = search_from(terrain, &live, &self.goal, &SearchOpts { max_nodes: QUICK_NODES, budget: QUICK_BUDGET, ..opts.clone() });
-        if quick.complete {
+        let quick_opts = SearchOpts { max_nodes: QUICK_NODES, budget: QUICK_BUDGET, max_rollout_ticks: QUICK_ROLLOUT_TICKS, ..opts.clone() };
+        let quick = search_cached(terrain, &live, &self.goal, &quick_opts, &mut lock(&self.cache));
+        // A plan whose macro budget ran out may have missed faster macro moves: search again in full.
+        if quick.complete && !quick.macro_stats.exhausted {
             return self.accept(quick, live.pos);
         }
-        let (world, registry, goal) = (view.world().clone(), registry.clone(), self.goal.clone());
+        let (world, registry, goal, cache) = (view.world().clone(), registry.clone(), self.goal.clone(), self.cache.clone());
         self.pending = Some(tokio::task::spawn_blocking(move || {
-            search_from(&Terrain::new(WorldBlocks::new(world), &registry), &live, &goal, &opts)
+            search_cached(&Terrain::new(WorldBlocks::new(world), &registry), &live, &goal, &opts, &mut lock(&cache))
         }));
         Ok(())
     }
@@ -251,6 +259,10 @@ impl Navigator {
         }
         Ok(())
     }
+}
+
+fn lock(cache: &Mutex<RolloutCache>) -> MutexGuard<'_, RolloutCache> {
+    cache.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// The next nodes still offer the same footing (up to the first that waits for work: its footing

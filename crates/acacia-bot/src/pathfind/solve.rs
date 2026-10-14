@@ -2,20 +2,20 @@
 //! a hazard, ceiling or hard fall, and for `Human` under every perturbation of the profile. The planner
 //! solves from a node's momentum, the follower again from the live state when a leap drifts.
 
-use acacia_physics::{BlockPos, LiquidKind, PlayerState, Vec3, WorldView};
+use acacia_physics::{BlockPos, PlayerState, WorldView};
 
 use super::control::{Controller, centre};
 use super::leap::{JumpAt, LeapCtl};
-use super::profile::{Aim, MovementProfile, Perturbation};
+use super::profile::{Aim, MovementProfile};
 use super::rollout::{self, Body};
 use crate::movement::{Controls, Rollout};
 
 /// Backstop for a rollout; every controller gives up long before.
 const ROLLOUT_CAP: u32 = 200;
 /// Last tick a jump is tried on; later ones have run off any edge.
-const MAX_TAKEOFF: u8 = 12;
+pub(super) const MAX_TAKEOFF: u8 = 12;
 /// Latest coast tried on an overshoot (air ticks before letting go of forward).
-const MAX_COAST: u8 = 8;
+pub(super) const MAX_COAST: u8 = 8;
 /// Falls up to 3 blocks do no damage.
 const MAX_SAFE_FALL: f32 = 3.0;
 /// Seed of the planned aim's jitter stream.
@@ -42,6 +42,7 @@ pub(crate) enum Miss {
     Other,
 }
 
+#[derive(Clone)]
 pub(crate) struct Solved {
     /// Not yet started.
     pub ctl: LeapCtl,
@@ -67,39 +68,54 @@ pub(crate) struct Solver<'a, W: WorldView + ?Sized> {
     /// Controls held before the first tick (a leap leaves the yaw alone in the air).
     pub held: Controls,
     pub rollouts: u32,
+    /// Ticks simulated.
+    pub ticks: u64,
+    /// Ticks it may simulate: callers check [`Solver::spent`] between moves.
+    pub budget: u64,
+    /// Index of the perturbation that last failed a judgement.
+    pub(super) fails_first: usize,
 }
 
-struct Attempt {
+pub(super) struct Attempt {
     /// The controller as it started.
-    ctl: LeapCtl,
-    takeoff: Option<u16>,
-    bodies: Vec<Body>,
-    end: PlayerState,
-    clean: bool,
+    pub ctl: LeapCtl,
+    pub takeoff: Option<u16>,
+    pub bodies: Vec<Body>,
+    pub end: PlayerState,
+    pub clean: bool,
 }
 
 impl Attempt {
-    fn last(&self) -> Body {
+    pub fn last(&self) -> Body {
         self.bodies[self.bodies.len() - 1]
     }
 
-    fn ticks(&self) -> u32 {
+    pub fn ticks(&self) -> u32 {
         self.bodies.len() as u32 - 1
     }
 }
 
+impl<'a, W: WorldView + ?Sized> Solver<'a, W> {
+    pub fn new(w: &'a W, avoid: &'a dyn Fn(BlockPos) -> bool, safe: &'a dyn Fn(BlockPos) -> bool, profile: MovementProfile, perturb: bool, held: Controls) -> Self {
+        Self { w, avoid, pad: profile.hazard_pad(), safe, profile, perturb, held, rollouts: 0, ticks: 0, budget: u64::MAX, fails_first: 0 }
+    }
+
+    pub fn spent(&self) -> bool {
+        self.ticks >= self.budget
+    }
+}
 
 impl<W: WorldView + ?Sized> Solver<'_, W> {
     /// Runs `ctl` from `start` (until it ends itself): its bodies, end state, and whether it finished cleanly.
     pub fn run(&mut self, start: &Rollout, ctl: &mut impl Controller, wet: bool) -> (Vec<Body>, PlayerState, bool) {
-        self.rollouts += 1;
         let mut r = start.clone();
         let trace = rollout::run(&mut r, ctl, self.held, ROLLOUT_CAP, self.w);
+        (self.rollouts, self.ticks) = (self.rollouts + 1, self.ticks + u64::from(trace.ticks));
         let clean = trace.landed && self.clean(&trace.bodies, wet);
         (trace.bodies, r.st, clean)
     }
 
-    fn attempt(&mut self, start: &Rollout, ctl: LeapCtl) -> Attempt {
+    pub(super) fn attempt(&mut self, start: &Rollout, ctl: LeapCtl) -> Attempt {
         let mut running = ctl;
         let (bodies, end, clean) = self.run(start, &mut running, ctl.wet);
         Attempt { ctl, takeoff: running.takeoff(), bodies, end, clean }
@@ -113,7 +129,7 @@ impl<W: WorldView + ?Sized> Solver<'_, W> {
     }
 
     /// Distance from the landing feet `b` to the nearest side of `target`'s cell with no safe cell beyond it.
-    fn margin(&self, b: &Body, target: BlockPos) -> f32 {
+    pub(super) fn margin(&self, b: &Body, target: BlockPos) -> f32 {
         let (x, z) = (b.pos[0] - target[0] as f32, b.pos[2] - target[2] as f32);
         let sides = [(x, -1, 0), (1.0 - x, 1, 0), (z, 0, -1), (1.0 - z, 0, 1)];
         let unsafe_sides = sides.into_iter().filter(|&(_, dx, dz)| !(self.safe)([target[0] + dx, target[1], target[2] + dz]));
@@ -146,10 +162,11 @@ impl<W: WorldView + ?Sized> Solver<'_, W> {
             (ctl.wet, ctl.yaw_off, ctl.air_aim) = (wet, yaw, shape.air_aim);
             // The air time barely depends on the takeoff, so the earliest takeoff that lands is the fastest.
             let (mut jumped, mut last) = (None, None);
-            for k in 0..=MAX_TAKEOFF {
+            let (first, mut known) = self.first_reaching(start, ctl).unwrap_or((MAX_TAKEOFF + 1, None));
+            for k in first..=MAX_TAKEOFF {
                 let mut c = ctl;
                 c.jump = JumpAt::Tick(k);
-                let a = self.attempt(start, c);
+                let a = known.take().unwrap_or_else(|| self.attempt(start, c));
                 // A jump due after the edge never comes: the later ones neither.
                 let Some(takeoff) = a.takeoff else { break };
                 if last.replace(takeoff) == Some(takeoff) {
@@ -175,10 +192,11 @@ impl<W: WorldView + ?Sized> Solver<'_, W> {
         best.ok_or(if short { Miss::Short } else { Miss::Other })
     }
 
-    /// A sprint-jump from `start` at once toward `aim_at`: where it comes down (no cell is required).
-    pub fn hop_landing(&mut self, start: &Rollout, aim_at: BlockPos, feet: f32) -> Body {
+    /// A sprint-jump from `start` at once toward `aim_at`: where it comes down (no cell is required), and when.
+    pub fn hop_landing(&mut self, start: &Rollout, aim_at: BlockPos, feet: f32) -> (Body, u32) {
         let ctl = LeapCtl::new(aim_at, feet, JumpAt::Tick(0), None, Aim::new(self.profile, AIM_SEED));
-        self.attempt(start, ctl).last()
+        let a = self.attempt(start, ctl);
+        (a.last(), a.ticks())
     }
 
     /// A sprint-jump from `start` at once into `target`'s cell (or beside it, on the level), judged like any leap.
@@ -188,6 +206,33 @@ impl<W: WorldView + ?Sized> Solver<'_, W> {
         let a = self.attempt(start, ctl);
         if a.clean { self.judge(start, a) } else { None }
     }
+    /// The earliest takeoff tick whose jump is not short of the target, `None` if even the jump at the edge
+    /// is. A later takeoff has more run-up nearer the gap, so it flies farther: bisection finds it.
+    /// Also returns that takeoff's attempt when the bisection ran it.
+    fn first_reaching(&mut self, start: &Rollout, ctl: LeapCtl) -> Option<(u8, Option<Attempt>)> {
+        let reaches = |this: &mut Self, jump: JumpAt| {
+            let mut c = ctl;
+            c.jump = jump;
+            let a = this.attempt(start, c);
+            let reached = a.clean || !short(start, &a);
+            (a, reached)
+        };
+        let (edge, reached) = reaches(self, JumpAt::Edge);
+        // No edge ahead (a wall or a long run-up): try every takeoff.
+        let Some(edge) = edge.takeoff else { return Some((0, None)) };
+        if !reached {
+            return None;
+        }
+        let (mut lo, mut hi, mut at_hi) = (0, edge.min(u16::from(MAX_TAKEOFF)) as u8, None);
+        while lo < hi {
+            let mid = (lo + hi) / 2;
+            match reaches(self, JumpAt::Tick(mid)) {
+                (a, false) if a.takeoff.is_some() => lo = mid + 1,
+                (a, _) => (hi, at_hi) = (mid, Some(a)),
+            }
+        }
+        Some((lo, at_hi))
+    }
 
     /// `a` if it landed, else the coast that lands it when it went long (binary search: a later coast
     /// flies farther). `Err(true)`: it fell short.
@@ -196,9 +241,7 @@ impl<W: WorldView + ?Sized> Solver<'_, W> {
             return Ok(a);
         }
         let ctl = a.ctl;
-        let (from, goal) = ([start.st.pos[0], start.st.pos[2]], centre(ctl.target));
-        let goal_along = along(from, ctl.target, goal);
-        let short = |b: &Attempt| along(from, ctl.target, [b.last().pos[0], b.last().pos[2]]) < goal_along - 0.5;
+        let short = |b: &Attempt| short(start, b);
         if short(&a) {
             return Err(true);
         }
@@ -215,64 +258,13 @@ impl<W: WorldView + ?Sized> Solver<'_, W> {
         }
         Err(false)
     }
-
-    /// The nominal landing `a` under the profile's perturbations: worst ticks, least margin, or `None`
-    /// if one of them fails.
-    fn judge(&mut self, start: &Rollout, a: Attempt) -> Option<Solved> {
-        let (mut ticks, mut least) = (a.ticks(), self.margin(&a.last(), a.ctl.target));
-        let perturbations = if self.perturb { self.profile.perturbations() } else { &[] };
-        for p in perturbations.iter().filter(|p| **p != Perturbation::NOMINAL) {
-            let (from, ctl) = perturbed(start, a.ctl, a.takeoff, p);
-            let b = self.attempt(&from, ctl);
-            if !b.clean {
-                return None;
-            }
-            (ticks, least) = (ticks.max(b.ticks()), least.min(self.margin(&b.last(), a.ctl.target)));
-        }
-        Some(Solved { ctl: a.ctl, ticks, margin: least, end: a.end })
-    }
-
-    /// A leap that drifted, solved again from the live state: an airborne one by its coast, else by any
-    /// takeoff and coast. Of the landings, the one arriving nearest the planned horizontal velocity `want`
-    /// wins (then the fastest), so the moves after it still start as planned.
-    pub fn retry(&mut self, ctl: &LeapCtl, live: &Rollout, shape: Shape, want: Vec3) -> Option<(LeapCtl, Vec<Body>)> {
-        let coasts = || [None].into_iter().chain((0..=MAX_COAST).map(Some));
-        let mut tries: Vec<LeapCtl> = Vec::new();
-        if ctl.airborne() {
-            tries.extend(coasts().map(|coast| {
-                let mut c = *ctl;
-                c.coast = coast;
-                c
-            }));
-        } else {
-            let fresh = |yaw: f32, jump: JumpAt, coast: Option<u8>| {
-                let mut c = LeapCtl::new(ctl.target, ctl.feet, jump, coast, ctl.aim);
-                (c.wet, c.yaw_off, c.air_aim, c.slack) = (ctl.wet, yaw, shape.air_aim, ctl.slack);
-                c
-            };
-            for &yaw in shape.yaws {
-                for k in 0..=MAX_TAKEOFF {
-                    // A jump due after the edge never comes: the later ones neither.
-                    if self.attempt(live, fresh(yaw, JumpAt::Tick(k), Some(0))).takeoff.is_none() {
-                        break;
-                    }
-                    tries.extend(coasts().map(|coast| fresh(yaw, JumpAt::Tick(k), coast)));
-                }
-                if shape.drop || ctl.jump == JumpAt::Never {
-                    tries.extend(coasts().map(|coast| fresh(yaw, JumpAt::Never, coast)));
-                }
-            }
-        }
-        let off = |v: Vec3| ((v[0] - want[0]).hypot(v[2] - want[2]) * 100.0).round() as u32;
-        let landed = tries.into_iter().map(|c| self.attempt(live, c)).filter(|a| a.clean);
-        landed.min_by_key(|a| (off(a.end.vel), a.ticks())).map(|a| (a.ctl, a.bodies))
-    }
 }
 
-/// What a live re-solve or shortcut must not touch, read from the physics view: lava and cobwebs.
-pub(crate) fn live_hazard(w: &dyn WorldView, p: BlockPos) -> bool {
-    let b = w.block(p);
-    b.cobweb || b.liquid.is_some_and(|l| l.kind == LiquidKind::Lava)
+/// The attempt came down over half a block short of its target's centre, along the line from `start`.
+fn short(start: &Rollout, a: &Attempt) -> bool {
+    let from = [start.st.pos[0], start.st.pos[2]];
+    let end = a.last();
+    along(from, a.ctl.target, [end.pos[0], end.pos[2]]) < along(from, a.ctl.target, centre(a.ctl.target)) - 0.5
 }
 
 /// How far along the line from `from` to `target`'s centre `at` lies (blocks).
@@ -280,21 +272,4 @@ fn along(from: [f32; 2], target: BlockPos, at: [f32; 2]) -> f32 {
     let [tx, tz] = centre(target);
     let (sx, sz) = (tx - from[0], tz - from[1]);
     ((at[0] - from[0]) * sx + (at[1] - from[1]) * sz) / sx.hypot(sz).max(1e-3)
-}
-
-/// The start and controller of one perturbed execution.
-fn perturbed(start: &Rollout, mut ctl: LeapCtl, takeoff: Option<u16>, p: &Perturbation) -> (Rollout, LeapCtl) {
-    if let Some(k) = takeoff.filter(|_| p.jump != 0) {
-        ctl.jump = JumpAt::Tick((i32::from(k) + i32::from(p.jump)).clamp(0, i32::from(u8::MAX)) as u8);
-    }
-    ctl.aim.bias = p.yaw;
-    let mut from = start.clone();
-    if p.start != 0.0 {
-        let [tx, tz] = centre(ctl.target);
-        let (dx, dz) = (tx - from.st.pos[0], tz - from.st.pos[2]);
-        let len = dx.hypot(dz).max(1e-3);
-        from.st.pos[0] -= dx / len * p.start;
-        from.st.pos[2] -= dz / len * p.start;
-    }
-    (from, ctl)
 }
