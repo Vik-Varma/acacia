@@ -22,8 +22,9 @@ pub enum Entry {
     /// Standing (classic and work moves end here).
     #[default]
     Rest,
-    /// Running along direction index 0..8 (`moves::DIRS`).
-    Run(u8),
+    /// Running along direction index 0..8 (`moves::DIRS`) in a horizontal speed bin ([`speed_bin`]), so a
+    /// faster later arrival is not pruned by a slower earlier one.
+    Run(u8, u8),
     /// In the air; the search start only.
     Air,
 }
@@ -40,6 +41,15 @@ impl NodeKey {
     pub fn rest(pos: BlockPos) -> Self {
         Self { pos, mode: Mode::Ground, entry: Entry::Rest }
     }
+}
+
+/// Upper edges (blocks/tick) of the `Entry::Run` speed bins below the top one: walking, sprinting on
+/// the ground, sprint-jumping. Placeholders until hop speeds are measured (plan step 6).
+const SPEED_BINS: [f32; 3] = [0.15, 0.25, 0.32];
+
+/// The `Entry::Run` bin (0..=3) of a horizontal speed.
+pub fn speed_bin(h_speed: f32) -> u8 {
+    SPEED_BINS.iter().filter(|&&edge| h_speed >= edge).count() as u8
 }
 
 pub(crate) type KeyMap<V> = HashMap<NodeKey, V, BuildHasherDefault<PosHasher>>;

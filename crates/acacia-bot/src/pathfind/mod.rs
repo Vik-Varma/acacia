@@ -45,7 +45,7 @@ pub use goal::Goal;
 pub use goto::{GotoOpts, NavStatus, Navigator};
 pub use kit::{DEFAULT_SCAFFOLD, Kit};
 pub use moves::MoveKind;
-pub use node::{Entry, Mode, Momentum, NodeKey};
+pub use node::{Entry, Mode, Momentum, NodeKey, speed_bin};
 pub use profile::{Aim, MovementProfile, Perturbation};
 pub use rollout::{Body, Trace, peek, run};
 pub use snapshot::WorldBlocks;

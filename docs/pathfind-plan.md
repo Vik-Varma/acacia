@@ -18,6 +18,9 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
 - Flat-ground hop chains on by default; dropped when food ≤ 6. Gap leaps unaffected.
 - Human aim constants are placeholders in `human.rs` until a vanilla capture fits them.
 - Neo/ladder jumps: stretch at the end of M1, slip to M2 if they stall.
+- 2026-10-14, after `../research/pathfinder-survey.md` (Tungsten/unionclef, azalea, ParkourCalculator,
+  SwarmBot): nodes are momentum-aware; follower gets an any-angle shortcut; leaps search takeoff
+  yaw/point and in-air correction with an obstruction prefilter.
 - Done bar for M1: headless sim tests per move under both profiles; parkour legs in
   `examples/course.rs` with 0 corrections on a dedicated strict testbox BDS; ticks-to-goal
   comparison vs macros off; `trace_regression` green.
@@ -25,12 +28,19 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
 ## M1 design
 
 ### Node state (`pathfind/node.rs`)
-- `Mode: u8` (`Ground` now; `Glide`, `Boat` later). `Entry: Rest | Run(dir8) | Air` (Air: start only).
+- `Mode: u8` (`Ground` now; `Glide`, `Boat` later). `Entry: Rest | Run(dir8, speed_bin) | Air` (Air: start only).
+  `speed_bin` (horizontal speed, ~4 bins) keeps a faster later arrival from being pruned by a slower
+  earlier one; if bins prove too coarse, keep a small non-dominated set per key instead.
 - `NodeKey {pos, mode, entry}` replaces `BlockPos` as the A* key (`astar.rs` `Rec`, `PosMap`).
 - `Momentum {off:[i16;3] (1/1024 blk), vel:[i16;3] (1/4096 blk/t), yaw_q, flags}`;
   `snap(&PlayerState)` / `synth(pos, Momentum) -> PlayerState`. Stored per `Rec`.
 - Classic and alter edges yield `Rest`; macro edges need `made == 0` at both ends.
 - `PathNode` gains `entry` and `mac: Option<Macro>`; `MoveKind` gains `Run`, `Hop`; gap leaps stay `Parkour`.
+- As built (steps 1–2): `Momentum::snap(st, at)` / `synth(at, base)`; `base` (live state) supplies
+  attribute, freeze, effects, equipment, flight; flags = on_ground, sprinting, sneaking, pressing_jump,
+  jump_delay. Fidelity held (worst 0.0013 blk over 45 snaps × 30 ticks), no full-`PlayerState` fallback.
+  `Run(dir, bin)` bins via `node::speed_bin` (edges placeholder until step 6). `Momentum` per `Rec` lands
+  with the first macro edge (step 4).
 
 ### Shared sim
 - `movement/keys.rs`: `KeyLatch` lifted from `Movement::tick` (double-tap, sprint latch, wire
@@ -38,6 +48,9 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
 - `world/adapter.rs`: extract `block_physics`; `pathfind/physview.rs`: `WorldView for Terrain<B>`
   (unloaded = `Blocks::ids` → None). `Cell` gains `liquid`.
 - `pathfind/rollout.rs`: `Rollout {st, keys}`, `step`, `run(ctl, max) -> Trace {bodies, landed, ticks, min_margin}`.
+- As built: `Rollout {st, keys, using_item}` + `step` live in `movement/fork.rs` (keeps pathfind →
+  movement one-way); `rollout.rs` has `Body`, `run(r, ctl, c, max, w)`, `peek`. `min_margin` comes with
+  leap acceptance (step 4).
 
 ### Controllers (`pathfind/control.rs`, `pathfind/profile.rs`)
 - `trait Controller { fn step(&mut self, b:&Body, peek:&mut dyn FnMut(&Controls)->Body, c:&mut Controls) -> Phase }`.
@@ -49,6 +62,9 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
 - Leap from `Stand && !wet`: cardinal 2–5, diagonals (2,1)(2,2)(3,1)(3,2)(4,1); dy +1, 0, −1..−3
   (deeper only into water). Geometric prefilter (corridor `body_clear`, ≥1 gap cell) then
   jump-timing search (AtEdge/AtAlong, AtTick 0..6) × coast {None,3,5}; fewest ticks wins.
+- Before timing search: SwarmBot-style obstruction prefilter (drop targets whose straight corridor
+  is blocked). Timing search also tries takeoff yaws (±11.25°, ±22.5° off the target line), a free
+  takeoff point along the last block (ParkourCalculator-style), and an in-air yaw correction.
 - `Run(d, 1..3)` only before a gap or on lanes ≥4; `Hop` only from `Run(d)` along d.
 - Accept: on_ground, feet within 1e-3 of spot, xz in target cell, no AVOID/danger touch, no
   pre-apex h-collision, ≤40 ticks. Human: all perturbations land in the cell, edge margin ≥0.15.
@@ -67,6 +83,11 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
 - Navigator on `Diverged`: no stop, not counted in `max_replans` (cap 5 consecutive); hold
   controls while airborne; inline quick search from live `Momentum` (Run entry).
 - Invariant test: Optimal executed ticks == predicted.
+- As built (step 3): `tick(s, live: Option<&Rollout>, w, c)`; `Exec` sits in `MacroRunner`; "retry other
+  timings" waits for the step-4 timing search (TODO in `follow_macro.rs`); the in-place re-plan searches
+  from the live position (Rest) until Run entries exist (TODO in `goto.rs`). `LeapCtl` ignores air before
+  its first ground contact. A full sprint jump overshoots a cell-exact landing, so coast/timing search
+  is required, not optional (step-3 test picks the coast by rollout).
 
 ## M1 steps (one commit each, tests with each)
 
@@ -77,6 +98,9 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
 4. Flat cardinal Leap 1–4 + timing search; Human detours around pixel-perfect gaps.
 5. Height-changing and diagonal leaps; head-hitter rejected; lava gap margin.
 6. `Run`/`Hop` + `Run(d)` entries; stepping stones chain with no Rest between; measure hop speed, switch heuristic; hunger gate.
+6b. Any-angle follower shortcut (azalea-style): on Ground segments, simulate sprint / sprint-jump
+    straight at nodes up to ~20 ahead, take the fastest clean rollout that reaches the path; removes
+    8-direction staircasing. Test: 30-block diagonal ticks drop vs 6; Optimal predicted == executed.
 7. Cache + rollout budget; perf guard (flat 100×100, 80 blocks, ≤2× macros off).
 8. Human complete: aim on all segments incl. walk, perturbations, risk cost; 5 seeds, 0 Diverged failures.
 9. `tests/speed.rs`: ticks-to-goal macros on vs off (flat, diagonal, gaps, stairs); on ≤ off.
