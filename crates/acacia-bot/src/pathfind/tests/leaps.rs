@@ -7,7 +7,7 @@ use super::drive::{assert_arrived, assert_exact, drive, macro_nodes, macro_opts,
 use super::grid::Grid;
 use crate::pathfind::{Goal, MoveKind, MovementProfile};
 
-const PROFILES: [MovementProfile; 2] = [MovementProfile::Optimal, MovementProfile::Human];
+pub const PROFILES: [MovementProfile; 2] = [MovementProfile::Optimal, MovementProfile::Human];
 
 /// Floor up to x = 0, `gap` cells of void, floor again; a 5-wide lane.
 pub fn gap_course(gap: i32) -> Grid {
@@ -18,7 +18,7 @@ pub fn gap_course(gap: i32) -> Grid {
 
 /// Plans from rest at `from` to `goal` and follows the plan; asserts arrival and, for `Optimal`, that
 /// every macro move ran as predicted. `None` when no complete plan exists.
-fn leap_and_follow(g: &Grid, from: [f32; 3], goal: BlockPos, profile: MovementProfile) -> Option<Vec<(MoveKind, BlockPos)>> {
+pub fn leap_and_follow(g: &Grid, from: [f32; 3], goal: BlockPos, profile: MovementProfile) -> Option<Vec<(MoveKind, BlockPos)>> {
     let mut m = standing(from);
     let opts = macro_opts(profile);
     let path = plan(g, &m, &Goal::Block(goal), &opts);

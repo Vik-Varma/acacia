@@ -25,6 +25,7 @@ mod goal;
 mod goto;
 mod kit;
 mod leap;
+mod leap_moves;
 mod macros;
 mod maneuver;
 mod moves;

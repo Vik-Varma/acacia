@@ -6,7 +6,7 @@ use acacia_physics::{BlockPos, LiquidKind, WorldView};
 use super::PathNode;
 use super::control::{Controller, Macro, Phase};
 use super::rollout::{self, Body};
-use super::solve::{STRAIGHT, Solver};
+use super::solve::{STRAIGHT, Solver, WIDE};
 use crate::movement::{Controls, Rollout};
 
 /// Prediction horizon; controllers fail long before it.
@@ -47,6 +47,11 @@ pub(super) struct MacroRunner {
 impl MacroRunner {
     pub fn active(&self) -> bool {
         self.exec.is_some()
+    }
+
+    /// The macro move of path index `index` has run.
+    pub fn finished(&self, index: usize) -> bool {
+        self.done == Some(index)
     }
 
     pub fn take_report(&mut self) -> Option<MacroReport> {
@@ -140,7 +145,8 @@ fn resolve(ctl: &Macro, live: &Rollout, held: Controls, w: &dyn WorldView) -> Op
         Macro::Leap(l) => {
             let profile = l.aim.profile;
             let mut s = Solver { w, avoid: &avoid, pad: profile.hazard_pad(), profile, perturb: false, held, rollouts: 0 };
-            s.retry(l, live, STRAIGHT).map(|(l, b)| (Macro::Leap(l), b))
+            let found = s.retry(l, live, STRAIGHT).or_else(|| (!l.airborne()).then(|| s.retry(l, live, WIDE)).flatten());
+            found.map(|(l, b)| (Macro::Leap(l), b))
         }
     }
 }

@@ -12,8 +12,8 @@ use crate::movement::{Controls, Rollout};
 
 /// Last tick a jump is tried on; later ones have run off any edge.
 const MAX_TAKEOFF: u8 = 12;
-/// Coasts tried on an overshoot, latest first.
-const COASTS: [u8; 9] = [8, 7, 6, 5, 4, 3, 2, 1, 0];
+/// Latest coast tried on an overshoot (air ticks before letting go of forward).
+const MAX_COAST: u8 = 8;
 /// Falls up to 3 blocks do no damage.
 const MAX_SAFE_FALL: f32 = 3.0;
 /// Seed of the planned aim's jitter stream.
@@ -30,6 +30,8 @@ pub(crate) struct Shape {
 }
 
 pub(crate) const STRAIGHT: Shape = Shape { yaws: &[0.0], air_aim: false, drop: false };
+/// Off-line takeoff yaws and steering in the air, for leaps that miss straight (diagonals).
+pub(crate) const WIDE: Shape = Shape { yaws: &[0.0, 11.25, -11.25, 22.5, -22.5], air_aim: true, drop: false };
 
 pub(crate) struct Solved {
     /// Not yet started.
@@ -99,61 +101,74 @@ impl<W: WorldView + ?Sized> Solver<'_, W> {
 
     fn touches(&self, b: &Body) -> bool {
         let r = 0.3 + self.pad;
-        let lo = [b.pos[0] - r, b.pos[1] - self.pad, b.pos[2] - r].map(|v| v.floor() as i32);
+        // No pad below the feet: a leap over lava level with the floor passes above it.
+        let lo = [b.pos[0] - r, b.pos[1], b.pos[2] - r].map(|v| v.floor() as i32);
         let hi = [b.pos[0] + r, b.pos[1] + 1.8 + self.pad, b.pos[2] + r].map(|v| v.floor() as i32);
         (lo[0]..=hi[0]).any(|x| (lo[1]..=hi[1]).any(|y| (lo[2]..=hi[2]).any(|z| (self.avoid)([x, y, z]))))
     }
 
     /// The fastest clean leap from `start` to the cell `target` (feet `feet`, water if `wet`).
     pub fn solve(&mut self, start: &Rollout, target: BlockPos, feet: f32, wet: bool, shape: Shape) -> Option<Solved> {
-        let mut landings = Vec::new();
-        let from = [start.st.pos[0], start.st.pos[2]];
-        let goal_along = along(from, target, centre(target));
-        let jumps = (0..=MAX_TAKEOFF).map(JumpAt::Tick).chain(shape.drop.then_some(JumpAt::Never));
-        let jumps: Vec<JumpAt> = jumps.collect();
-        for &yaw in shape.yaws {
-            let (mut seen, mut ran_off) = (Vec::new(), false);
-            for &jump in &jumps {
-                if ran_off && jump != JumpAt::Never {
-                    continue;
-                }
-                let mut ctl = LeapCtl::new(target, feet, jump, None, Aim::new(self.profile, AIM_SEED));
-                (ctl.wet, ctl.yaw_off, ctl.air_aim) = (wet, yaw, shape.air_aim);
-                let first = self.attempt(start, ctl);
-                // A jump due after the edge never comes: the later ones neither.
-                ran_off |= first.takeoff.is_none() && jump != JumpAt::Never;
-                if ran_off && jump != JumpAt::Never || seen.contains(&first.takeoff) {
-                    continue;
-                }
-                seen.push(first.takeoff);
-                let last = first.last();
-                let short = along(from, target, [last.pos[0], last.pos[2]]) < goal_along - 0.5;
-                let landing = if first.clean { Some(first) } else if short { None } else { self.coast(start, ctl) };
-                landings.extend(landing);
-            }
-        }
-        // Perturbations only add ticks: judge the fastest nominal landings first.
-        landings.sort_by_key(Attempt::ticks);
         let mut best: Option<Solved> = None;
-        for a in landings {
-            if best.as_ref().is_some_and(|b| a.ticks() > b.ticks) {
-                break;
+        for &yaw in shape.yaws {
+            let mut ctl = LeapCtl::new(target, feet, JumpAt::Never, None, Aim::new(self.profile, AIM_SEED));
+            (ctl.wet, ctl.yaw_off, ctl.air_aim) = (wet, yaw, shape.air_aim);
+            // The air time barely depends on the takeoff, so the earliest takeoff that lands is the fastest.
+            let (mut jumped, mut last) = (None, None);
+            for k in 0..=MAX_TAKEOFF {
+                let mut c = ctl;
+                c.jump = JumpAt::Tick(k);
+                let a = self.attempt(start, c);
+                // A jump due after the edge never comes: the later ones neither.
+                let Some(takeoff) = a.takeoff else { break };
+                if last.replace(takeoff) == Some(takeoff) {
+                    continue;
+                }
+                jumped = self.land(start, a).and_then(|a| self.judge(start, a));
+                if jumped.is_some() {
+                    break;
+                }
             }
-            if let Some(s) = self.judge(start, a)
-                && best.as_ref().is_none_or(|b| (s.ticks, -s.margin) < (b.ticks, -b.margin))
-            {
-                best = Some(s);
+            let dropped = if shape.drop {
+                let a = self.attempt(start, ctl);
+                self.land(start, a).and_then(|a| self.judge(start, a))
+            } else {
+                None
+            };
+            for s in [jumped, dropped].into_iter().flatten() {
+                if best.as_ref().is_none_or(|b| (s.ticks, -s.margin) < (b.ticks, -b.margin)) {
+                    best = Some(s);
+                }
             }
         }
         best
     }
 
-    /// The overshooting `ctl` with the latest coast that lands it.
-    fn coast(&mut self, start: &Rollout, mut ctl: LeapCtl) -> Option<Attempt> {
-        COASTS.iter().find_map(|&k| {
-            ctl.coast = Some(k);
-            Some(self.attempt(start, ctl)).filter(|a| a.clean)
-        })
+    /// `a` if it landed, else the coast that lands it when it went long (binary search: a later coast
+    /// flies farther).
+    fn land(&mut self, start: &Rollout, a: Attempt) -> Option<Attempt> {
+        if a.clean {
+            return Some(a);
+        }
+        let ctl = a.ctl;
+        let (from, goal) = ([start.st.pos[0], start.st.pos[2]], centre(ctl.target));
+        let goal_along = along(from, ctl.target, goal);
+        let short = |b: &Attempt| along(from, ctl.target, [b.last().pos[0], b.last().pos[2]]) < goal_along - 0.5;
+        if short(&a) {
+            return None;
+        }
+        let (mut lo, mut hi) = (0, i32::from(MAX_COAST));
+        while lo <= hi {
+            let mid = (lo + hi) / 2;
+            let mut c = ctl;
+            c.coast = Some(mid as u8);
+            let b = self.attempt(start, c);
+            if b.clean {
+                return Some(b);
+            }
+            if short(&b) { lo = mid + 1 } else { hi = mid - 1 }
+        }
+        None
     }
 
     /// The nominal landing `a` under the profile's perturbations: worst ticks, least margin, or `None`
@@ -176,7 +191,7 @@ impl<W: WorldView + ?Sized> Solver<'_, W> {
     pub fn retry(&mut self, ctl: &LeapCtl, live: &Rollout, shape: Shape) -> Option<(LeapCtl, Vec<Body>)> {
         if ctl.airborne() {
             let mut c = *ctl;
-            let coasts = [None].into_iter().chain(COASTS.iter().rev().map(|&k| Some(k)));
+            let coasts = [None].into_iter().chain((0..=MAX_COAST).map(Some));
             return coasts
                 .map(|coast| {
                     c.coast = coast;

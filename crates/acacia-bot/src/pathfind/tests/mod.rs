@@ -4,6 +4,7 @@ mod grid;
 mod drive;
 mod leap;
 mod leaps;
+mod leaps_shaped;
 mod rollout;
 mod search;
 mod sim;

@@ -118,7 +118,11 @@ impl Follower {
             }
         }
         c.pitch = 0.0;
-        let node = self.path[self.index];
+        let mut node = self.path[self.index];
+        if self.macros.finished(self.index) {
+            // Landed on the final node: only settling there is left.
+            node.kind = MoveKind::Walk;
+        }
         let target = center(&node);
         if self.off_path(s.pos, target) {
             c.stop();

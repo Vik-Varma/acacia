@@ -76,6 +76,11 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
   deduped by actual takeoff tick, coasts 8..0 only on overshoot; candidates judged fastest-first. Human = every
   perturbation lands, hazard pad 0.25, no absolute 0.15 margin (survey rec 5); Human refuses 4-gaps. Search starts
   from the live state (`search_from`); test `opts()` keeps macros off so the classic suite still runs.
+- As built (step 5): targets in `leap_moves.rs` (all 8 symmetries of the diagonals; dry dy +1..−3, first water
+  below up to 16). Solve = earliest takeoff that lands wins (air time barely varies), coast by binary search;
+  `Never` (run off the edge) for drops — a jumped down-2 falls 3.25 and is rejected (fall > 3). Takeoff yaws
+  ±11.25/±22.5 + air aim only when a diagonal misses straight. Head-hitters: any ceiling contact rejects.
+  Hazard pad is sideways and up, not below the feet (lava level with the floor is cleared).
 
 ### Cache and budget (`pathfind/cache.rs`)
 - Key `(family, params, dir, Momentum, corridor signature hash)`; caches failures too.
