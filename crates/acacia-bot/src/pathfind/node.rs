@@ -22,7 +22,7 @@ pub enum Entry {
     /// Standing (classic and work moves end here).
     #[default]
     Rest,
-    /// Running along direction index 0..8 (`moves::DIRS`) in a horizontal speed bin ([`speed_bin`]), so a
+    /// Running along direction index 0..8 ([`DIRS`]) in a horizontal speed bin ([`speed_bin`]), so a
     /// faster later arrival is not pruned by a slower earlier one.
     Run(u8, u8),
     /// In the air; the search start only.
@@ -50,6 +50,19 @@ const SPEED_BINS: [f32; 3] = [0.15, 0.25, 0.32];
 /// The `Entry::Run` bin (0..=3) of a horizontal speed.
 pub fn speed_bin(h_speed: f32) -> u8 {
     SPEED_BINS.iter().filter(|&&edge| h_speed >= edge).count() as u8
+}
+
+/// Horizontal directions, indexed by `Entry::Run`.
+pub(crate) const DIRS: [(i32, i32); 8] = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)];
+
+/// The `Entry::Run` of moving at `vel`: the nearest of [`DIRS`] and the speed's bin.
+pub(crate) fn run_entry(vel: Vec3) -> Entry {
+    let speed = vel[0].hypot(vel[2]);
+    // sin 22.5°: inside the 45° sector around an axis, the other axis reads 0.
+    let axis = |v: f32| if v > 0.383 * speed { 1 } else if v < -0.383 * speed { -1 } else { 0 };
+    let d = (axis(vel[0]), axis(vel[2]));
+    let dir = DIRS.iter().position(|&x| x == d).unwrap_or(0);
+    Entry::Run(dir as u8, speed_bin(speed))
 }
 
 pub(crate) type KeyMap<V> = HashMap<NodeKey, V, BuildHasherDefault<PosHasher>>;
@@ -93,6 +106,12 @@ impl Momentum {
             | bit(st.pressing_jump, PRESSING_JUMP)
             | (delay << DELAY_SHIFT);
         Self { off, vel: st.vel.map(|v| q(v, VEL_Q)), yaw_q: (st.yaw.rem_euclid(360.0) * YAW_Q) as u16, flags }
+    }
+
+    /// Standing still at the centre of block `at` with feet at `feet`.
+    pub fn rest(feet: f32, at: BlockPos) -> Self {
+        let off = [OFF_Q as i16 / 2, q(feet - at[1] as f32, OFF_Q), OFF_Q as i16 / 2];
+        Self { off, flags: ON_GROUND, ..Self::default() }
     }
 
     pub fn feet(&self, at: BlockPos) -> Vec3 {

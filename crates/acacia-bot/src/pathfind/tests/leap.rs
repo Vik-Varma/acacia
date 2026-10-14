@@ -5,11 +5,10 @@ use acacia_client::proto::packets::SetEntityMotion;
 use acacia_client::proto::types::Vec3f;
 use acacia_physics::{BlockPos, Vec3};
 
+use super::drive::{Outcome, assert_arrived, assert_exact, drive, macro_opts, standing};
 use super::grid::Grid;
-use super::search::opts;
-use super::sim::sense;
 use crate::movement::Movement;
-use crate::pathfind::{Aim, Entry, FollowStatus, Follower, Goal, JumpAt, LeapCtl, Macro, MacroReport, MoveKind, MovementProfile, PathNode, Work, run, search};
+use crate::pathfind::{Aim, Entry, Goal, JumpAt, LeapCtl, Macro, MoveKind, MovementProfile, PathNode, Work, run};
 use crate::state::Me;
 use crate::state::queries::test_support::raw;
 
@@ -29,11 +28,9 @@ fn node(pos: BlockPos, kind: MoveKind, mac: Option<Macro>) -> PathNode {
     PathNode { pos, feet: pos[1] as f32, kind, wet: false, work: Work::default(), entry: Entry::Rest, mac }
 }
 
-/// A leap from the run-up over the gap, then walking on to the goal. A full sprint jump overshoots the
-/// landing cell, so the coast is picked by rollout (the planner's timing search stands in here).
+/// A leap from the run-up over the gap, then walking on to the goal, with the coast picked by hand.
 fn leap_path(g: &Grid, profile: MovementProfile) -> Vec<PathNode> {
-    let mut m = Movement::new();
-    m.start(START, -90.0, 0.0);
+    let m = standing(START);
     let leap = [None].into_iter().chain((1..12).map(Some)).find_map(|coast| {
         let leap = LeapCtl::new(LAND, 1.0, JumpAt::Edge, coast, Aim::new(profile, 7));
         run(&mut m.fork().unwrap(), &mut { leap }, m.controls, 60, &g.terrain()).landed.then_some(leap)
@@ -42,62 +39,20 @@ fn leap_path(g: &Grid, profile: MovementProfile) -> Vec<PathNode> {
     vec![node(LAND, MoveKind::Parkour, Some(Macro::Leap(leap))), node([5, 1, 0], MoveKind::Walk, None), node(GOAL, MoveKind::Walk, None)]
 }
 
-struct Outcome {
-    reports: Vec<MacroReport>,
-    diverged: u32,
-    /// Forward was still held on every tick that diverged.
-    held: bool,
-    end: Vec3,
-}
-
-/// Follows `path`, re-planning inline on divergence as the navigator does; `nudge` may disturb the bot.
-fn drive(g: &Grid, path: Vec<PathNode>, mut nudge: impl FnMut(u32, &mut Movement)) -> Outcome {
-    let world = g.physics();
-    let mut m = Movement::new();
-    m.start(START, -90.0, 0.0);
-    let mut follower = Follower::new(path, START, 0.25);
-    let mut out = Outcome { reports: Vec::new(), diverged: 0, held: true, end: START };
-    for tick in 0..300 {
-        nudge(tick, &mut m);
-        let s = sense(g, &m);
-        let live = m.fork();
-        let status = follower.tick(&s, live.as_ref(), &g.terrain(), &mut m.controls);
-        out.reports.extend(follower.take_macro_report());
-        match status {
-            FollowStatus::Moving => {}
-            FollowStatus::Arrived => {
-                out.end = s.pos;
-                return out;
-            }
-            FollowStatus::Diverged => {
-                eprintln!("tick {tick}: diverged at {:?}, controls {:?}", s.pos, m.controls);
-                out.diverged += 1;
-                out.held &= m.controls.forward != 0.0;
-                let path = search(&g.terrain(), s.pos, &Goal::Block(GOAL), &opts(true));
-                assert!(path.complete, "no path from {:?}", s.pos);
-                follower = Follower::new(path.nodes, s.pos, 0.25);
-            }
-            other => panic!("tick {tick}: {other:?} at {:?}", s.pos),
-        }
-        m.tick(&world);
-    }
-    panic!("not arrived: at {:?}", m.position());
-}
-
-fn assert_arrived(o: &Outcome) {
-    let d = (o.end[0] - GOAL[0] as f32 - 0.5).hypot(o.end[2] - GOAL[2] as f32 - 0.5);
-    assert!(d < 0.3 && (o.end[1] - 1.0).abs() < 0.1, "ended at {:?}", o.end);
+fn follow(g: &Grid, profile: MovementProfile, nudge: impl FnMut(u32, &mut Movement)) -> Outcome {
+    let mut m = standing(START);
+    drive(g, &mut m, leap_path(g, profile), &Goal::Block(GOAL), &macro_opts(profile), nudge)
 }
 
 #[test]
 fn a_leap_executes_exactly_as_predicted() {
     let g = gap();
     for profile in [MovementProfile::Optimal, MovementProfile::Human] {
-        let o = drive(&g, leap_path(&g, profile), |_, _| {});
-        assert_arrived(&o);
+        let o = follow(&g, profile, |_, _| {});
+        assert_arrived(&o, GOAL);
         assert_eq!(o.diverged, 0, "{profile:?}");
-        let [r] = o.reports[..] else { panic!("{profile:?}: reports {:?}", o.reports) };
-        assert_eq!((r.executed, r.max_error, r.repredicted), (r.predicted, 0.0, 0), "{profile:?}");
+        assert_eq!(o.reports.len(), 1, "{profile:?}: {:?}", o.reports);
+        assert_exact(&o);
     }
 }
 
@@ -105,7 +60,7 @@ fn a_leap_executes_exactly_as_predicted() {
 fn a_knock_mid_leap_diverges_and_replans_without_stopping() {
     let g = gap();
     let mut airborne = 0;
-    let o = drive(&g, leap_path(&g, MovementProfile::Optimal), |_, m| {
+    let o = follow(&g, MovementProfile::Optimal, |_, m| {
         if !m.on_ground() {
             airborne += 1;
         }
@@ -115,7 +70,6 @@ fn a_knock_mid_leap_diverges_and_replans_without_stopping() {
             m.apply(&raw(&knock), &ME).unwrap();
         }
     });
-    assert_arrived(&o);
+    assert_arrived(&o, GOAL);
     assert!(o.diverged >= 1 && o.held, "diverged {} times, held {}", o.diverged, o.held);
-    assert!(o.reports.is_empty(), "the leap did not finish: {:?}", o.reports);
 }

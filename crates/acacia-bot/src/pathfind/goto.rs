@@ -3,11 +3,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use acacia_physics::{BlockPos, Vec3};
+use acacia_physics::{BlockPos, PlayerState, Vec3};
 use acacia_world::{BlockRegistry, ChunkView};
 use tokio::task::JoinHandle;
 
-use super::astar::{search, Path, SearchOpts};
+use super::astar::{search_from, Path, SearchOpts};
 use super::follow::{FollowStatus, Follower, Sense};
 use super::execute;
 use super::goal::Goal;
@@ -151,9 +151,10 @@ impl Navigator {
         let (Some(world), Some(movement)) = (bot.world.as_ref(), bot.movement.as_mut()) else {
             return Ok(NavStatus::Searching);
         };
-        let (Some(view), Some(registry), Some(pos)) = (world.view(), world.registry(), movement.position()) else {
+        let (Some(view), Some(registry), Some(state)) = (world.view(), world.registry(), movement.state()) else {
             return Ok(NavStatus::Searching);
         };
+        let (pos, live_state) = (state.pos, state.clone());
         let terrain = Terrain::new(view, registry.as_ref());
         if self.teleports.replace(movement.teleports).is_some_and(|t| t != movement.teleports) {
             self.follower = None;
@@ -167,7 +168,7 @@ impl Navigator {
             if !self.diverged_in_air || movement.on_ground() {
                 movement.controls.stop();
             }
-            self.plan(&terrain, view, registry, pos, kit)?;
+            self.plan(&terrain, view, registry, live_state, kit)?;
             return Ok(NavStatus::Searching);
         };
         let feet = [pos[0].floor() as i32, pos[1].floor() as i32, pos[2].floor() as i32];
@@ -188,8 +189,7 @@ impl Navigator {
                 }
                 self.follower = None;
                 self.diverged_in_air = !movement.on_ground();
-                // TODO: search from the live Momentum (Run entry) once macro edges exist (plan step 6).
-                self.plan(&terrain, view, registry, pos, kit)?;
+                self.plan(&terrain, view, registry, live_state, kit)?;
             }
             FollowStatus::Work => return Ok(NavStatus::Working),
             FollowStatus::Arrived if !self.partial => return Ok(NavStatus::Arrived),
@@ -203,18 +203,20 @@ impl Navigator {
         Ok(NavStatus::Moving)
     }
 
-    fn plan(&mut self, terrain: &Terrain<&ChunkView>, view: &ChunkView, registry: &Arc<BlockRegistry>, pos: Vec3, kit: Option<Kit>) -> Result<(), ActionError> {
+    /// Searches from the live state, so the plan starts with the momentum the bot has (a re-plan after a
+    /// divergence keeps running).
+    fn plan(&mut self, terrain: &Terrain<&ChunkView>, view: &ChunkView, registry: &Arc<BlockRegistry>, live: PlayerState, kit: Option<Kit>) -> Result<(), ActionError> {
         let mut opts = self.opts.search.clone();
         if let Some(kit) = kit {
             opts.kit = kit;
         }
-        let quick = search(terrain, pos, &self.goal, &SearchOpts { max_nodes: QUICK_NODES, budget: QUICK_BUDGET, ..opts.clone() });
+        let quick = search_from(terrain, &live, &self.goal, &SearchOpts { max_nodes: QUICK_NODES, budget: QUICK_BUDGET, ..opts.clone() });
         if quick.complete {
-            return self.accept(quick, pos);
+            return self.accept(quick, live.pos);
         }
         let (world, registry, goal) = (view.world().clone(), registry.clone(), self.goal.clone());
         self.pending = Some(tokio::task::spawn_blocking(move || {
-            search(&Terrain::new(WorldBlocks::new(world), &registry), pos, &goal, &opts)
+            search_from(&Terrain::new(WorldBlocks::new(world), &registry), &live, &goal, &opts)
         }));
         Ok(())
     }

@@ -8,8 +8,11 @@ use acacia_physics::constants::STEP_HEIGHT;
 
 use super::alter;
 use super::cell::{CLIMB as CLIMBABLE, Rect};
+use super::control::Macro;
 use super::costs::{self, CENTER_AFTER_FALL, CLIMB, DANGER_NEAR, ENTER_WATER, JUMP_PENALTY, LONG_JUMP_PENALTY, SPRINT, SWIM, WALK_OFF};
 use super::kit::Kit;
+use super::macros::{self, Macros};
+use super::node::{DIRS, Entry, Momentum};
 use super::terrain::{Blocks, EPS, Spot, SpotKind, Terrain};
 use super::work::Work;
 
@@ -39,6 +42,10 @@ pub(crate) struct Edge {
     pub kind: MoveKind,
     pub cost: f32,
     pub work: Work,
+    pub entry: Entry,
+    /// The motion the move arrives with (macro moves; `Rest` edges get the standing one).
+    pub mom: Momentum,
+    pub mac: Option<Macro>,
 }
 
 /// What the search may do besides walking, per expanded node.
@@ -50,9 +57,10 @@ pub(crate) struct Ctx<'k> {
     pub kit: &'k Kit,
     /// Scaffold blocks not yet used by the path to this node.
     pub blocks_left: u32,
+    /// Macro moves, found by rollout; `None` plans classic moves only.
+    pub macros: Option<Macros<'k>>,
 }
 
-const DIRS: [(i32, i32); 8] = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)];
 /// Highest feet rise a standing jump clears (apex ≈ 1.25 with the 0.42 jump velocity).
 const MAX_JUMP_RISE: f32 = 1.2;
 /// Falls up to 3 blocks do no damage.
@@ -64,7 +72,10 @@ pub(crate) fn offset(p: BlockPos, dx: i32, dy: i32, dz: i32) -> BlockPos {
     [p[0] + dx, p[1] + dy, p[2] + dz]
 }
 
-pub(crate) fn successors<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, ctx: &Ctx, out: &mut Vec<Edge>) {
+pub(crate) fn successors<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, at: (Entry, &Momentum), ctx: &Ctx, out: &mut Vec<Edge>) {
+    if let Some(m) = &ctx.macros {
+        macros::successors(t, p, from, at, m, out);
+    }
     for (dx, dz) in DIRS {
         let start = out.len();
         let side = offset(p, dx, 0, dz);
@@ -77,7 +88,7 @@ pub(crate) fn successors<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, ctx
             horizontal(t, p, from, up, to, (dx, dz), out);
         } else if level.is_none() && (dx == 0 || dz == 0) {
             descend(t, p, from, side, (dx, dz), out);
-            if ctx.parkour && from.kind == SpotKind::Stand && !from.wet {
+            if ctx.parkour && ctx.macros.is_none() && from.kind == SpotKind::Stand && !from.wet {
                 gap_jump(t, p, from, (dx, dz), out);
             }
         }
@@ -201,5 +212,5 @@ pub(crate) fn push<B: Blocks>(t: &Terrain<B>, out: &mut Vec<Edge>, pos: BlockPos
     if t.danger_near(pos) {
         cost += DANGER_NEAR;
     }
-    out.push(Edge { pos, spot, kind, cost, work });
+    out.push(Edge { pos, spot, kind, cost, work, entry: Entry::Rest, mom: Momentum::rest(spot.feet, pos), mac: None });
 }

@@ -43,6 +43,14 @@ impl MovementProfile {
         }
     }
 
+    /// Clearance (blocks) a macro move keeps from lava, fire and the like.
+    pub fn hazard_pad(self) -> f32 {
+        match self {
+            MovementProfile::Optimal => 0.0,
+            MovementProfile::Human => 0.25,
+        }
+    }
+
     /// The executions a macro move must survive to be planned.
     pub fn perturbations(self) -> &'static [Perturbation] {
         match self {

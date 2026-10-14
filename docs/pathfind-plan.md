@@ -70,6 +70,12 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
   pre-apex h-collision, ≤40 ticks. Human: all perturbations land in the cell, edge margin ≥0.15.
 - Cost: simulated ticks (worst perturbation for Human) + `DANGER_NEAR`; Human + `HUMAN_JUMP` per
   jump + `RISK*(1-margin/0.3)`. Classic `gap_jump` only when `!macros`.
+- As built (step 4): `macros.rs` (successors), `solve.rs` (timing search, shared with the follower), `leap.rs`
+  (`LeapCtl`). Cardinal reach 7, not 5: from rest a 4-gap needs a 2-block run-up inside the leap (a jump from the
+  edge block falls short). Prefilter = walk the lane, a blocked cell shadows the rest. Timings: `Tick(0..=12)`
+  deduped by actual takeoff tick, coasts 8..0 only on overshoot; candidates judged fastest-first. Human = every
+  perturbation lands, hazard pad 0.25, no absolute 0.15 margin (survey rec 5); Human refuses 4-gaps. Search starts
+  from the live state (`search_from`); test `opts()` keeps macros off so the classic suite still runs.
 
 ### Cache and budget (`pathfind/cache.rs`)
 - Key `(family, params, dir, Momentum, corridor signature hash)`; caches failures too.
@@ -88,6 +94,10 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
   from the live position (Rest) until Run entries exist (TODO in `goto.rs`). `LeapCtl` ignores air before
   its first ground contact. A full sprint jump overshoots a cell-exact landing, so coast/timing search
   is required, not optional (step-3 test picks the coast by rollout).
+- As built (step 4): a leap that does not finish from the live state is solved again (`resolve`: fresh timing
+  search before takeoff, coasts once airborne), at start and on drift; `MacroReport.resolved` marks it. A
+  finished macro hands over to the next on the same tick. The classic follower sprints into a macro heading
+  the same way (run-up). Navigator always plans from the live state, so a re-plan keeps the momentum.
 
 ## M1 steps (one commit each, tests with each)
 

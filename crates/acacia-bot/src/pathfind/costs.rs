@@ -27,6 +27,11 @@ pub const MAX_DIG_TICKS: u32 = 600;
 pub const PLACE: f32 = 20.0;
 /// Opening a door or gate: aim, click, wait for the update.
 pub const DOOR: f32 = 10.0;
+/// `Human`: a person hesitates before each jump of a macro move.
+pub const HUMAN_JUMP: f32 = 2.0;
+/// `Human`: cost of a landing with no margin, falling to 0 at [`RISK_MARGIN`] blocks from the cell's sides.
+pub const RISK: f32 = 6.0;
+pub const RISK_MARGIN: f32 = 0.3;
 
 /// Placing a block with `left` scaffold blocks remaining: dearer as they run out.
 pub fn place(left: u32) -> f32 {

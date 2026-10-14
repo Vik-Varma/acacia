@@ -46,11 +46,31 @@ pub struct Body {
     pub yaw: f32,
     pub on_ground: bool,
     pub h_collision: bool,
+    /// Hit a ceiling this tick.
+    pub bonk: bool,
+    /// Blocks fallen since last on the ground.
+    pub fall: f32,
 }
 
 impl Body {
     pub fn of(st: &PlayerState) -> Self {
-        Self { pos: st.pos, vel: st.vel, yaw: st.yaw, on_ground: st.on_ground, h_collision: st.collide_x || st.collide_z }
+        Self {
+            pos: st.pos,
+            vel: st.vel,
+            yaw: st.yaw,
+            on_ground: st.on_ground,
+            h_collision: st.collide_x || st.collide_z,
+            bonk: st.collide_y && !st.on_ground,
+            fall: st.fall_distance,
+        }
+    }
+
+    pub fn h_speed(&self) -> f32 {
+        self.vel[0].hypot(self.vel[2])
+    }
+
+    pub fn cell(&self) -> [i32; 2] {
+        [self.pos[0].floor() as i32, self.pos[2].floor() as i32]
     }
 
     /// Largest per-axis position difference.

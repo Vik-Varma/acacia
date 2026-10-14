@@ -24,6 +24,8 @@ mod follow_macro;
 mod goal;
 mod goto;
 mod kit;
+mod leap;
+mod macros;
 mod maneuver;
 mod moves;
 mod node;
@@ -31,14 +33,16 @@ mod physview;
 mod profile;
 mod rollout;
 mod snapshot;
+mod solve;
 mod terrain;
 mod work;
 
 #[cfg(test)]
 mod tests;
 
-pub use astar::{Path, SearchOpts, search, start_node};
-pub use control::{Controller, JumpAt, LeapCtl, Macro, Phase};
+pub use astar::{Path, SearchOpts, search, search_from, start_node};
+pub use control::{Controller, Macro, Phase};
+pub use leap::{JumpAt, LeapCtl};
 pub use follow::{FollowStatus, Follower, Sense};
 pub use follow_macro::MacroReport;
 pub use goal::Goal;

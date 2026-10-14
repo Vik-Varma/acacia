@@ -1,16 +1,20 @@
 //! A* over feet block positions with Baritone's best-partial-path fallback (azalea `astar/mod.rs`).
 
+use std::cell::Cell;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use std::collections::hash_map::Entry;
+use std::collections::hash_map::Entry as Slot;
 use std::time::{Duration, Instant};
 
-use acacia_physics::{BlockPos, Vec3};
+use acacia_physics::{BlockPos, PlayerState, Vec3};
 
-use super::goal::Goal;
+use super::control::Macro;
+use super::goal::{Goal, Speed};
 use super::kit::Kit;
+use super::macros::Macros;
 use super::moves::{self, Ctx, Edge, MoveKind};
-use super::node::{KeyMap, NodeKey};
+use super::node::{Entry, KeyMap, Momentum, NodeKey, run_entry};
+use super::profile::MovementProfile;
 use super::terrain::{Blocks, EPS, Spot, Terrain};
 use super::work::Work;
 use super::PathNode;
@@ -18,6 +22,8 @@ use super::PathNode;
 /// Partial-path candidates are the best nodes by `h + g / c` for each coefficient (Baritone).
 const COEFFICIENTS: [f32; 7] = [1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 15.0];
 const MIN_IMPROVEMENT: f32 = 0.01;
+/// Slower than this (blocks per tick) on the ground counts as standing.
+const AT_REST: f32 = 0.05;
 
 #[derive(Debug, Clone)]
 pub struct SearchOpts {
@@ -33,6 +39,10 @@ pub struct SearchOpts {
     pub open_doors: bool,
     /// Tools and blocks to plan with; [`Bot::goto`](crate::Bot::goto) fills it from the inventory.
     pub kit: Kit,
+    /// How macro moves are planned and run.
+    pub profile: MovementProfile,
+    /// Plan macro moves (leaps found by simulation) instead of the classic gap jump.
+    pub macros: bool,
 }
 
 impl Default for SearchOpts {
@@ -45,7 +55,15 @@ impl Default for SearchOpts {
             allow_bridge: false,
             open_doors: true,
             kit: Kit::default(),
+            profile: MovementProfile::Optimal,
+            macros: true,
         }
+    }
+}
+
+impl SearchOpts {
+    pub(crate) fn speed(&self) -> Speed {
+        Speed::CLASSIC
     }
 }
 
@@ -60,6 +78,8 @@ pub struct Path {
     pub cost: f32,
     /// Nodes expanded.
     pub visited: usize,
+    /// Macro-move simulations run.
+    pub rollouts: u32,
 }
 
 #[derive(Clone, Copy)]
@@ -71,11 +91,14 @@ struct Rec {
     g: f32,
     /// Scaffold blocks the path to here places.
     placed: u32,
-    /// Index into the search's work list, `NO_WORK` for plain moves.
+    /// Index into the search's work list, `NONE` for plain moves.
     work: u32,
+    /// Index into the search's macro list, `NONE` for classic moves.
+    mac: u32,
+    mom: Momentum,
 }
 
-const NO_WORK: u32 = u32::MAX;
+const NONE: u32 = u32::MAX;
 
 struct Open {
     f: f32,
@@ -122,61 +145,71 @@ pub fn start_node<B: Blocks>(t: &Terrain<B>, feet: Vec3) -> Option<(BlockPos, Sp
     best.map(|(_, p, s)| (p, s))
 }
 
+/// Searches from a player standing at `feet`.
 pub fn search<B: Blocks>(t: &Terrain<B>, feet: Vec3, goal: &Goal, opts: &SearchOpts) -> Path {
+    let mut st = PlayerState::new(feet);
+    st.on_ground = true;
+    search_from(t, &st, goal, opts)
+}
+
+/// Searches from the player's live state: its momentum is the start node's, and its attributes and
+/// effects shape every macro move.
+pub fn search_from<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal, opts: &SearchOpts) -> Path {
     let started = Instant::now();
-    let empty = |complete| Path { nodes: Vec::new(), complete, cost: 0.0, visited: 0 };
-    let Some((start, spot)) = start_node(t, feet) else { return empty(false) };
+    let empty = |complete| Path { nodes: Vec::new(), complete, cost: 0.0, visited: 0, rollouts: 0 };
+    let Some((start, spot)) = start_node(t, live.pos) else { return empty(false) };
     if goal.success(start) {
         return empty(true);
     }
-    let start = NodeKey::rest(start);
-    let mut recs = vec![Rec { key: start, spot, kind: MoveKind::Walk, parent: u32::MAX, g: 0.0, placed: 0, work: NO_WORK }];
-    let mut works: Vec<Work> = Vec::new();
+    let entry = match live.on_ground {
+        false => Entry::Air,
+        true if live.vel[0].hypot(live.vel[2]) < AT_REST => Entry::Rest,
+        true => run_entry(live.vel),
+    };
+    let start = NodeKey { entry, ..NodeKey::rest(start) };
+    let mom = Momentum::snap(live, start.pos);
+    let mut recs = vec![Rec { key: start, spot, kind: MoveKind::Walk, parent: NONE, g: 0.0, placed: 0, work: NONE, mac: NONE, mom }];
+    let (mut works, mut macs): (Vec<Work>, Vec<Macro>) = (Vec::new(), Vec::new());
     let mut index = KeyMap::default();
     index.insert(start, 0u32);
     let mut open = BinaryHeap::from([Open { f: 0.0, g: 0.0, index: 0 }]);
+    let speed = opts.speed();
     let mut best = [0u32; 7];
-    let mut best_score = [goal.heuristic(start.pos); 7];
+    let mut best_score = [goal.estimate(start.pos, speed); 7];
     let mut edges: Vec<Edge> = Vec::with_capacity(32);
     let mut visited = 0;
-    let mut ctx = Ctx {
-        parkour: opts.parkour,
-        dig: opts.allow_dig,
-        bridge: opts.allow_bridge,
-        doors: opts.open_doors,
-        kit: &opts.kit,
-        blocks_left: 0,
-    };
+    let macros = opts.macros.then(|| Macros { profile: opts.profile, leaps: opts.parkour, base: live, rollouts: Cell::new(0) });
+    let mut ctx = Ctx { parkour: opts.parkour, dig: opts.allow_dig, bridge: opts.allow_bridge, doors: opts.open_doors, kit: &opts.kit, blocks_left: 0, macros };
+    let rollouts = |ctx: &Ctx| ctx.macros.as_ref().map_or(0, |m| m.rollouts.get());
 
     while let Some(Open { g, index: i, .. }) = open.pop() {
-        let rec = &recs[i as usize];
+        let rec = recs[i as usize];
         if g > rec.g {
             continue;
         }
         if goal.success(rec.key.pos) {
-            return Path { nodes: reconstruct(&recs, &works, i), complete: true, cost: g, visited };
+            return Path { nodes: reconstruct(&recs, &works, &macs, i), complete: true, cost: g, visited, rollouts: rollouts(&ctx) };
         }
         visited += 1;
         if visited >= opts.max_nodes || (visited % 512 == 0 && started.elapsed() >= opts.budget) {
             break;
         }
         edges.clear();
-        let placed = rec.placed;
-        ctx.blocks_left = opts.kit.blocks.saturating_sub(placed);
-        moves::successors(t, rec.key.pos, rec.spot, &ctx, &mut edges);
+        ctx.blocks_left = opts.kit.blocks.saturating_sub(rec.placed);
+        moves::successors(t, rec.key.pos, rec.spot, (rec.key.entry, &rec.mom), &ctx, &mut edges);
         for e in &edges {
             let g2 = g + e.cost;
-            let key = NodeKey::rest(e.pos);
-            let mut next = Rec { key, spot: e.spot, kind: e.kind, parent: i, g: g2, placed: placed + e.work.places(), work: NO_WORK };
+            let key = NodeKey { pos: e.pos, entry: e.entry, ..rec.key };
+            let mut next = Rec { key, spot: e.spot, kind: e.kind, parent: i, g: g2, placed: rec.placed + e.work.places(), work: NONE, mac: NONE, mom: e.mom };
             let j = match index.entry(key) {
-                Entry::Occupied(o) => {
+                Slot::Occupied(o) => {
                     let j = *o.get();
                     if recs[j as usize].g <= g2 {
                         continue;
                     }
                     j
                 }
-                Entry::Vacant(v) => {
+                Slot::Vacant(v) => {
                     let j = recs.len() as u32;
                     recs.push(next);
                     v.insert(j);
@@ -187,8 +220,12 @@ pub fn search<B: Blocks>(t: &Terrain<B>, feet: Vec3, goal: &Goal, opts: &SearchO
                 next.work = works.len() as u32;
                 works.push(e.work);
             }
+            if let Some(m) = e.mac {
+                next.mac = macs.len() as u32;
+                macs.push(m);
+            }
             recs[j as usize] = next;
-            let h = goal.heuristic(e.pos);
+            let h = goal.estimate(e.pos, speed);
             open.push(Open { f: g2 + h, g: g2, index: j });
             for (k, c) in COEFFICIENTS.iter().enumerate() {
                 let score = h + g2 / c;
@@ -200,14 +237,15 @@ pub fn search<B: Blocks>(t: &Terrain<B>, feet: Vec3, goal: &Goal, opts: &SearchO
     }
     let pick = best.iter().copied().find(|&b| b != 0).unwrap_or(0);
     let cost = recs[pick as usize].g;
-    Path { nodes: reconstruct(&recs, &works, pick), complete: false, cost, visited }
+    Path { nodes: reconstruct(&recs, &works, &macs, pick), complete: false, cost, visited, rollouts: rollouts(&ctx) }
 }
 
-fn reconstruct(recs: &[Rec], works: &[Work], mut i: u32) -> Vec<PathNode> {
+fn reconstruct(recs: &[Rec], works: &[Work], macs: &[Macro], mut i: u32) -> Vec<PathNode> {
     let mut nodes = Vec::new();
-    while let Some(r) = recs.get(i as usize).filter(|r| r.parent != u32::MAX) {
+    while let Some(r) = recs.get(i as usize).filter(|r| r.parent != NONE) {
         let work = works.get(r.work as usize).copied().unwrap_or_default();
-        nodes.push(PathNode { pos: r.key.pos, feet: r.spot.feet, kind: r.kind, wet: r.spot.wet, work, entry: r.key.entry, mac: None });
+        let mac = macs.get(r.mac as usize).copied();
+        nodes.push(PathNode { pos: r.key.pos, feet: r.spot.feet, kind: r.kind, wet: r.spot.wet, work, entry: r.key.entry, mac });
         i = r.parent;
     }
     nodes.reverse();

@@ -108,11 +108,14 @@ impl Follower {
         if !self.macros.active() {
             self.advance(s);
         }
-        match self.macros.tick(&self.path, self.index, live, w, c) {
-            MacroStep::Idle => {}
-            MacroStep::Going => return FollowStatus::Moving,
-            MacroStep::Diverged => return FollowStatus::Diverged,
-            MacroStep::Done => self.pass_node(),
+        // A finished macro move hands over to the next one on the same tick.
+        loop {
+            match self.macros.tick(&self.path, self.index, live, w, c) {
+                MacroStep::Idle => break,
+                MacroStep::Going => return FollowStatus::Moving,
+                MacroStep::Diverged => return FollowStatus::Diverged,
+                MacroStep::Done => self.pass_node(),
+            }
         }
         c.pitch = 0.0;
         let node = self.path[self.index];
@@ -173,7 +176,7 @@ impl Follower {
         let wanted = !s.in_water
             && match node.kind {
                 MoveKind::Parkour => true,
-                MoveKind::Walk => self.straight_run() >= SPRINT_RUN,
+                MoveKind::Walk => self.straight_run() >= SPRINT_RUN || self.runs_into_macro(),
                 _ => false,
             };
         // The sprint key only starts a sprint; Movement keeps it going until forward is released.
@@ -201,6 +204,14 @@ impl Follower {
             run += 1;
         }
         run
+    }
+
+    /// The next node is a macro move heading on the way the bot walks now: arriving at speed is a run-up.
+    fn runs_into_macro(&self) -> bool {
+        let Some(next) = self.path.get(self.index + 1).filter(|n| n.mac.is_some()) else { return false };
+        let here = center(&self.path[self.index]);
+        let unit = |(x, z): (i32, i32)| (x.signum(), z.signum());
+        unit(dir(self.origin, here)) == unit(dir(here, center(next)))
     }
 
     /// Moves on to the next node, if any.

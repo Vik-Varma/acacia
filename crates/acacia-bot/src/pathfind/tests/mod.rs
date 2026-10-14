@@ -1,7 +1,9 @@
 mod alter;
 mod alter_sim;
 mod grid;
+mod drive;
 mod leap;
+mod leaps;
 mod rollout;
 mod search;
 mod sim;
