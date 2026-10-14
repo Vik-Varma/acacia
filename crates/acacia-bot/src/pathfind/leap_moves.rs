@@ -26,7 +26,7 @@ const MAX_WATER_DROP: i32 = 16;
 /// (`tests::leaps`: four lands, five never does).
 const MAX_FLAT_GAP: usize = 4;
 /// Horizontal speed (blocks per tick) from which a node counts as running (`node::speed_bin` 1 and up).
-const RUNNING: f32 = 0.12;
+pub(super) const RUNNING: f32 = 0.12;
 
 /// A landing column relative to the node and the cells the straight line to it crosses.
 struct Offset {

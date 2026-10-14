@@ -168,6 +168,15 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
    (Rest entry) no longer re-solve for an arrival velocity they never planned. `off_path` also accepts the next
    segment (a classic gap jump that carries past its node). Bridging maneuvers (`maneuver.rs`) still snap.
 9. `tests/speed.rs`: ticks-to-goal macros on vs off (flat, diagonal, gaps, stairs); on ≤ off.
+   As built: `src/pathfind/tests/speed.rs` (needs the test grid), shortcuts off and on, Human = mean of 5 seeds.
+   Gap course = 1-gap + 2-gap (classic can do both). Measured saved ticks (off → on), shortcuts off: flat 40
+   Optimal 154→127, Human 154→154; diagonal 30×11 149→117 / 149.6→144.2; gaps 109→81 / 115.4→94.4; stairs
+   145→141 / 145→145. Shortcuts on: flat 126→127 / 126→126; diagonal 122→111 / 130.4→111; gaps 100→81 /
+   107.8→88.4; stairs 137→140 / 141→141. Strict gains asserted: flat Optimal, gaps both (shortcuts off ≥20/15,
+   on ≥12). Deviations: Human gains nothing on flat (hops do not pay, step 6); with shortcuts on, flat and stairs
+   Optimal lose 1–3 ticks to the hop chain's discretization (the shortcut already sprint-jumps), allowed ≤4.
+   Shortcut tweaks: rollout cap by distance (4 t/b + 20, a hop node spans ~4 blocks) and a from-rest startup
+   term (`MACRO_STARTUP`) in the take-it comparison. The test takes ~150 s in debug on testbox.
 10. `examples/course.rs` parkour legs (gap3, gap4, up1, down2, diag, stones, sprint40), `--profile`, `--macros off`; dedicated strict testbox BDS, 0 corrections both profiles; evidence in `docs/DESIGN.md`.
 11. Stretch: neo jumps (Optimal), ladder jumps.
 

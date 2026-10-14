@@ -12,3 +12,4 @@ mod rollout;
 mod search;
 mod shortcuts;
 mod sim;
+mod speed;

@@ -6,7 +6,8 @@ use acacia_physics::{BlockPos, WorldView};
 
 use super::PathNode;
 use super::control::{Controller, LAND_EPS, Phase, centre, standing_on, yaw_to};
-use super::costs::{COST_HEURISTIC, HOP_SPEED};
+use super::costs::{COST_HEURISTIC, HOP_SPEED, MACRO_STARTUP};
+use super::leap_moves::RUNNING;
 use super::moves::MoveKind;
 use super::profile::Aim;
 use super::rollout::{Body, Spend};
@@ -67,11 +68,14 @@ pub(super) fn find(path: &[PathNode], index: usize, live: &Rollout, w: &dyn Worl
     let held = Controls { yaw: live.st.yaw, ..Controls::default() };
     let mut solver = Solver::new(w, &avoid, &|_| false, aim.profile, false, held);
     solver.budget = spend.left();
+    // From standing, following the nodes pays the run-up too.
+    let startup = if live.st.vel[0].hypot(live.st.vel[2]) < RUNNING { MACRO_STARTUP } else { 0.0 };
     let found = AHEAD.into_iter().filter(|&k| k < reach).find_map(|k| {
         let j = index + k;
         let along = polyline(live, &path[index..=j]);
         let per_block = if path[index..=j].iter().any(|n| n.kind == MoveKind::Hop) { 1.0 / HOP_SPEED } else { COST_HEURISTIC };
-        let max = 4 * k as u16 + 20;
+        // By distance, not node count: a hop node spans four blocks.
+        let max = (4.0 * along) as u16 + 20;
         let best = STYLES
             .iter()
             .filter_map(|&(jump, stop_jump)| {
@@ -83,7 +87,7 @@ pub(super) fn find(path: &[PathNode], index: usize, live: &Rollout, w: &dyn Worl
                 clean.then_some((ctl, bodies))
             })
             .min_by_key(|(_, b)| b.len());
-        best.filter(|(_, b)| ((b.len() - 1) as f32) < along * per_block).map(|(ctl, bodies)| (ctl, bodies, j))
+        best.filter(|(_, b)| ((b.len() - 1) as f32) < along * per_block + startup).map(|(ctl, bodies)| (ctl, bodies, j))
     });
     spend.charge(&solver);
     found
