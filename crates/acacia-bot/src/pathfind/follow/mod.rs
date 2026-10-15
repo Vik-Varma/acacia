@@ -1,6 +1,7 @@
 //! Per-tick path following: turns a path into [`Controls`], network-free so it can run against the
 //! physics simulation headlessly.
 
+mod shortcuts;
 mod steer;
 mod work;
 
@@ -10,7 +11,6 @@ use super::follow_macro::{MacroReport, MacroRunner, MacroStep};
 use super::moves::MoveKind;
 use super::profile::{Aim, MovementProfile};
 use super::rollout::Spend;
-use super::shortcut;
 use super::PathNode;
 use crate::cadence::splitmix;
 use crate::movement::{Controls, Rollout};
@@ -67,6 +67,8 @@ pub struct Follower {
     shortcuts: bool,
     /// Path index a shortcut was last looked for from.
     tried: Option<usize>,
+    /// The path's last node is the goal (not a segment end a plan-ahead continues): shortcuts stop on it.
+    ends_at_goal: bool,
     /// What the last tick simulated.
     spend: Spend,
 }
@@ -87,7 +89,7 @@ impl Follower {
     /// `tolerance`: how close (horizontally, blocks) to the final node's centre counts as arrived.
     pub fn new(path: Vec<PathNode>, start: Vec3, tolerance: f32) -> Self {
         let (macros, aim, spend) = (MacroRunner::default(), Aim::new(MovementProfile::Optimal, 0), Spend::default());
-        Self { path, index: 0, worked: false, origin: start, last_pos: None, best_dist: f32::INFINITY, since_progress: 0, tolerance, macros, aim, rng: 0, shortcuts: false, tried: None, spend }
+        Self { path, index: 0, worked: false, origin: start, last_pos: None, best_dist: f32::INFINITY, since_progress: 0, tolerance, macros, aim, rng: 0, shortcuts: false, tried: None, ends_at_goal: true, spend }
     }
 
     /// Moves like `profile` (default `Optimal`), every aim jittered from `seed` for `Human`.
@@ -96,12 +98,6 @@ impl Follower {
         self.aim = Aim::new(profile, splitmix(&mut rng));
         self.macros.rng = splitmix(&mut rng);
         self.rng = rng;
-        self
-    }
-
-    /// On flat ground, run straight at nodes further on when that beats following the nodes between.
-    pub fn shortcuts(mut self, on: bool) -> Self {
-        self.shortcuts = on;
         self
     }
 
@@ -210,18 +206,6 @@ impl Follower {
         let coast = live.filter(|_| last).and_then(|l| Self::coast_end(l, c, w, spend));
         self.steer(s, c, &node, target, dist, speed, last, coast);
         FollowStatus::Moving
-    }
-
-    /// Once per node, with nothing running: start a shortcut to a node further on if one beats the nodes between.
-    fn try_shortcut(&mut self, live: Option<&Rollout>, w: &dyn WorldView, spend: &mut Spend) {
-        let Some(live) = live.filter(|_| self.shortcuts) else { return };
-        if self.macros.active() || self.tried.replace(self.index) == Some(self.index) {
-            return;
-        }
-        let aim = self.aim.reseeded(splitmix(&mut self.rng));
-        if let Some((ctl, predicted, last)) = shortcut::find(&self.path, self.index, live, w, aim, spend) {
-            self.macros.begin(ctl, predicted, last);
-        }
     }
 
     /// Moves on to the next node, if any.

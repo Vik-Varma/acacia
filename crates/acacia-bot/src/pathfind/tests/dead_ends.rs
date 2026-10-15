@@ -6,6 +6,7 @@ use super::drive::{macro_opts, standing};
 use super::grid::Grid;
 use super::pilot_sim::{Sky, fly};
 use super::search::opts;
+use crate::pathfind::exit::Exits;
 use crate::pathfind::{Favour, Goal, GotoOpts, Kit, MovementProfile, SearchOpts, search};
 
 /// A lane (z -1..1) from x 0 to the pit's rim at 44, then a 3-deep pit (x 45..47) at the edge of the loaded grid.
@@ -39,6 +40,20 @@ fn edge_of_the_world_backs_off_then_gives_up() {
     assert!((f.end()[0] - 44.5).abs() < 0.5, "waits on the rim: {:?}", f.end());
     // ~200 ticks stalled on the rim; one search a tick before the backoff.
     assert!(f.searches <= 8, "{} searches", f.searches);
+}
+
+/// Leaps down are only queued into cells with a way on: a pit floor is closed (all its cells at once), the lane open,
+/// and a pit holding the goal open.
+#[test]
+fn leap_landings_into_a_closed_pit_are_skipped() {
+    let g = lane_to_a_pit();
+    let (t, o) = (g.terrain(), macro_opts(MovementProfile::Optimal));
+    let spot = |p| t.spot(p).expect("a floor");
+    let mut exits = Exits::default();
+    assert!(!exits.open(&t, [46, -2, 0], spot([46, -2, 0]), &o, &Goal::XZ(60, 0)));
+    assert!(!exits.open(&t, [45, -2, 1], spot([45, -2, 1]), &o, &Goal::XZ(60, 0)), "the basin is closed as a whole");
+    assert!(exits.open(&t, [20, 1, 0], spot([20, 1, 0]), &o, &Goal::XZ(60, 0)));
+    assert!(Exits::default().open(&t, [46, -2, 0], spot([46, -2, 0]), &o, &Goal::Block([47, -2, 1])));
 }
 
 /// A closed 3-deep pit around the bot: every reachable cell searched.

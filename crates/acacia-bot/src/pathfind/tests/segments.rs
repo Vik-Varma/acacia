@@ -4,13 +4,17 @@
 
 use super::drive::{PROFILES, macro_opts, standing};
 use super::grid::Grid;
-use super::pilot_sim::{Sky, fly};
+use acacia_physics::Vec3;
+
+use super::pilot_sim::{Flight, Sky, fly};
 use crate::pathfind::{Goal, GotoOpts, MovementProfile};
 
 /// Slower than this (blocks/tick) near a join counts as stopping there (walking is 0.216).
 const MIN_JOIN_SPEED: f32 = 0.15;
 /// Ticks either side of passing a join that are checked.
 const JOIN_WINDOW: usize = 10;
+/// Moving back faster than this (blocks/tick) counts as turning round.
+const BACK_SPEED: f32 = 0.01;
 
 /// A stone lane 7 wide along +x from x -5 to `len`, feet at y 1: two-block gaps at 100 and 300, a raised
 /// stretch (one block up) from 200 to 230.
@@ -41,12 +45,39 @@ fn long_goto_runs_through_the_joins() {
         let f = fly(&g, &mut standing([0.5, 1.0, 0.5]), goal.clone(), opts(profile), sky);
         let speeds = f.join_speeds(JOIN_WINDOW);
         eprintln!("JOINS {profile:?}: {} ticks, {} joins, {} searches, {} diverged, slowest near each join {speeds:.3?}", f.ticks, f.joins.len(), f.searches, f.divergences);
-        let ok = f.result.is_ok() && f.joins.len() >= 3 && f.replans == 0 && speeds.iter().all(|&s| s > MIN_JOIN_SPEED);
+        let back = turned_back(&f, goal_x(&goal));
+        eprintln!("BACKWARDS {profile:?}: {back:.2?}");
+        let ok = f.result.is_ok() && f.joins.len() >= 3 && f.replans == 0 && speeds.iter().all(|&s| s > MIN_JOIN_SPEED) && back.is_empty();
         if !ok {
             bad.push(format!("{profile:?}: {:?}, {} joins, {} re-plans, speeds {speeds:?}", f.result, f.joins.len(), f.replans));
         }
     }
     assert!(bad.is_empty(), "{bad:#?}");
+}
+
+fn goal_x(goal: &Goal) -> f32 {
+    match goal {
+        Goal::Block(p) => p[0] as f32 + 0.5,
+        _ => unreachable!("lane goals are blocks"),
+    }
+}
+
+/// Ticks moving back (-x) on the lane, away from the goal's last block (settling there may step back).
+fn turned_back(f: &Flight, goal_x: f32) -> Vec<(usize, Vec3)> {
+    f.backwards(BACK_SPEED).into_iter().filter(|(_, p)| goal_x - p[0] > 1.5).collect()
+}
+
+/// `Human` seed 1 sprint-jumped past a shortcut's target at x 146 and turned round to stand in it (fixed: a
+/// shortcut landing just past its target ends there).
+#[test]
+#[ignore = "slow in debug; run in release"]
+fn human_runs_on_past_a_shortcut_target() {
+    let g = lane(200);
+    let goal = Goal::Block([190, 1, 0]);
+    let sky = Sky { horizon: Some(5), delay: 0, max_ticks: 2000 };
+    let f = fly(&g, &mut standing([0.5, 1.0, 0.5]), goal.clone(), opts(MovementProfile::Human), sky);
+    assert_eq!(f.result, Ok(()));
+    assert_eq!(turned_back(&f, goal_x(&goal)), Vec::new());
 }
 
 /// A plan-ahead answering after the bot reached the segment's end: it waits there, then carries on.

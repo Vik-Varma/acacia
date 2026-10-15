@@ -5,7 +5,7 @@
 mod ahead;
 mod guard;
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use acacia_physics::{PlayerState, Vec3};
@@ -59,8 +59,8 @@ pub struct Pilot {
     /// The dropped path's cells, favoured by re-plans until one is accepted.
     favour: Option<Arc<Favour>>,
     guard: Guard,
-    /// Macro-move results kept across re-plans; background searches take it along.
-    cache: Arc<Mutex<RolloutCache>>,
+    /// Macro-move results kept across re-plans, shared with the searches running.
+    cache: Arc<RolloutCache>,
     /// Seeds each follower's aim jitter.
     rng: u64,
 }
@@ -210,11 +210,7 @@ impl Pilot {
         self.guard.searched(live.on_ground);
         if inline {
             let quick_opts = SearchOpts { max_nodes: QUICK_NODES, budget: QUICK_BUDGET, max_rollout_ticks: QUICK_ROLLOUT_TICKS, ..opts.clone() };
-            // A plan-ahead may hold the cache for a while: search without it rather than wait.
-            let quick = match self.cache.try_lock() {
-                Ok(mut cache) => search_cached(terrain, &live, &self.goal, &quick_opts, &mut cache),
-                Err(_) => search_cached(terrain, &live, &self.goal, &quick_opts, &mut RolloutCache::default()),
-            };
+            let quick = search_cached(terrain, &live, &self.goal, &quick_opts, &self.cache);
             // A plan whose macro budget ran out may have missed faster macro moves: search again in full. Moving, a
             // partial one beats stopping for the full search: plan-ahead extends it from its end.
             let moving = live.vel[0].hypot(live.vel[2]) > MOVING;
@@ -243,7 +239,8 @@ impl Pilot {
         self.partial = !path.complete;
         self.generation += 1;
         self.ahead.clear();
-        let follower = Follower::new(path.nodes, pos, self.opts.tolerance).moving(self.opts.search.profile, splitmix(&mut self.rng));
+        let mut follower = Follower::new(path.nodes, pos, self.opts.tolerance).moving(self.opts.search.profile, splitmix(&mut self.rng));
+        follower.set_ends_at_goal(path.complete);
         self.follower = Some(follower.shortcuts(self.opts.shortcuts));
         Ok(())
     }

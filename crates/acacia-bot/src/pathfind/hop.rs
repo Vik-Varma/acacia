@@ -6,7 +6,7 @@ use std::f32::consts::SQRT_2;
 
 use acacia_physics::{BlockPos, PlayerState};
 
-use super::cache::{RolloutCache, feet_key};
+use super::cache::{Counts, Store, feet_key};
 use super::control::RunCtl;
 use super::costs::{HUMAN_JUMP, SPRINT};
 use super::moves::offset;
@@ -36,7 +36,7 @@ fn level<B: Blocks>(t: &Terrain<B>, q: BlockPos, from: Spot) -> Option<Spot> {
 }
 
 /// The runs from `p`: along every direction from rest, along the running direction otherwise.
-pub(crate) fn runs<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, (entry, mom): (Entry, &Momentum), start: &Rollout, solver: &mut Solver<Terrain<B>>, cache: &mut RolloutCache) -> Vec<(BlockPos, Spot, Ran)> {
+pub(crate) fn runs<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, (entry, mom): (Entry, &Momentum), start: &Rollout, solver: &mut Solver<Terrain<B>>, (cache, n): (&Store, &mut Counts)) -> Vec<(BlockPos, Spot, Ran)> {
     let dirs = match entry {
         Entry::Run(d, _) => d..d + 1,
         _ => 0..DIRS.len() as u8,
@@ -57,7 +57,7 @@ pub(crate) fn runs<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, (entry, m
             _ => continue,
         };
         let Some(to) = level(t, at(k), from) else { continue };
-        let ran = cache.runs.get_or(t, p, (*mom, d, k, feet_key(to.feet, p)), &mut cache.counts, || {
+        let ran = cache.runs.get_or(t, p, (*mom, d, k, feet_key(to.feet, p)), n, || {
             let ctl = RunCtl::new(at(k), to.feet, Aim::new(solver.profile, AIM_SEED));
             let (bodies, end, clean) = solver.run(start, &mut { ctl }, false);
             clean.then(|| Ran { ctl, ticks: bodies.len() as u32 - 1, end })

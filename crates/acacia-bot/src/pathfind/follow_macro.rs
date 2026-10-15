@@ -80,6 +80,11 @@ impl MacroRunner {
             Some(e) => e,
             None => {
                 let Some(mac) = path[index].mac.filter(|_| self.done != Some(index)) else { return MacroStep::Idle };
+                // Planned from standing on the node before: a classic jump onto it still in the air (an Ascend counts as
+                // reached mid-air) lands first, steered classically.
+                if !live.st.on_ground {
+                    return MacroStep::Idle;
+                }
                 let mac = mac.reseeded(splitmix(&mut self.rng));
                 // A node entered at rest (water) plans no arrival velocity.
                 let want = (path[index].entry != Entry::Rest).then(|| path[index].mom.velocity());

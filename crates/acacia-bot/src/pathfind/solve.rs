@@ -18,6 +18,10 @@ pub(super) const MAX_TAKEOFF: u8 = 12;
 pub(super) const MAX_COAST: u8 = 8;
 /// Falls up to 3 blocks do no damage.
 const MAX_SAFE_FALL: f32 = 3.0;
+/// Least height a jump rises (no effects: 1.25; jump boost only adds).
+const JUMP_RISE: f32 = 1.25;
+/// Most a fall of under 5 blocks drops in one tick: the landing tick's drop is not counted as fallen.
+const LAST_TICK_FALL: f32 = 0.8;
 /// Seed of the planned aim's jitter stream.
 pub(crate) const AIM_SEED: u64 = 0x5eed;
 
@@ -166,12 +170,14 @@ impl<W: WorldView + ?Sized> Solver<'_, W> {
                 None
             }
         };
+        let jumps = wet || !falls_too_far(start, feet);
         for &yaw in shape.yaws {
             let mut ctl = LeapCtl::new(target, feet, JumpAt::Never, None, Aim::new(self.profile, AIM_SEED));
             (ctl.wet, ctl.yaw_off, ctl.air_aim) = (wet, yaw, shape.air_aim);
             // The air time barely depends on the takeoff, so the earliest takeoff that lands is the fastest.
             let (mut jumped, mut last) = (None, None);
-            let (first, mut known) = self.first_reaching(start, ctl).unwrap_or((MAX_TAKEOFF + 1, None));
+            let reaching = if jumps { self.first_reaching(start, ctl) } else { None };
+            let (first, mut known) = reaching.unwrap_or((MAX_TAKEOFF + 1, None));
             for k in first..=MAX_TAKEOFF {
                 let mut c = ctl;
                 c.jump = JumpAt::Tick(k);
@@ -267,6 +273,14 @@ impl<W: WorldView + ?Sized> Solver<'_, W> {
         }
         Err(false)
     }
+}
+
+/// Any jump from `start` down to a dry floor at `feet` counts over [`MAX_SAFE_FALL`] fallen from its apex before
+/// it lands (a jumped down-3: 4.25 less the landing tick's ≤ 0.8), so only running off the edge can land there.
+/// Not under effects that change the fall.
+fn falls_too_far(start: &Rollout, feet: f32) -> bool {
+    let e = &start.st.effects;
+    e.levitation.is_none() && !e.slow_falling && start.st.pos[1] - feet + JUMP_RISE - LAST_TICK_FALL > MAX_SAFE_FALL
 }
 
 /// The attempt came down over half a block short of its target's centre, along the line from `start`.

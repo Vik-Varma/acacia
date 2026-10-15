@@ -1,6 +1,7 @@
 mod alter;
 mod alter_sim;
 mod cache;
+mod cache_shared;
 mod course;
 mod dead_ends;
 mod grid;
@@ -9,6 +10,7 @@ mod drive;
 mod leap;
 mod leaps;
 mod leaps_shaped;
+mod macro_start;
 mod perf;
 mod pilot_sim;
 mod rollout;

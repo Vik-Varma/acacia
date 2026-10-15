@@ -7,7 +7,7 @@ use std::sync::LazyLock;
 use acacia_physics::BlockPos;
 use acacia_physics::constants::DEFAULT_MOVEMENT_SPEED;
 
-use super::cache::{RolloutCache, feet_key};
+use super::cache::{Counts, Store, feet_key};
 use super::cell::Rect;
 use super::moves::offset;
 use super::node::Momentum;
@@ -88,8 +88,32 @@ fn landings<B: Blocks>(t: &Terrain<B>, c: BlockPos) -> Vec<(BlockPos, Spot)> {
     out
 }
 
-/// The leaps from `p` (standing at `from`), solved from `start`.
-pub(crate) fn leaps<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, mom: &Momentum, start: &Rollout, solver: &mut Solver<Terrain<B>>, cache: &mut RolloutCache) -> Vec<(BlockPos, Spot, Solved)> {
+/// A line of leaps from a node: unit step and landing dy.
+pub(crate) type Line = ((i32, i32), i32);
+
+/// A leap target from a node, not yet solved: the landing cell, its spot and the offset it lies at.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct LeapCand {
+    pub q: BlockPos,
+    pub to: Spot,
+    off: u16,
+}
+
+impl LeapCand {
+    /// The line (unit step, landing dy) it lies on: a nearer leap on it that fell short means this one does too.
+    pub fn line(&self, p: BlockPos) -> Line {
+        (OFFSETS[usize::from(self.off)].unit, self.q[1] - p[1])
+    }
+
+    /// Unit steps along its line: a leap that fell short makes only farther ones on the line fall short.
+    pub fn steps(&self) -> i32 {
+        let off = &OFFSETS[usize::from(self.off)];
+        if off.unit.0 != 0 { off.to.0 / off.unit.0 } else { off.to.1 / off.unit.1 }
+    }
+}
+
+/// The leap targets from `p` (standing at `from`, starting as `start`) that pass the geometric prefilters.
+pub(crate) fn candidates<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, start: &Rollout) -> Vec<LeapCand> {
     let mut found = Vec::new();
     // Per crossed cell: no floor at the start's level; per cell and lane shape: body clear at takeoff and jump height.
     const W: i32 = 2 * MAX_CARDINAL + 1;
@@ -106,11 +130,9 @@ pub(crate) fn leaps<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, mom: &Mo
         *clears[at((dx, dz))][usize::from(diagonal)].get_or_insert_with(|| t.body_clear(q, rect, from.feet) && t.body_clear(q, rect, from.feet + 1.0))
     };
     let plain = start.st.effects.jump_boost.is_none() && start.st.movement_attribute <= DEFAULT_MOVEMENT_SPEED;
-    // Lines (unit step, landing dy) on which a nearer leap fell short: farther ones would too.
-    let mut short: Vec<((i32, i32), i32)> = Vec::new();
     let [vx, _, vz] = start.st.vel;
     let running = vx.hypot(vz) >= RUNNING;
-    for off in OFFSETS.iter() {
+    for (i, off) in OFFSETS.iter().enumerate() {
         // A runner leaps ahead or aside; a leap back starts from a stop, which the node standing here offers.
         let back = running && vx * off.to.0 as f32 + vz * off.to.1 as f32 <= 0.0;
         // Gaps first: open ground has none, and they are the cheaper probe.
@@ -118,28 +140,28 @@ pub(crate) fn leaps<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, mom: &Mo
             continue;
         }
         let too_wide = !off.diagonal && plain && widest_gap(&off.crossed, &mut gap) > MAX_FLAT_GAP;
-        let start = facing(start, off.to.0 as f32, off.to.1 as f32);
         for (q, to) in landings(t, offset(p, off.to.0, 0, off.to.1)) {
-            let line = (off.unit, q[1] - p[1]);
-            if short.contains(&line) || solver.spent() || (too_wide && !to.wet && q[1] >= p[1]) {
-                continue;
-            }
-            let key = (*mom, ((off.to.0, off.to.1, q[1] - p[1]), feet_key(to.feet, p), to.wet));
-            let solved = cache.leaps.get_or(t, p, key, &mut cache.counts, || {
-                let straight = Shape { drop: to.wet || q[1] < p[1], ..STRAIGHT };
-                let wide = Shape { drop: straight.drop, ..WIDE };
-                let solved = solver.solve(&start, q, to.feet, to.wet, straight);
-                // Turning off the line adds no reach: a leap that fell short straight falls short wide too.
-                if off.diagonal && matches!(solved, Err(Miss::Other)) { solver.solve(&start, q, to.feet, to.wet, wide) } else { solved }
-            });
-            match solved {
-                Ok(s) => found.push((q, to, s)),
-                Err(Miss::Short) => short.push(line),
-                Err(Miss::Other) => {}
+            if !(too_wide && !to.wet && q[1] >= p[1]) {
+                found.push(LeapCand { q, to, off: i as u16 });
             }
         }
     }
     found
+}
+
+/// The leap to `c` from `p`, solved from `start` (or the cache); `real_yaw`: from the momentum's facing, not turned to
+/// the leap.
+pub(crate) fn solve<B: Blocks>(t: &Terrain<B>, p: BlockPos, (mom, real_yaw): (&Momentum, bool), start: &Rollout, c: LeapCand, solver: &mut Solver<Terrain<B>>, (cache, n): (&Store, &mut Counts)) -> Result<Solved, Miss> {
+    let (off, q, to) = (&OFFSETS[usize::from(c.off)], c.q, c.to);
+    let key = (*mom, ((off.to.0, off.to.1, q[1] - p[1]), feet_key(to.feet, p), to.wet, real_yaw));
+    cache.leaps.get_or(t, p, key, n, || {
+        let start = if real_yaw { start.clone() } else { facing(start, off.to.0 as f32, off.to.1 as f32) };
+        let straight = Shape { drop: to.wet || q[1] < p[1], ..STRAIGHT };
+        let wide = Shape { drop: straight.drop, ..WIDE };
+        let solved = solver.solve(&start, q, to.feet, to.wet, straight);
+        // Turning off the line adds no reach: a leap that fell short straight falls short wide too.
+        if off.diagonal && matches!(solved, Err(Miss::Other)) { solver.solve(&start, q, to.feet, to.wet, wide) } else { solved }
+    })
 }
 
 /// Most gap cells in a row along `crossed`.

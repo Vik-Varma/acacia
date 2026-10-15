@@ -49,7 +49,7 @@ pub fn cases() -> Vec<Case> {
 }
 
 /// Plans case `c` with `cache`: the path and milliseconds taken.
-pub fn run(c: &Case, g: &Grid, cache: &mut RolloutCache) -> (Path, f32) {
+pub fn run(c: &Case, g: &Grid, cache: &RolloutCache) -> (Path, f32) {
     let m = standing(c.from);
     let t0 = Instant::now();
     let p = search_cached(&g.terrain(), m.state().expect("started"), &c.goal, &c.opts, cache);
@@ -85,7 +85,7 @@ fn cost_skew_report() {
                 let mut m = standing([-20.5, 1.0, 0.5]);
                 let p = super::drive::plan(&g, &m, &goal, &opts);
                 let o = super::drive::drive(&g, &mut m, p.nodes.clone(), &goal, &opts, super::drive::Style::default(), |_, _| {});
-                eprintln!("STAT {profile:?} macros {macros} {} blocks: cost {:.1}, executed {} ticks", to + 21, p.cost, o.ticks);
+                eprintln!("STAT {profile:?} macros {macros} {} blocks: cost {:.1}, near the goal after {:?}, executed {} ticks", to + 21, p.cost, o.near, o.ticks);
             }
         }
     }
@@ -100,14 +100,14 @@ fn perf_report() {
     for c in cases().into_iter().filter(|c| c.name.contains(&only)) {
         let g = (c.grid)();
         if uncached {
-            report(c.name, "uncached", &run(&c, &g, &mut RolloutCache::disabled()));
+            report(c.name, "uncached", &run(&c, &g, &RolloutCache::disabled()));
         }
         // Cold: a fresh grid (terrain memo) and cache; replan: the navigator's cache kept. Best of five (a
         // shared testbox is noisy).
         let best = |runs: Vec<(Path, f32)>| runs.into_iter().min_by(|a, b| a.1.total_cmp(&b.1)).expect("runs");
-        report(c.name, "cold", &best((0..5).map(|_| run(&c, &(c.grid)(), &mut RolloutCache::default())).collect()));
-        let mut cache = RolloutCache::default();
-        run(&c, &g, &mut cache);
-        report(c.name, "replan", &best((0..5).map(|_| run(&c, &(c.grid)(), &mut cache)).collect()));
+        report(c.name, "cold", &best((0..5).map(|_| run(&c, &(c.grid)(), &RolloutCache::default())).collect()));
+        let cache = RolloutCache::default();
+        run(&c, &g, &cache);
+        report(c.name, "replan", &best((0..5).map(|_| run(&c, &(c.grid)(), &cache)).collect()));
     }
 }

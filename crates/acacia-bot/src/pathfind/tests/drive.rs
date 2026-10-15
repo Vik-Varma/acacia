@@ -38,7 +38,10 @@ pub fn plan(g: &Grid, m: &Movement, goal: &Goal, opts: &SearchOpts) -> Path {
     let t0 = Instant::now();
     let p = search_from(&g.terrain(), m.state().expect("started"), goal, opts);
     let ms = t0.elapsed().as_secs_f32() * 1000.0;
-    eprintln!("plan {:?}: {} nodes, {} visited, {ms:.1} ms, complete {}, {:?}", opts.profile, p.nodes.len(), p.visited, p.complete, p.macro_stats);
+    eprintln!("plan {:?}: {} nodes, {} visited, {ms:.1} ms, complete {}, cost {:.1}, {:?}", opts.profile, p.nodes.len(), p.visited, p.complete, p.cost, p.macro_stats);
+    if std::env::var("PLAN_NODES").is_ok() {
+        p.nodes.iter().for_each(|n| eprintln!("  NODE {:?} {:?} {:?} cost {:.1}", n.pos, n.kind, n.entry, n.cost));
+    }
     p
 }
 
@@ -58,6 +61,8 @@ pub struct Outcome {
     pub end: Vec3,
     /// Most rollout ticks one follower tick simulated.
     pub max_spend: u64,
+    /// First tick the feet were within the arrival tolerance of the goal's centre (before settling there).
+    pub near: Option<u32>,
 }
 
 /// Follows `path` from `m` towards `goal`; `nudge` may disturb the bot each tick. Asserts no follower tick
@@ -68,13 +73,20 @@ pub fn drive(g: &Grid, m: &mut Movement, path: Vec<PathNode>, goal: &Goal, opts:
     let mut rng = style.seed;
     let mut new_follower = |path, at| Follower::new(path, at, 0.25).moving(opts.profile, crate::cadence::splitmix(&mut rng)).shortcuts(style.shortcuts);
     let mut follower = new_follower(path, start);
-    let mut out = Outcome { reports: Vec::new(), diverged: 0, held: true, ticks: 0, end: start, max_spend: 0 };
+    let mut out = Outcome { reports: Vec::new(), diverged: 0, held: true, ticks: 0, end: start, max_spend: 0, near: None };
+    let centre = goal_centre(goal);
     for tick in 0..600 {
         nudge(tick, m);
         let s = sense(g, m);
+        if out.near.is_none() && centre.is_some_and(|c| (s.pos[0] - c[0]).hypot(s.pos[2] - c[1]) < 0.25) {
+            out.near = Some(tick);
+        }
         let live = m.fork();
         let status = follower.tick(&s, live.as_ref(), &g.terrain(), &mut m.controls);
         let spend = follower.spend();
+        if std::env::var("DRIVE_TRACE").is_ok() {
+            eprintln!("DT {tick} {:.3?} index {} yaw {:.1}", s.pos, follower.index(), m.controls.yaw);
+        }
         assert!(spend.ticks <= ROLLOUT_BUDGET, "tick {tick}: {spend:?}");
         out.max_spend = out.max_spend.max(spend.ticks);
         out.reports.extend(follower.take_macro_report());
@@ -119,6 +131,13 @@ pub fn plan_and_follow(g: &Grid, from: Vec3, goal: BlockPos, opts: &SearchOpts, 
         o
     }).collect();
     Some((path, runs))
+}
+
+fn goal_centre(goal: &Goal) -> Option<[f32; 2]> {
+    match goal {
+        Goal::Block(p) => Some([p[0] as f32 + 0.5, p[2] as f32 + 0.5]),
+        _ => None,
+    }
 }
 
 pub fn assert_arrived(o: &Outcome, goal: BlockPos) {

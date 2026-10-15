@@ -63,6 +63,7 @@ impl Pilot {
                 tracing::debug!(nodes = p.nodes.len(), complete = p.complete, "next segment spliced on");
                 self.ahead.joins.extend(f.path().last().map(|n| n.pos));
                 f.splice(p.nodes);
+                f.set_ends_at_goal(p.complete);
                 self.partial = !p.complete;
             }
             (Some(_), _) => tracing::debug!("plan-ahead found no way on"),
