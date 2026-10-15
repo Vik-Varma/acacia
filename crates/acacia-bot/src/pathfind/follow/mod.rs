@@ -165,6 +165,10 @@ impl Follower {
             match self.macros.tick(&self.path, self.index, live, w, c, spend) {
                 MacroStep::Idle => break,
                 MacroStep::Going => return FollowStatus::Moving,
+                MacroStep::Wait => {
+                    c.jump = false;
+                    return FollowStatus::Moving;
+                }
                 MacroStep::Diverged => return FollowStatus::Diverged,
                 MacroStep::Done(last) => {
                     self.index = last;

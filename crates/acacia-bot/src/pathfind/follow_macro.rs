@@ -35,6 +35,8 @@ pub(super) enum MacroStep {
     /// The current node is no macro move (or has no live state to run one): steer classically.
     Idle,
     Going,
+    /// The move is due but this tick's rollout budget is spent: start it on the next tick.
+    Wait,
     /// The move finished this tick, on the path node of this index.
     Done(usize),
     Diverged,
@@ -88,8 +90,11 @@ impl MacroRunner {
                 let mac = mac.reseeded(splitmix(&mut self.rng));
                 // A node entered at rest (water) plans no arrival velocity.
                 let want = (path[index].entry != Entry::Rest).then(|| path[index].mom.velocity());
+                // Rollouts already spent this tick went on the shortcut search, which runs once per node.
+                let starved = spend.ticks > 0;
                 match Exec::start(mac, want, index, live, *c, w, spend) {
                     Some(e) => self.exec.insert(e),
+                    None if starved && spend.short => return MacroStep::Wait,
                     None => return MacroStep::Diverged,
                 }
             }

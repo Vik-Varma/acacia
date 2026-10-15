@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Linux BDS for live action tests on testbox (~/work/bds-actions, RakNet :19170, offline, flat world,
 # tools/actiontest-pack enabled). Run from this machine; every command goes over ssh.
-# usage: tools/testbox-bds.sh install|pack|start|stop|restart|reset|log [n]|cmd <console command>
+# usage: tools/testbox-bds.sh install|pack|unpack|start|stop|restart|reset|log [n]|cmd <console command>
 #   a second instance: BDS_DIR=work/bds-actions2 BDS_PORT=19172 tools/testbox-bds.sh ...
 #   install  download BDS, write server.properties, install the pack (idempotent)
 #   pack     re-sync tools/actiontest-pack (then restart)
+#   unpack   turn the pack off for this world (movement and pathfind runs, docs/testing.md); `pack` turns it back on
 #   reset    delete the world (a fresh scene on the next start)
 set -uo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -52,9 +53,10 @@ case "${1:-}" in
     printf '%s\n' "$props" | retry ssh $opts testbox "cd $dir || exit; cat > props.new; awk -F= 'NR==FNR{k[\$1]=1; print; next} !(\$1 in k)' props.new server.properties > p.tmp && mv p.tmp server.properties; rm props.new" || exit 1
     install_pack ;;
   pack) install_pack ;;
+  unpack) remote "rm -f $dir/worlds/actions/world_behavior_packs.json" ;;
   start|stop|reset) retry ctl "$1" ;;
   restart) "$0" stop; "$0" start ;;
   log) remote "tail -n ${2:-60} $dir/bds.log" ;;
   cmd) shift; remote "echo $(printf '%q ' "$@") > $dir/console" ;;
-  *) sed -n '2,7p' "$0"; exit 2 ;;
+  *) sed -n '2,9p' "$0"; exit 2 ;;
 esac
