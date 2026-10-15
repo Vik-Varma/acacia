@@ -173,16 +173,40 @@ the proxy (`crates/acacia-mitm/src/transfer.rs`). What is left: [mitm-next.md](m
     | Human seed 3 | 0 / 54 | 0 / 54 | 0 / 43 | 0 / 30 | 0 / 83 | 0 / 82 | 4 / 184 |
     | macros off, Optimal | 0 / 32 | 0 / 53 | 0 / 57 | 0 / 59 | 0 / 64 | 0 / 61 | 0 / 147 |
     | macros off, Human 1 | 0 / 32 | 0 / 52 | 0 / 57 | 1 / 73 | 1 / 70 | 0 / 58 | 4 / 143 |
+    | fresh world, Optimal | 0 / 39 | 0 / 50 | 0 / 30 | 0 / 27 | 0 / 66 | 0 / 59 | 0 / 178 |
+    | fresh world, Human 2 | 0 / 72 | 1 / 73 | 0 / 68 | 0 / 34 | 0 / 100 | 0 / 83 | timeout |
+
+    On the fresh world Human seed 2 also drew 142 on classic legs (ladder 43, pool 64), seed 1 one in all.
 
     Optimal draws no correction on any leg (classic legs included). Human draws a few on classic legs too
     (exit 14, slabs 8, pool 2 in single seeds) and with macros off, so they come from its aim, not macro moves.
-  - Strict Linux BDS corrects positions one f32 ulp off (x ~60–80: 7.6e-6) when the yaw changes every tick
-    by a fraction of a degree: shortcuts re-aiming each tick drew 20–22 on sprint40, Human jitter does the
-    same. The replay agrees with every such correction at its 0.001 tolerance, so no trace in
-    `tests/traces` pins it. Ruled out by replay (`HYP` toggles in `motion::move_relative`): glibc
-    `sinf`/`cosf` and correctly rounded sin/cos for the walk impulse. Shortcuts now hold their heading once
-    faced (`shortcut.rs`); the Human residue stays open. Traces: testbox `work/bc-pathfind/opt3.btrc`
-    (re-aiming, 22), `hum-g4b.btrc` (Human, 17); inputs with `examples/trace_inputs.rs`.
+  - Strict Linux BDS corrects positions one f32 ulp off (x ~60–80: 7.6e-6) off the axes. Open; what is known
+    (2026-10-15, `examples/yaw_sweep.rs`, `replay --correction-tolerance 0 --verbose`, which prints both
+    velocities):
+    - Not the per-tick yaw change itself: walking 6 ticks from rest at 60 random yaws drew 0 corrections, with
+      ±0.5° jitter every tick 0 too. Bunny-hopping 20 ticks at 30 random yaws drew bursts at a constant yaw
+      (7 yaws), with jitter (9) and with jitter held in the air (10) alike, though those pads stood at y
+      100–180 (see below). Axis yaws are exact (sin/cos 0 and ±1): Optimal along the lane draws none.
+    - A burst starts on a jump or landing tick with a horizontal velocity 1–8 ulps off ours. BDS lets
+      differences under half a position ulp pass, so the velocity drifts unseen for some ticks first; no
+      sin/cos, sine-table index or order variant reproduces it from our previous state.
+    - The rest of a burst is BDS's box: it keeps an AABB and takes the position as its centre, while we rebuild
+      the box from a corrected centre (`hum-g4b` ticks 934–943: positions alternate ±1 ulp with equal
+      velocities; only a server box one ulp off ours at one face reproduces them). BDS
+      `ClientAcceptanceSystem::fn0` (Windows 1.26.52, 142514970) also moves the server box towards small
+      client differences, so that box is hidden state. Lead: translating our box by the correction instead of
+      rebuilding it reproduces about half the bursts bit-exactly (`course-BaseHum2` 143 → 72 mismatching,
+      `hum-g4b` 17 → 12), but makes old regression traces worse at tolerance 0 (powder snow 29 → 102, honey
+      top 269 → 346), so it is not in.
+    - Offline bots rejoin where they left, so repeated drills creep up the pads: at y ~180 positions are
+      4x coarser and Optimal drew 48 on the parkour legs; reset the world before a course run.
+    - Tried, not kept: a Human aim holding an axis exactly once turned onto one it wants. Seeds 1–3 drew 0, 60
+      and 0 corrections, but run-to-run spread swamps that (unchanged Human seeds 1 and 2 on the same world
+      drew 1 and 143), off-axis legs still drew bursts, and seed 3 missed the gap3 leap at exactly -90°.
+    - Human sprint40 timed out on a fresh world for every seed, with and without that change: the bot cuts the
+      diag pit's corner at z ≈ 3.5 heading back and falls in (open; the old world never showed it).
+    Replay (`HYP` toggles) also ruled out glibc and correctly rounded sin/cos in the walk impulse and
+    rebuilding the box on rotation changes. Traces: testbox `work/pf-traces` (`hum-g4b`, `opt3`, `yaw*`).
   - Live divergence (`course --lift`: one second of levitation over the gap3 leap, Optimal): the leap
     diverged at x 51.5 in mid-air, the inline re-plan found no start node in the air (one counted re-plan),
     the next one planned 2 nodes and the leg finished (63 ticks, 0 stops). Its 2 corrections are the

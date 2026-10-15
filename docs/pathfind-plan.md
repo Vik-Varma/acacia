@@ -195,8 +195,9 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
    it (a `/fill` touching an unloaded chunk fails whole). Flags also `--shortcuts off`, `--seed`, `--lift`
    (levitation mid-leap: the live `Diverged` path). Navigator gained `GotoOpts::seed` and `divergences()`.
    Deviations: Optimal 0 corrections on every leg, Human 0 on the parkour legs but 2–9 on sprint40 (and a
-   few on classic legs, macros off too): strict Linux BDS corrects one-ulp position differences under
-   per-tick yaw changes (DESIGN.md). Shortcuts now hold their heading once faced, which removed them for
+   few on classic legs, macros off too): strict Linux BDS corrects one-ulp position differences off the axes,
+   not caused by the per-tick yaw change itself; open, and on a fresh world Human sprint40 times out in the
+   diag pit (DESIGN.md "Movement vs the servers"). Shortcuts now hold their heading once faced, which removed them for
    Optimal. Live, macros on lost to off on gap3 (36 vs 32: the corridor detour beats the leap with its
    run-up) and sprint40 (161 vs 147); not chased. A divergence in mid-air finds no start node and spends
    one counted re-plan before the next search succeeds.
