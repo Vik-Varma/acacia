@@ -289,10 +289,49 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
 - Unchanged (release): `macros_never_slow` table, segments Optimal 1443 ticks, `perf_report` cold (gap course
   Optimal 6.4 ms, Human 39 ms; flat 80 13.5 / 28.8; diagonal 15.8 / 2.6; 5-gap refusal Human 18.8), cost skew
   (classic under-runs 7–8 ticks, macro 5–8).
-- Open: the diag leg (diagonal leaps down 2 into the pit floor, straight then the 5-yaw wide retry) still takes
-  0.5–1 s Optimal, and Human diag/sprint40 still spend the 400k rollout budget; the lever is lazy macro edges (push a
-  leap at a lower-bound cost, solve it when popped). Gap-course Human 39 ms vs the 30 ms target. Human's one
-  divergence on the 500 lane (x 200, the raised step). `Memo` eviction drops the most recently hit entry.
+- Lazy leaps (`frontier.rs`, `reach.rs`): a node's leap targets (`leap_moves::candidates`: the geometric prefilters)
+  are queued unsolved at a floor on their cost and solved when popped. Floor = ticks for the feet to reach the target
+  cell at the fastest straight run from the node's speed (sprinting, jumping after 0/1/2/3/5/8 ticks or never; simulated
+  once per start speed on flat default-friction ground; one tick of slack; `LEAP_VMAX` 0.7 b/t on other floors) +
+  `Human`'s jump hesitation + the hazard term. Not the heuristic between the ends: one running leap beats steady hops
+  (a 0.9 × heuristic floor planned gap3 at 35.6 instead of 30.1). Debug builds assert each solved leap costs at least
+  its floor. "Fell short" pruning is per (node, line), only for leaps as far or farther (a far leap popped first had
+  hidden a nearer one). A hop and a leap landing alike tie; whichever is relaxed first stays (tests accept either).
+- Macro moves start only on the ground (`follow_macro.rs`): the planner plans them from standing on the node before,
+  but an Ascend counts as reached mid-air, so a Run after a step-up started in the air and failed at once. This was
+  Human's divergence at x 200 on the 500 lane (the raised step) and an `Optimal` one on the speed test's stairs that
+  lazy leaps' better stairs plan exposed. Test: `macro_start::a_run_after_a_step_up_starts_on_landing`.
+- Shortcuts: once past the target's centre the held heading is never re-aimed (the eased aim turned round mid-air:
+  Human x 472, landing 1.1 past); overshoot up to 2 blocks ends a shortcut only when 3 classic flat nodes follow (past a
+  macro's start or a leap's takeoff the follower would come back, or start the macro elsewhere: Optimal diverged in
+  the late-splice run, Human got stuck past a down2 leap); a `Human` shortcut onto the goal (`Follower::set_ends_at_goal`,
+  not a segment end) brakes and stops on it instead of arriving at a run and circling back (`Optimal` turns on the spot
+  and keeps arriving at speed: braking cost it 5 ticks on the diagonal).
+- Rollout cache eviction: per key most recently used first; a full key drops the least recently used (it dropped the
+  most recently hit one). Evictions are rare: stairs Optimal plan 69 → 49 evicted, 1623 → 1600 misses, 16413 → 16282
+  rollouts; stairs Human 609 → 591 misses; course legs within ±3 rollouts.
+- Classic cost skew, cause (`cost_skew_report` now prints when the feet first come within the tolerance): classic
+  under-ran by ~4.3 ticks of run-up from standing (near the goal after cost + 4.2–4.7, 5–60 blocks) plus ~3 of
+  settling at the goal; macro plans simulate their run-up and under-run by ~3 (settling only). Calibrated: classic
+  moves out of a standing search start cost `CLASSIC_STARTUP` (4) more, so they compete fairly with macro moves from
+  standing; the heuristic is unchanged (costs only rise). Settling is the same for every plan, not costed. Effect:
+  Human course legs pick macros from rest: gap4 58 → 49–51 ticks driven, up1 34 → 27–32, down2 32 → 29–31, stones
+  45–49 → 36–49, sprint40 125–159 → 125–136; speed test diagonal off 149 → 146 / 149.8 → 147. Plan costs from a
+  standing start are 4 higher (same paths).
+- Measured after (release, testbox, `tests::course::parkour_course_legs` plans, ms / rollouts, before → after):
+  Optimal gap3 74 → 10.5 (439 → 190), gap4 88 → 7.9, up1 22 → 2.2, down2 38 → 7.5, diag 1051 → 59 (11083 → 1197), stones
+  111 → 18.6, sprint40 759 → 425 (12146 → 8149); Human gap3 179 → 70, gap4 983 → 529, up1 469 → 42, down2 79 → 66,
+  stones 767 → 867 (8170 → 15100: plans in full, cost 51.1), diag 1929 → 1116 and sprint40 1712 → 1257 still at the
+  400k budget. Optimal plan costs equal wherever both searches finished (+4 from a standing start, above).
+  `perf_report` cold: gap course Human 39 → 31.4 ms (587 rollouts, was 760), Optimal 6.4 → 6.1, others unchanged.
+  Segments 500 lane: Optimal 1443 → 1444, Human 1446 → 1439 ticks, 0 diverged (was 1), no turning back; late splice
+  839 → 840. Speed test: all rows on ≤ off; stairs Human with shortcuts 143 → 134.
+- Open: Human diag and sprint40 still spend the rollout budget: 85% of Human diag's rollouts are diagonal leaps down
+  2 from the rim into the pit floor (235 solves, ~80 rollouts each, the 5-yaw wide retry) whose floors make them
+  look as good as the way on (f under the goal's), so laziness cannot skip them; a cheaper wide retry or a dead-end
+  test before queuing them would. Gap-course Human 31.4 ms vs the 30 ms target. Rest nodes are planned facing the
+  leap (`leap_moves::facing`); a live start facing elsewhere can diverge (seen while a settling change left the bot
+  facing back; that change was dropped).
 
 ## Running
 - Tests: `REMOTE_DIR=work/bc-pathfind tools/remote-test.sh -p acacia-bot` (testbox; never workspace-wide locally).
