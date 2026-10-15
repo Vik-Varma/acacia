@@ -57,6 +57,8 @@ for every tick our position is off by more than 0.0001, so each correction is a 
 - `tools/physics/fuzz.sh <rounds> [seed]` builds random terrain on a pad (water, lava, slime, honey, ladders, scaffolding,
   powder snow...) and drives random inputs over it, recording a trace (`.testserver/traces/*.btrc`: the server's movement
   packets plus every input we sent). It prints the seed; `FUZZ_BOTS=n` runs n offline bots in parallel.
+- `cargo run --release -p acacia-bot --example yaw_sweep -- <server> <name> [count] [variants] [ticks]` walks or
+  bunny-hops from rest at random yaws and counts corrections per variant (run it on a reset world).
 - `tools/physics/drill.sh <names>` runs scripted drills (`crates/acacia-bot/examples/drills.rs`), exact control
   sequences that isolate one variable.
 - `cargo run -p acacia-bot --example flight -- <server> <name> [rounds]` drills creative flight (crates/acacia-physics
@@ -66,8 +68,8 @@ for every tick our position is off by more than 0.0001, so each correction is a 
   (docs/DESIGN.md "Dimension travel"): overworld, Nether and End by command, then by a Nether portal and End portal
   blocks, printing each arrival's and walk's corrections and the distance from the server's own position.
 - `cargo run -p acacia-bot --example replay -- <trace> [--verbose]` replays a trace offline through the current code
-  and reports server corrections we disagree with (`--correction-tolerance`, default 0.001) and ticks that differ from
-  what the live bot did. "Diverged from the recording" means the replay would send other inputs than were recorded:
+  and reports server corrections we disagree with (`--correction-tolerance`, default 0.001; 0 compares bit-exactly,
+  and `--verbose` prints both velocities) and ticks that differ from what the live bot did. "Diverged from the recording" means the replay would send other inputs than were recorded:
   rules that change our own input flags (sprint, swim, jump starts) can only be judged by a fresh live run.
 - `crates/acacia-bot/tests/trace_regression.rs` replays the regression set in `crates/acacia-bot/tests/traces`
   (gzipped bot traces from the local BDS) and fails if a trace gains mismatches.
