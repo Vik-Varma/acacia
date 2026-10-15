@@ -63,8 +63,10 @@ fn parkour_course_legs() {
     let g = course();
     let world = g.physics();
     let mut failed = Vec::new();
+    // COURSE_MACROS=off: the same legs planned with classic moves only (live, macros lost to off on gap3 and sprint40).
+    let macros = std::env::var("COURSE_MACROS").map_or(true, |v| v != "off");
     for profile in PROFILES {
-        let opts = macro_opts(profile);
+        let opts = SearchOpts { macros, ..macro_opts(profile) };
         for &seed in seeds(profile) {
             let [x, y, z] = at([EXIT_X, 0, 0]);
             let mut m = standing([x as f32 + 0.5, y as f32, z as f32 + 0.5]);

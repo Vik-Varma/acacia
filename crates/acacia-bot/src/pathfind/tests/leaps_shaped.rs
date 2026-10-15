@@ -5,7 +5,7 @@ use acacia_physics::BlockPos;
 use super::drive::{PROFILES, macro_opts, plan, plan_and_follow, standing};
 use super::grid::Grid;
 use super::leaps::{gap_course, leap_and_follow};
-use crate::pathfind::{Goal, MoveKind, MovementProfile};
+use crate::pathfind::{Aim, Goal, JumpAt, LeapCtl, MoveKind, MovementProfile, run};
 
 const START: [f32; 3] = [-0.5, 1.0, 0.5];
 
@@ -30,6 +30,23 @@ fn leaps_down_two_blocks() {
     for profile in PROFILES {
         let leaps = leap_and_follow(&g, [-0.5, 3.0, 0.5], [7, 1, 0], profile).expect("plan");
         assert!(has_leap_to(&leaps, |p| p[1] == 1), "{profile:?}: {leaps:?}");
+    }
+}
+
+/// Any jump down three blocks counts over three fallen before it lands, whatever the takeoff, run-up and distance,
+/// so the planner only runs off the edge there (`solve::falls_too_far`).
+#[test]
+fn a_jump_down_three_blocks_always_falls_too_far() {
+    let g = Grid::new();
+    g.fill([-12, 0, -2], [0, 0, 2], "stone").fill([1, -3, -2], [9, -3, 2], "stone");
+    for from in [[-0.5, 1.0, 0.5], [-4.5, 1.0, 0.5]] {
+        let m = standing(from);
+        for (x, k) in (1..=7).flat_map(|x| (0..=12).map(move |k| (x, k))) {
+            let mut leap = LeapCtl::new([x, -2, 0], -2.0, JumpAt::Tick(k), None, Aim::new(MovementProfile::Optimal, 0));
+            let trace = run(&mut m.fork().expect("started"), &mut leap, m.controls, 80, &g.terrain());
+            let fell = trace.bodies.iter().map(|b| b.fall).fold(0.0, f32::max);
+            assert!(!trace.landed || leap.takeoff().is_none() || fell > 3.0, "from {from:?} to x {x}, jump at {k}: fell {fell}");
+        }
     }
 }
 

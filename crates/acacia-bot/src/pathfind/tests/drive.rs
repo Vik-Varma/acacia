@@ -38,7 +38,7 @@ pub fn plan(g: &Grid, m: &Movement, goal: &Goal, opts: &SearchOpts) -> Path {
     let t0 = Instant::now();
     let p = search_from(&g.terrain(), m.state().expect("started"), goal, opts);
     let ms = t0.elapsed().as_secs_f32() * 1000.0;
-    eprintln!("plan {:?}: {} nodes, {} visited, {ms:.1} ms, complete {}, {:?}", opts.profile, p.nodes.len(), p.visited, p.complete, p.macro_stats);
+    eprintln!("plan {:?}: {} nodes, {} visited, {ms:.1} ms, complete {}, cost {:.1}, {:?}", opts.profile, p.nodes.len(), p.visited, p.complete, p.cost, p.macro_stats);
     p
 }
 
