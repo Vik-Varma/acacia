@@ -149,12 +149,13 @@ pub(crate) fn candidates<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, sta
     found
 }
 
-/// The leap to `c` from `p`, solved from `start` (or the cache).
-pub(crate) fn solve<B: Blocks>(t: &Terrain<B>, p: BlockPos, mom: &Momentum, start: &Rollout, c: LeapCand, solver: &mut Solver<Terrain<B>>, (cache, n): (&Store, &mut Counts)) -> Result<Solved, Miss> {
+/// The leap to `c` from `p`, solved from `start` (or the cache); `real_yaw`: from the momentum's facing, not turned to
+/// the leap.
+pub(crate) fn solve<B: Blocks>(t: &Terrain<B>, p: BlockPos, (mom, real_yaw): (&Momentum, bool), start: &Rollout, c: LeapCand, solver: &mut Solver<Terrain<B>>, (cache, n): (&Store, &mut Counts)) -> Result<Solved, Miss> {
     let (off, q, to) = (&OFFSETS[usize::from(c.off)], c.q, c.to);
-    let key = (*mom, ((off.to.0, off.to.1, q[1] - p[1]), feet_key(to.feet, p), to.wet));
+    let key = (*mom, ((off.to.0, off.to.1, q[1] - p[1]), feet_key(to.feet, p), to.wet, real_yaw));
     cache.leaps.get_or(t, p, key, n, || {
-        let start = facing(start, off.to.0 as f32, off.to.1 as f32);
+        let start = if real_yaw { start.clone() } else { facing(start, off.to.0 as f32, off.to.1 as f32) };
         let straight = Shape { drop: to.wet || q[1] < p[1], ..STRAIGHT };
         let wide = Shape { drop: straight.drop, ..WIDE };
         let solved = solver.solve(&start, q, to.feet, to.wet, straight);

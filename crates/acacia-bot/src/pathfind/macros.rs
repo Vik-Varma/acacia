@@ -118,8 +118,9 @@ pub(crate) fn leap_candidates<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot
 }
 
 /// The leap from `p` to `c` as an edge, if it lands; `Err(Miss::Other)` once the budget is spent.
-pub(crate) fn leap<B: Blocks>(t: &Terrain<B>, p: BlockPos, mom: &Momentum, c: LeapCand, m: &Macros) -> Result<Edge, Miss> {
-    let solved = simulate(t, p, mom, m, |start, solver, cache| leap_moves::solve(t, p, mom, start, c, solver, cache)).unwrap_or(Err(Miss::Other))?;
+/// `real_yaw`: keep the momentum's facing (the live start) rather than face the leap.
+pub(crate) fn leap<B: Blocks>(t: &Terrain<B>, p: BlockPos, mom: &Momentum, c: LeapCand, real_yaw: bool, m: &Macros) -> Result<Edge, Miss> {
+    let solved = simulate(t, p, mom, m, |start, solver, cache| leap_moves::solve(t, p, (mom, real_yaw), start, c, solver, cache)).unwrap_or(Err(Miss::Other))?;
     let mut out = Vec::with_capacity(1);
     push_leap(t, &mut out, c.q, c.to, solved, MoveKind::Parkour, m.profile);
     Ok(out.remove(0))

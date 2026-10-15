@@ -109,8 +109,9 @@ pub(crate) struct Counts {
     pub off: bool,
 }
 
-/// Leap key beyond the momentum: landing offset, feet height relative to the node (1/1024), into water.
-pub(crate) type LeapKey = ((i32, i32, i32), i16, bool);
+/// Leap key beyond the momentum: landing offset, feet height relative to the node (1/1024), into water, from the
+/// momentum's own facing.
+pub(crate) type LeapKey = ((i32, i32, i32), i16, bool, bool);
 
 /// A hop's landing cell, its spot and the leap.
 pub(crate) type Hopped = (BlockPos, Spot, Solved);

@@ -6,7 +6,7 @@ use std::time::Instant;
 use acacia_physics::{BlockPos, PlayerState, Vec3};
 
 use super::cache::RolloutCache;
-use super::exit::has_exit;
+use super::exit::{Exits, has_exit};
 use super::frontier::{Frontier, Popped, Rec};
 use super::goal::Goal;
 use super::macros::{self, MACRO_TIME_SHARE, MacroStats, Macros};
@@ -86,7 +86,7 @@ pub fn search_cached<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal,
     });
     let mut ctx = Ctx { parkour: opts.parkour, dig: opts.allow_dig, bridge: opts.allow_bridge, doors: opts.open_doors, kit: &opts.kit, blocks_left: 0, macros };
     let stats = |ctx: &Ctx| ctx.macros.as_ref().map_or_else(MacroStats::default, |m| m.stats.get());
-    let (mut cut, mut reaches) = (false, Reaches::default());
+    let (mut cut, mut reaches, mut exits) = (false, Reaches::default(), Exits::default());
 
     while let Some(popped) = front.pop() {
         let i = match popped {
@@ -98,7 +98,8 @@ pub fn search_cached<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal,
                     break;
                 }
                 let (Some(m), r) = (&ctx.macros, front.recs[l.parent as usize]) else { continue };
-                match macros::leap(t, r.key.pos, &r.mom, l.cand, m) {
+                // From the search's start, the bot's real facing (it may face away); other nodes face their leap.
+                match macros::leap(t, r.key.pos, &r.mom, l.cand, l.parent == 0, m) {
                     Ok(e) => {
                         debug_assert!(e.cost >= l.floor - 1e-3, "leap {:?} -> {:?} cost {} under its floor {}", r.key.pos, e.pos, e.cost, l.floor);
                         front.relax(l.parent, &e)
@@ -130,6 +131,10 @@ pub fn search_cached<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal,
         edges.iter().for_each(|e| front.relax(i, e));
         if let Some(m) = &ctx.macros {
             for c in macros::leap_candidates(t, rec.key.pos, rec.spot, (rec.key.entry, &rec.mom), m) {
+                // Down into a basin with no way on (a pit floor): never on a path to the goal.
+                if c.q[1] < rec.key.pos[1] && !c.to.wet &&!exits.open(t, c.q, c.to, opts, goal) {
+                    continue;
+                }
                 let reach = reaches.get(&rec.mom, live);
                 front.queue_leap(i, c, reach::leap_floor(t, rec.key.pos, &rec.mom, &c, reach, live, opts.profile));
             }
