@@ -1,6 +1,6 @@
 //! Searches off the tick: the pilot hands a [`SearchJob`] to a spawner and polls its [`Answer`] once per tick.
 
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::Arc;
 
 use acacia_physics::PlayerState;
 use acacia_world::{BlockRegistry, World};
@@ -23,13 +23,13 @@ pub struct SearchJob {
     pub from: PlayerState,
     pub goal: Goal,
     pub opts: SearchOpts,
-    /// Macro-move results shared by every search of one goto.
-    pub cache: Arc<Mutex<RolloutCache>>,
+    /// Macro-move results shared by every search of one goto, running ones included.
+    pub cache: Arc<RolloutCache>,
 }
 
 impl SearchJob {
     pub fn run<B: Blocks>(&self, t: &Terrain<B>) -> Path {
-        search_cached(t, &self.from, &self.goal, &self.opts, &mut lock(&self.cache))
+        search_cached(t, &self.from, &self.goal, &self.opts, &self.cache)
     }
 
     /// Runs on tokio's blocking pool against `world` as it is while it runs.
@@ -48,8 +48,4 @@ pub fn answered(path: Path) -> Answer {
     let (tx, rx) = oneshot::channel();
     let _ = tx.send(path);
     rx
-}
-
-pub(crate) fn lock(cache: &Mutex<RolloutCache>) -> MutexGuard<'_, RolloutCache> {
-    cache.lock().unwrap_or_else(PoisonError::into_inner)
 }

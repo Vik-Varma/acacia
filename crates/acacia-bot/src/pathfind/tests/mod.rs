@@ -1,6 +1,7 @@
 mod alter;
 mod alter_sim;
 mod cache;
+mod cache_shared;
 mod course;
 mod dead_ends;
 mod grid;

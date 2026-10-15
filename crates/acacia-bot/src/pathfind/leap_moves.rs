@@ -7,7 +7,7 @@ use std::sync::LazyLock;
 use acacia_physics::BlockPos;
 use acacia_physics::constants::DEFAULT_MOVEMENT_SPEED;
 
-use super::cache::{RolloutCache, feet_key};
+use super::cache::{Counts, Store, feet_key};
 use super::cell::Rect;
 use super::moves::offset;
 use super::node::Momentum;
@@ -89,7 +89,7 @@ fn landings<B: Blocks>(t: &Terrain<B>, c: BlockPos) -> Vec<(BlockPos, Spot)> {
 }
 
 /// The leaps from `p` (standing at `from`), solved from `start`.
-pub(crate) fn leaps<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, mom: &Momentum, start: &Rollout, solver: &mut Solver<Terrain<B>>, cache: &mut RolloutCache) -> Vec<(BlockPos, Spot, Solved)> {
+pub(crate) fn leaps<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, mom: &Momentum, start: &Rollout, solver: &mut Solver<Terrain<B>>, (cache, n): (&Store, &mut Counts)) -> Vec<(BlockPos, Spot, Solved)> {
     let mut found = Vec::new();
     // Per crossed cell: no floor at the start's level; per cell and lane shape: body clear at takeoff and jump height.
     const W: i32 = 2 * MAX_CARDINAL + 1;
@@ -125,7 +125,7 @@ pub(crate) fn leaps<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, mom: &Mo
                 continue;
             }
             let key = (*mom, ((off.to.0, off.to.1, q[1] - p[1]), feet_key(to.feet, p), to.wet));
-            let solved = cache.leaps.get_or(t, p, key, &mut cache.counts, || {
+            let solved = cache.leaps.get_or(t, p, key, n, || {
                 let straight = Shape { drop: to.wet || q[1] < p[1], ..STRAIGHT };
                 let wide = Shape { drop: straight.drop, ..WIDE };
                 let solved = solver.solve(&start, q, to.feet, to.wet, straight);

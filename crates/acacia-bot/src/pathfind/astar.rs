@@ -1,6 +1,6 @@
 //! A* over feet block positions with Baritone's best-partial-path fallback (azalea `astar/mod.rs`).
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::collections::hash_map::Entry as Slot;
@@ -101,12 +101,12 @@ pub fn search<B: Blocks>(t: &Terrain<B>, feet: Vec3, goal: &Goal, opts: &SearchO
 /// Searches from the player's live state: its momentum is the start node's, and its attributes and
 /// effects shape every macro move.
 pub fn search_from<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal, opts: &SearchOpts) -> Path {
-    search_cached(t, live, goal, opts, &mut RolloutCache::default())
+    search_cached(t, live, goal, opts, &RolloutCache::default())
 }
 
 /// [`search_from`] reusing (and adding to) the macro-move results in `cache`; they are dropped first if
 /// they were found for another profile or player.
-pub fn search_cached<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal, opts: &SearchOpts, cache: &mut RolloutCache) -> Path {
+pub fn search_cached<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal, opts: &SearchOpts, cache: &RolloutCache) -> Path {
     let started = Instant::now();
     let empty = |complete| Path { nodes: Vec::new(), complete, unreachable: false, cost: 0.0, visited: 0, macro_stats: MacroStats::default() };
     let Some((start, spot)) = start_node(t, live.pos) else { return empty(false) };
@@ -130,13 +130,12 @@ pub fn search_cached<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal,
     let mut best_score = [goal.estimate(start.pos, speed, entry == Entry::Rest); 7];
     let mut edges: Vec<Edge> = Vec::with_capacity(32);
     let mut visited = 0;
-    cache.claim(opts.profile, live);
     let macros = opts.macros.then(|| Macros {
         profile: opts.profile,
         leaps: opts.parkour,
         hops: opts.hops,
         base: live,
-        cache: RefCell::new(cache),
+        cache: cache.claim(opts.profile, live),
         budget: opts.max_rollout_ticks,
         deadline: started + opts.budget / MACRO_TIME_SHARE,
         stats: Cell::default(),

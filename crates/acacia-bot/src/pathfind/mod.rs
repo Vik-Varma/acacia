@@ -45,6 +45,7 @@ mod pilot;
 mod profile;
 mod retry;
 mod rollout;
+mod shift;
 mod shortcut;
 mod snapshot;
 mod solve;

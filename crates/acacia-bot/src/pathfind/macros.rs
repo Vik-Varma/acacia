@@ -2,12 +2,13 @@
 //! (`docs/pathfind-plan.md` "Macro moves"), cached across nodes ([`RolloutCache`]) and capped by a rollout
 //! tick budget.
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
+use std::sync::Arc;
 use std::time::Instant;
 
 use acacia_physics::{BlockPos, PlayerState};
 
-use super::cache::RolloutCache;
+use super::cache::{Counts, Store};
 use super::cell::AVOID;
 use super::costs::{DANGER_NEAR, HUMAN_JUMP, RISK, RISK_MARGIN};
 use super::hop;
@@ -48,7 +49,7 @@ pub(crate) struct Macros<'a> {
     pub hops: bool,
     /// The live state: attributes, effects and equipment of every rollout.
     pub base: &'a PlayerState,
-    pub cache: RefCell<&'a mut RolloutCache>,
+    pub cache: Arc<Store>,
     /// Rollout ticks the search may simulate (`SearchOpts::max_rollout_ticks`).
     pub budget: u64,
     /// No rollouts after this: the rest of the search's time is for classic moves (see [`MACRO_TIME_SHARE`]).
@@ -70,28 +71,27 @@ pub(crate) fn successors<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, (en
     let safe = |q: BlockPos| t.spot(q).is_some_and(|s| s.kind == SpotKind::Stand && !s.wet && s.feet == q[1] as f32);
     let mut solver = Solver::new(t, &avoid, &safe, m.profile, true, Controls::default());
     solver.budget = m.budget - stats.ticks;
-    let mut cache = m.cache.borrow_mut();
-    let cache: &mut RolloutCache = &mut cache;
-    let counts = cache.counts;
+    let cache = &*m.cache;
+    let mut n = Counts { off: cache.off, ..Counts::default() };
     if m.leaps {
-        for (q, to, s) in leap_moves::leaps(t, p, from, mom, &start, &mut solver, cache) {
+        for (q, to, s) in leap_moves::leaps(t, p, from, mom, &start, &mut solver, (cache, &mut n)) {
             push_leap(t, out, q, to, s, MoveKind::Parkour, m.profile);
         }
     }
-    for (q, to, r) in hop::runs(t, p, from, (entry, mom), &start, &mut solver, cache) {
+    for (q, to, r) in hop::runs(t, p, from, (entry, mom), &start, &mut solver, (cache, &mut n)) {
         push(t, out, q, to, MoveKind::Run, r.ticks as f32, &r.end, Macro::Run(r.ctl));
     }
     if m.hops
         && !solver.spent()
         && let Entry::Run(d, _) = entry
-        && let Some((q, to, s)) = cache.hops.get_or(t, p, (*mom, d), &mut cache.counts, || hop::hop(t, p, from, d, &start, &mut solver))
+        && let Some((q, to, s)) = cache.hops.get_or(t, p, (*mom, d), &mut n, || hop::hop(t, p, from, d, &start, &mut solver))
     {
         push_leap(t, out, q, to, s, MoveKind::Hop, m.profile);
     }
     stats.rollouts += solver.rollouts;
     stats.ticks += solver.ticks;
-    stats.hits += cache.counts.hits - counts.hits;
-    stats.misses += cache.counts.misses - counts.misses;
+    stats.hits += n.hits;
+    stats.misses += n.misses;
     stats.exhausted |= solver.spent();
     m.stats.set(stats);
 }
