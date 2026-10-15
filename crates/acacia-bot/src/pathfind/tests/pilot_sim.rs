@@ -54,6 +54,15 @@ impl Flight {
         *self.track.last().expect("ticked")
     }
 
+    /// Ticks (and positions) moving back against the way from start to end faster than `speed` blocks/tick.
+    pub fn backwards(&self, speed: f32) -> Vec<(usize, Vec3)> {
+        let (a, b) = (self.track[0], self.end());
+        let len = (b[0] - a[0]).hypot(b[2] - a[2]).max(1e-3);
+        let (ux, uz) = ((b[0] - a[0]) / len, (b[2] - a[2]) / len);
+        let along = |t: usize| (self.track[t + 1][0] - self.track[t][0]) * ux + (self.track[t + 1][2] - self.track[t][2]) * uz;
+        (0..self.track.len() - 1).filter(|&t| along(t) < -speed).map(|t| (t, self.track[t])).collect()
+    }
+
     /// Slowest horizontal speed (blocks/tick) within `window` ticks of passing each join.
     pub fn join_speeds(&self, window: usize) -> Vec<f32> {
         let speed = |t: usize| (self.track[t + 1][0] - self.track[t][0]).hypot(self.track[t + 1][2] - self.track[t][2]);

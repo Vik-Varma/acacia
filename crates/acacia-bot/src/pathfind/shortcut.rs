@@ -23,6 +23,8 @@ const STYLES: [(bool, f32); 3] = [(false, 0.0), (true, 1.0), (true, 3.0)];
 const DROP: f32 = 0.6;
 /// Facing within this (degrees) of the held heading: keep it rather than re-aim.
 const HELD_AIM_DEG: f32 = 1.0;
+/// Landing up to this far (blocks) past the target's centre ends the shortcut there.
+const OVERSHOOT: f32 = 1.0;
 
 /// Sprints straight at `target`, jumping whenever on the ground until within `stop_jump` blocks of it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -36,11 +38,29 @@ pub struct ShortcutCtl {
     t: u16,
     /// Bearing to the target, held once faced (per-tick re-aims draw strict BDS corrections, docs/DESIGN.md).
     heading: Option<f32>,
+    origin: Option<[f32; 2]>,
+}
+
+impl ShortcutCtl {
+    /// On the ground at the target's level, in its cell or past its centre near the line from the start: a hop
+    /// that carried past the target is done there, not walked back (`Human` turned round on the 500-block lane).
+    fn arrived(&self, b: &Body, origin: [f32; 2]) -> bool {
+        if standing_on(b, self.target, self.feet) {
+            return true;
+        }
+        let [tx, tz] = centre(self.target);
+        let (sx, sz) = (tx - origin[0], tz - origin[1]);
+        let len = sx.hypot(sz).max(1e-3);
+        let (dx, dz) = (b.pos[0] - tx, b.pos[2] - tz);
+        let (past, aside) = ((dx * sx + dz * sz) / len, (dz * sx - dx * sz).abs() / len);
+        b.on_ground && (b.pos[1] - self.feet).abs() < LAND_EPS && (0.0..OVERSHOOT).contains(&past) && aside < 0.5
+    }
 }
 
 impl Controller for ShortcutCtl {
     fn step(&mut self, b: &Body, _: &mut dyn FnMut(&Controls) -> Body, c: &mut Controls) -> Phase {
-        if standing_on(b, self.target, self.feet) {
+        let origin = *self.origin.get_or_insert([b.pos[0], b.pos[2]]);
+        if self.arrived(b, origin) {
             return Phase::Done;
         }
         if self.t >= self.max || b.pos[1] < self.feet - DROP || (b.on_ground && (b.pos[1] - self.feet).abs() > LAND_EPS) {
@@ -87,7 +107,7 @@ pub(super) fn find(path: &[PathNode], index: usize, live: &Rollout, w: &dyn Worl
         let best = STYLES
             .iter()
             .filter_map(|&(jump, stop_jump)| {
-                let ctl = ShortcutCtl { target: path[j].pos, feet: path[j].feet, jump, stop_jump, aim, max, t: 0, heading: None };
+                let ctl = ShortcutCtl { target: path[j].pos, feet: path[j].feet, jump, stop_jump, aim, max, t: 0, heading: None, origin: None };
                 if !solver.affords(u64::from(max)) {
                     return None;
                 }
