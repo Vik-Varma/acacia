@@ -258,8 +258,41 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
   a join at 0.300 b/t), 1 correction (first segment, mid-air). Human 1577 ticks, 7 joins, slowest 0.309, 0 diverged,
   321 corrections: all on off-axis stretches (z drifting off a block centre), none on the on-axis stretch x 95–351,
   i.e. the known one-ulp off-axis issue (step 10), not the joins.
-- Open: Human's off-axis corrections; in the sim, Human turned round near x 296 inside a shortcut (not at a join);
-  a plan-ahead holds the shared rollout cache for its whole search (re-plans meanwhile search without it).
+- Open: Human's off-axis corrections. Fixed after (see "Core fixes"): Human's turn-rounds inside shortcuts, the
+  plan-ahead holding the rollout cache.
+
+## Core fixes (2026-10-15, `pathfind/core-fixes`, sim only)
+
+- Shared rollout cache: every search of a goto, running ones included, shares one `Arc<RolloutCache>`. Each move
+  family's memo is 16 `Mutex` shards (by key hash), locked for a lookup or an insert, never while a result is
+  computed; a hit's check reads terrain under the shard lock (only chunk read locks below it). `claim` swaps in a
+  fresh store for another player/profile or past 50k results; a search on the old store keeps it. Hit counts are per
+  search. Two searches missing one key at once both compute it (both kept). Single-search timings unchanged.
+  Tests: `tests::cache_shared` (a re-plan while a plan-ahead is under way hits; 4 concurrent cold searches plan as one).
+- Human turn-round, cause: a shortcut's sprint-jump came down ~0.5 block past its target cell; the held heading is
+  dropped whenever the yaw is >1° off it (Human jitter 1.5°), so the aim re-pointed at the cell behind and the bot
+  circled back into it (5 times on the 500 lane: x 146, 296, 325, 388, 472). Fix: `ShortcutCtl` is done on landing
+  at the target's level up to 1 block past its centre, within 0.5 of the line. Human 500 lane 1558 → 1446 ticks;
+  segments assert no turning back; `segments::human_runs_on_past_a_shortcut_target` failed at x 146 before.
+- Course-leg plan cost: on the course's 3-deep pits most rollouts were leaps into the pit floor that tried every
+  takeoff × coast. A jumped leap down 3 counts ≥ 4.25 − 0.8 (the landing tick's drop is not counted) > 3 fallen, so
+  it can never land; `solve` now only runs off the edge there (`falls_too_far`; jumped down-2 still lands).
+  Test: `leaps_shaped::a_jump_down_three_blocks_always_falls_too_far`. Optimal plan costs unchanged wherever both
+  complete. Course plans (release, `tests::course`, testbox load 7–11): Optimal gap3 434 → 52 ms, gap4 691 → 74,
+  stones 877 → 64, sprint40 1193 → 667 ms and now within the rollout budget (driven 142 → 130 ticks); Human gap3
+  1179 → 185 ms, stones now plans in full (driven 61 → 37–43 ticks), sprint40 driven 124–150 (was 135–157).
+- Live macros-on losing to off (gap3, sprint40; step 10) does not reproduce in the sim (`COURSE_MACROS=off`
+  `tests::course::parkour_course_legs`): gap3 33 vs 51 ticks both profiles, Optimal sprint40 130 vs 147, Human
+  sprint40 mean 134 vs 141 (seed 5 alone loses, 150 vs 135). Live, the plans came from a 2 s search on a loaded
+  testbox, so suspect plans cut by the time budget before the fix above.
+- Tried, no gain: ending the takeoff loop once every coast overshoots (identical rollout counts; reverted).
+- Unchanged (release): `macros_never_slow` table, segments Optimal 1443 ticks, `perf_report` cold (gap course
+  Optimal 6.4 ms, Human 39 ms; flat 80 13.5 / 28.8; diagonal 15.8 / 2.6; 5-gap refusal Human 18.8), cost skew
+  (classic under-runs 7–8 ticks, macro 5–8).
+- Open: the diag leg (diagonal leaps down 2 into the pit floor, straight then the 5-yaw wide retry) still takes
+  0.5–1 s Optimal, and Human diag/sprint40 still spend the 400k rollout budget; the lever is lazy macro edges (push a
+  leap at a lower-bound cost, solve it when popped). Gap-course Human 39 ms vs the 30 ms target. Human's one
+  divergence on the 500 lane (x 200, the raised step). `Memo` eviction drops the most recently hit entry.
 
 ## Running
 - Tests: `REMOTE_DIR=work/bc-pathfind tools/remote-test.sh -p acacia-bot` (testbox; never workspace-wide locally).
