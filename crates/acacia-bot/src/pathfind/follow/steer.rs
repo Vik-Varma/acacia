@@ -16,8 +16,9 @@ const SETTLE_MARGIN: f32 = 0.05;
 const COAST_TICKS: u32 = 40;
 /// Straight nodes ahead before sprinting pays off.
 const SPRINT_RUN: usize = 3;
-/// Facing farther than this (degrees) off the final node, stop walking until turned.
-const SETTLE_AIM_DEG: f32 = 30.0;
+/// Facing farther than this (degrees) off the node, stop walking until turned: an eased aim lagging the bearing
+/// walks an arc (it circled the goal, and walked off the course's stones pit turning round).
+const TURN_FIRST_DEG: f32 = 30.0;
 
 impl Follower {
     #[allow(clippy::too_many_arguments)]
@@ -31,14 +32,16 @@ impl Follower {
         let aim_off = ((want - c.yaw + 180.0).rem_euclid(360.0) - 180.0).abs();
         c.strafe = 0.0;
         c.sneak = false;
-        c.forward = if last {
+        // Over the node (ladders, pillars) the bearing is noise and the aim holds.
+        c.forward = if aim_off > TURN_FIRST_DEG && (last || dist > 0.05) {
+            0.0
+        } else if last {
             // Ground friction lets the bot coast: release the key once coasting ends within the tolerance.
             let stops = match coast {
                 Some(end) => hdist(end, target) < self.tolerance - SETTLE_MARGIN,
                 None => dist < speed * GROUND_DRAG / (1.0 - GROUND_DRAG) + 0.05,
             };
-            // An eased aim lagging the bearing would circle the goal: turn first.
-            if stops || aim_off > SETTLE_AIM_DEG { 0.0 } else { 1.0 }
+            if stops { 0.0 } else { 1.0 }
         } else if matches!(node.kind, MoveKind::ClimbUp | MoveKind::ClimbDown | MoveKind::Pillar | MoveKind::Down) && dist < 0.15 {
             0.0
         } else {

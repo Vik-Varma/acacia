@@ -3,6 +3,7 @@
 //! tick budget.
 
 use std::cell::{Cell, RefCell};
+use std::time::Instant;
 
 use acacia_physics::{BlockPos, PlayerState};
 
@@ -19,6 +20,11 @@ use super::profile::MovementProfile;
 use super::solve::{Solved, Solver};
 use super::terrain::{Blocks, Spot, SpotKind, Terrain};
 use crate::movement::{Controls, Rollout};
+
+/// Macro rollouts may take this share (1/n) of a search's time budget. The default tick budget alone takes about the
+/// whole budget, so a slowed search ran out of time just after it, and the partial path it fell back to led into the
+/// course's pits (docs/pathfind-plan.md step 10).
+pub(crate) const MACRO_TIME_SHARE: u32 = 2;
 
 /// What one search spent on macro moves.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -45,6 +51,8 @@ pub(crate) struct Macros<'a> {
     pub cache: RefCell<&'a mut RolloutCache>,
     /// Rollout ticks the search may simulate (`SearchOpts::max_rollout_ticks`).
     pub budget: u64,
+    /// No rollouts after this: the rest of the search's time is for classic moves (see [`MACRO_TIME_SHARE`]).
+    pub deadline: Instant,
     pub stats: Cell<MacroStats>,
 }
 
@@ -53,7 +61,7 @@ pub(crate) fn successors<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, (en
         return;
     }
     let mut stats = m.stats.get();
-    if stats.ticks >= m.budget {
+    if stats.ticks >= m.budget || Instant::now() >= m.deadline {
         stats.exhausted = true;
         return m.stats.set(stats);
     }

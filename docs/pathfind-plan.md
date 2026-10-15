@@ -196,11 +196,21 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
    (levitation mid-leap: the live `Diverged` path). Navigator gained `GotoOpts::seed` and `divergences()`.
    Deviations: Optimal 0 corrections on every leg, Human 0 on the parkour legs but 2–9 on sprint40 (and a
    few on classic legs, macros off too): strict Linux BDS corrects one-ulp position differences off the axes,
-   not caused by the per-tick yaw change itself; open, and on a fresh world Human sprint40 times out in the
-   diag pit (DESIGN.md "Movement vs the servers"). Shortcuts now hold their heading once faced, which removed them for
+   not caused by the per-tick yaw change itself; open (DESIGN.md "Movement vs the servers"). Shortcuts now hold their heading once faced, which removed them for
    Optimal. Live, macros on lost to off on gap3 (36 vs 32: the corridor detour beats the leap with its
    run-up) and sprint40 (161 vs 147); not chased. A divergence in mid-air finds no start node and spends
    one counted re-plan before the next search succeeds.
+   Fixed after: on a fresh world Human timed out in a pit (sprint40 every seed, later diag and gap4 too). Cause:
+   the default rollout budget (400k ticks) takes ~1.7 s, so on the loaded testbox the 2 s search ran out of time
+   and the best partial path leapt or walked into a pit bottom, a dead end (seen in navigator logs for diag and gap4; the
+   sprint40 trace walks into the pit at z ≈ 2.9, too far in for an edge graze, so most likely the same). Rollouts now stop at half the time budget (`macros::MACRO_TIME_SHARE`) and
+   the classic rest completes. Two Human weaknesses found on the way: a shortcut could pass the diag pit's corner
+   with its centre over air (box overlap 0.03), so Human shortcuts keep the feet centre over the floor
+   (`MovementProfile::centred_shortcuts`); and classic steering walked an arc while the eased aim turned round,
+   off the stones pit, so it stops walking while >30° off on every node, not only the last. Tests (release,
+   ignored): `tests::course` (the parkour section in the sim, both profiles, Human seeds 1–5; plans complete
+   with a 1 s budget: 8 of 14 cut short before) and `shortcuts::human_shortcuts_keep_off_pit_edges` (default run).
+   Live (fresh world per run): all legs ok, Optimal 0 corrections, Human seeds 1–3 bursts as above.
 11. Stretch: neo jumps (Optimal), ladder jumps.
 
 ## Running

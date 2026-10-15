@@ -61,6 +61,12 @@ impl MovementProfile {
         }
     }
 
+    /// A shortcut keeps the feet centre over the floor on the ground: an eased, jittered aim drifts off a line
+    /// whose box only grazes an edge (the course's sprint40 fell into the diag pit, docs/pathfind-plan.md step 10).
+    pub fn centred_shortcuts(self) -> bool {
+        self == MovementProfile::Human
+    }
+
     /// The executions a macro move must survive to be planned.
     pub fn perturbations(self) -> &'static [Perturbation] {
         match self {

@@ -13,7 +13,7 @@ use super::costs;
 use super::goal::{Goal, Speed};
 use super::kit::Kit;
 use super::cache::RolloutCache;
-use super::macros::{MacroStats, Macros};
+use super::macros::{MACRO_TIME_SHARE, MacroStats, Macros};
 use super::moves::{self, Ctx, Edge, MoveKind};
 use super::node::{Entry, KeyMap, Momentum, NodeKey, run_entry};
 use super::profile::MovementProfile;
@@ -204,6 +204,7 @@ pub fn search_cached<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal,
         base: live,
         cache: RefCell::new(cache),
         budget: opts.max_rollout_ticks,
+        deadline: started + opts.budget / MACRO_TIME_SHARE,
         stats: Cell::default(),
     });
     let mut ctx = Ctx { parkour: opts.parkour, dig: opts.allow_dig, bridge: opts.allow_bridge, doors: opts.open_doors, kit: &opts.kit, blocks_left: 0, macros };

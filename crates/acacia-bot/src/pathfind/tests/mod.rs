@@ -1,6 +1,7 @@
 mod alter;
 mod alter_sim;
 mod cache;
+mod course;
 mod grid;
 mod hops;
 mod drive;

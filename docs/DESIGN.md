@@ -175,8 +175,14 @@ the proxy (`crates/acacia-mitm/src/transfer.rs`). What is left: [mitm-next.md](m
     | macros off, Human 1 | 0 / 32 | 0 / 52 | 0 / 57 | 1 / 73 | 1 / 70 | 0 / 58 | 4 / 143 |
     | fresh world, Optimal | 0 / 39 | 0 / 50 | 0 / 30 | 0 / 27 | 0 / 66 | 0 / 59 | 0 / 178 |
     | fresh world, Human 2 | 0 / 72 | 1 / 73 | 0 / 68 | 0 / 34 | 0 / 100 | 0 / 83 | timeout |
+    | fresh world, fixed, Optimal | 0 / 37 | 0 / 57 | 0 / 30 | 0 / 25 | 0 / 67 | 0 / 79 | 0 / 162 |
+    | fresh world, fixed, Human 1 | 1 / 56 | 4 / 71 | 0 / 45 | 0 / 34 | 27 / 82 | 40 / 88 | 51 / 161 |
+    | fresh world, fixed, Human 2 | 0 / 52 | 1 / 72 | 0 / 54 | 0 / 39 | 22 / 83 | 39 / 80 | 38 / 152 |
+    | fresh world, fixed, Human 3 | 1 / 54 | 15 / 68 | 25 / 54 | 10 / 38 | 0 / 82 | 0 / 82 | 0 / 157 |
 
     On the fresh world Human seed 2 also drew 142 on classic legs (ladder 43, pool 64), seed 1 one in all.
+    "Fixed" rows (2026-10-15, a fresh world per run): every leg ok; the Human corrections are the one-ulp bursts
+    below, classic legs 0–39 per seed.
 
     Optimal draws no correction on any leg (classic legs included). Human draws a few on classic legs too
     (exit 14, slabs 8, pool 2 in single seeds) and with macros off, so they come from its aim, not macro moves.
@@ -203,8 +209,9 @@ the proxy (`crates/acacia-mitm/src/transfer.rs`). What is left: [mitm-next.md](m
     - Tried, not kept: a Human aim holding an axis exactly once turned onto one it wants. Seeds 1–3 drew 0, 60
       and 0 corrections, but run-to-run spread swamps that (unchanged Human seeds 1 and 2 on the same world
       drew 1 and 143), off-axis legs still drew bursts, and seed 3 missed the gap3 leap at exactly -90°.
-    - Human sprint40 timed out on a fresh world for every seed, with and without that change: the bot cuts the
-      diag pit's corner at z ≈ 3.5 heading back and falls in (open; the old world never showed it).
+    - Human timeouts on a fresh world (sprint40, and diag/gap4 in later runs) were searches cut by the 2 s budget:
+      the default rollout budget alone took about 2 s on the loaded testbox, and the partial path fell back on
+      leapt or walked into a pit with no way out. Fixed in docs/pathfind-plan.md step 10.
     Replay (`HYP` toggles) also ruled out glibc and correctly rounded sin/cos in the walk impulse and
     rebuilding the box on rotation changes. Traces: testbox `work/pf-traces` (`hum-g4b`, `opt3`, `yaw*`).
   - Live divergence (`course --lift`: one second of levitation over the gap3 leap, Optimal): the leap

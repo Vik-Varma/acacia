@@ -2,7 +2,7 @@
 //! simulates sprinting (and sprint-jumping) straight at nodes further on and runs the fastest clean one
 //! instead of the 8-direction staircase between them.
 
-use acacia_physics::{BlockPos, WorldView};
+use acacia_physics::{Aabb, BlockPos, WorldView};
 
 use super::PathNode;
 use super::control::{Controller, LAND_EPS, Phase, centre, standing_on, yaw_to};
@@ -92,13 +92,22 @@ pub(super) fn find(path: &[PathNode], index: usize, live: &Rollout, w: &dyn Worl
                     return None;
                 }
                 let (bodies, _, clean) = solver.run(live, &mut { ctl }, false);
-                clean.then_some((ctl, bodies))
+                let centred = !aim.profile.centred_shortcuts() || bodies.iter().all(|b| !b.on_ground || over_floor(w, b));
+                (clean && centred).then_some((ctl, bodies))
             })
             .min_by_key(|(_, b)| b.len());
         best.filter(|(_, b)| ((b.len() - 1) as f32) < planned).map(|(ctl, bodies)| (ctl, bodies, j))
     });
     spend.charge(&solver);
     found
+}
+
+/// A collision box right under the feet centre.
+pub(crate) fn over_floor(w: &dyn WorldView, b: &Body) -> bool {
+    let ([x, y, z], e) = (b.pos, 1e-3);
+    let mut boxes = Vec::new();
+    w.collisions(&Aabb::new(x - e, y - 0.01, z - e, x + e, y, z + e), &mut boxes);
+    !boxes.is_empty()
 }
 
 /// Blocks from the live position through the nodes' centres, and the ticks following them takes: macro moves
