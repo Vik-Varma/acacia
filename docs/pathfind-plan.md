@@ -259,8 +259,8 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
   321 corrections: all on off-axis stretches (z drifting off a block centre), none on the on-axis stretch x 95–351,
   i.e. the known one-ulp off-axis issue (step 10), not the joins.
 - Human's off-axis corrections, after BDS's sine table and the correction box fit (DESIGN.md "Off-axis ulp
-  corrections"): the same goto drew 10 / 10 / 5 for seeds 1–3. Optimal's goto from a fresh spawn now stops at once
-  (every macro diverges, `no closer for 601 ticks`) on the base commit too: open.
+  corrections"): the same goto drew 10 / 10 / 5 for seeds 1–3. Optimal's goto from a fresh spawn then stopped at
+  once (`no closer for 601 ticks`): fixed, see "Core fixes" (starved macro starts).
 - Fixed after (see "Core fixes"): Human's turn-rounds inside shortcuts, the plan-ahead holding the rollout cache.
 
 ## Core fixes (2026-10-15, `pathfind/core-fixes`, sim only)
@@ -349,6 +349,18 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
 - Unchanged by these two: perf_report (gap course Human 31.7 ms), segments (Optimal 1444, Human 1439 ticks, 0
   diverged), late splice 840, speed table.
 - Open: gap-course Human 31.7 ms vs the 30 ms target; Human sprint40 0.8 s.
+- Starved macro starts (live, testbox strict BDS): Optimal's 500-block goto from a fresh flat spawn never moved. The
+  first node was a planned `Run`; that tick's shortcut search (spawn facing south: every shortcut lost to the
+  planned hops) spent 1470 of `ROLLOUT_BUDGET`'s 1500 ticks, so the run could not be predicted and the follower
+  reported `Diverged` (spend short, no inline search); the pilot re-planned the same path, 19 times, until the
+  failure timeout. With the test pack on, its scene forced a leap start (no shortcut search), which is why the C1
+  runs worked and why it looked older than the sine-table fix. A start that fails for want of budget after this
+  tick's shortcut search (once per node) now waits a tick (`MacroStep::Wait`, jump released) instead. Test:
+  `macro_start::a_macro_starved_by_the_shortcut_search_starts_next_tick` (diverged at tick 0, `Spend` 1470/1500, before).
+  Live after (fresh world per run, pack off, docs/testing.md), 500-block goto ticks / corrections / joins / diverged:
+  Optimal 1454 / 0 / 8 / 1, Human seeds 1–3 1455 / 10 / 7 / 0, 1446 / 3 / 7 / 0, 1453 / 7 / 7 / 0; slowest near a
+  join ≥ 0.281 b/t. Course (all legs ok, 0 diverged): corrections Optimal 3 (stair2, gap, ladder: classic legs),
+  Human 2 / 4 / 5; parkour legs Optimal 0, Human 0 / 1 (diag) + 1 (sprint40) / 4 (gap4 1, diag 3).
 
 ## Running
 - Tests: `REMOTE_DIR=work/bc-pathfind tools/remote-test.sh -p acacia-bot` (testbox; never workspace-wide locally).
