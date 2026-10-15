@@ -326,12 +326,27 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
   `perf_report` cold: gap course Human 39 → 31.4 ms (587 rollouts, was 760), Optimal 6.4 → 6.1, others unchanged.
   Segments 500 lane: Optimal 1443 → 1444, Human 1446 → 1439 ticks, 0 diverged (was 1), no turning back; late splice
   839 → 840. Speed test: all rows on ≤ off; stairs Human with shortcuts 143 → 134.
-- Open: Human diag and sprint40 still spend the rollout budget: 85% of Human diag's rollouts are diagonal leaps down
-  2 from the rim into the pit floor (235 solves, ~80 rollouts each, the 5-yaw wide retry) whose floors make them
-  look as good as the way on (f under the goal's), so laziness cannot skip them; a cheaper wide retry or a dead-end
-  test before queuing them would. Gap-course Human 31.4 ms vs the 30 ms target. Rest nodes are planned facing the
-  leap (`leap_moves::facing`); a live start facing elsewhere can diverge (seen while a settling change left the bot
-  facing back; that change was dropped).
+- Then (same day): 85% of Human diag's rollouts were diagonal leaps down 2 from the rim into the pit floor (235
+  solves, ~80 rollouts each with the 5-yaw wide retry); their floors left them under the goal's f, so laziness could not
+  skip them. Leaps down onto a dry floor are now queued only if the landing has a way on (`exit::Exits`: the classic
+  flood of `has_exit`, open at `EXIT_NODES` cells or a goal cell; a closed flood marks its whole basin closed, as every
+  cell in it reaches only cells the start reaches; cached per search). Same-level and water landings are not
+  checked (the course's stones are islands only leaps reach). Heuristic like `has_exit`: a basin left only by a leap
+  wider than the classic gap jump counts as closed. Test: `dead_ends::leap_landings_into_a_closed_pit_are_skipped`.
+  Course-leg plans (release, from the same starts): costs equal; Optimal diag 59 → 5.7 ms (1197 → 104 rollouts),
+  sprint40 425 → 243; Human diag 1116 ms at the budget → 146 ms (3253 rollouts), sprint40 1257 ms at the budget →
+  818 ms within it (15136), stones 867 → 244, gap4 529 → 184. 1 s-budget plans (`course_plans_complete`): every Human
+  leg but sprint40 now finishes in the 0.5 s macro share (diag cost 64.3 → 61.7).
+- The search start plans its leaps from the bot's real facing (`macros::leap(.., real_yaw)`, part of the cache key);
+  other rest nodes are still planned facing their leap (they are reached moving that way). A `Human` start facing
+  back or sideways was planned as if facing the leap and re-solved live (or diverged, as on up1 after a settling change
+  left the bot facing back); now the plan includes the eased turn and runs as planned (backward start onto a 2-gap +1:
+  40 → 38 ticks). `Optimal` snaps its aim, unaffected. Test: `macro_start::a_leap_from_the_start_plans_from_the_real_facing`
+  (Optimal and Human facing back and both sides: no live re-solve, no divergence; failed for Human without the fix).
+  Human course-leg costs from a start facing away rise accordingly (down2 21 → 24, diag 57.9 → 60.9).
+- Unchanged by these two: perf_report (gap course Human 31.7 ms), segments (Optimal 1444, Human 1439 ticks, 0
+  diverged), late splice 840, speed table.
+- Open: gap-course Human 31.7 ms vs the 30 ms target; Human sprint40 0.8 s.
 
 ## Running
 - Tests: `REMOTE_DIR=work/bc-pathfind tools/remote-test.sh -p acacia-bot` (testbox; never workspace-wide locally).
