@@ -23,8 +23,14 @@ const STYLES: [(bool, f32); 3] = [(false, 0.0), (true, 1.0), (true, 3.0)];
 const DROP: f32 = 0.6;
 /// Facing within this (degrees) of the held heading: keep it rather than re-aim.
 const HELD_AIM_DEG: f32 = 1.0;
-/// Landing up to this far (blocks) past the target's centre ends the shortcut there.
-const OVERSHOOT: f32 = 1.0;
+/// Landing up to this far (blocks) past the target's centre ends the shortcut there (a hop lands up to ~1.5 past).
+const OVERSHOOT: f32 = 2.0;
+/// Slower than this (blocks/tick), a shortcut has stopped on a target it may not overshoot.
+const FINAL_SPEED: f32 = 0.05;
+/// Ground coast per unit of speed: friction 0.6 × drag 0.91 per tick, k / (1 − k).
+const GROUND_COAST: f32 = 0.546 / (1.0 - 0.546);
+/// Flat nodes after the target a shortcut that may overshoot needs: one per block it may land past, and one more.
+const OVERSHOOT_AHEAD: usize = 3;
 
 /// Sprints straight at `target`, jumping whenever on the ground until within `stop_jump` blocks of it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -39,21 +45,31 @@ pub struct ShortcutCtl {
     /// Bearing to the target, held once faced (per-tick re-aims draw strict BDS corrections, docs/DESIGN.md).
     heading: Option<f32>,
     origin: Option<[f32; 2]>,
+    /// How far past the target a landing may end it: [`OVERSHOOT`] inside a flat span, else none.
+    overshoot: f32,
+    /// The target ends the path: stop on it.
+    stop: bool,
 }
 
 impl ShortcutCtl {
     /// On the ground at the target's level, in its cell or past its centre near the line from the start: a hop
     /// that carried past the target is done there, not walked back (`Human` turned round on the 500-block lane).
     fn arrived(&self, b: &Body, origin: [f32; 2]) -> bool {
-        if standing_on(b, self.target, self.feet) {
+        // The path's end (no overshoot) is reached slowed down: arriving at a run, the follower circled back to it.
+        if standing_on(b, self.target, self.feet) && (!self.stop || b.h_speed() < FINAL_SPEED) {
             return true;
         }
+        let (past, aside) = self.past(b, origin);
+        b.on_ground && (b.pos[1] - self.feet).abs() < LAND_EPS && (0.0..self.overshoot).contains(&past) && aside < 0.5
+    }
+
+    /// How far `b` is past the target's centre along the line from `origin`, and off that line.
+    fn past(&self, b: &Body, origin: [f32; 2]) -> (f32, f32) {
         let [tx, tz] = centre(self.target);
         let (sx, sz) = (tx - origin[0], tz - origin[1]);
         let len = sx.hypot(sz).max(1e-3);
         let (dx, dz) = (b.pos[0] - tx, b.pos[2] - tz);
-        let (past, aside) = ((dx * sx + dz * sz) / len, (dz * sx - dx * sz).abs() / len);
-        b.on_ground && (b.pos[1] - self.feet).abs() < LAND_EPS && (0.0..OVERSHOOT).contains(&past) && aside < 0.5
+        ((dx * sx + dz * sz) / len, (dz * sx - dx * sz).abs() / len)
     }
 }
 
@@ -69,13 +85,19 @@ impl Controller for ShortcutCtl {
         self.t += 1;
         let to = centre(self.target);
         (c.strafe, c.sneak, c.pitch, c.forward, c.sprint) = (0.0, false, 0.0, 1.0, true);
-        // Re-aimed only while still turning onto it.
+        // Re-aimed only while still turning onto it, and never once past a target it may overshoot (that turned round).
+        let past = self.overshoot > 0.0 && self.past(b, origin).0 >= 0.0;
         let heading = match self.heading {
-            Some(h) if ((b.yaw - h + 180.0).rem_euclid(360.0) - 180.0).abs() < HELD_AIM_DEG => h,
+            Some(h) if ((b.yaw - h + 180.0).rem_euclid(360.0) - 180.0).abs() < HELD_AIM_DEG || past => h,
             _ => *self.heading.insert(yaw_to(b, to)),
         };
         c.yaw = self.aim.turn(b.yaw, heading);
-        c.jump = self.jump && b.on_ground && (b.pos[0] - to[0]).hypot(b.pos[2] - to[1]) > self.stop_jump;
+        let dist = (b.pos[0] - to[0]).hypot(b.pos[2] - to[1]);
+        c.jump = self.jump && b.on_ground && dist > self.stop_jump;
+        // Braking for a stop-only target: let go once coasting on the ground covers what is left.
+        if self.stop && b.on_ground && dist < b.h_speed() * GROUND_COAST {
+            (c.forward, c.sprint, c.jump) = (0.0, false, false);
+        }
         Phase::Going
     }
 }
@@ -87,7 +109,8 @@ fn flat(n: &PathNode, level: f32) -> bool {
 
 /// The shortcut from the live state to a node after `path[index]`: its controller, predicted bodies and the
 /// index it lands on. Only taken when faster than following the nodes between; looked for within `spend`.
-pub(super) fn find(path: &[PathNode], index: usize, live: &Rollout, w: &dyn WorldView, aim: Aim, spend: &mut Spend) -> Option<(ShortcutCtl, Vec<Body>, usize)> {
+/// `ends_at_goal`: the path's last node is the goal, where a shortcut stops.
+pub(super) fn find(path: &[PathNode], index: usize, live: &Rollout, w: &dyn WorldView, aim: Aim, ends_at_goal: bool, spend: &mut Spend) -> Option<(ShortcutCtl, Vec<Body>, usize)> {
     let level = live.st.pos[1];
     if !live.st.on_ground || !path.get(index).is_some_and(|n| flat(n, level)) {
         return None;
@@ -107,7 +130,12 @@ pub(super) fn find(path: &[PathNode], index: usize, live: &Rollout, w: &dyn Worl
         let best = STYLES
             .iter()
             .filter_map(|&(jump, stop_jump)| {
-                let ctl = ShortcutCtl { target: path[j].pos, feet: path[j].feet, jump, stop_jump, aim, max, t: 0, heading: None, origin: None };
+                // Only well inside the flat span, so the follower carries on to nodes still ahead: past a leap's
+                // takeoff, the goal, or the span's last nodes it would have to come back.
+                // Macro moves after it were planned from the target itself: a landing past it would start them elsewhere.
+                let walked_on = k + OVERSHOOT_AHEAD < reach && path[j + 1..=j + OVERSHOOT_AHEAD].iter().all(|n| n.mac.is_none());
+                let overshoot = if walked_on { OVERSHOOT } else { 0.0 };
+                let ctl = ShortcutCtl { target: path[j].pos, feet: path[j].feet, jump, stop_jump, aim, max, t: 0, heading: None, origin: None, overshoot, stop: aim.profile.eased_stop() && ends_at_goal && j + 1 == path.len() };
                 if !solver.affords(u64::from(max)) {
                     return None;
                 }

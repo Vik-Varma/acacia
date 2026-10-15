@@ -67,6 +67,12 @@ impl MovementProfile {
         self == MovementProfile::Human
     }
 
+    /// A shortcut onto the goal brakes to stop on it: an eased aim arriving at a run circles back (`Optimal` turns
+    /// on the spot and is faster arriving at speed).
+    pub fn eased_stop(self) -> bool {
+        self == MovementProfile::Human
+    }
+
     /// The executions a macro move must survive to be planned.
     pub fn perturbations(self) -> &'static [Perturbation] {
         match self {

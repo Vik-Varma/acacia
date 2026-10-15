@@ -239,7 +239,8 @@ impl Pilot {
         self.partial = !path.complete;
         self.generation += 1;
         self.ahead.clear();
-        let follower = Follower::new(path.nodes, pos, self.opts.tolerance).moving(self.opts.search.profile, splitmix(&mut self.rng));
+        let mut follower = Follower::new(path.nodes, pos, self.opts.tolerance).moving(self.opts.search.profile, splitmix(&mut self.rng));
+        follower.set_ends_at_goal(path.complete);
         self.follower = Some(follower.shortcuts(self.opts.shortcuts));
         Ok(())
     }

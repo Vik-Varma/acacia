@@ -10,6 +10,7 @@ mod drive;
 mod leap;
 mod leaps;
 mod leaps_shaped;
+mod macro_start;
 mod perf;
 mod pilot_sim;
 mod rollout;
