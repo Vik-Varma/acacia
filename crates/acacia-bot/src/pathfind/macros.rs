@@ -13,12 +13,12 @@ use super::cell::AVOID;
 use super::costs::{DANGER_NEAR, HUMAN_JUMP, RISK, RISK_MARGIN};
 use super::hop;
 use super::leap::JumpAt;
-use super::leap_moves;
+use super::leap_moves::{self, LeapCand};
 use super::mac::Macro;
 use super::moves::{Edge, MoveKind};
 use super::node::{Entry, Momentum, run_entry};
 use super::profile::MovementProfile;
-use super::solve::{Solved, Solver};
+use super::solve::{Miss, Solved, Solver};
 use super::terrain::{Blocks, Spot, SpotKind, Terrain};
 use crate::movement::{Controls, Rollout};
 
@@ -36,6 +36,8 @@ pub struct MacroStats {
     /// Move families answered by the cache, and those simulated.
     pub hits: u32,
     pub misses: u32,
+    /// Cached results dropped because their key was full.
+    pub evicted: u32,
     /// The tick budget ran out: later nodes got classic moves only.
     pub exhausted: bool,
 }
@@ -57,43 +59,70 @@ pub(crate) struct Macros<'a> {
     pub stats: Cell<MacroStats>,
 }
 
-pub(crate) fn successors<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, (entry, mom): (Entry, &Momentum), m: &Macros, out: &mut Vec<Edge>) {
-    if entry == Entry::Air || from.kind != SpotKind::Stand || from.wet || from.made != 0 {
-        return;
-    }
+/// Macro moves start standing dry on a node the search did not change.
+fn can_start(entry: Entry, from: Spot) -> bool {
+    entry != Entry::Air && from.kind == SpotKind::Stand && !from.wet && from.made == 0
+}
+
+/// Runs `f` with a solver from `mom` at `p` and books what it simulated; `None` once the budget or time is spent.
+fn simulate<B: Blocks, R>(t: &Terrain<B>, p: BlockPos, mom: &Momentum, m: &Macros, f: impl FnOnce(&Rollout, &mut Solver<Terrain<B>>, (&Store, &mut Counts)) -> R) -> Option<R> {
     let mut stats = m.stats.get();
     if stats.ticks >= m.budget || Instant::now() >= m.deadline {
         stats.exhausted = true;
-        return m.stats.set(stats);
+        m.stats.set(stats);
+        return None;
     }
     let start = Rollout::new(mom.synth(p, m.base));
     let avoid = |q: BlockPos| t.cell(q).has(AVOID);
     let safe = |q: BlockPos| t.spot(q).is_some_and(|s| s.kind == SpotKind::Stand && !s.wet && s.feet == q[1] as f32);
     let mut solver = Solver::new(t, &avoid, &safe, m.profile, true, Controls::default());
     solver.budget = m.budget - stats.ticks;
-    let cache = &*m.cache;
-    let mut n = Counts { off: cache.off, ..Counts::default() };
-    if m.leaps {
-        for (q, to, s) in leap_moves::leaps(t, p, from, mom, &start, &mut solver, (cache, &mut n)) {
-            push_leap(t, out, q, to, s, MoveKind::Parkour, m.profile);
-        }
-    }
-    for (q, to, r) in hop::runs(t, p, from, (entry, mom), &start, &mut solver, (cache, &mut n)) {
-        push(t, out, q, to, MoveKind::Run, r.ticks as f32, &r.end, Macro::Run(r.ctl));
-    }
-    if m.hops
-        && !solver.spent()
-        && let Entry::Run(d, _) = entry
-        && let Some((q, to, s)) = cache.hops.get_or(t, p, (*mom, d), &mut n, || hop::hop(t, p, from, d, &start, &mut solver))
-    {
-        push_leap(t, out, q, to, s, MoveKind::Hop, m.profile);
-    }
+    let mut n = Counts { off: m.cache.off, ..Counts::default() };
+    let r = f(&start, &mut solver, (&m.cache, &mut n));
     stats.rollouts += solver.rollouts;
     stats.ticks += solver.ticks;
     stats.hits += n.hits;
     stats.misses += n.misses;
+    stats.evicted += n.evicted;
     stats.exhausted |= solver.spent();
     m.stats.set(stats);
+    Some(r)
+}
+
+/// Runs and hops from `p`; leaps are offered lazily ([`leap_candidates`], [`leap`]).
+pub(crate) fn successors<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, (entry, mom): (Entry, &Momentum), m: &Macros, out: &mut Vec<Edge>) {
+    if !can_start(entry, from) {
+        return;
+    }
+    simulate(t, p, mom, m, |start, solver, (cache, n)| {
+        for (q, to, r) in hop::runs(t, p, from, (entry, mom), start, solver, (cache, &mut *n)) {
+            push(t, out, q, to, MoveKind::Run, r.ticks as f32, &r.end, Macro::Run(r.ctl));
+        }
+        if m.hops
+            && !solver.spent()
+            && let Entry::Run(d, _) = entry
+            && let Some((q, to, s)) = cache.hops.get_or(t, p, (*mom, d), n, || hop::hop(t, p, from, d, start, solver))
+        {
+            push_leap(t, out, q, to, s, MoveKind::Hop, m.profile);
+        }
+    });
+}
+
+/// Leap targets from `p`, to be solved when the search reaches them.
+pub(crate) fn leap_candidates<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, (entry, mom): (Entry, &Momentum), m: &Macros) -> Vec<LeapCand> {
+    let stats = m.stats.get();
+    if !m.leaps || !can_start(entry, from) || stats.exhausted {
+        return Vec::new();
+    }
+    leap_moves::candidates(t, p, from, &Rollout::new(mom.synth(p, m.base)))
+}
+
+/// The leap from `p` to `c` as an edge, if it lands; `Err(Miss::Other)` once the budget is spent.
+pub(crate) fn leap<B: Blocks>(t: &Terrain<B>, p: BlockPos, mom: &Momentum, c: LeapCand, m: &Macros) -> Result<Edge, Miss> {
+    let solved = simulate(t, p, mom, m, |start, solver, cache| leap_moves::solve(t, p, mom, start, c, solver, cache)).unwrap_or(Err(Miss::Other))?;
+    let mut out = Vec::with_capacity(1);
+    push_leap(t, &mut out, c.q, c.to, solved, MoveKind::Parkour, m.profile);
+    Ok(out.remove(0))
 }
 
 fn push_leap<B: Blocks>(t: &Terrain<B>, out: &mut Vec<Edge>, pos: BlockPos, to: Spot, s: Solved, kind: MoveKind, profile: MovementProfile) {

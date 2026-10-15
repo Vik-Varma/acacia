@@ -33,7 +33,11 @@ fn leaps_gaps_from(from: [f32; 3]) {
                 continue;
             }
             let leaps = leaps.unwrap_or_else(|| panic!("gap {gap}, {profile:?}: no plan"));
-            assert_eq!(leaps.iter().filter(|(k, _)| *k == MoveKind::Parkour).count(), 1, "gap {gap}: {leaps:?}");
+            // One jump over the gap: a leap, or a hop from a run (they tie, and lazily solved leaps come second).
+            let jumps = |w: &[(MoveKind, [i32; 3])]| matches!(w[1].0, MoveKind::Parkour | MoveKind::Hop) && w[0].1[0] <= 0 && w[1].1[0] > gap;
+            let first = [(MoveKind::Walk, [from[0].floor() as i32, 1, 0])];
+            let crossings = first.iter().chain(&leaps).copied().collect::<Vec<_>>().windows(2).filter(|w| jumps(w)).count();
+            assert_eq!(crossings, 1, "gap {gap}: {leaps:?}");
         }
     }
 }

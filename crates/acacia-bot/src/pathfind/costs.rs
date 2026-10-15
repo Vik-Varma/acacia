@@ -26,6 +26,10 @@ pub const HOP_TICKS: f32 = 12.0;
 /// Least ticks a run from standing loses against steady hops over three blocks or more (measured 4.1 at the
 /// first landing; `tests::hops::steady_hop_speed_bounds_the_heuristic` checks the bound).
 pub const MACRO_STARTUP: f32 = 4.0;
+/// Ticks a classic move from standing loses getting up to speed, which its per-block cost leaves out (measured
+/// 4.2–4.7 over 5–60 blocks by `tests::perf::cost_skew_report`; the other ~3 of the skew is settling at the goal,
+/// the same for every plan). Macro moves simulate theirs.
+pub const CLASSIC_STARTUP: f32 = 4.0;
 
 /// Fewest ticks per block any move achieves with macro moves on: steady hops (plus the `Human` jump
 /// hesitation, unless plain sprinting is faster), rounded down so the heuristic stays admissible.

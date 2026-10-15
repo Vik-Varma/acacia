@@ -7,6 +7,7 @@ use super::drive::{PROFILES, macro_opts, plan, plan_and_follow, standing};
 use super::grid::Grid;
 use crate::movement::Controls;
 use crate::pathfind::costs::HOP_SPEED;
+use crate::pathfind::reach::LEAP_VMAX;
 use crate::pathfind::{Entry, Goal, GotoOpts, MoveKind, MovementProfile, Path, Pilot, SearchOpts};
 
 /// Distance covered after each tick of sprinting from standing, jumping whenever possible or never.
@@ -38,6 +39,16 @@ fn steady_hop_speed_bounds_the_heuristic() {
             assert!(h <= (t + 1) as f32, "jump {jump}, tick {t}: {d} blocks, h {h}");
         }
     }
+}
+
+/// Lazy leaps are queued at distance / `LEAP_VMAX`: no tick of sprint-jumping, from rest into a hop chain, travels
+/// farther than that.
+#[test]
+fn leap_speed_stays_under_the_floor_bound() {
+    let xs = sprint_from_rest(true);
+    let fastest = xs.windows(2).map(|w| w[1] - w[0]).fold(xs[0], f32::max);
+    eprintln!("fastest tick {fastest:.4} blocks");
+    assert!(fastest < LEAP_VMAX, "{fastest}");
 }
 
 /// Plans from standing at `from` and follows the plan under every seed: (plan, worst ticks taken).
@@ -79,7 +90,8 @@ fn chains_leaps_over_stepping_stones() {
     for profile in PROFILES {
         let (p, _) = follow(&g, [-3.5, 1.0, 0.5], [18, 1, 0], &macro_opts(profile));
         let on_stones: Vec<_> = p.nodes.iter().filter(|n| (1..15).contains(&n.pos[0])).collect();
-        assert!(on_stones.iter().all(|n| n.kind == MoveKind::Parkour && n.entry != Entry::Rest), "{profile:?}: {on_stones:?}");
+        // A hop from a run lands a stone as well as a leap (they tie).
+        assert!(on_stones.iter().all(|n| matches!(n.kind, MoveKind::Parkour | MoveKind::Hop) && n.entry != Entry::Rest), "{profile:?}: {on_stones:?}");
     }
 }
 

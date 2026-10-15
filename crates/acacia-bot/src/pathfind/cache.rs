@@ -71,7 +71,8 @@ impl<K: Hash + Eq + Clone, V: Shift + Clone> Memo<K, V> {
                     Some(j) => reads.swap(0, j),
                     None => {
                         n.hits += 1;
-                        entries.swap(0, i);
+                        // Most recently used first: a full key drops its last.
+                        entries[..=i].rotate_right(1);
                         let mut v = entries[0].value.clone();
                         v.shift(p);
                         return v;
@@ -88,11 +89,12 @@ impl<K: Hash + Eq + Clone, V: Shift + Clone> Memo<K, V> {
         let mut shard = self.shard(&key);
         let entries = shard.entry(key).or_default();
         if entries.len() == PER_KEY {
-            entries.remove(0);
+            entries.pop();
+            n.evicted += 1;
         } else {
             self.len.fetch_add(1, Ordering::Relaxed);
         }
-        entries.push(Entry { reads, value: stored });
+        entries.insert(0, Entry { reads, value: stored });
         v
     }
 }
@@ -101,6 +103,8 @@ impl<K: Hash + Eq + Clone, V: Shift + Clone> Memo<K, V> {
 pub(crate) struct Counts {
     pub hits: u32,
     pub misses: u32,
+    /// Results dropped for a full key.
+    pub evicted: u32,
     /// Simulate everything and keep nothing (comparisons in tests).
     pub off: bool,
 }
