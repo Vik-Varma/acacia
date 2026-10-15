@@ -23,7 +23,7 @@ pub fn sense(g: &Grid, m: &Movement) -> Sense {
 
 /// Does a node's work in the grid the way the navigator does it on a server: breaks and doors at
 /// once, placing after the same maneuvers.
-fn perform(g: &Grid, world: &PhysicsWorld, m: &mut Movement, node: &PathNode) {
+pub fn perform(g: &Grid, world: &PhysicsWorld, m: &mut Movement, node: &PathNode) {
     for step in node.work.steps() {
         match step {
             Step::Break(pos) => {

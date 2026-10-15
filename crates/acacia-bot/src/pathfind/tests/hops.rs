@@ -7,7 +7,7 @@ use super::drive::{PROFILES, macro_opts, plan, plan_and_follow, standing};
 use super::grid::Grid;
 use crate::movement::Controls;
 use crate::pathfind::costs::HOP_SPEED;
-use crate::pathfind::{Entry, Goal, GotoOpts, MoveKind, MovementProfile, Navigator, Path, SearchOpts};
+use crate::pathfind::{Entry, Goal, GotoOpts, MoveKind, MovementProfile, Path, Pilot, SearchOpts};
 
 /// Distance covered after each tick of sprinting from standing, jumping whenever possible or never.
 fn sprint_from_rest(jump: bool) -> Vec<f32> {
@@ -85,7 +85,7 @@ fn chains_leaps_over_stepping_stones() {
 
 #[test]
 fn hunger_gate_drops_flat_hops_but_not_leaps() {
-    let nav = Navigator::new(Goal::Block([0, 0, 0]), GotoOpts::default());
+    let nav = Pilot::new(Goal::Block([0, 0, 0]), GotoOpts::default());
     assert!(!nav.search_opts(None, 6.0).hops && nav.search_opts(None, 6.5).hops);
     let g = super::leaps::gap_course(3);
     for profile in PROFILES {

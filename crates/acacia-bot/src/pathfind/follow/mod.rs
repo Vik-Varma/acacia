@@ -133,6 +133,17 @@ impl Follower {
         &self.path[self.index..]
     }
 
+    /// Planned ticks to the end of the path.
+    pub fn ticks_left(&self) -> f32 {
+        self.ahead().iter().map(|n| n.cost).sum()
+    }
+
+    /// Appends the next segment, planned from the last node: the last node stops being final, so the bot
+    /// runs on through it.
+    pub fn splice(&mut self, nodes: Vec<PathNode>) {
+        self.path.extend(nodes);
+    }
+
     /// `live`: a fork of the live simulation, which macro moves need (without it they are steered
     /// classically); `w` the world it runs in.
     pub fn tick(&mut self, s: &Sense, live: Option<&Rollout>, w: &dyn WorldView, c: &mut Controls) -> FollowStatus {

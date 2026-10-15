@@ -109,12 +109,18 @@ pub struct Terrain<'r, B> {
     pub(crate) cells: CellMemo,
     spots: RefCell<PosMap<Option<Spot>>>,
     toggled: RefCell<HashMap<u32, Option<u32>>>,
+    unloaded: std::cell::Cell<bool>,
 }
 
 impl<'r, B: Blocks> Terrain<'r, B> {
     pub fn new(blocks: B, registry: &'r BlockRegistry) -> Self {
-        let (cells, spots, toggled) = Default::default();
-        Self { blocks, registry, cells, spots, toggled }
+        let (cells, spots, toggled, unloaded) = Default::default();
+        Self { blocks, registry, cells, spots, toggled, unloaded }
+    }
+
+    /// Some cell read so far lies in a chunk that is not loaded.
+    pub fn saw_unloaded(&self) -> bool {
+        self.unloaded.get()
     }
 
     pub fn cell(&self, p: BlockPos) -> Cell {
@@ -129,7 +135,10 @@ impl<'r, B: Blocks> Terrain<'r, B> {
 
     fn classify(&self, p: BlockPos) -> Cell {
         const SOLID: &[Aabb] = &[Aabb::FULL];
-        let Some((block, liquid)) = self.blocks.ids(p) else { return Cell { boxes: SOLID, flags: UNLOADED, block: u32::MAX, liquid: u32::MAX } };
+        let Some((block, liquid)) = self.blocks.ids(p) else {
+            self.unloaded.set(true);
+            return Cell { boxes: SOLID, flags: UNLOADED, block: u32::MAX, liquid: u32::MAX };
+        };
         let Some(state) = self.registry.get(block) else { return Cell { boxes: SOLID, flags: 0, block, liquid } };
         let liquid_flags = self.registry.get(liquid).map_or(0, |s| state_flags(s) & (WATER | LIQUID | AVOID | DANGER_NEAR));
         Cell { boxes: state.boxes, flags: state_flags(state) | liquid_flags, block, liquid }

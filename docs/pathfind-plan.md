@@ -213,6 +213,47 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
    Live (fresh world per run): all legs ok, Optimal 0 corrections, Human seeds 1–3 bursts as above.
 11. Stretch: neo jumps (Optimal), ladder jumps.
 
+## C1 design (2026-10-15): continuous long gotos
+
+- Core moves out of the async `Navigator` into a network-free `Pilot` (`pathfind/pilot.rs`) driven with a
+  `Movement`, a `Terrain` and a search spawner; the navigator only adds work (`execute`) and the tick wait. The
+  sim drives the same `Pilot`, so joins, late splices and backoff are tested offline.
+- Searches run off the tick as a `SearchJob` (`pathfind/job.rs`) answered on a `tokio::sync::oneshot`; the
+  navigator spawns them with `spawn_blocking` on a `WorldBlocks` snapshot, tests inline with an optional delay.
+- Plan ahead (`pathfind/ahead.rs`): on a partial path, once the planned ticks left (`PathNode::cost` sum) drop
+  below `PLAN_AHEAD_TICKS` (100, Baritone's lookahead is 150), search from the last node's planned momentum
+  (`Momentum::synth`). Splice = `Follower::splice` appends the nodes, so the follower never sees a final node at
+  the join. A result is dropped when the follower was replaced or spliced since (generation check). Arriving at the
+  partial end with the search still running: hold there and wait for it (it starts from here); a failed or empty
+  one falls back to a plan from the live state.
+- Favouring (`pathfind/favour.rs`): a re-plan after Stuck/OffPath/Diverged/world change favours the dropped
+  path's cells: an edge into one costs `floor + 0.5·(cost − floor)`, `floor` = the heuristic between its ends
+  (non-rest). Each edge stays ≥ its heuristic floor, so h stays a lower bound except the from-rest startup term
+  (≤ `MACRO_STARTUP` = 4 ticks): bounded suboptimality, accepted. Not applied to plan-ahead (old cells are behind).
+  `PathNode::cost`/`Path::cost` stay undiscounted (shortcuts compare them with simulated ticks).
+- Dead ends (`pathfind/exit.rs`): a partial path ends on its candidate's deepest ancestor from which a classic
+  flood (same dig/bridge/doors options, no macros) reaches `EXIT_NODES` (64) distinct cells; a 3-deep pit fails it.
+  Heuristic, documented: a one-way drop into a ≥64-cell basin passes.
+- Unreachable: `Path::unreachable` = open set exhausted and no unloaded cell read. The pilot fails at once
+  (`NotPossible`) on it; with dig/bridge allowed the search itself plans the way out. An empty partial path (no
+  progress, e.g. at the edge of loaded terrain) counts a re-plan and backs off `BACKOFF_TICKS` (20, doubling to
+  160) before searching again, instead of re-searching every tick.
+- Failure timeout: `GotoOpts::give_up_ticks` (default 600 = 30 s): no new closest approach to the goal (classic
+  heuristic, by ≥1 block) for that long fails with `NotPossible`. Per-progress, not wall-clock, so long gotos live.
+- Done bar test: `tests::segments` drives a 500-block lane through a moving load horizon (`Horizon`, 5 chunks: the
+  planner sees chunks near the bot only, as on a server), ≥3 segments, horizontal speed sampled ±10 ticks around
+  each join node.
+- As built, deviations: (1) the plan-ahead trigger is `min(ticks left, straight line to the end × per-block ticks)`:
+  a running shortcut holds the follower's index at its start, so the planned ticks overstated what was left and the
+  search started one tick before the join (Optimal slowed to 0.087 b/t there, then diverged). (2) A re-plan while
+  moving (> 0.1 b/t) takes the quick inline search's partial path instead of stopping for the full search; plan-ahead
+  extends it. (3) Favouring only has slack where edges cost more than the heuristic: with macros on, classic edges
+  (3.56 t/b vs 2.80 Optimal / 3.27 Human); with macros off it only breaks ties. (4) `tests::pilot_sim` takes
+  `PILOT_TRACE=a..b` for per-tick pilot state.
+- Measured (sim, release, `tests::segments`): 500 blocks, lane with two 2-gaps and a raised stretch. Optimal 1443
+  ticks, 9 joins, 0 diverged, slowest near a join 0.286 b/t; Human seed 1 1558 ticks, 7 joins, 1 diverged (not at a
+  join), slowest 0.307. Late splice (answers 140 ticks late): waits at each join, arrives, 0 re-plans.
+
 ## Running
 - Tests: `REMOTE_DIR=work/bc-pathfind tools/remote-test.sh -p acacia-bot` (testbox; never workspace-wide locally).
 - Risks: synth fidelity (fallback: store full `PlayerState` per macro node); in-air yaw swings on strict BDS; node/rollout blowup on open maps.

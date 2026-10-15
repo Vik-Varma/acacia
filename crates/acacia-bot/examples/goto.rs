@@ -3,13 +3,15 @@
 //! `cargo run -p acacia-bot --example goto -- <server> <name|@account> <dx> <dz> [dy]`
 //! With `dy` the goal is that exact block; without it any y at that x/z.
 //! `BEDROCK_PROXY=host:port:user:pass` as in the other examples; `BEDROCK_DIG` / `BEDROCK_BRIDGE`
-//! let the path dig and place scaffold blocks.
+//! let the path dig and place scaffold blocks; `BEDROCK_PROFILE=human` and `BEDROCK_SEED=<n>` pick the movement
+//! profile and aim seed; `BEDROCK_CMDS` runs commands first. Ends with the segment joins and the slowest
+//! horizontal speed near each.
 use std::sync::Arc;
 use std::time::Duration;
 
 use acacia_bot::client::auth::{Account, AuthClient, AuthConfig, FileTokenCache};
 use acacia_bot::client::{Client, Socks5Proxy};
-use acacia_bot::pathfind::{Goal, GotoOpts, NavStatus, Navigator};
+use acacia_bot::pathfind::{Goal, GotoOpts, MovementProfile, NavStatus, Navigator};
 use acacia_bot::proto::types::Vec3f;
 use acacia_bot::state::Trackers;
 use acacia_bot::{Bot, BotConfig};
@@ -55,6 +57,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         bot.client().command(&format!("/tp @s {tp}"));
         bot.wait_ticks(40).await?;
     }
+    // BEDROCK_CMDS="effect @s saturation 600 10 true;...": commands to run first (operator).
+    for cmd in std::env::var("BEDROCK_CMDS").unwrap_or_default().split(';').filter(|c| !c.trim().is_empty()) {
+        bot.client().command(&format!("/{}", cmd.trim()));
+        bot.wait_ticks(5).await?;
+    }
     if std::env::var("BEDROCK_DUMP").is_ok() {
         print_surroundings(&bot);
     }
@@ -70,11 +77,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut opts = GotoOpts::default();
     opts.search.allow_dig = std::env::var("BEDROCK_DIG").is_ok();
     opts.search.allow_bridge = std::env::var("BEDROCK_BRIDGE").is_ok();
+    if std::env::var("BEDROCK_PROFILE").is_ok_and(|p| p == "human") {
+        opts.search.profile = MovementProfile::Human;
+    }
+    opts.seed = std::env::var("BEDROCK_SEED").ok().and_then(|s| s.parse().ok());
     let mut nav = Navigator::new(goal, opts);
     let mut report = tokio::time::Instant::now();
     let started = report;
     let mut seen = 0;
+    let mut track = Vec::new();
     let result = loop {
+        track.extend(bot.movement().and_then(|m| m.position()));
         let status = nav.tick(&mut bot).await;
         let corrections = bot.movement().map_or(0, |m| m.corrections);
         if corrections > seen {
@@ -96,6 +109,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(()) => println!("arrived in {:.1}s", started.elapsed().as_secs_f32()),
         Err(e) => println!("failed: {e}"),
     }
+    print_joins(&nav, &track);
     bot.wait_ticks(20).await?;
     if bot.movement().is_some_and(|m| m.corrections > seen) {
         print_surroundings(&bot);
@@ -146,6 +160,19 @@ fn print_surroundings(bot: &Bot) {
     }
     if !legend.is_empty() {
         println!("  legend: {}", legend.iter().enumerate().map(|(i, n)| format!("{}={n}", char::from(b'a' + i as u8))).collect::<Vec<_>>().join(" "));
+    }
+}
+
+/// Ticks, searches and each segment join with the slowest horizontal speed (blocks/tick) within 10 ticks of passing it.
+fn print_joins(nav: &Navigator, track: &[[f32; 3]]) {
+    let p = nav.pilot();
+    println!("ticks {} | searches {} | replans {} | diverged {} | joins {}", track.len(), p.searches(), p.replans(), p.divergences(), p.joins().len());
+    let speed = |t: usize| (track[t + 1][0] - track[t][0]).hypot(track[t + 1][2] - track[t][2]);
+    for j in p.joins() {
+        let d = |q: &[f32; 3]| (q[0] - j[0] as f32 - 0.5).hypot(q[2] - j[2] as f32 - 0.5);
+        let Some(at) = (0..track.len().saturating_sub(1)).min_by(|&a, &b| d(&track[a]).total_cmp(&d(&track[b]))) else { continue };
+        let slowest = (at.saturating_sub(10)..(at + 10).min(track.len() - 1)).map(speed).fold(f32::INFINITY, f32::min);
+        println!("JOIN {j:?} passed at tick {at}: slowest {slowest:.3} b/t");
     }
 }
 

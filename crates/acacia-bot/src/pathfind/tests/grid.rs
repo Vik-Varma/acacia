@@ -20,10 +20,15 @@ pub struct Grid {
 
 impl Grid {
     pub fn new() -> Self {
+        Self::sized(R)
+    }
+
+    /// Chunks -r..=r on both axes loaded.
+    pub fn sized(r: i32) -> Self {
         let registry = BlockRegistry::vanilla_arc();
         let mut view = ChunkView::new(World::new(registry.clone(), 0, BlockIds::Runtime));
-        for cx in -R..=R {
-            for cz in -R..=R {
+        for cx in -r..=r {
+            for cz in -r..=r {
                 view.insert_sub_chunk(cx, 0, cz, EMPTY_SECTION).expect("empty section");
             }
         }

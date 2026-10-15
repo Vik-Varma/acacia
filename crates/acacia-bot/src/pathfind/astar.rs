@@ -4,19 +4,18 @@ use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::collections::hash_map::Entry as Slot;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use acacia_physics::{BlockPos, PlayerState, Vec3};
 
 use super::mac::Macro;
-use super::costs;
-use super::goal::{Goal, Speed};
-use super::kit::Kit;
+use super::exit::has_exit;
+use super::goal::Goal;
 use super::cache::RolloutCache;
 use super::macros::{MACRO_TIME_SHARE, MacroStats, Macros};
 use super::moves::{self, Ctx, Edge, MoveKind};
 use super::node::{Entry, KeyMap, Momentum, NodeKey, run_entry};
-use super::profile::MovementProfile;
+pub use super::opts::{Path, SearchOpts};
 use super::terrain::{Blocks, EPS, Spot, Terrain};
 use super::work::Work;
 use super::PathNode;
@@ -27,73 +26,6 @@ const MIN_IMPROVEMENT: f32 = 0.01;
 /// Slower than this (blocks per tick) on the ground counts as standing.
 const AT_REST: f32 = 0.05;
 
-#[derive(Debug, Clone)]
-pub struct SearchOpts {
-    pub max_nodes: usize,
-    pub budget: Duration,
-    /// Allow gap jumps.
-    pub parkour: bool,
-    /// Break blocks in the way (costed by break time with the best tool in `kit`).
-    pub allow_dig: bool,
-    /// Place scaffold blocks from `kit` to cross gaps and to pillar up.
-    pub allow_bridge: bool,
-    /// Open wooden doors, fence gates and trapdoors in the way.
-    pub open_doors: bool,
-    /// Tools and blocks to plan with; [`Bot::goto`](crate::Bot::goto) fills it from the inventory.
-    pub kit: Kit,
-    /// How macro moves are planned and run.
-    pub profile: MovementProfile,
-    /// Plan macro moves (leaps found by simulation) instead of the classic gap jump.
-    pub macros: bool,
-    /// Sprint-jump along flat ground (macro moves). [`Bot::goto`](crate::Bot::goto) turns it off at food 6 or less.
-    pub hops: bool,
-    /// Rollout ticks the search may simulate for macro moves; once spent, nodes get classic moves only.
-    pub max_rollout_ticks: u64,
-}
-
-impl Default for SearchOpts {
-    fn default() -> Self {
-        Self {
-            max_nodes: 200_000,
-            budget: Duration::from_secs(2),
-            parkour: true,
-            allow_dig: false,
-            allow_bridge: false,
-            open_doors: true,
-            kit: Kit::default(),
-            profile: MovementProfile::Optimal,
-            macros: true,
-            hops: true,
-            max_rollout_ticks: 400_000,
-        }
-    }
-}
-
-impl SearchOpts {
-    /// The heuristic's speed: macro moves sprint-jump, and change height on the way.
-    pub(crate) fn speed(&self) -> Speed {
-        if self.macros {
-            Speed { per_block: costs::macro_ticks_per_block(self.profile), startup: costs::MACRO_STARTUP, overlap: true }
-        } else {
-            Speed::CLASSIC
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Path {
-    /// Nodes after the start, in order.
-    pub nodes: Vec<PathNode>,
-    /// False when the search ran out of budget or options: `nodes` then leads to the node that
-    /// looked closest to the goal.
-    pub complete: bool,
-    /// Estimated ticks.
-    pub cost: f32,
-    /// Nodes expanded.
-    pub visited: usize,
-    pub macro_stats: MacroStats,
-}
-
 #[derive(Clone, Copy)]
 struct Rec {
     key: NodeKey,
@@ -101,6 +33,8 @@ struct Rec {
     kind: MoveKind,
     parent: u32,
     g: f32,
+    /// `g` without [`SearchOpts::favour`]'s discounts.
+    raw: f32,
     /// Scaffold blocks the path to here places.
     placed: u32,
     /// Index into the search's work list, `NONE` for plain moves.
@@ -174,7 +108,7 @@ pub fn search_from<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal, o
 /// they were found for another profile or player.
 pub fn search_cached<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal, opts: &SearchOpts, cache: &mut RolloutCache) -> Path {
     let started = Instant::now();
-    let empty = |complete| Path { nodes: Vec::new(), complete, cost: 0.0, visited: 0, macro_stats: MacroStats::default() };
+    let empty = |complete| Path { nodes: Vec::new(), complete, unreachable: false, cost: 0.0, visited: 0, macro_stats: MacroStats::default() };
     let Some((start, spot)) = start_node(t, live.pos) else { return empty(false) };
     if goal.success(start) {
         return empty(true);
@@ -186,7 +120,7 @@ pub fn search_cached<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal,
     };
     let start = NodeKey { entry, ..NodeKey::rest(start) };
     let mom = Momentum::snap(live, start.pos);
-    let mut recs = vec![Rec { key: start, spot, kind: MoveKind::Walk, parent: NONE, g: 0.0, placed: 0, work: NONE, mac: NONE, mom }];
+    let mut recs = vec![Rec { key: start, spot, kind: MoveKind::Walk, parent: NONE, g: 0.0, raw: 0.0, placed: 0, work: NONE, mac: NONE, mom }];
     let (mut works, mut macs): (Vec<Work>, Vec<Macro>) = (Vec::new(), Vec::new());
     let mut index = KeyMap::default();
     index.insert(start, 0u32);
@@ -209,6 +143,7 @@ pub fn search_cached<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal,
     });
     let mut ctx = Ctx { parkour: opts.parkour, dig: opts.allow_dig, bridge: opts.allow_bridge, doors: opts.open_doors, kit: &opts.kit, blocks_left: 0, macros };
     let stats = |ctx: &Ctx| ctx.macros.as_ref().map_or_else(MacroStats::default, |m| m.stats.get());
+    let mut cut = false;
 
     while let Some(Open { g, index: i, .. }) = open.pop() {
         let rec = recs[i as usize];
@@ -216,20 +151,23 @@ pub fn search_cached<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal,
             continue;
         }
         if goal.success(rec.key.pos) {
-            return Path { nodes: reconstruct(&recs, &works, &macs, i), complete: true, cost: g, visited, macro_stats: stats(&ctx) };
+            let nodes = reconstruct(&recs, &works, &macs, i);
+            return Path { nodes, complete: true, unreachable: false, cost: rec.raw, visited, macro_stats: stats(&ctx) };
         }
         visited += 1;
         // Checked often: a node with macro moves costs many rollouts.
         if visited >= opts.max_nodes || (visited % 8 == 0 && started.elapsed() >= opts.budget) {
+            cut = true;
             break;
         }
         edges.clear();
         ctx.blocks_left = opts.kit.blocks.saturating_sub(rec.placed);
         moves::successors(t, rec.key.pos, rec.spot, (rec.key.entry, &rec.mom), &ctx, &mut edges);
         for e in &edges {
-            let g2 = g + e.cost;
+            let g2 = g + opts.favour.as_ref().map_or(e.cost, |f| f.cost(rec.key.pos, e.pos, e.cost, speed));
             let key = NodeKey { pos: e.pos, entry: e.entry, ..rec.key };
-            let mut next = Rec { key, spot: e.spot, kind: e.kind, parent: i, g: g2, placed: rec.placed + e.work.places(), work: NONE, mac: NONE, mom: e.mom };
+            let (placed, raw) = (rec.placed + e.work.places(), rec.raw + e.cost);
+            let mut next = Rec { key, spot: e.spot, kind: e.kind, parent: i, g: g2, raw, placed, work: NONE, mac: NONE, mom: e.mom };
             let j = match index.entry(key) {
                 Slot::Occupied(o) => {
                     let j = *o.get();
@@ -264,9 +202,15 @@ pub fn search_cached<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal,
             }
         }
     }
-    let pick = best.iter().copied().find(|&b| b != 0).unwrap_or(0);
-    let cost = recs[pick as usize].g;
-    Path { nodes: reconstruct(&recs, &works, &macs, pick), complete: false, cost, visited, macro_stats: stats(&ctx) }
+    let macro_stats = stats(&ctx);
+    let unreachable = !cut && !macro_stats.exhausted && !t.saw_unloaded();
+    let mut pick = best.iter().copied().find(|&b| b != 0).unwrap_or(0);
+    // Back off a dead end to the last node on the way that still leads somewhere.
+    while pick != 0 && !has_exit(t, recs[pick as usize].key.pos, recs[pick as usize].spot, opts, recs[pick as usize].placed) {
+        pick = recs[pick as usize].parent;
+    }
+    let cost = recs[pick as usize].raw;
+    Path { nodes: reconstruct(&recs, &works, &macs, pick), complete: false, unreachable, cost, visited, macro_stats }
 }
 
 fn reconstruct(recs: &[Rec], works: &[Work], macs: &[Macro], mut i: u32) -> Vec<PathNode> {
@@ -274,7 +218,7 @@ fn reconstruct(recs: &[Rec], works: &[Work], macs: &[Macro], mut i: u32) -> Vec<
     while let Some(r) = recs.get(i as usize).filter(|r| r.parent != NONE) {
         let work = works.get(r.work as usize).copied().unwrap_or_default();
         let mac = macs.get(r.mac as usize).copied();
-        let cost = r.g - recs[r.parent as usize].g;
+        let cost = r.raw - recs[r.parent as usize].raw;
         nodes.push(PathNode { pos: r.key.pos, feet: r.spot.feet, kind: r.kind, wet: r.spot.wet, work, entry: r.key.entry, mom: r.mom, mac, cost });
         i = r.parent;
     }
