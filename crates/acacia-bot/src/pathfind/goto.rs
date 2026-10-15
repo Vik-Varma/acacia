@@ -43,12 +43,14 @@ pub struct GotoOpts {
     pub scaffold: Vec<String>,
     /// Run straight at nodes further on over flat ground instead of the path's 8-direction staircase.
     pub shortcuts: bool,
+    /// Seeds the followers' aim jitter (`Human`); random when `None`.
+    pub seed: Option<u64>,
 }
 
 impl Default for GotoOpts {
     fn default() -> Self {
         let scaffold = DEFAULT_SCAFFOLD.iter().map(|s| s.to_string()).collect();
-        Self { search: SearchOpts::default(), max_replans: 10, tolerance: 0.25, scaffold, shortcuts: true }
+        Self { search: SearchOpts::default(), max_replans: 10, tolerance: 0.25, scaffold, shortcuts: true, seed: None }
     }
 }
 
@@ -74,6 +76,7 @@ pub struct Navigator {
     /// Macro moves diverged in a row; free re-plans up to `MAX_DIVERGED`.
     diverged: u32,
     diverged_in_air: bool,
+    divergences: u32,
     /// Macro-move results kept across re-plans; the blocking search takes it along.
     cache: Arc<Mutex<RolloutCache>>,
     /// Seeds each follower's aim jitter.
@@ -82,8 +85,13 @@ pub struct Navigator {
 
 impl Navigator {
     pub fn new(goal: Goal, opts: GotoOpts) -> Self {
-        let cache = Arc::default();
-        Self { goal, opts, follower: None, partial: false, pending: None, replans: 0, teleports: None, diverged: 0, diverged_in_air: false, cache, rng: seed() }
+        let (cache, rng) = (Arc::default(), opts.seed.unwrap_or_else(seed));
+        Self { goal, opts, follower: None, partial: false, pending: None, replans: 0, teleports: None, diverged: 0, diverged_in_air: false, divergences: 0, cache, rng }
+    }
+
+    /// Macro moves that diverged live (each re-planned without stopping).
+    pub fn divergences(&self) -> u32 {
+        self.divergences
     }
 
     pub fn goal(&self) -> &Goal {
@@ -198,6 +206,7 @@ impl Navigator {
                 let inline = !follower.spend().short;
                 tracing::debug!(?pos, inline, "macro move diverged; re-planning in place");
                 self.diverged += 1;
+                self.divergences += 1;
                 if self.diverged > MAX_DIVERGED {
                     self.count_replan(format!("diverged {} times in a row", self.diverged))?;
                     self.diverged = 0;

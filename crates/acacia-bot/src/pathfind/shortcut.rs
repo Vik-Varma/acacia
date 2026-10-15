@@ -21,6 +21,8 @@ const AHEAD: [usize; 7] = [20, 15, 10, 5, 4, 3, 2];
 const STYLES: [(bool, f32); 3] = [(false, 0.0), (true, 1.0), (true, 3.0)];
 /// Falling this far below the path means the line left the floor.
 const DROP: f32 = 0.6;
+/// Facing within this (degrees) of the held heading: keep it rather than re-aim.
+const HELD_AIM_DEG: f32 = 1.0;
 
 /// Sprints straight at `target`, jumping whenever on the ground until within `stop_jump` blocks of it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -32,6 +34,8 @@ pub struct ShortcutCtl {
     pub aim: Aim,
     max: u16,
     t: u16,
+    /// Bearing to the target, held once faced (per-tick re-aims draw strict BDS corrections, docs/DESIGN.md).
+    heading: Option<f32>,
 }
 
 impl Controller for ShortcutCtl {
@@ -45,7 +49,12 @@ impl Controller for ShortcutCtl {
         self.t += 1;
         let to = centre(self.target);
         (c.strafe, c.sneak, c.pitch, c.forward, c.sprint) = (0.0, false, 0.0, 1.0, true);
-        c.yaw = self.aim.turn(b.yaw, yaw_to(b, to));
+        // Re-aimed only while still turning onto it.
+        let heading = match self.heading {
+            Some(h) if ((b.yaw - h + 180.0).rem_euclid(360.0) - 180.0).abs() < HELD_AIM_DEG => h,
+            _ => *self.heading.insert(yaw_to(b, to)),
+        };
+        c.yaw = self.aim.turn(b.yaw, heading);
         c.jump = self.jump && b.on_ground && (b.pos[0] - to[0]).hypot(b.pos[2] - to[1]) > self.stop_jump;
         Phase::Going
     }
@@ -78,7 +87,7 @@ pub(super) fn find(path: &[PathNode], index: usize, live: &Rollout, w: &dyn Worl
         let best = STYLES
             .iter()
             .filter_map(|&(jump, stop_jump)| {
-                let ctl = ShortcutCtl { target: path[j].pos, feet: path[j].feet, jump, stop_jump, aim, max, t: 0 };
+                let ctl = ShortcutCtl { target: path[j].pos, feet: path[j].feet, jump, stop_jump, aim, max, t: 0, heading: None };
                 if !solver.affords(u64::from(max)) {
                     return None;
                 }

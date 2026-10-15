@@ -1,111 +1,112 @@
 //! Physics obstacle course on a server where the bot is operator: builds a walled lane along +X
-//! (steps, slabs, stairs, a parkour gap, a ladder, a pool) and walks it leg by leg, reporting the
-//! server's movement corrections per leg.
-//! `cargo run -p acacia-bot --example course -- <server> <name|@account> [java|bedrock] [legs]`
+//! (steps, slabs, stairs, a gap, a ladder, a pool, then parkour legs: gaps of 3 and 4, a leap up 1 and
+//! down 2, a diagonal leap, stepping stones and a 40-block sprint) and walks it leg by leg, reporting the
+//! server's movement corrections and the ticks per leg (`course/legs.rs`).
+//! `cargo run -p acacia-bot --example course -- <server> <name|@account> [java|bedrock] [legs] [flags]`
 //! `java` for Geyser (Java block-state syntax); `legs` is a comma list of leg names to run.
+//! Flags: `--profile optimal|human`, `--macros off`, `--shortcuts off`, `--seed <n>` (aim jitter), `--lift`
+//! (levitate the bot in mid-air over the gap3 leap: a live macro divergence). `BEDROCK_RECORD=<file>` records a trace.
+#[path = "course/legs.rs"]
+mod legs;
+
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use acacia_bot::client::auth::{Account, AuthClient, AuthConfig, FileTokenCache};
 use acacia_bot::client::Client;
-use acacia_bot::pathfind::Goal;
-use acacia_bot::{Bot, BotConfig};
+use acacia_bot::pathfind::{Goal, GotoOpts, MovementProfile, NavStatus, Navigator};
+use acacia_bot::{ActionError, Bot, BotConfig};
+use legs::{LEGS, LIFT, LIFT_LEG, LIFT_X, lane, resolve};
 
 const LEG_TIMEOUT: Duration = Duration::from_secs(30);
 
-struct Leg {
-    name: &'static str,
-    /// Goal offset from the course origin (the bot's spawn feet block).
-    goal: [i32; 3],
-    /// Blocks to set, as (offset, block) with `{stairs_e}`/`{ladder_w}` placeholders.
-    build: &'static [([i32; 3], [i32; 3], &'static str)],
+type Error = Box<dyn std::error::Error>;
+
+struct Args {
+    server: String,
+    name: String,
+    java: bool,
+    only: Option<Vec<String>>,
+    opts: GotoOpts,
+    lift: bool,
 }
 
-const LEGS: &[Leg] = &[
-    Leg { name: "flat", goal: [3, 0, 0], build: &[] },
-    Leg { name: "step", goal: [8, 0, 0], build: &[([5, 0, -1], [5, 0, 1], "stone")] },
-    Leg {
-        name: "stair2",
-        goal: [14, 0, 0],
-        build: &[([10, 0, -1], [10, 0, 1], "stone"), ([11, 0, -1], [12, 1, 1], "stone")],
-    },
-    Leg {
-        name: "slabs",
-        goal: [20, 0, 0],
-        build: &[
-            ([15, 0, -1], [15, 0, 1], "{slab}"),
-            ([16, 0, -1], [17, 0, 1], "stone"),
-            ([17, 1, -1], [17, 1, 1], "{slab}"),
-        ],
-    },
-    Leg {
-        name: "stairs",
-        goal: [26, 0, 0],
-        build: &[
-            ([21, 0, -1], [21, 0, 1], "{stairs_e}"),
-            ([22, 0, -1], [23, 0, 1], "stone"),
-            ([22, 1, -1], [22, 1, 1], "{stairs_e}"),
-            ([23, 1, -1], [23, 1, 1], "stone"),
-        ],
-    },
-    Leg { name: "gap", goal: [32, 0, 0], build: &[([28, -3, -1], [29, -1, 1], "air")] },
-    Leg {
-        name: "ladder",
-        goal: [38, 0, 0],
-        build: &[
-            ([34, 0, -1], [34, 3, 1], "stone"),
-            ([35, 0, -1], [35, 1, 1], "stone"),
-            ([33, 0, 0], [33, 3, 0], "{ladder_w}"),
-        ],
-    },
-    Leg {
-        name: "pool",
-        goal: [47, 0, 0],
-        build: &[([40, -2, -1], [44, -1, 1], "water")],
-    },
-    Leg { name: "float", goal: [42, -1, 0], build: &[] },
-    Leg { name: "exit", goal: [47, 0, 0], build: &[] },
-];
+fn parse() -> Args {
+    let (mut flags, mut pos) = (Vec::new(), Vec::new());
+    let mut it = std::env::args().skip(1);
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--lift" => flags.push((a, String::new())),
+            f if f.starts_with("--") => flags.push((a.clone(), it.next().unwrap_or_default())),
+            _ => pos.push(a),
+        }
+    }
+    let mut opts = GotoOpts::default();
+    let mut lift = false;
+    for (flag, value) in flags {
+        match (flag.as_str(), value.as_str()) {
+            ("--profile", "human") => opts.search.profile = MovementProfile::Human,
+            ("--profile", "optimal") => opts.search.profile = MovementProfile::Optimal,
+            ("--macros", "off") => opts.search.macros = false,
+            ("--shortcuts", "off") => opts.shortcuts = false,
+            ("--seed", n) => opts.seed = Some(n.parse().expect("--seed <n>")),
+            ("--lift", _) => lift = true,
+            _ => panic!("unknown flag {flag} {value}"),
+        }
+    }
+    let mut pos = pos.into_iter();
+    Args {
+        server: pos.next().unwrap_or_else(|| "127.0.0.1:19140".into()),
+        name: pos.next().unwrap_or_else(|| "@default".into()),
+        java: pos.next().is_some_and(|d| d == "java"),
+        only: pos.next().map(|l| l.split(',').map(str::to_owned).collect()),
+        opts,
+        lift,
+    }
+}
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Error> {
     let _ = tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init();
-    let mut args = std::env::args().skip(1);
-    let server = args.next().unwrap_or_else(|| "127.0.0.1:19140".into());
-    let name = args.next().unwrap_or_else(|| "@default".into());
-    let java = args.next().is_some_and(|d| d == "java");
-    let only: Option<Vec<String>> = args.next().map(|l| l.split(',').map(str::to_owned).collect());
-
-    let mut builder = Client::builder(&server);
-    builder = match name.strip_prefix('@') {
+    let args = parse();
+    let mut builder = Client::builder(&args.server);
+    builder = match args.name.strip_prefix('@') {
         Some(account) => {
             let account = Account::new(Arc::new(AuthClient::new(AuthConfig::default())?), Arc::new(FileTokenCache::new(".tokens")?), account);
             let (key, credentials) = account.login_credentials().await?;
             builder.online(credentials, key)
         }
-        None => builder.offline(&name),
+        None => builder.offline(&args.name),
     };
-    let mut bot = Bot::connect(builder, BotConfig { physics: true, ..BotConfig::default() }).await?;
+    let record = std::env::var_os("BEDROCK_RECORD").map(Into::into);
+    let mut bot = Bot::connect(builder, BotConfig { physics: true, record, ..BotConfig::default() }).await?;
     while bot.movement().is_none_or(|m| !m.is_started()) {
         bot.wait_ticks(1).await?;
     }
     bot.wait_ticks(20).await?;
-    if only.as_ref().is_none_or(|o| o.iter().any(|n| n == "respawn")) {
+    let wanted = |name: &str| args.only.as_ref().is_none_or(|o| o.iter().any(|n| n == name));
+    if wanted("respawn") {
         respawn_check(&mut bot).await?;
     }
-    let [x, y, z] = bot.block_position().expect("movement started");
-    println!("course origin [{x}, {y}, {z}] ({})", if java { "java" } else { "bedrock" });
-    build(&mut bot, [x, y, z], java).await?;
+    let origin = bot.block_position().expect("movement started");
+    let s = &args.opts.search;
+    println!("course origin {origin:?} ({}), profile {:?}, macros {}, seed {:?}", if args.java { "java" } else { "bedrock" }, s.profile, s.macros, args.opts.seed);
+    build(&mut bot, origin, args.java, false).await?;
 
-    let (mut total_corr, mut failed) = (0, 0);
-    for leg in LEGS {
-        if only.as_ref().is_some_and(|o| !o.iter().any(|n| n == leg.name)) {
-            continue;
+    let (mut total_corr, mut failed, mut far_built) = (0, 0, false);
+    for leg in LEGS.iter().filter(|l| wanted(l.name)) {
+        if leg.far() && !far_built {
+            build(&mut bot, origin, args.java, true).await?;
+            far_built = true;
         }
+        let [x, y, z] = origin;
+        let lift = (args.lift && leg.name == LIFT_LEG).then_some(x as f32);
         let before = counts(&bot);
         let t = Instant::now();
         let goal = Goal::Block([x + leg.goal[0], y + leg.goal[1], z + leg.goal[2]]);
-        let result = tokio::time::timeout(LEG_TIMEOUT, bot.goto(goal)).await;
+        let mut nav = Navigator::new(goal, args.opts.clone());
+        let mut ticks = 0;
+        let result = tokio::time::timeout(LEG_TIMEOUT, run_leg(&mut bot, &mut nav, &mut ticks, lift)).await;
         bot.stop_pathing();
         bot.wait_ticks(10).await?;
         let after = counts(&bot);
@@ -117,15 +118,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(_) => "TIMEOUT".into(),
         };
         failed += u32::from(outcome != "ok");
-        println!("{:8} {outcome:<8} {:5.1}s  corrections {corr}  teleports {tp}", leg.name, t.elapsed().as_secs_f32());
+        println!(
+            "{:8} {outcome:<8} {ticks:4} ticks {:5.1}s  corrections {corr}  teleports {tp}  diverged {}  replans {}",
+            leg.name,
+            t.elapsed().as_secs_f32(),
+            nav.divergences(),
+            nav.replans()
+        );
     }
     println!("total corrections {total_corr}, failed legs {failed}");
+    // Offline players rejoin where they left: back to the origin, so the next run builds in the same place.
+    bot.client().command(&format!("/tp @s {} {} {}", origin[0] as f32 + 0.5, origin[1], origin[2] as f32 + 0.5));
+    bot.wait_ticks(10).await?;
     bot.disconnect().await;
     Ok(())
 }
 
+/// Navigates until arrival, counting ticks. `lift`: the origin's x, to levitate the bot once it is in the
+/// air over the lift leg's gap.
+async fn run_leg(bot: &mut Bot, nav: &mut Navigator, ticks: &mut u32, lift: Option<f32>) -> Result<(), ActionError> {
+    let mut lifted = false;
+    loop {
+        if let (Some(x0), false) = (lift, lifted)
+            && let Some(m) = bot.movement()
+            && let Some(p) = m.position()
+            && !m.on_ground()
+            && (LIFT_X.0..LIFT_X.1).contains(&(p[0] - x0))
+        {
+            bot.client().command(LIFT);
+            println!("lift at tick {ticks}, x offset {:.2}", p[0] - x0);
+            lifted = true;
+        }
+        if nav.tick(bot).await? == NavStatus::Arrived {
+            return Ok(());
+        }
+        *ticks += 1;
+    }
+}
+
 /// Dies (`/kill`), expects auto-respawn, then idles: movement must resume without corrections.
-async fn respawn_check(bot: &mut Bot) -> Result<(), Box<dyn std::error::Error>> {
+async fn respawn_check(bot: &mut Bot) -> Result<(), Error> {
     let before = counts(bot);
     let t = Instant::now();
     bot.client().command("/kill @s");
@@ -158,22 +190,16 @@ fn counts(bot: &Bot) -> (u32, u32) {
     bot.movement().map_or((0, 0), |m| (m.corrections, m.teleports))
 }
 
-/// Clears a walled lane from the origin and places every leg's obstacles.
-async fn build(bot: &mut Bot, [x, y, z]: [i32; 3], java: bool) -> Result<(), Box<dyn std::error::Error>> {
+/// Clears one section of the walled lane from the origin and places its legs' obstacles; no mobs (their
+/// hits are corrections).
+async fn build(bot: &mut Bot, [x, y, z]: [i32; 3], java: bool, far: bool) -> Result<(), Error> {
     let fill = |a: [i32; 3], b: [i32; 3], block: &str| {
         format!("/fill {} {} {} {} {} {} {block}", x + a[0], y + a[1], z + a[2], x + b[0], y + b[1], z + b[2])
     };
-    let mut cmds = vec![
-        fill([-2, 0, -3], [50, 8, 3], "air"),
-        fill([-2, -4, -3], [50, -1, 3], "stone"),
-        fill([-2, 0, -2], [50, 5, -2], "glass"),
-        fill([-2, 0, 2], [50, 5, 2], "glass"),
-        fill([-2, 0, -2], [-2, 5, 2], "glass"),
-    ];
-    for leg in LEGS {
-        for &(a, b, block) in leg.build {
-            cmds.push(fill(a, b, &resolve(block, java)));
-        }
+    let mut cmds = vec!["/difficulty peaceful".to_string(), "/kill @e[type=!player]".into()];
+    cmds.extend(lane(far).into_iter().map(|(a, b, block)| fill(a, b, block)));
+    for leg in LEGS.iter().filter(|l| l.far() == far) {
+        cmds.extend(leg.build.iter().map(|&(a, b, block)| fill(a, b, &resolve(block, java))));
     }
     for cmd in cmds {
         bot.client().command(&cmd);
@@ -181,15 +207,4 @@ async fn build(bot: &mut Bot, [x, y, z]: [i32; 3], java: bool) -> Result<(), Box
     }
     bot.wait_ticks(40).await?;
     Ok(())
-}
-
-fn resolve(block: &str, java: bool) -> String {
-    match (block, java) {
-        ("{slab}", _) => "smooth_stone_slab".into(),
-        ("{stairs_e}", true) => "oak_stairs[facing=east]".into(),
-        ("{stairs_e}", false) => "oak_stairs [\"weirdo_direction\"=0]".into(),
-        ("{ladder_w}", true) => "ladder[facing=west]".into(),
-        ("{ladder_w}", false) => "ladder [\"facing_direction\"=4]".into(),
-        (b, _) => b.into(),
-    }
 }

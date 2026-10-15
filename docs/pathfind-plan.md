@@ -184,10 +184,22 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
    each edge's planned cost; a span costs its macro nodes' simulated ticks plus walked segments at sprint
    speed (+ startup from standing); the span's last node is tried first; settling releases once a simulated
    coast (`Follower::coast_end`) ends inside the tolerance. Shortcuts on (off → on): flat 125→124 / 125→125,
-   diagonal 116→111 / 125→113.4, gaps 94→82 / 101.6→87, stairs 137→137 / 142.4→142.4. Asserted: on ≤ off
+   diagonal 116→111 / 125→113.4, gaps 94→82 / 101.6→87, stairs 137→137 / 142.4→142.4. With the held
+   shortcut heading of step 10: diagonal 120→108 / 123.4→114.2, gaps 94→82 / 101.2→87, stairs 138→138 /
+   143→143, flat unchanged. Asserted: on ≤ off
    everywhere, gaps on ≥10 with shortcuts. The test takes ~150 s in debug on testbox, so it is
    `#[ignore]`d (default `--lib` 22 s): `cargo test --release -p acacia-bot --lib macros_never_slow -- --ignored --nocapture`.
 10. `examples/course.rs` parkour legs (gap3, gap4, up1, down2, diag, stones, sprint40), `--profile`, `--macros off`; dedicated strict testbox BDS, 0 corrections both profiles; evidence in `docs/DESIGN.md`.
+   As built: legs in `examples/course/legs.rs`; lane walled 11 wide from x 48 to 95 with a flat corridor
+   (z 4..5) beside every obstacle, so profiles that cannot leap walk round; that section is built on reaching
+   it (a `/fill` touching an unloaded chunk fails whole). Flags also `--shortcuts off`, `--seed`, `--lift`
+   (levitation mid-leap: the live `Diverged` path). Navigator gained `GotoOpts::seed` and `divergences()`.
+   Deviations: Optimal 0 corrections on every leg, Human 0 on the parkour legs but 2–9 on sprint40 (and a
+   few on classic legs, macros off too): strict Linux BDS corrects one-ulp position differences under
+   per-tick yaw changes (DESIGN.md). Shortcuts now hold their heading once faced, which removed them for
+   Optimal. Live, macros on lost to off on gap3 (36 vs 32: the corridor detour beats the leap with its
+   run-up) and sprint40 (161 vs 147); not chased. A divergence in mid-air finds no start node and spends
+   one counted re-plan before the next search succeeds.
 11. Stretch: neo jumps (Optimal), ladder jumps.
 
 ## Running

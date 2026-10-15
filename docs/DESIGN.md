@@ -162,6 +162,31 @@ the proxy (`crates/acacia-mitm/src/transfer.rs`). What is left: [mitm-next.md](m
   - Water contact counts any liquid cell the shrunk box overlaps, however shallow (liquid.rs).
   - Dead players don't move: movement pauses while dead and auto-respawn (`respawn.rs`) handles both
     BDS (`Respawn` searching) and Geyser (no searching packet; dying is the trigger).
+  - Parkour legs (2026-10-15, Linux BDS 1.26.52.3 on testbox, strict keys of docs/testing.md, bot op by
+    `default-player-permission-level`; `examples/course.rs`, release). Corrections / ticks per leg:
+
+    | run | gap3 | gap4 | up1 | down2 | diag | stones | sprint40 |
+    |---|---|---|---|---|---|---|---|
+    | Optimal (2 runs) | 0 / 36 | 0 / 46 | 0 / 28 | 0 / 22 | 0 / 60 | 0 / 52 | 0 / 161 |
+    | Human seed 1 | 0 / 54 | 0 / 55 | 0 / 44 | 0 / 32 | 0 / 84 | 0 / 87 | 2 / 161 |
+    | Human seed 2 | 0 / 54 | 0 / 53 | 0 / 44 | 0 / 36 | 0 / 87 | 0 / 80 | 9 / 157 |
+    | Human seed 3 | 0 / 54 | 0 / 54 | 0 / 43 | 0 / 30 | 0 / 83 | 0 / 82 | 4 / 184 |
+    | macros off, Optimal | 0 / 32 | 0 / 53 | 0 / 57 | 0 / 59 | 0 / 64 | 0 / 61 | 0 / 147 |
+    | macros off, Human 1 | 0 / 32 | 0 / 52 | 0 / 57 | 1 / 73 | 1 / 70 | 0 / 58 | 4 / 143 |
+
+    Optimal draws no correction on any leg (classic legs included). Human draws a few on classic legs too
+    (exit 14, slabs 8, pool 2 in single seeds) and with macros off, so they come from its aim, not macro moves.
+  - Strict Linux BDS corrects positions one f32 ulp off (x ~60–80: 7.6e-6) when the yaw changes every tick
+    by a fraction of a degree: shortcuts re-aiming each tick drew 20–22 on sprint40, Human jitter does the
+    same. The replay agrees with every such correction at its 0.001 tolerance, so no trace in
+    `tests/traces` pins it. Ruled out by replay (`HYP` toggles in `motion::move_relative`): glibc
+    `sinf`/`cosf` and correctly rounded sin/cos for the walk impulse. Shortcuts now hold their heading once
+    faced (`shortcut.rs`); the Human residue stays open. Traces: testbox `work/bc-pathfind/opt3.btrc`
+    (re-aiming, 22), `hum-g4b.btrc` (Human, 17); inputs with `examples/trace_inputs.rs`.
+  - Live divergence (`course --lift`: one second of levitation over the gap3 leap, Optimal): the leap
+    diverged at x 51.5 in mid-air, the inline re-plan found no start node in the air (one counted re-plan),
+    the next one planned 2 nodes and the leg finished (63 ticks, 0 stops). Its 2 corrections are the
+    levitation's first tick, which BDS applied before the bot heard of the effect (replay: 1 mismatch).
 - Dimension travel on BDS 1.26.52 (`bot/dimension.rs`; packets seen live with `examples/dimensions.rs`, the
   server's rules read from its binary; no vanilla client capture of a change exists yet):
   - Server: `ChangeDimension {dimension, position, respawn, loading_screen_id}`. From here its `PlayerAuthInput`
