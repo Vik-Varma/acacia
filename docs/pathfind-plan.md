@@ -253,6 +253,13 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
 - Measured (sim, release, `tests::segments`): 500 blocks, lane with two 2-gaps and a raised stretch. Optimal 1443
   ticks, 9 joins, 0 diverged, slowest near a join 0.286 b/t; Human seed 1 1558 ticks, 7 joins, 1 diverged (not at a
   join), slowest 0.307. Late splice (answers 140 ticks late): waits at each join, arrives, 0 re-plans.
+- Live (testbox strict BDS, fresh flat world per run, `examples/goto.rs` +500 x, seed 1, saturation): Optimal 1483
+  ticks, 9 joins, slowest near a join 0.286 b/t, 0 re-plans, 3 diverged (two in the first segment, one 1 block past
+  a join at 0.300 b/t), 1 correction (first segment, mid-air). Human 1577 ticks, 7 joins, slowest 0.309, 0 diverged,
+  321 corrections: all on off-axis stretches (z drifting off a block centre), none on the on-axis stretch x 95–351,
+  i.e. the known one-ulp off-axis issue (step 10), not the joins.
+- Open: Human's off-axis corrections; in the sim, Human turned round near x 296 inside a shortcut (not at a join);
+  a plan-ahead holds the shared rollout cache for its whole search (re-plans meanwhile search without it).
 
 ## Running
 - Tests: `REMOTE_DIR=work/bc-pathfind tools/remote-test.sh -p acacia-bot` (testbox; never workspace-wide locally).
