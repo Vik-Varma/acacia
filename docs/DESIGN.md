@@ -179,6 +179,10 @@ the proxy (`crates/acacia-mitm/src/transfer.rs`). What is left: [mitm-next.md](m
     | fresh world, fixed, Human 1 | 1 / 56 | 4 / 71 | 0 / 45 | 0 / 34 | 27 / 82 | 40 / 88 | 51 / 161 |
     | fresh world, fixed, Human 2 | 0 / 52 | 1 / 72 | 0 / 54 | 0 / 39 | 22 / 83 | 39 / 80 | 38 / 152 |
     | fresh world, fixed, Human 3 | 1 / 54 | 15 / 68 | 25 / 54 | 10 / 38 | 0 / 82 | 0 / 82 | 0 / 157 |
+    | BDS table + box fit, Optimal | 0 / 36 | 0 / 46 | 0 / 28 | 0 / 23 | 0 / 56 | 0 / 51 | 0 / 162 |
+    | BDS table + box fit, Human 1 | 0 / 53 | 0 / 70 | 0 / 46 | 0 / 32 | 0 / 84 | 0 / 82 | 4 / 165 |
+    | BDS table + box fit, Human 2 | 0 / 53 | 0 / 71 | 1 / 46 | 0 / 32 | 2 / 78 | 2 / 81 | 2 / 153 |
+    | BDS table + box fit, Human 3 | 0 / 55 | 0 / 72 | 0 / 54 | 0 / 36 | 0 / 83 | 0 / 79 | 0 / 146 |
 
     On the fresh world Human seed 2 also drew 142 on classic legs (ladder 43, pool 64), seed 1 one in all.
     "Fixed" rows (2026-10-15, a fresh world per run): every leg ok; the Human corrections are the one-ulp bursts
@@ -186,34 +190,43 @@ the proxy (`crates/acacia-mitm/src/transfer.rs`). What is left: [mitm-next.md](m
 
     Optimal draws no correction on any leg (classic legs included). Human draws a few on classic legs too
     (exit 14, slabs 8, pool 2 in single seeds) and with macros off, so they come from its aim, not macro moves.
-  - Strict Linux BDS corrects positions one f32 ulp off (x ~60–80: 7.6e-6) off the axes. Open; what is known
-    (2026-10-15, `examples/yaw_sweep.rs`, `replay --correction-tolerance 0 --verbose`, which prints both
-    velocities):
-    - Not the per-tick yaw change itself: walking 6 ticks from rest at 60 random yaws drew 0 corrections, with
-      ±0.5° jitter every tick 0 too. Bunny-hopping 20 ticks at 30 random yaws drew bursts at a constant yaw
-      (7 yaws), with jitter (9) and with jitter held in the air (10) alike, though those pads stood at y
-      100–180 (see below). Axis yaws are exact (sin/cos 0 and ±1): Optimal along the lane draws none.
-    - A burst starts on a jump or landing tick with a horizontal velocity 1–8 ulps off ours. BDS lets
-      differences under half a position ulp pass, so the velocity drifts unseen for some ticks first; no
-      sin/cos, sine-table index or order variant reproduces it from our previous state.
-    - The rest of a burst is BDS's box: it keeps an AABB and takes the position as its centre, while we rebuild
-      the box from a corrected centre (`hum-g4b` ticks 934–943: positions alternate ±1 ulp with equal
-      velocities; only a server box one ulp off ours at one face reproduces them). BDS
-      `ClientAcceptanceSystem::fn0` (Windows 1.26.52, 142514970) also moves the server box towards small
-      client differences, so that box is hidden state. Lead: translating our box by the correction instead of
-      rebuilding it reproduces about half the bursts bit-exactly (`course-BaseHum2` 143 → 72 mismatching,
-      `hum-g4b` 17 → 12), but makes old regression traces worse at tolerance 0 (powder snow 29 → 102, honey
-      top 269 → 346), so it is not in.
+    "BDS table + box fit" rows (2026-10-15, fresh world per run, test pack off): totals with classic legs Optimal
+    0, Human 4 / 7 / 11 (Human 3: step 2, stair2 3, stairs 1, gap 1, ladder 4). The 500-block goto
+    (`examples/goto.rs`, +500 x) drew Human 10 / 10 / 5 corrections in 1566 / 1551 / 1525 ticks (C1 run: 321).
+    Before the wall guard of `correction.rs` (same code otherwise) the course drew Human 34 / 6 / 3, the goto
+    11 / 7 / 15.
+  - Off-axis ulp corrections on strict Linux BDS (2026-10-15):
+    - Strict BDS corrects any position more than about 1e-6 off (1.07e-6 corrected, 9.5e-7 not): one f32 ulp at
+      |x| ≥ 16 (7.6e-6 at 64). `ClientAcceptanceSystem` only moves its box towards differences of 0.05–0.1, so
+      it plays no part.
+    - The server's position every tick: a second bot sees the first's `MovePlayer` broadcasts, which carry the
+      server's own f32 position (`examples/observe.rs`; a correction comes exactly when they drift 1e-6 from
+      what we sent). Near the origin they differ by an ulp on a few percent of off-axis ticks without any
+      correction, so the drift is found long before it shows.
+    - Root cause 1, the sine table: Linux BDS fills it with glibc `sinf(i / 10430.378f)` (dumped from the live
+      process, all 65536 entries; physics README). Ours was correctly rounded, two thirds of the entries an ulp
+      off: every off-axis sprint jump moved by 1–8 ulps (the "jump tick" burst starts). With BDS's table the jump
+      tick matches the broadcast exactly.
+    - Root cause 2, the box after a correction: BDS never rebuilds its box, and rebuilding ours from the
+      corrected centre is an ulp off at a face, which drew the ±1-ulp runs. `apply_small_correction` (physics
+      README) keeps the faces consistent with our last 20 shared ticks, unless the box pushes against a wall.
+      Replayed at tolerance 0 with both fixes, older Human runs' mismatching corrections drop to a third
+      (`h-base-Hum1` 34 → 8, now `tests/traces/course-human-linux.btrc.gz`; `course-Hum2` 61 → 20) and old
+      regression traces improve too (fuzz-a 1589 → 1286, fuzz-b 1701 → 1439, powder snow 29 → 19).
+    - Left open: ground and air ticks still drift by an ulp on about 2% of off-axis ticks (sprint walks from rest
+      near the origin: 7 of 30 per axis). Not explained by constant acceleration offsets, glibc sin/cos, Java's
+      operation order (BDS's `WaterMoveSystem` form), air speed 0.025999999, friction order, double-precision
+      centres or position-derived velocity (each scored against the broadcasts, none better). Liquids and ladders
+      with Human jitter draw most of what remains (course Human 1: ladder, pool, exit).
     - Offline bots rejoin where they left, so repeated drills creep up the pads: at y ~180 positions are
-      4x coarser and Optimal drew 48 on the parkour legs; reset the world before a course run.
-    - Tried, not kept: a Human aim holding an axis exactly once turned onto one it wants. Seeds 1–3 drew 0, 60
-      and 0 corrections, but run-to-run spread swamps that (unchanged Human seeds 1 and 2 on the same world
-      drew 1 and 143), off-axis legs still drew bursts, and seed 3 missed the gap3 leap at exactly -90°.
+      4x coarser and Optimal drew 48 on the parkour legs; reset the world before a course run. The test pack
+      (`tools/actiontest-pack`) builds its scene, with a water pool, under the player who joins 40 ticks later.
+    - Tried, not kept: a Human aim holding an axis exactly once turned onto one it wants (run-to-run spread
+      swamped it; seed 3 missed the gap3 leap at exactly -90°).
     - Human timeouts on a fresh world (sprint40, and diag/gap4 in later runs) were searches cut by the 2 s budget:
       the default rollout budget alone took about 2 s on the loaded testbox, and the partial path fell back on
       leapt or walked into a pit with no way out. Fixed in docs/pathfind-plan.md step 10.
-    Replay (`HYP` toggles) also ruled out glibc and correctly rounded sin/cos in the walk impulse and
-    rebuilding the box on rotation changes. Traces: testbox `work/pf-traces` (`hum-g4b`, `opt3`, `yaw*`).
+    Traces: testbox `work/pf-traces` (`obs*` with broadcasts in `obs*.log`, `h-*`, `g-fit-*`).
   - Live divergence (`course --lift`: one second of levitation over the gap3 leap, Optimal): the leap
     diverged at x 51.5 in mid-air, the inline re-plan found no start node in the air (one counted re-plan),
     the next one planned 2 nodes and the leg finished (63 ticks, 0 stops). Its 2 corrections are the

@@ -151,7 +151,12 @@ impl History {
                 *st = e.after.clone();
                 st.pending_teleport = teleport;
             }
-            st.apply_correction(c.feet, c.delta, c.on_ground);
+            if c.teleport {
+                st.apply_correction(c.feet, c.delta, c.on_ground);
+            } else {
+                let earlier: Vec<&PlayerState> = self.entries.iter().filter(|e| e.tick < tick).map(|e| &e.after).collect();
+                st.apply_small_correction(c.feet, c.delta, c.on_ground, &earlier);
+            }
             if c.teleport {
                 physics::apply_current(st, world);
             }

@@ -3,7 +3,7 @@
 Bedrock player movement simulation: a network-free, dependency-free Rust port of
 [oomph-ac/bedsim](https://github.com/oomph-ac/bedsim) (MIT), commit
 `34d11dc576aeb56a7f7f0541dbb5a600cc443488` (2026-09-16). The f32 operation order of bedsim is
-kept, down to Go's `math.Sin` sine table and chewxy/math32 `Sin`/`Cos`. Module names follow the
+kept, down to chewxy/math32 `Sin`/`Cos`; the sine table is BDS's own (see "Deliberate deviations"). Module names follow the
 bedsim files (`movement.rs` = `simulateMovement`, `collide.rs` = `tryCollisions`, `liquid*.rs` = `liquid.go`).
 
 ## API
@@ -16,7 +16,8 @@ bedsim files (`movement.rs` = `simulateMovement`, `collide.rs` = `tryCollisions`
   a flight toggles on a jump double tap (see "Flight").
   Start and stop edges are derived from the state, the same way as `toInputState` in the harness.
 - `PlayerState`: `queue_teleport(feet)` (applied on the next tick, velocity reset to zero),
-  `queue_knockback(vel)`, `apply_correction(feet, delta, on_ground)`, `set_movement_attribute(v)`,
+  `queue_knockback(vel)`, `apply_correction(feet, delta, on_ground)` (`apply_small_correction` with the states
+  of the ticks before it keeps the server's box, see below), `set_movement_attribute(v)`,
   `set_freeze(f)`, `eye_position()`. Effects and equipment are set on `state.effects` and `state.equipment`
   (`acacia-bot` sets the effects from `MobEffect` and the equipment from the worn armour).
 - `WorldView`: `block_collisions(pos)` (block-local boxes), `block(pos) -> BlockPhysics`, plus the defaulted
@@ -51,9 +52,19 @@ freeze modifiers (the simulation adds both itself).
 ## Deliberate deviations from bedsim
 Each was found by fuzzing against strict BDS (`acacia-bot` examples `fuzz` and `replay`) and fixes
 mismatches there; `tests/bedsim_diff.rs` lists the bedsim scenarios that diverge because of them.
+- The sine table (sprint-jump boost, glide look, swim pitch, horse leap) is Linux BDS's: `sinf(i / 10430.378f)`
+  with glibc's `sinf` (`sinf.rs`), dumped from a live BDS 1.26.52.3 and matched in all 65536 entries. Go's
+  table (bedsim) is a correctly rounded one and differs in two thirds of the entries by an ulp, which moved
+  every off-axis sprint jump by 1–8 ulps. Windows BDS fills it with MSVC's `sinf`; old Windows traces do not
+  see the difference at their 0.001 tolerance.
+- Corrections (`correction.rs`): BDS keeps its box and never rebuilds it from the position, so after a
+  correction of an ulp or so the corrected centre does not say where its faces are, and rebuilding ours from it
+  starts a run of ±1-ulp corrections. `PlayerState::apply_small_correction` keeps the faces that, moved by our
+  own displacements of the last 20 ticks, land on every centre we shared with the server and then on the
+  corrected one (else the faces nearest ours around it); corrections over 1e-4 still rebuild.
 - Gliding follows BDS: the look vector from -pitch, its real horizontal length,
-  BDS's gravity form (docs/research/riding-fishing-elytra.md). Over a long glide this drifts about 1e-5
-  from bedsim, which uses cos(pitch). Strict BDS showed 0 corrections over 14 live glides.
+  BDS's gravity form (docs/research/riding-fishing-elytra.md). Over a long glide this drifts up to 1e-5
+  from bedsim, which uses cos(pitch) (with BDS's sine table, under the fixture's 1e-5). Strict BDS showed 0 corrections over 14 live glides.
 - The sneak slowdown lasts through the tick sneaking stops, and a sprint cannot start on that tick.
 - A crouch forced by a low ceiling (sneak key up) is no sneak for edge avoidance; a held sneak avoids edges
   on the jump tick too.

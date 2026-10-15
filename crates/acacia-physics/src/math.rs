@@ -1,5 +1,5 @@
-//! Bit-exact ports of the float routines bedsim relies on (Go `math.Sin`,
-//! chewxy/math32 `Sin`/`Cos`, mgl32 vector helpers and the Minecraft sine table).
+//! Bit-exact float routines: chewxy/math32 `Sin`/`Cos` (bedsim), mgl32 vector helpers and the Minecraft sine
+//! table as Linux BDS builds it.
 
 use std::sync::OnceLock;
 
@@ -10,12 +10,10 @@ pub(crate) const PI32: f32 = std::f32::consts::PI;
 
 static SIN_TABLE: OnceLock<Box<[f32]>> = OnceLock::new();
 
+/// BDS fills its table with `sinf(i / 10430.378f)` (dumped from a live Linux BDS 1.26.52.3: all 65536 entries;
+/// two thirds differ by an ulp from a correctly rounded sine, which moved every off-axis sprint jump).
 fn sin_table() -> &'static [f32] {
-    SIN_TABLE.get_or_init(|| {
-        (0..65536)
-            .map(|i| go_sin_f64(i as f64 * std::f64::consts::PI * 2.0 / 65536.0) as f32)
-            .collect()
-    })
+    SIN_TABLE.get_or_init(|| (0..65536).map(|i| crate::sinf::sinf(i as f32 / 10430.378)).collect())
 }
 
 /// Minecraft's table sine.
@@ -27,60 +25,6 @@ pub fn mc_sin(v: f32) -> f32 {
 /// Minecraft's table cosine.
 pub fn mc_cos(v: f32) -> f32 {
     sin_table()[((v * 10430.378 + 16384.0) as i32 as u16) as usize]
-}
-
-const SIN64: [f64; 6] = [
-    1.5896230157654656e-10,
-    -2.5050747762857807e-8,
-    2.7557313621385722e-6,
-    -0.0001984126982958954,
-    0.008333333333322118,
-    -0.1666666666666663,
-];
-const COS64: [f64; 6] = [
-    -1.1358536521387682e-11,
-    2.087570084197473e-9,
-    -2.755731417929674e-7,
-    2.4801587288851704e-5,
-    -0.0013888888888873056,
-    0.041666666666666595,
-];
-
-/// Go's pure `math.Sin` (Cephes) for arguments below 2^29.
-fn go_sin_f64(x: f64) -> f64 {
-    const PI4A: f64 = 0.7853981256484985;
-    const PI4B: f64 = 3.774894707930798e-8;
-    const PI4C: f64 = 2.6951514290790595e-15;
-    const FOUR_OVER_PI: f64 = 1.2732395447351628;
-    if x == 0.0 || x.is_nan() {
-        return x;
-    }
-    let (mut x, mut sign) = (x, false);
-    if x < 0.0 {
-        x = -x;
-        sign = true;
-    }
-    let mut j = (x * FOUR_OVER_PI) as u64;
-    let mut y = j as f64;
-    if j & 1 == 1 {
-        j += 1;
-        y += 1.0;
-    }
-    j &= 7;
-    let z = ((x - y * PI4A) - y * PI4B) - y * PI4C;
-    if j > 3 {
-        sign = !sign;
-        j -= 4;
-    }
-    let zz = z * z;
-    let c = &COS64;
-    let s = &SIN64;
-    let r = if j == 1 || j == 2 {
-        1.0 - 0.5 * zz + zz * zz * (((((c[0] * zz + c[1]) * zz + c[2]) * zz + c[3]) * zz + c[4]) * zz + c[5])
-    } else {
-        z + z * zz * (((((s[0] * zz + s[1]) * zz + s[2]) * zz + s[3]) * zz + s[4]) * zz + s[5])
-    };
-    if sign { -r } else { r }
 }
 
 const SIN32: [f32; 6] = [1.589623e-10, -2.5050747e-8, 2.7557314e-6, -0.0001984127, 0.008333334, -0.16666667];

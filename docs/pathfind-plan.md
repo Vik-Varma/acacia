@@ -258,7 +258,10 @@ Paths below are under `crates/acacia-bot/src/` unless marked.
   a join at 0.300 b/t), 1 correction (first segment, mid-air). Human 1577 ticks, 7 joins, slowest 0.309, 0 diverged,
   321 corrections: all on off-axis stretches (z drifting off a block centre), none on the on-axis stretch x 95–351,
   i.e. the known one-ulp off-axis issue (step 10), not the joins.
-- Open: Human's off-axis corrections; in the sim, Human turned round near x 296 inside a shortcut (not at a join);
+- Human's off-axis corrections, after BDS's sine table and the correction box fit (DESIGN.md "Off-axis ulp
+  corrections"): the same goto drew 10 / 10 / 5 for seeds 1–3. Optimal's goto from a fresh spawn now stops at once
+  (every macro diverges, `no closer for 601 ticks`) on the base commit too: open.
+- Open: in the sim, Human turned round near x 296 inside a shortcut (not at a join);
   a plan-ahead holds the shared rollout cache for its whole search (re-plans meanwhile search without it).
 
 ## Running
