@@ -19,7 +19,7 @@ Movement milestone detail: `pathfind-plan.md`.
 | C1 | Segment planning ahead + splice, previous-path favouring, failure timeout (`pathfind-plan.md` "C1 design") | 500-block goto over 3+ segments, no stop at joins |
 | C2 | Process layer (priority, pre-empt, pause/resume) with Goto, Follow, Backfill (`process-layer.md`, done 2026-10-17) | Follow pre-empts and resumes Goto; Backfill restores every dug cell |
 | C3 | Server-confirmed actions: place/break as tasks done only on the server's echo, timeout + retry, pause on correction; one lag/rate governor every module asks (`confirmed-actions.md`, done 2026-10-17) | dig/bridge courses with injected lag: 0 ghost blocks, 0 loops |
-| B1 | Schematic builder: `.mcstructure` load, layer/support ordering, scaffold + cleanup, liquid sealing, registered stations, restock by remaining need (shulker/ender chest), resumable job | 16×16×8 mixed-block build block-exact on strict BDS, survives a restart mid-build |
+| B1 | Schematic builder: `.mcstructure` load, layer/support ordering, scaffold + cleanup, liquid sealing, registered stations, restock by remaining need (shulker/ender chest), resumable job (`builder.md`, in progress) | 16×16×8 mixed-block build block-exact on strict BDS, survives a restart mid-build |
 | B2 | Swarm build: task board, claims, expiring leases, dropped bot's work returns to pool | 2 bots ≤ 0.6× 1-bot time; killing one mid-build still completes |
 | B3 | Presets: map art (staircased, colour-need restock), highway (dig + pave + repair) | 128×128 map art block-exact; 200-block highway segment |
 | R1 | Persistent swarm chunk cache; path through cached chunks; block scan + ore index | 2,000-block goto into unloaded terrain; cache survives restart |

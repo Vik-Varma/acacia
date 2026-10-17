@@ -5,6 +5,7 @@
 //! locking and no background work beyond the client's own connection task.
 
 pub mod books;
+pub mod build;
 mod bot;
 mod cadence;
 mod config;

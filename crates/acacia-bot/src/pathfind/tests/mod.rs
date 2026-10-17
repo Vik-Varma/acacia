@@ -1,5 +1,7 @@
 mod alter;
 mod alter_sim;
+mod build_sim;
+mod build_tests;
 mod cache;
 mod cache_shared;
 mod confirm_sim;
