@@ -92,6 +92,11 @@ impl History {
         self.pending = Some((tick, correction));
     }
 
+    /// Feet position simulated at the end of `tick`, while kept.
+    pub(super) fn position_at(&self, tick: u64) -> Option<Vec3> {
+        self.entries.iter().find(|e| e.tick == tick).map(|e| e.after.pos)
+    }
+
     /// Applies a knockback on already simulated input `tick`; false when that tick (or the one before,
     /// to start from) is no longer kept.
     pub(super) fn knockback(&mut self, tick: u64, velocity: Vec3) -> bool {

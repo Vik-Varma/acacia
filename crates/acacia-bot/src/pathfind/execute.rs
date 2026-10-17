@@ -1,8 +1,6 @@
 //! Performs a move's [`Work`](super::Work) with the bot's own actions: [`Bot::break_block`] with
 //! the best tool, [`Bot::place_block`] with a scaffold block, [`Bot::use_item_on_block`] on doors.
 
-use std::time::Duration;
-
 use acacia_physics::BlockPos;
 
 use super::follow::Sense;
@@ -10,7 +8,7 @@ use super::maneuver;
 use super::moves::MoveKind;
 use super::work::Step;
 use super::PathNode;
-use crate::interact::{facing_face, Face};
+use crate::interact::Face;
 use crate::movement::Controls;
 use crate::survival::Destination;
 use crate::{ActionError, Bot};
@@ -19,7 +17,6 @@ use crate::{ActionError, Bot};
 const EDGE_TICKS: u32 = 30;
 /// Ticks for a pillar jump to clear the cell.
 const RISE_TICKS: u32 = 12;
-const DOOR_TIMEOUT: Duration = Duration::from_secs(1);
 
 pub(super) async fn perform(bot: &mut Bot, node: &PathNode, scaffold: &[String]) -> Result<(), ActionError> {
     bot.stop_pathing();
@@ -56,11 +53,7 @@ async fn door(bot: &mut Bot, pos: BlockPos, open: bool) -> Result<(), ActionErro
         None => return Err(ActionError::NotPossible(format!("no door at {pos:?}"))),
         Some(_) => {}
     }
-    bot.use_item_on_block(pos, facing_face(bot.eye_position(), pos)).await?;
-    match bot.wait_until(DOOR_TIMEOUT, |bot, _| (state(bot) == Some(want)).then_some(())).await {
-        Err(ActionError::Timeout) => Err(ActionError::Rejected(format!("the door at {pos:?} did not move"))),
-        other => other,
-    }
+    bot.door_confirmed(pos, open).await
 }
 
 async fn place(bot: &mut Bot, kind: MoveKind, against: BlockPos, face: Face, scaffold: &[String]) -> Result<(), ActionError> {

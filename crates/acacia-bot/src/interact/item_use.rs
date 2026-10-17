@@ -1,10 +1,10 @@
-use std::time::Duration;
+use std::time::Instant;
 
 use acacia_client::proto::types::Action;
-use acacia_client::proto::RawPacket;
 use acacia_physics::BlockPos;
 
-use super::geometry::{block_distance, face_point, BLOCK_REACH};
+use super::confirm::{unpredict, Confirm, Expect, Verdict};
+use super::geometry::{block_distance, face_point, facing_face, BLOCK_REACH};
 use super::legacy::{self, SlotChange};
 use super::wire::{self, SwingSource};
 use super::Face;
@@ -13,8 +13,8 @@ use crate::reflex::Reflex;
 use crate::state::ItemStack;
 use crate::{ActionError, Bot};
 
-/// How long `place_block` waits for the server to show the placed block.
-const PLACE_TIMEOUT: Duration = Duration::from_secs(1);
+/// Clicks of a placement the server shows no block for.
+const MAX_TRIES: u32 = 3;
 
 impl Bot {
     /// Swings the main hand (`Animate`), as a click on nothing does.
@@ -50,9 +50,33 @@ impl Bot {
         self.click_block(pos, face, SwingSource::Interact)
     }
 
+    /// Clicks the door, gate or trapdoor at `pos` and waits for the server to show it `open` (or closed). One
+    /// click only: a second would toggle it back were the first just late.
+    pub(crate) async fn door_confirmed(&mut self, pos: BlockPos, open: bool) -> Result<(), ActionError> {
+        let face = facing_face(self.eye_position(), pos);
+        let distance = block_distance(self.eye_position(), pos);
+        if distance > BLOCK_REACH {
+            return Err(ActionError::NotPossible(format!("door {pos:?} is {distance:.2} blocks away")));
+        }
+        self.look_at(face_point(pos, face)).await?;
+        self.admit_action().await?;
+        let mut c = self.confirmation(pos, Expect::Prop("open_bit", if open { "1" } else { "0" }), 1);
+        let clicked = self.click_block(pos, face, SwingSource::Interact);
+        let verdict = match clicked {
+            Ok(()) => self.await_confirm(pos, &mut c, Instant::now()).await,
+            Err(e) => Err(e),
+        };
+        self.governor.settled();
+        match verdict? {
+            Verdict::Done => Ok(()),
+            _ => Err(ActionError::Rejected(format!("the door at {pos:?} did not move"))),
+        }
+    }
+
     /// Places the held block or item (sign, bed, boat...) against `face` of the block at `against`.
-    /// Physics bots wait until the server shows a block in the target cell (`Rejected` if it does
-    /// not within a second; items that make entities, like boats, are not waited for).
+    /// Waits until the server shows a block in the target cell, clicking again (up to 3 tries) while it
+    /// stays empty past the governor's timeout; `Rejected` after that. Items that make entities, like
+    /// boats, are not waited for.
     pub async fn place_block(&mut self, against: BlockPos, face: Face) -> Result<(), ActionError> {
         if self.state.inventory.held().is_empty() {
             return Err(ActionError::NotPossible("nothing held to place".into()));
@@ -73,14 +97,56 @@ impl Bot {
         }
         self.look_at(face_point(against, face)).await?;
         let makes_entity = self.held_name().is_some_and(|n| n.ends_with("boat") || n.ends_with("minecart"));
-        self.click_block(against, face, SwingSource::Build)?;
         if makes_entity || self.block_at(target).is_none() {
-            return Ok(());
+            return self.click_block(against, face, SwingSource::Build);
         }
-        let placed = |bot: &Bot, _: &RawPacket| bot.block_at(target).is_some_and(|(_, s)| !s.is_air() && !s.is_liquid()).then_some(());
-        match self.wait_until(PLACE_TIMEOUT, placed).await {
-            Err(ActionError::Timeout) => Err(ActionError::Rejected(format!("no block appeared at {target:?}"))),
-            other => other,
+        self.admit_action().await?;
+        let result = self.place_confirmed(against, face).await;
+        self.governor.settled();
+        result.map_err(|e| match e {
+            ActionError::Rejected(why) => ActionError::Rejected(format!("placing at {target:?}: {why}")),
+            e => e,
+        })
+    }
+
+    /// Clicks, then waits for the server's echo; clicks again while the cell stays empty. A refused click's
+    /// predicted stack change is undone (see [`unpredict`]).
+    async fn place_confirmed(&mut self, against: BlockPos, face: Face) -> Result<(), ActionError> {
+        let target = face.adjacent(against);
+        let mut confirm: Option<Confirm> = None;
+        loop {
+            let (slot, before) = (self.state.inventory.selected_hotbar_slot, self.state.inventory.held().clone());
+            if before.is_empty() {
+                return Err(ActionError::NotPossible("nothing held to place".into()));
+            }
+            let c = match &mut confirm {
+                Some(c) => {
+                    c.retried(self.governor.now(), self.governor.timeout_ticks());
+                    self.governor.sent(true);
+                    c
+                }
+                None => confirm.insert(self.confirmation(target, Expect::Solid, MAX_TRIES).predicted()),
+            };
+            self.click_block(against, face, SwingSource::Build)?;
+            let replaced = (before.block_runtime_id != 0).then(|| self.predict_block(target, before.block_runtime_id)).flatten();
+            let predicted = self.state.inventory.held().clone();
+            let verdict = self.await_confirm(target, c, Instant::now()).await?;
+            if verdict != Verdict::Done {
+                if let Some(old) = replaced.filter(|_| c.unechoed()) {
+                    self.unpredict_block(target, old);
+                }
+                let main = &mut self.state.inventory.main[usize::from(slot)];
+                if let Some(back) = unpredict(main, &predicted, &before) {
+                    tracing::debug!(?target, "placement refused; undoing the predicted stack change");
+                    *main = back;
+                }
+            }
+            match verdict {
+                Verdict::Done => return Ok(()),
+                Verdict::Retry => {}
+                Verdict::Failed(why) => return Err(ActionError::Rejected(why)),
+                Verdict::Wait => unreachable!("await_confirm decides"),
+            }
         }
     }
 

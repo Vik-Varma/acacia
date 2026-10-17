@@ -135,7 +135,11 @@ pub struct Movement {
     history: History,
     /// Replay only: the recorded `WantDown` (bot traces before 2026-10-02 never sent it), else it follows sneak.
     pub(crate) recorded_want_down: Option<bool>,
+    last_setback: Option<u64>,
 }
+
+/// A correction moving the bot further than this (blocks) is a setback: paths and actions pause.
+pub const SETBACK: f32 = 0.05;
 
 impl Movement {
     pub const PACKETS: &'static [u32] = &[
@@ -174,7 +178,13 @@ impl Movement {
             equipment: Equipment::default(),
             server_flying: None,
             history: History::default(),
+            last_setback: None,
         }
+    }
+
+    /// Ticks since a correction moved the bot more than [`SETBACK`] (ulp-sized ones are not setbacks).
+    pub fn setback_age(&self) -> Option<u64> {
+        self.last_setback.map(|t| self.tick.saturating_sub(t))
     }
 
     /// The worn armour for the ticks from here on (see `equipment::worn`); true when it changed.
@@ -307,6 +317,10 @@ impl Movement {
                     delta = ?[c.delta.x, c.delta.y, c.delta.z], on_ground = c.on_ground, "movement correction"
                 );
                 let (feet, delta, on_ground) = (feet(&c.position), [c.delta.x, c.delta.y, c.delta.z], c.on_ground);
+                let ours = if c.tick == 0 { Some(st.pos) } else { self.history.position_at(c.tick) };
+                if ours.is_none_or(|p| p.iter().zip(feet).map(|(a, b)| (a - b) * (a - b)).sum::<f32>() > SETBACK * SETBACK) {
+                    self.last_setback = Some(self.tick);
+                }
                 if c.tick == 0 {
                     st.apply_correction(feet, delta, on_ground);
                 } else {

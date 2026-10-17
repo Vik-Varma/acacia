@@ -4,6 +4,7 @@
 
 mod ahead;
 mod guard;
+mod watch;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,6 +27,7 @@ use crate::movement::Movement;
 use crate::ActionError;
 use ahead::Ahead;
 use guard::Guard;
+use watch::Watch;
 
 /// Nodes ahead re-checked every tick for world changes.
 const LOOKAHEAD: usize = 6;
@@ -63,6 +65,7 @@ pub struct Pilot {
     cache: Arc<RolloutCache>,
     /// Seeds each follower's aim jitter.
     rng: u64,
+    watch: Watch,
 }
 
 impl Pilot {
@@ -74,7 +77,7 @@ impl Pilot {
     pub fn with_cache(goal: Goal, opts: GotoOpts, cache: Arc<RolloutCache>) -> Self {
         let (rng, guard) = (opts.seed.unwrap_or_else(seed), Guard::new(opts.give_up_ticks));
         let (follower, pending, ahead, favour) = (None, None, Ahead::default(), None);
-        Self { goal, opts, follower, partial: false, pending, ahead, generation: 0, replans: 0, teleports: None, diverged: 0, diverged_in_air: false, divergences: 0, favour, guard, cache, rng }
+        Self { goal, opts, follower, partial: false, pending, ahead, generation: 0, replans: 0, teleports: None, diverged: 0, diverged_in_air: false, divergences: 0, favour, guard, cache, rng, watch: Watch::default() }
     }
 
     pub fn cache(&self) -> &Arc<RolloutCache> {
@@ -152,6 +155,9 @@ impl Pilot {
     pub fn drive<B: Blocks>(&mut self, terrain: &Terrain<B>, movement: &mut Movement, opts: SearchOpts, spawn: Spawn) -> Result<NavStatus, ActionError> {
         let Some(live) = movement.state().cloned() else { return Ok(NavStatus::Searching) };
         self.guard.tick(&self.goal, live.pos)?;
+        if self.hold_after_setback(movement) {
+            return Ok(NavStatus::Searching);
+        }
         if let Some(answer) = &mut self.pending {
             let path = match answer.try_recv() {
                 Err(TryRecvError::Empty) => return Ok(NavStatus::Searching),
@@ -205,7 +211,12 @@ impl Pilot {
                 self.diverged_in_air = !movement.on_ground();
                 self.plan(terrain, live, opts, !short, spawn)?;
             }
-            FollowStatus::Work => return Ok(NavStatus::Working),
+            FollowStatus::Work => {
+                if let Some(node) = self.pending_work() {
+                    self.watch.work(&node)?;
+                }
+                return Ok(NavStatus::Working);
+            }
             FollowStatus::Arrived if !self.partial => return Ok(NavStatus::Arrived),
             // At the end of a segment before the next one is planned: it starts here, so wait for it.
             FollowStatus::Arrived if self.ahead.running() => return Ok(NavStatus::Searching),

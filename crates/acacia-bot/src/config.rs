@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use acacia_client::PacketFilter;
 
 use crate::events::{ChatPattern, Events};
+use crate::lag::Lag;
 use crate::state::Trackers;
 use crate::survival::AutoEat;
 use crate::world::SharedWorlds;
@@ -37,6 +38,8 @@ pub struct BotConfig {
     /// client the bot otherwise looks like). BDS breaks a block at once in creative only for
     /// input that is not touch, so a client played at a keyboard turns it on.
     pub mouse_input: bool,
+    /// Hold back every server packet (tests and the lab only; default none).
+    pub lag: Option<Lag>,
 }
 
 impl Default for BotConfig {
@@ -53,6 +56,7 @@ impl Default for BotConfig {
             auto_eat: None,
             strict: false,
             mouse_input: false,
+            lag: None,
         }
     }
 }
