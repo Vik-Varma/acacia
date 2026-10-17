@@ -219,9 +219,6 @@ pub fn run(w: &mut World, start: Vec3, arb: &mut Arbiter, id: ProcId, max_ticks:
     for tick in 0..max_ticks {
         let pos = m.position().expect("started");
         let decision = arb.decide(pos, m.on_ground(), &SimLook(&*w));
-        if tick % 500 == 0 {
-            eprintln!("tick {tick} at {pos:?} ground {} {decision:?}", m.on_ground());
-        }
         match decision {
             Decision::Go => {
                 let pilot = arb.pilot_mut().expect("routed");

@@ -7,12 +7,11 @@ use std::sync::{Arc, Mutex};
 use acacia_physics::BlockPos;
 
 use super::job::BuildJob;
-use super::plan::{self, Next};
+use super::plan;
 use super::status::{BuildStatus, Phase, StatusHandle};
 use super::structure::{Block, Structure, StructureError};
 use super::survey::{need, Need};
-use crate::pathfind::process::{Act, Ctx, Event, Look, Process, Want};
-use crate::pathfind::GotoOpts;
+use crate::pathfind::process::Look;
 use crate::ActionError;
 
 /// Failed acts on one cell before it is given up.
@@ -70,7 +69,7 @@ pub struct Builder {
     /// The goal being driven to, kept while its task is open (a new pilot each tick would never get there).
     pub(super) commit: Option<(BlockPos, crate::pathfind::Goal)>,
     /// The goal the pilot reached: asking for it again would only hold still (the arbiter keeps an arrived route).
-    arrived: Option<crate::pathfind::Goal>,
+    pub(super) arrived: Option<crate::pathfind::Goal>,
     pub(super) tick: u64,
     pub(super) waiting_since: Option<u64>,
     status: StatusHandle,
@@ -155,7 +154,7 @@ impl Builder {
         self.tries.get(&pos).is_some_and(Tries::given_up)
     }
 
-    fn fail(&mut self, pos: BlockPos, e: &ActionError) {
+    pub(super) fn fail(&mut self, pos: BlockPos, e: &ActionError) {
         tracing::debug!(?pos, %e, "build act failed");
         let t = self.tries.entry(pos).or_default();
         (t.fails, t.next_at) = (t.fails + 1, self.tick + RETRY_TICKS);
@@ -169,7 +168,7 @@ impl Builder {
     }
 
     /// Learns what a station lacks from what the last restock brought.
-    fn check_restock(&mut self, look: &dyn Look) {
+    pub(super) fn check_restock(&mut self, look: &dyn Look) {
         let Some(r) = self.restock.take() else { return };
         for (item, before) in r.before {
             if look.count(&item) <= before {
@@ -178,7 +177,7 @@ impl Builder {
         }
     }
 
-    fn publish(&self, needs: &[Need], look: &dyn Look, phase: Phase, missing: Vec<String>) {
+    pub(super) fn publish(&self, needs: &[Need], look: &dyn Look, phase: Phase, missing: Vec<String>) {
         let Ok(mut s) = self.status.lock() else { return };
         let count = |n: Need| needs.iter().filter(|x| **x == n).count();
         (s.done, s.to_place, s.to_break, s.unknown, s.kept) = (count(Need::Done), count(Need::Place), count(Need::Break) + count(Need::Drain), count(Need::Unknown), count(Need::Kept));
@@ -189,121 +188,9 @@ impl Builder {
         (s.phase, s.missing) = (phase, missing);
     }
 
-    fn bump(&self, f: impl FnOnce(&mut BuildStatus)) {
+    pub(super) fn bump(&self, f: impl FnOnce(&mut BuildStatus)) {
         if let Ok(mut s) = self.status.lock() {
             f(&mut s);
         }
-    }
-}
-
-impl Process for Builder {
-    fn name(&self) -> &str {
-        "builder"
-    }
-
-    fn want(&mut self, cx: &Ctx) -> Want {
-        self.tick = cx.tick;
-        self.check_restock(cx.look);
-        let needs = self.survey(cx.look);
-        self.scaffold.retain(|p| cx.look.solid(*p) != Some(false));
-        // In the air: keep driving (a jump or pillar in progress), or wait to land before acting.
-        let mut next = match &self.commit {
-            Some((task, goal)) if !cx.on_ground => Next::Go(Phase::Building, *task, goal.clone()),
-            _ => Next::Hold(Phase::Building, Vec::new()),
-        };
-        // A task wanting the goal just reached could not act from there after all: let it rest and ask again.
-        for _ in 0..8 {
-            if !cx.on_ground {
-                break;
-            }
-            next = plan::next(self, cx, &needs);
-            match &next {
-                Next::Go(_, task, goal) if self.arrived.as_ref() == Some(goal) => {
-                    tracing::debug!(?task, ?goal, "build stand reached but no click from there");
-                    self.rest(*task);
-                    next = Next::Hold(Phase::Building, Vec::new());
-                }
-                _ => break,
-            }
-        }
-        let (phase, missing, want) = match next {
-            Next::Act(phase, act) => {
-                self.arrived = None;
-                (phase, Vec::new(), Want::Act(act))
-            }
-            Next::Go(phase, task, goal) => {
-                self.commit = Some((task, goal.clone()));
-                (phase, Vec::new(), Want::Go(goal))
-            }
-            Next::Hold(phase, missing) => (phase, missing, Want::Hold),
-            Next::Done(result) => (Phase::Done, Vec::new(), Want::Done(result)),
-        };
-        if phase == Phase::Waiting {
-            let since = *self.waiting_since.get_or_insert(self.tick);
-            // Stations may have been refilled since: ask them again now and then.
-            if self.tick - since > 600 {
-                self.stations.iter_mut().for_each(|s| s.lacks.clear());
-                self.waiting_since = None;
-            }
-        } else {
-            self.waiting_since = None;
-        }
-        self.publish(&needs, cx.look, phase, missing);
-        want
-    }
-
-    fn opts(&self) -> GotoOpts {
-        let mut opts = GotoOpts { scaffold: self.job.scaffold.clone(), ..GotoOpts::default() };
-        opts.search.allow_bridge = true;
-        opts
-    }
-
-    fn arrived(&mut self) -> bool {
-        self.arrived = self.commit.take().map(|(_, goal)| goal);
-        false
-    }
-
-    fn failed(&mut self, e: &ActionError) -> bool {
-        if let Some((task, _)) = self.commit.take() {
-            self.fail(task, e);
-        }
-        false
-    }
-
-    fn acted(&mut self, act: &Act, result: &Result<(), ActionError>) {
-        match (act, result) {
-            (Act::Place { against, face, .. }, Ok(())) => {
-                self.tries.entry(face.adjacent(*against)).or_default().places += 1;
-                self.bump(|s| s.placed += 1);
-            }
-            (Act::Place { against, face, .. }, Err(e)) => self.fail(face.adjacent(*against), e),
-            (Act::Break { .. }, Ok(())) => self.bump(|s| s.broken += 1),
-            (Act::Break { pos }, Err(e)) => self.fail(*pos, e),
-            (Act::Fill { pos, .. }, Ok(())) => {
-                if self.index.contains_key(pos) || !self.seals.contains(pos) {
-                    self.scaffold.insert(*pos);
-                }
-            }
-            (Act::Fill { pos, .. }, Err(e)) => {
-                self.seals.remove(pos);
-                self.fail(*pos, e);
-            }
-            (Act::Restock { .. }, r) => {
-                if let Err(e) = r {
-                    tracing::debug!(%e, "restock failed");
-                }
-                self.bump(|s| s.restocks += 1);
-            }
-        }
-    }
-
-    fn observe(&mut self, event: &Event) {
-        if let Event::Placed { pos } = event {
-            self.scaffold.insert(*pos);
-        }
-    }
-
-    fn lost_control(&mut self) {
-        self.commit = None;
     }
 }

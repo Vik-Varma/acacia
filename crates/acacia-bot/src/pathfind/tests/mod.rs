@@ -23,3 +23,4 @@ mod segments;
 mod shortcuts;
 mod sim;
 mod speed;
+mod step_up;

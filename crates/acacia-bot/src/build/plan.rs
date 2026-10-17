@@ -4,7 +4,7 @@
 use acacia_physics::{BlockPos, Vec3};
 
 use super::builder::Builder;
-use super::reach::{click_for, in_reach, stands, Stand, STAND_SLACK};
+use super::reach::{click_for, in_reach, stands, Keep, Stand, STAND_SLACK};
 use super::restock;
 use super::rules;
 use super::status::Phase;
@@ -66,7 +66,7 @@ fn break_at(cx: &Ctx, pos: BlockPos, phase: Phase, b: &Builder) -> Option<Next> 
         return Some(Next::Act(phase, Act::Break { pos }));
     }
     let above = [pos[0], pos[1] + 1, pos[2]];
-    go(phase, pos, stands(pos, cx.pos, cx.look, &|f| f == above, &|_| true, STANDS), b)
+    go(phase, pos, stands(pos, cx.pos, cx.look, &Keep { feet: &|f| f == above, pillar: &|c| unbuilt(b, cx.look, c) }, &|_| true, STANDS), b)
 }
 
 /// A liquid next to `pos` that breaking it would let in (from above or the sides), not held back by a target.
@@ -75,6 +75,11 @@ fn leak(b: &Builder, look: &dyn Look, pos: BlockPos) -> Option<BlockPos> {
         let target_solid = b.target(*n).is_some_and(|t| !t.is_air());
         !target_solid && look.block(*n).is_some_and(|v| v.liquid)
     })
+}
+
+/// A cell the structure fills that is still empty: pillars stay out (dirt in a wall would have to be dug out again).
+fn unbuilt(b: &Builder, look: &dyn Look, c: BlockPos) -> bool {
+    b.target(c).is_some_and(|t| !t.is_air()) && look.solid(c) != Some(true)
 }
 
 fn fill(b: &Builder, pos: BlockPos) -> Act {
@@ -96,7 +101,7 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     // Scaffold standing where air belongs stays until the cleanup: the pilot may still be using it.
     let held = |b: &Builder, i: usize| b.scaffold.contains(&b.cells[i].pos) && b.cells[i].target.is_air();
     let mut breaks: Vec<usize> = order.iter().copied().filter(|&i| (open(b, i, Need::Break) && !held(b, i)) || open(b, i, Need::Drain)).collect();
-    breaks.sort_by_key(|&i| -b.cells[i].pos[1]);
+    breaks.sort_by_key(|&i| (Some(b.cells[i].pos) != committed, -b.cells[i].pos[1]));
     for &i in breaks.iter().take(TRIES) {
         let pos = b.cells[i].pos;
         let act = match leak(b, cx.look, pos) {
@@ -111,7 +116,7 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
         };
         let next = match act {
             Some(act) if in_reach(eye, pos) && !in_body(cx.pos, pos) => Some(Next::Act(Phase::Building, act)),
-            Some(_) => go(Phase::Building, pos, stands(pos, cx.pos, cx.look, &|_| false, &|_| true, STANDS), b),
+            Some(_) => go(Phase::Building, pos, stands(pos, cx.pos, cx.look, &Keep { feet: &|_| false, pillar: &|c| unbuilt(b, cx.look, c) }, &|_| true, STANDS), b),
             None => break_at(cx, pos, Phase::Building, b),
         };
         match next {
@@ -126,7 +131,10 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     let mut missing: Vec<String> = Vec::new();
     let mut unsupported = None;
     let mut ready: Vec<(usize, String)> = Vec::new();
-    for &i in places.iter().take(TRIES * 2) {
+    // Never cover an open cell: a block over it takes away the click on the face below (and the stand above).
+    let covers = |b: &Builder, p: BlockPos| b.index.get(&[p[0], p[1] - 1, p[2]]).is_some_and(|&j| needs[j] == Need::Place && !b.given_up(b.cells[j].pos));
+    let candidates: Vec<usize> = places.iter().copied().filter(|&i| !covers(b, b.cells[i].pos)).take(TRIES * 2).collect();
+    for i in candidates {
         let (pos, target) = (b.cells[i].pos, &b.cells[i].target);
         let Some(item) = rules::item(target) else { continue };
         if missing.contains(&item) || (rules::gravity(&target.name) && cx.look.solid([pos[0], pos[1] - 1, pos[2]]) != Some(true)) {
@@ -158,9 +166,15 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
             return Next::Act(Phase::Building, Act::Place { item: item.clone(), against: c.against, face: c.face, click: c.click });
         }
     }
+    // The committed task first: picking the nearest anew each tick switches goals as the bot moves, and the
+    // pilot restarts on every switch.
+    if let Some(at) = ready.iter().position(|(i, _)| Some(b.cells[*i].pos) == committed) {
+        ready[..=at].rotate_right(1);
+    }
     for (i, _) in ready.iter().take(SEARCHES) {
         let (pos, target) = (b.cells[*i].pos, b.cells[*i].target.clone());
-        let found = stands(pos, cx.pos, cx.look, &|_| false, &|e| click_for(pos, &target, e, cx.look, STAND_SLACK).is_some(), STANDS);
+        let keep = Keep { feet: &|_| false, pillar: &|c| unbuilt(b, cx.look, c) };
+        let found = stands(pos, cx.pos, cx.look, &keep, &|e| click_for(pos, &target, e, cx.look, STAND_SLACK).is_some(), STANDS);
         match go(Phase::Building, pos, found, b) {
             Some(next) => return next,
             None => b.rest(pos),
@@ -184,7 +198,7 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     // Scaffold, top down; seals outside the footprint stay.
     let standing: Vec<BlockPos> = b.scaffold.iter().copied().filter(|p| !b.seals.contains(p) && !b.given_up(*p) && cx.look.solid(*p) == Some(true)).filter(|p| b.target(*p).is_none_or(|t| t.is_air())).collect();
     let mut left: Vec<BlockPos> = standing.iter().copied().filter(|p| !b.resting(*p)).collect();
-    left.sort_by(|p, q| q[1].cmp(&p[1]).then(dist(eye, *p).total_cmp(&dist(eye, *q))));
+    left.sort_by(|p, q| (Some(*q) == committed).cmp(&(Some(*p) == committed)).then(q[1].cmp(&p[1])).then(dist(eye, *p).total_cmp(&dist(eye, *q))));
     for &pos in left.iter().take(TRIES) {
         match break_at(cx, pos, Phase::Cleaning, b) {
             Some(next) => return next,
@@ -208,7 +222,7 @@ pub(crate) fn explain(b: &Builder, look: &dyn Look, feet: Vec3) -> Vec<String> {
         .filter(|(_, n)| **n == Need::Place)
         .map(|(c, _)| {
             let now = click_for(c.pos, &c.target, eye, look, 0.0);
-            let found = stands(c.pos, feet, look, &|_| false, &|e| click_for(c.pos, &c.target, e, look, STAND_SLACK).is_some(), STANDS);
+            let found = stands(c.pos, feet, look, &Keep { feet: &|_| false, pillar: &|_| false }, &|e| click_for(c.pos, &c.target, e, look, STAND_SLACK).is_some(), STANDS);
             let item = rules::item(&c.target).map(|i| look.count(&i));
             format!("{:?} {} [{}]: held {item:?} resting {} body {} now {now:?} stands {:?}", c.pos, c.target.name, c.target.props, b.resting(c.pos), in_body(feet, c.pos), found.iter().map(|s| s.feet).collect::<Vec<_>>())
         })
@@ -230,5 +244,5 @@ fn support(b: &Builder, cx: &Ctx, pos: BlockPos) -> Option<Next> {
     if in_reach(cx.eye(), cell) && !in_body(cx.pos, cell) {
         return Some(Next::Act(Phase::Building, fill(b, cell)));
     }
-    go(Phase::Building, cell, stands(cell, cx.pos, cx.look, &|f| f == cell, &|_| true, STANDS), b)
+    go(Phase::Building, cell, stands(cell, cx.pos, cx.look, &Keep { feet: &|f| f == cell, pillar: &|c| unbuilt(b, cx.look, c) }, &|_| true, STANDS), b)
 }

@@ -56,13 +56,16 @@ async fn fill(bot: &mut Bot, pos: BlockPos, blocks: &[String]) -> Result<(), Act
 /// Takes whole stacks of the wanted items until each count is covered or the inventory is full.
 async fn restock(bot: &mut Bot, station: BlockPos, items: &[(String, u32)]) -> Result<(), ActionError> {
     let container = bot.open_container_at(station).await?;
+    tracing::debug!(?station, slots = container.slots.len(), ?items, "restock opened");
     let mut want: Vec<(String, u32)> = items.to_vec();
     let mut result = Ok(());
     for (slot, stack) in container.slots.iter().enumerate() {
         let Some(name) = bot.state.items.name(stack.network_id).map(str::to_string) else { continue };
         let Some(w) = want.iter_mut().find(|(n, c)| *n == name && *c > 0) else { continue };
         let Ok(slot) = u8::try_from(slot) else { continue };
-        match bot.move_to_inventory(slot).await {
+        let moved = bot.move_to_inventory(slot).await;
+        tracing::debug!(slot, %name, count = stack.count, ?moved, "restock take");
+        match moved {
             Ok(_) => w.1 = w.1.saturating_sub(u32::from(stack.count)),
             Err(ActionError::NotPossible(_)) => break,
             Err(e) => {

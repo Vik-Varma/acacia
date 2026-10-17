@@ -6,6 +6,7 @@ mod builder;
 mod check;
 mod job;
 mod plan;
+mod process;
 mod reach;
 mod restock;
 mod rules;

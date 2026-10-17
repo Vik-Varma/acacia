@@ -18,10 +18,11 @@ const MAX_TICKS: u32 = 40_000;
 /// Footprint corner (pad offset).
 const AT: [i32; 3] = [4, 0, -8];
 const STATIONS: [[i32; 3]; 2] = [[0, 0, -10], [1, 0, -10]];
-/// Stacks per barrel, as (item, stacks): enough for the house with spares.
+/// Stacks per barrel, as (item, stacks): the house twice over. An offline bot that reconnects comes back with an
+/// empty inventory (BDS 1.26.52, seen 2026-10-17), so what the killed bot took is gone.
 const STOCK: [&[(&str, u32)]; 2] = [
-    &[("cobblestone", 6), ("oak_planks", 4), ("oak_log", 1), ("glass_pane", 1), ("oak_slab", 2), ("oak_stairs", 1)],
-    &[("torch", 1), ("ladder", 1), ("oak_fence", 1), ("cobblestone_wall", 1), ("stone_button", 1), ("furnace", 1), ("dispenser", 1), ("observer", 1), ("piston", 1)],
+    &[("cobblestone", 9), ("oak_planks", 6), ("oak_log", 2), ("glass_pane", 2), ("oak_slab", 3), ("oak_stairs", 1)],
+    &[("torch", 2), ("ladder", 2), ("oak_fence", 2), ("cobblestone_wall", 2), ("stone_button", 2), ("furnace", 2), ("dispenser", 2), ("observer", 2), ("piston", 2), ("oak_stairs", 1)],
 ];
 
 fn env<T: std::str::FromStr>(name: &str, default: T) -> T {
@@ -55,6 +56,12 @@ async fn main() -> Result<(), Error> {
         println!("killed after {} ticks: {:?}", first.0, first.1);
         a.disconnect().await;
         let (mut b, _) = support::connect(&server, &name).await?;
+        let inv = b.state().inventory.main.iter().filter(|s| !s.is_empty()).count();
+        println!("restarted with {inv} stacks in the inventory");
+        for c in ["/give @s diamond_pickaxe", "/give @s dirt 64"] {
+            pad.run(&b, c);
+            b.wait_ticks(4).await?;
+        }
         let (second, more) = run(&mut b, BuildJob::from_json(&saved)?, 0).await?;
         fixes += more;
         total = (first.0 + second.0, BuildStatus { placed: first.1.placed + second.1.placed, broken: first.1.broken + second.1.broken, restocks: first.1.restocks + second.1.restocks, ..second.1 });
@@ -125,6 +132,9 @@ async fn run(bot: &mut Bot, job: BuildJob, kill_at: u32) -> Result<((u32, BuildS
         if still > 0 && still % 1000 == 0 {
             let m = bot.movement();
             println!("STALL at {:?} ground {:?} status {st:?} failed {:?}", m.and_then(|m| m.position()), m.map(|m| m.on_ground()), s.failed);
+            let state = bot.state();
+            let inv: Vec<String> = state.inventory.main.iter().filter(|s| !s.is_empty()).map(|s| format!("{}x{}", state.items.name(s.network_id).unwrap_or("?"), s.count)).collect();
+            println!("  INV {inv:?}");
             diag.explain_for(bot).iter().take(12).for_each(|l| println!("  OPEN {l}"));
         }
         if st == Status::Empty || procs.outcome(id).is_some() {

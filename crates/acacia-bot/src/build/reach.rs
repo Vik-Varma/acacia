@@ -28,14 +28,22 @@ pub struct Click {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Stand {
-    /// Feet cell.
+    /// Feet cell, as the pathfinder keys a standing spot.
     pub feet: BlockPos,
+    /// Feet height above the cell's bottom: 0.5 on a bottom slab in the cell.
+    pub lift: f32,
     /// Blocks of pillar the pilot has to build under it (0: stands on something).
     pub pillar: i32,
 }
 
-pub fn eye_at(feet: BlockPos) -> Vec3 {
-    [feet[0] as f32 + 0.5, feet[1] as f32 + EYE_HEIGHT, feet[2] as f32 + 0.5]
+impl Stand {
+    pub fn eye(&self) -> Vec3 {
+        [self.feet[0] as f32 + 0.5, self.feet[1] as f32 + self.lift + EYE_HEIGHT, self.feet[2] as f32 + 0.5]
+    }
+}
+
+fn bottom_slab(b: &BlockView) -> bool {
+    b.name.ends_with("_slab") && b.prop("minecraft:vertical_half") == Some("bottom")
 }
 
 fn dist_to_block(eye: Vec3, p: BlockPos) -> f32 {
@@ -106,39 +114,56 @@ fn clear_of(feet: BlockPos, pos: BlockPos) -> bool {
     feet != pos && [feet[0], feet[1] + 1, feet[2]] != pos
 }
 
+/// Where a stand may not be: `feet` cells to avoid, and cells a pillar may not fill.
+pub struct Keep<'a> {
+    pub feet: &'a dyn Fn(BlockPos) -> bool,
+    pub pillar: &'a dyn Fn(BlockPos) -> bool,
+}
+
 /// Up to `limit` spots near `pos` the bot can stand at (or pillar up to) with `ok(eye)`, cheapest from `from` first.
-pub fn stands(pos: BlockPos, from: Vec3, look: &dyn Look, avoid: &dyn Fn(BlockPos) -> bool, ok: &dyn Fn(Vec3) -> bool, limit: usize) -> Vec<Stand> {
+pub fn stands(pos: BlockPos, from: Vec3, look: &dyn Look, keep: &Keep, ok: &dyn Fn(Vec3) -> bool, limit: usize) -> Vec<Stand> {
     let mut all = Vec::new();
     for dx in -RADIUS..=RADIUS {
         for dz in -RADIUS..=RADIUS {
             for dy in -3..=1 {
                 let feet = [pos[0] + dx, pos[1] + dy, pos[2] + dz];
-                if !clear_of(feet, pos) || avoid(feet) || !within(eye_at(feet), pos, STAND_SLACK) || !passable(look, feet) || !passable(look, [feet[0], feet[1] + 1, feet[2]]) {
-                    continue;
-                }
-                if let Some(pillar) = support(look, feet) {
-                    all.push(Stand { feet, pillar });
+                let Some(s) = footing(look, feet) else { continue };
+                let body_clear = clear_of(feet, pos) && (s.lift == 0.0 || [feet[0], feet[1] + 2, feet[2]] != pos);
+                let pillar_ok = (0..s.pillar).all(|k| !(keep.pillar)([feet[0], feet[1] - 1 - k, feet[2]]));
+                if body_clear && pillar_ok && !(keep.feet)(feet) && within(s.eye(), pos, STAND_SLACK) {
+                    all.push(s);
                 }
             }
         }
     }
     let cost = |s: &Stand| {
-        let d = [s.feet[0] as f32 + 0.5 - from[0], s.feet[1] as f32 - from[1], s.feet[2] as f32 + 0.5 - from[2]];
+        let d = [s.feet[0] as f32 + 0.5 - from[0], s.feet[1] as f32 + s.lift - from[1], s.feet[2] as f32 + 0.5 - from[2]];
         (d[0] * d[0] + d[2] * d[2]).sqrt() + d[1].abs() * 2.0 + s.pillar as f32 * 4.0
     };
     all.sort_by(|a, b| cost(a).total_cmp(&cost(b)));
-    all.into_iter().filter(|s| ok(eye_at(s.feet))).take(limit).collect()
+    all.into_iter().filter(|s| ok(s.eye())).take(limit).collect()
 }
 
-/// Blocks of pillar under `feet` down to something solid; `None` past [`MAX_PILLAR`] or over liquid or unloaded cells.
-fn support(look: &dyn Look, feet: BlockPos) -> Option<i32> {
+/// How feet in `cell` would rest, as the pathfinder sees a standing spot: on a bottom slab in the cell, on a full
+/// block or upper slab under it, or on a pillar the pilot builds (up to [`MAX_PILLAR`]). A bottom slab under the
+/// cell is no footing: that spot belongs to the slab's own cell. Partial blocks (fences, panes) are not stood on.
+fn footing(look: &dyn Look, cell: BlockPos) -> Option<Stand> {
+    let up = |n: i32| [cell[0], cell[1] + n, cell[2]];
+    let here = look.block(cell)?;
+    if bottom_slab(&here) {
+        return (passable(look, up(1)) && passable(look, up(2))).then_some(Stand { feet: cell, lift: 0.5, pillar: 0 });
+    }
+    if here.solid() || !passable(look, up(1)) {
+        return None;
+    }
     for n in 0..=MAX_PILLAR {
-        let b = look.block([feet[0], feet[1] - 1 - n, feet[2]])?;
-        if b.liquid {
-            return None;
-        }
-        if b.solid() {
-            return Some(n);
+        let b = look.block(up(-1 - n))?;
+        match () {
+            _ if b.liquid => return None,
+            _ if bottom_slab(&b) => return None,
+            _ if b.solid() && (b.full || b.name.ends_with("_slab")) => return Some(Stand { feet: cell, lift: 0.0, pillar: n }),
+            _ if b.solid() => return None,
+            _ => {}
         }
     }
     None
