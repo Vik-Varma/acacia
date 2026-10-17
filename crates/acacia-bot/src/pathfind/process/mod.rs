@@ -1,0 +1,110 @@
+//! Processes: goals that compete for the bot's movement (Baritone's `PathingControlManager`). Each tick the
+//! highest-priority process that wants control gets it, and one shared [`Pilot`](super::Pilot) drives towards
+//! its goal. Network-free core: [`Arbiter`]; on a server: [`Processes`]. Design: docs/process-layer.md.
+
+mod arbiter;
+mod backfill;
+mod fill;
+mod follow;
+mod goto;
+mod run;
+
+use acacia_physics::{BlockPos, Vec3};
+
+use super::{GotoOpts, Goal, PathNode};
+use crate::ActionError;
+
+pub use arbiter::{Arbiter, Decision};
+pub use backfill::{Backfill, substitutes};
+pub use follow::{Follow, Target};
+pub use goto::Goto;
+pub use run::{Processes, Status};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ProcId(pub(crate) u32);
+
+/// What a process wants this tick.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Want {
+    /// Drive towards the goal (with [`Process::opts`]).
+    Go(Goal),
+    /// Keep control and stand still.
+    Hold,
+    /// Keep control and do something in place.
+    Act(Act),
+    /// Let lower-priority processes have control.
+    Yield,
+    /// Finished: removed, with its outcome kept.
+    Done(Result<(), ActionError>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Act {
+    /// Place a block into `pos` (an air or liquid cell): the first of `blocks` (item identifiers) the bot holds.
+    Fill { pos: BlockPos, blocks: Vec<String> },
+}
+
+/// World changes every process hears about, whichever made them.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Event {
+    /// A path's work broke the block `block` (identifier) at `pos`.
+    Dug { pos: BlockPos, block: String },
+}
+
+/// What a process may look at besides the bot itself.
+pub trait Look {
+    /// The cell blocks movement; `None`: not loaded.
+    fn solid(&self, pos: BlockPos) -> Option<bool>;
+    /// Feet position of a tracked entity.
+    fn find(&self, target: &Target) -> Option<Vec3>;
+}
+
+pub struct Ctx<'a> {
+    pub tick: u64,
+    /// Feet position.
+    pub pos: Vec3,
+    pub on_ground: bool,
+    /// The driven path's nodes still ahead (empty when nothing is driven).
+    pub path: &'a [PathNode],
+    /// Ticks since a process other than the asking one last had control.
+    pub quiet: u64,
+    pub look: &'a dyn Look,
+}
+
+impl Ctx<'_> {
+    pub fn eye(&self) -> Vec3 {
+        [self.pos[0], self.pos[1] + crate::movement::EYE_HEIGHT, self.pos[2]]
+    }
+}
+
+/// A goal competing for the bot's movement. Hooks other than [`Process::want`] are called on the process
+/// they concern only.
+pub trait Process: Send {
+    fn name(&self) -> &str;
+
+    fn want(&mut self, cx: &Ctx) -> Want;
+
+    /// Settings for driving to a [`Want::Go`] goal; read when the goal changes.
+    fn opts(&self) -> GotoOpts {
+        GotoOpts::default()
+    }
+
+    /// The pilot reached this process's goal; true: finished (`Ok`).
+    fn arrived(&mut self) -> bool {
+        false
+    }
+
+    /// Driving to this process's goal failed (the pilot gave up); true: finished with this error.
+    fn failed(&mut self, _e: &ActionError) -> bool {
+        false
+    }
+
+    /// A [`Want::Act`] was done (or not).
+    fn acted(&mut self, _act: &Act, _result: &Result<(), ActionError>) {}
+
+    fn observe(&mut self, _event: &Event) {}
+
+    fn lost_control(&mut self) {}
+
+    fn regained(&mut self) {}
+}

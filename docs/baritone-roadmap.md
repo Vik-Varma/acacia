@@ -17,7 +17,7 @@ Movement milestone detail: `pathfind-plan.md`.
 |---|---|---|
 | M1 | Ground speed & parkour (`pathfind-plan.md` steps 7–11) | plan's M1 done bar |
 | C1 | Segment planning ahead + splice, previous-path favouring, failure timeout (`pathfind-plan.md` "C1 design") | 500-block goto over 3+ segments, no stop at joins |
-| C2 | Process layer (priority, pre-empt, pause/resume) with Goto, Follow, Backfill | Follow pre-empts and resumes Goto; Backfill restores every dug cell |
+| C2 | Process layer (priority, pre-empt, pause/resume) with Goto, Follow, Backfill (`process-layer.md`, done 2026-10-17) | Follow pre-empts and resumes Goto; Backfill restores every dug cell |
 | C3 | Server-confirmed actions: place/break as tasks done only on the server's echo, timeout + retry, pause on correction; one lag/rate governor every module asks | dig/bridge courses with injected lag: 0 ghost blocks, 0 loops |
 | B1 | Schematic builder: `.mcstructure` load, layer/support ordering, scaffold + cleanup, liquid sealing, registered stations, restock by remaining need (shulker/ender chest), resumable job | 16×16×8 mixed-block build block-exact on strict BDS, survives a restart mid-build |
 | B2 | Swarm build: task board, claims, expiring leases, dropped bot's work returns to pool | 2 bots ≤ 0.6× 1-bot time; killing one mid-build still completes |

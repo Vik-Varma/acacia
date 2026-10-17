@@ -67,9 +67,25 @@ pub struct Pilot {
 
 impl Pilot {
     pub fn new(goal: Goal, opts: GotoOpts) -> Self {
-        let (cache, rng, guard) = (Arc::default(), opts.seed.unwrap_or_else(seed), Guard::new(opts.give_up_ticks));
+        Self::with_cache(goal, opts, Arc::default())
+    }
+
+    /// A pilot reusing another's macro-move results (the cache keys them by profile and player).
+    pub fn with_cache(goal: Goal, opts: GotoOpts, cache: Arc<RolloutCache>) -> Self {
+        let (rng, guard) = (opts.seed.unwrap_or_else(seed), Guard::new(opts.give_up_ticks));
         let (follower, pending, ahead, favour) = (None, None, Ahead::default(), None);
         Self { goal, opts, follower, partial: false, pending, ahead, generation: 0, replans: 0, teleports: None, diverged: 0, diverged_in_air: false, divergences: 0, favour, guard, cache, rng }
+    }
+
+    pub fn cache(&self) -> &Arc<RolloutCache> {
+        &self.cache
+    }
+
+    /// Something else had the controls for a while: drop the path (re-planned from here, favoured) and any
+    /// search started from where the bot was. Not counted as a re-plan.
+    pub fn interrupt(&mut self) {
+        self.drop_follower(true);
+        (self.pending, self.diverged_in_air) = (None, false);
     }
 
     pub fn goal(&self) -> &Goal {

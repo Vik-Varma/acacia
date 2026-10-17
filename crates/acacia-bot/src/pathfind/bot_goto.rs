@@ -3,19 +3,22 @@
 use acacia_physics::BlockPos;
 
 use super::goal::Goal;
-use super::goto::{GotoOpts, NavStatus, Navigator};
+use super::goto::GotoOpts;
+use super::process::{Goto, Processes};
 use crate::{ActionError, Bot};
 
 impl Bot {
-    /// Walks to `goal` (physics bots only). See [`Navigator`] for step-wise control.
+    /// Walks to `goal` (physics bots only). See [`Navigator`](super::Navigator) for step-wise control.
     pub async fn goto(&mut self, goal: Goal) -> Result<(), ActionError> {
         self.goto_with(goal, GotoOpts::default()).await
     }
 
+    /// [`Bot::run`] with a single [`Goto`].
     pub async fn goto_with(&mut self, goal: Goal, opts: GotoOpts) -> Result<(), ActionError> {
-        let mut nav = Navigator::new(goal, opts);
-        while nav.tick(self).await? != NavStatus::Arrived {}
-        Ok(())
+        let mut procs = Processes::new();
+        let id = procs.add(Goto::with(goal, opts), 0);
+        self.run(&mut procs).await?;
+        procs.take_outcome(id).unwrap_or(Ok(()))
     }
 
     /// Releases the movement controls, e.g. after dropping a `goto` future or a [`Navigator`].

@@ -30,6 +30,11 @@ pub async fn connect(server: &str, name: &str) -> Result<(Bot, Pad), Error> {
 
 /// [`connect`] recording to `record`, sharing terrain with other bots through `worlds`.
 pub async fn connect_with(server: &str, name: &str, record: Option<PathBuf>, worlds: SharedWorlds) -> Result<(Bot, Pad), Error> {
+    connect_config(server, name, BotConfig { record, shared_worlds: worlds, ..BotConfig::default() }).await
+}
+
+/// [`connect`] with `config` (physics forced on).
+pub async fn connect_config(server: &str, name: &str, config: BotConfig) -> Result<(Bot, Pad), Error> {
     let mut builder = Client::builder(server);
     builder = match name.strip_prefix('@') {
         Some(account) => {
@@ -39,7 +44,7 @@ pub async fn connect_with(server: &str, name: &str, record: Option<PathBuf>, wor
         }
         None => builder.offline(name),
     };
-    let config = BotConfig { physics: true, record, shared_worlds: worlds, ..BotConfig::default() };
+    let config = BotConfig { physics: true, ..config };
     let mut bot = Bot::connect(builder, config).await?;
     while bot.movement().is_none_or(|m| !m.is_started()) {
         bot.wait_ticks(1).await?;

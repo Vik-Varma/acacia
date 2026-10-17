@@ -1,8 +1,11 @@
 //! Async execution: plan, follow, re-plan on trouble (azalea `execute/`). The logic is [`Pilot`]'s; this adds
 //! the server side: world changes done by the bot's actions, and waiting for the next tick.
 
+use acacia_physics::BlockPos;
+
 use super::execute;
 use super::goal::Goal;
+use super::work::Step;
 use super::kit::DEFAULT_SCAFFOLD;
 use super::pilot::Pilot;
 use super::terrain::Terrain;
@@ -108,31 +111,47 @@ impl Navigator {
     }
 
     async fn poll(&mut self, bot: &mut Bot) -> Result<NavStatus, ActionError> {
-        if bot.movement.is_none() {
-            return Err(ActionError::NotPossible("pathfinding needs a physics bot (BotConfig.physics)".into()));
-        }
-        let s = &self.pilot.opts().search;
-        let kit = (s.allow_dig || s.allow_bridge).then(|| bot.path_kit(&self.pilot.opts().scaffold));
-        let opts = self.pilot.search_opts(kit, bot.state.player.hunger);
-        let (Some(world), Some(movement)) = (bot.world.as_ref(), bot.movement.as_mut()) else {
-            return Ok(NavStatus::Searching);
-        };
-        let (Some(view), Some(registry)) = (world.view(), world.registry()) else {
-            return Ok(NavStatus::Searching);
-        };
-        let terrain = Terrain::new(view, registry.as_ref());
-        let (snapshot, reg) = (view.world().clone(), registry.clone());
-        let status = self.pilot.drive(&terrain, movement, opts, &mut |job| job.spawn_blocking(snapshot.clone(), reg.clone()))?;
-        if let Some(node) = self.pilot.pending_work().filter(|_| status == NavStatus::Working) {
-            match execute::perform(bot, &node, &self.pilot.opts().scaffold).await {
-                Ok(()) => self.pilot.work_done(),
-                Err(ActionError::Disconnected) => return Err(ActionError::Disconnected),
-                Err(e) => {
-                    tracing::debug!(%e, ?node, "path work failed; re-planning");
-                    self.pilot.work_failed(e.to_string())?;
-                }
-            }
-        }
-        Ok(status)
+        step(&mut self.pilot, bot).await.0
     }
+}
+
+/// A block a path's work broke, with its identifier.
+pub(super) type Dug = (BlockPos, String);
+
+/// Drives `pilot` for one tick (without letting it pass) and does any work due; also returns the blocks the
+/// work broke, failed or not.
+pub(super) async fn step(pilot: &mut Pilot, bot: &mut Bot) -> (Result<NavStatus, ActionError>, Vec<Dug>) {
+    if bot.movement.is_none() {
+        return (Err(ActionError::NotPossible("pathfinding needs a physics bot (BotConfig.physics)".into())), Vec::new());
+    }
+    let s = &pilot.opts().search;
+    let kit = (s.allow_dig || s.allow_bridge).then(|| bot.path_kit(&pilot.opts().scaffold));
+    let opts = pilot.search_opts(kit, bot.state.player.hunger);
+    let (Some(world), Some(movement)) = (bot.world.as_ref(), bot.movement.as_mut()) else {
+        return (Ok(NavStatus::Searching), Vec::new());
+    };
+    let (Some(view), Some(registry)) = (world.view(), world.registry()) else {
+        return (Ok(NavStatus::Searching), Vec::new());
+    };
+    let terrain = Terrain::new(view, registry.as_ref());
+    let (snapshot, reg) = (view.world().clone(), registry.clone());
+    let status = match pilot.drive(&terrain, movement, opts, &mut |job| job.spawn_blocking(snapshot.clone(), reg.clone())) {
+        Ok(s) => s,
+        Err(e) => return (Err(e), Vec::new()),
+    };
+    let Some(node) = pilot.pending_work().filter(|_| status == NavStatus::Working) else { return (Ok(status), Vec::new()) };
+    let name = |bot: &Bot, p: BlockPos| bot.block_at(p).filter(|(_, s)| !s.is_air() && !s.is_liquid()).map(|(_, s)| s.name.to_string());
+    let breaks: Vec<_> = node.work.steps().filter_map(|s| if let Step::Break(p) = s { Some(p) } else { None }).collect();
+    let before: Vec<_> = breaks.into_iter().filter_map(|p| Some((p, name(bot, p)?))).collect();
+    let done = execute::perform(bot, &node, &pilot.opts().scaffold).await;
+    let dug = before.into_iter().filter(|(p, _)| bot.block_at(*p).is_some_and(|(_, s)| s.is_air() || s.is_liquid())).collect();
+    let status = match done {
+        Ok(()) => Ok(status).inspect(|_| pilot.work_done()),
+        Err(ActionError::Disconnected) => Err(ActionError::Disconnected),
+        Err(e) => {
+            tracing::debug!(%e, ?node, "path work failed; re-planning");
+            pilot.work_failed(e.to_string()).map(|()| status)
+        }
+    };
+    (status, dug)
 }
