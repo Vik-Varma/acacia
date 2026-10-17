@@ -24,14 +24,17 @@ pub(crate) enum Expect {
     Solid,
     /// A block property, like a door's `open_bit`.
     Prop(&'static str, &'static str),
+    /// Placed into a cell already holding block `.0` (a half slab made double): any other solid block.
+    Replaced(u32),
 }
 
 impl Expect {
-    fn met(self, s: &BlockState) -> bool {
+    fn met(self, id: u32, s: &BlockState) -> bool {
         match self {
             Expect::Gone => s.is_air() || s.is_liquid(),
             Expect::Solid => !s.is_air() && !s.is_liquid(),
             Expect::Prop(name, value) => s.property(name) == Some(value),
+            Expect::Replaced(old) => id != old && !s.is_air() && !s.is_liquid(),
         }
     }
 }
@@ -84,7 +87,7 @@ impl Confirm {
         self.echo_seen |= echoed;
         let Some((id, state)) = cell else { return Verdict::Failed("the cell is no longer loaded".into()) };
         let ours = self.predicted && !self.echo_seen;
-        if self.expect.met(state) && !ours {
+        if self.expect.met(id, state) && !ours {
             return Verdict::Done;
         }
         let unchanged = ours || self.before.is_none_or(|b| b == id);

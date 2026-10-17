@@ -1,10 +1,10 @@
 use std::time::Instant;
 
 use acacia_client::proto::types::Action;
-use acacia_physics::BlockPos;
+use acacia_physics::{BlockPos, Vec3};
 
 use super::confirm::{unpredict, Confirm, Expect, Verdict};
-use super::geometry::{block_distance, face_point, facing_face, BLOCK_REACH};
+use super::geometry::{block_distance, block_min, face_point, facing_face, BLOCK_REACH};
 use super::legacy::{self, SlotChange};
 use super::wire::{self, SwingSource};
 use super::Face;
@@ -47,7 +47,7 @@ impl Bot {
             return Err(ActionError::NotPossible(format!("block {pos:?} is {distance:.2} blocks away")));
         }
         self.look_at(face_point(pos, face)).await?;
-        self.click_block(pos, face, SwingSource::Interact)
+        self.click_block(pos, face, face.click_offset(), SwingSource::Interact)
     }
 
     /// Clicks the door, gate or trapdoor at `pos` and waits for the server to show it `open` (or closed). One
@@ -61,7 +61,7 @@ impl Bot {
         self.look_at(face_point(pos, face)).await?;
         self.admit_action().await?;
         let mut c = self.confirmation(pos, Expect::Prop("open_bit", if open { "1" } else { "0" }), 1);
-        let clicked = self.click_block(pos, face, SwingSource::Interact);
+        let clicked = self.click_block(pos, face, face.click_offset(), SwingSource::Interact);
         let verdict = match clicked {
             Ok(()) => self.await_confirm(pos, &mut c, Instant::now()).await,
             Err(e) => Err(e),
@@ -78,15 +78,25 @@ impl Bot {
     /// stays empty past the governor's timeout; `Rejected` after that. Items that make entities, like
     /// boats, are not waited for.
     pub async fn place_block(&mut self, against: BlockPos, face: Face) -> Result<(), ActionError> {
+        self.place_block_at(against, face, face.click_offset()).await
+    }
+
+    /// [`Bot::place_block`] clicking at `click` (relative to `against`'s minimum corner), which picks a slab's
+    /// half or a stair's upside-down bit. A half slab in the target cell may be clicked into to make it double.
+    pub async fn place_block_at(&mut self, against: BlockPos, face: Face, click: Vec3) -> Result<(), ActionError> {
         if self.state.inventory.held().is_empty() {
             return Err(ActionError::NotPossible("nothing held to place".into()));
         }
         let target = face.adjacent(against);
-        if let Some((_, s)) = self.block_at(target)
+        let mut half_slab = None;
+        if let Some((id, s)) = self.block_at(target)
             && !s.is_air()
             && !s.is_liquid()
         {
-            return Err(ActionError::NotPossible(format!("{target:?} is occupied by {}", s.name)));
+            if !s.name.ends_with("_slab") {
+                return Err(ActionError::NotPossible(format!("{target:?} is occupied by {}", s.name)));
+            }
+            half_slab = Some(id);
         }
         if self.block_at(against).is_some_and(|(_, s)| s.is_air()) {
             return Err(ActionError::NotPossible(format!("nothing to place against at {against:?}")));
@@ -95,13 +105,14 @@ impl Bot {
         if distance > BLOCK_REACH {
             return Err(ActionError::NotPossible(format!("block {against:?} is {distance:.2} blocks away")));
         }
-        self.look_at(face_point(against, face)).await?;
+        let m = block_min(against);
+        self.look_at([m[0] + click[0], m[1] + click[1], m[2] + click[2]]).await?;
         let makes_entity = self.held_name().is_some_and(|n| n.ends_with("boat") || n.ends_with("minecart"));
         if makes_entity || self.block_at(target).is_none() {
-            return self.click_block(against, face, SwingSource::Build);
+            return self.click_block(against, face, click, SwingSource::Build);
         }
         self.admit_action().await?;
-        let result = self.place_confirmed(against, face).await;
+        let result = self.place_confirmed(against, face, click, half_slab).await;
         self.governor.settled();
         result.map_err(|e| match e {
             ActionError::Rejected(why) => ActionError::Rejected(format!("placing at {target:?}: {why}")),
@@ -111,8 +122,9 @@ impl Bot {
 
     /// Clicks, then waits for the server's echo; clicks again while the cell stays empty. A refused click's
     /// predicted stack change is undone (see [`unpredict`]).
-    async fn place_confirmed(&mut self, against: BlockPos, face: Face) -> Result<(), ActionError> {
+    async fn place_confirmed(&mut self, against: BlockPos, face: Face, click: Vec3, half_slab: Option<u32>) -> Result<(), ActionError> {
         let target = face.adjacent(against);
+        let expect = half_slab.map_or(Expect::Solid, Expect::Replaced);
         let mut confirm: Option<Confirm> = None;
         loop {
             let (slot, before) = (self.state.inventory.selected_hotbar_slot, self.state.inventory.held().clone());
@@ -125,10 +137,12 @@ impl Bot {
                     self.governor.sent(true);
                     c
                 }
-                None => confirm.insert(self.confirmation(target, Expect::Solid, MAX_TRIES).predicted()),
+                None if half_slab.is_some() => confirm.insert(self.confirmation(target, expect, MAX_TRIES)),
+                None => confirm.insert(self.confirmation(target, expect, MAX_TRIES).predicted()),
             };
-            self.click_block(against, face, SwingSource::Build)?;
-            let replaced = (before.block_runtime_id != 0).then(|| self.predict_block(target, before.block_runtime_id)).flatten();
+            self.click_block(against, face, click, SwingSource::Build)?;
+            let predict = before.block_runtime_id != 0 && half_slab.is_none();
+            let replaced = predict.then(|| self.predict_block(target, before.block_runtime_id)).flatten();
             let predicted = self.state.inventory.held().clone();
             let verdict = self.await_confirm(target, c, Instant::now()).await?;
             if verdict != Verdict::Done {
@@ -156,7 +170,7 @@ impl Bot {
 
     /// Vanilla's block click: StartItemUseOn, the swing, the ClickBlock (placing: with the held
     /// stack's predicted change, then the new stack in MobEquipment), StopItemUseOn a moment later.
-    pub(super) fn click_block(&mut self, pos: BlockPos, face: Face, source: SwingSource) -> Result<(), ActionError> {
+    pub(super) fn click_block(&mut self, pos: BlockPos, face: Face, click: Vec3, source: SwingSource) -> Result<(), ActionError> {
         let block = self.block_wire_id(pos)?;
         tracing::debug!(?pos, ?face, block, "click block");
         let held = self.state.inventory.held().clone();
@@ -167,7 +181,7 @@ impl Bot {
         }
         self.client.send(&wire::item_use_on(self.runtime_id(), Action::StartItemUseOn, pos, result, face as i32));
         self.swing_from(Some(source));
-        let packet = wire::click_block(self.hand(), pos, face, face.click_offset(), block);
+        let packet = wire::click_block(self.hand(), pos, face, click, block);
         if source != SwingSource::Build {
             self.client.send(&packet);
         } else {

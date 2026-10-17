@@ -97,6 +97,11 @@ impl Bot {
         self.block_at(pos).map(|(_, s)| s.name)
     }
 
+    /// The tracked block at `pos` with its properties (registry form: `key=value`, sorted, comma separated).
+    pub fn block_state(&self, pos: BlockPos) -> Option<&acacia_world::BlockState> {
+        self.block_at(pos).map(|(_, s)| s)
+    }
+
     /// The block being mined and how far along (0 to 1), for a crack overlay.
     pub fn mining_progress(&self) -> Option<(BlockPos, f32)> {
         self.mining.map(|m| (m.pos, m.done as f32 / m.ticks as f32))
@@ -136,6 +141,6 @@ impl Bot {
         let places = held.block_runtime_id != 0 || self.held_name().is_some_and(|n| n.ends_with("boat") || n.ends_with("minecart"));
         let interactive = self.block_at(pos).is_some_and(|(_, s)| is_interactive(s));
         let build = places && (sneaking || !interactive);
-        self.click_block(pos, face, if build { SwingSource::Build } else { SwingSource::Interact })
+        self.click_block(pos, face, face.click_offset(), if build { SwingSource::Build } else { SwingSource::Interact })
     }
 }
