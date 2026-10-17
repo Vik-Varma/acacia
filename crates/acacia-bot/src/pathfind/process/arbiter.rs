@@ -208,6 +208,14 @@ impl Arbiter {
         }
     }
 
+    /// Cells a path's work placed scaffold into this tick (after [`Decision::Go`]).
+    pub fn placed(&mut self, cells: Vec<BlockPos>) {
+        for pos in cells {
+            let event = Event::Placed { pos };
+            self.entries.iter_mut().for_each(|e| e.proc.observe(&event));
+        }
+    }
+
     pub fn acted(&mut self, id: ProcId, act: &Act, result: &Result<(), ActionError>) {
         self.with(id, |p| p.acted(act, result));
     }

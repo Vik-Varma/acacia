@@ -108,7 +108,7 @@ impl Process for Backfill {
     }
 
     fn acted(&mut self, act: &Act, result: &Result<(), ActionError>) {
-        let Act::Fill { pos, .. } = act;
+        let Act::Fill { pos, .. } = act else { return };
         let Some(at) = self.holes.iter().position(|h| h.pos == *pos) else { return };
         let Err(e) = result else { return };
         tracing::debug!(%e, ?pos, "backfill failed; retrying later");
@@ -120,7 +120,7 @@ impl Process for Backfill {
     }
 
     fn observe(&mut self, event: &Event) {
-        let Event::Dug { pos, block } = event;
+        let Event::Dug { pos, block } = event else { return };
         if !self.holes.iter().any(|h| h.pos == *pos) {
             self.holes.push(Hole { pos: *pos, block: block.clone(), tries: 0, next_at: 0 });
         }

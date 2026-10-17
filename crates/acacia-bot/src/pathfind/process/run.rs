@@ -3,8 +3,8 @@
 use acacia_physics::{BlockPos, Vec3};
 
 use super::arbiter::{Arbiter, Decision};
-use super::fill;
-use super::{Look, ProcId, Process, Target};
+use super::act;
+use super::{BlockView, Look, ProcId, Process, Target};
 use crate::pathfind::goto::step;
 use crate::pathfind::{NavStatus, Pilot};
 use crate::{ActionError, Bot};
@@ -85,7 +85,7 @@ impl Processes {
         let status = match decision {
             Decision::Go => {
                 let Some(pilot) = self.arbiter.pilot_mut() else { return Ok(Status::Idle) };
-                let (result, dug) = step(pilot, bot).await;
+                let (result, worked) = step(pilot, bot).await;
                 if result == Err(ActionError::Disconnected) {
                     return Err(ActionError::Disconnected);
                 }
@@ -93,12 +93,13 @@ impl Processes {
                 if !matches!(result, Ok(NavStatus::Searching | NavStatus::Moving | NavStatus::Working)) {
                     bot.stop_pathing();
                 }
-                self.arbiter.drove(result, dug);
+                self.arbiter.placed(worked.placed);
+                self.arbiter.drove(result, worked.dug);
                 status
             }
             Decision::Act(id, act) => {
                 bot.stop_pathing();
-                let result = fill::perform(bot, &act).await;
+                let result = act::perform(bot, &act).await;
                 if result == Err(ActionError::Disconnected) {
                     return Err(ActionError::Disconnected);
                 }
@@ -126,7 +127,7 @@ impl Bot {
     }
 }
 
-struct BotLook<'a>(&'a Bot);
+pub(crate) struct BotLook<'a>(pub &'a Bot);
 
 impl Look for BotLook<'_> {
     fn solid(&self, pos: BlockPos) -> Option<bool> {
@@ -141,5 +142,20 @@ impl Look for BotLook<'_> {
         }?;
         let f = e.feet();
         Some([f.x, f.y, f.z])
+    }
+
+    fn block(&self, pos: BlockPos) -> Option<BlockView> {
+        let (_, s) = self.0.block_at(pos)?;
+        Some(BlockView::of(s))
+    }
+
+    fn count(&self, item: &str) -> u32 {
+        let inv = &self.0.state.inventory;
+        let items = &self.0.state.items;
+        inv.main.iter().filter(|s| !s.is_empty() && items.name(s.network_id) == Some(item)).map(|s| u32::from(s.count)).sum()
+    }
+
+    fn free_slots(&self) -> u32 {
+        self.0.state.inventory.main.iter().filter(|s| s.is_empty()).count() as u32
     }
 }

@@ -118,33 +118,44 @@ impl Navigator {
 /// A block a path's work broke, with its identifier.
 pub(super) type Dug = (BlockPos, String);
 
-/// Drives `pilot` for one tick (without letting it pass) and does any work due; also returns the blocks the
-/// work broke, failed or not.
-pub(super) async fn step(pilot: &mut Pilot, bot: &mut Bot) -> (Result<NavStatus, ActionError>, Vec<Dug>) {
+/// What a path's work changed this tick, failed or not.
+#[derive(Default)]
+pub(super) struct Worked {
+    pub dug: Vec<Dug>,
+    /// Cells it placed a block into.
+    pub placed: Vec<BlockPos>,
+}
+
+/// Drives `pilot` for one tick (without letting it pass) and does any work due; also returns what the work changed.
+pub(super) async fn step(pilot: &mut Pilot, bot: &mut Bot) -> (Result<NavStatus, ActionError>, Worked) {
     if bot.movement.is_none() {
-        return (Err(ActionError::NotPossible("pathfinding needs a physics bot (BotConfig.physics)".into())), Vec::new());
+        return (Err(ActionError::NotPossible("pathfinding needs a physics bot (BotConfig.physics)".into())), Worked::default());
     }
     let s = &pilot.opts().search;
     let kit = (s.allow_dig || s.allow_bridge).then(|| bot.path_kit(&pilot.opts().scaffold));
     let opts = pilot.search_opts(kit, bot.state.player.hunger);
     let (Some(world), Some(movement)) = (bot.world.as_ref(), bot.movement.as_mut()) else {
-        return (Ok(NavStatus::Searching), Vec::new());
+        return (Ok(NavStatus::Searching), Worked::default());
     };
     let (Some(view), Some(registry)) = (world.view(), world.registry()) else {
-        return (Ok(NavStatus::Searching), Vec::new());
+        return (Ok(NavStatus::Searching), Worked::default());
     };
     let terrain = Terrain::new(view, registry.as_ref());
     let (snapshot, reg) = (view.world().clone(), registry.clone());
     let status = match pilot.drive(&terrain, movement, opts, &mut |job| job.spawn_blocking(snapshot.clone(), reg.clone())) {
         Ok(s) => s,
-        Err(e) => return (Err(e), Vec::new()),
+        Err(e) => return (Err(e), Worked::default()),
     };
-    let Some(node) = pilot.pending_work().filter(|_| status == NavStatus::Working) else { return (Ok(status), Vec::new()) };
+    let Some(node) = pilot.pending_work().filter(|_| status == NavStatus::Working) else { return (Ok(status), Worked::default()) };
+    let solid = |bot: &Bot, p: BlockPos| bot.block_at(p).is_some_and(|(_, s)| !s.is_air() && !s.is_liquid());
     let name = |bot: &Bot, p: BlockPos| bot.block_at(p).filter(|(_, s)| !s.is_air() && !s.is_liquid()).map(|(_, s)| s.name.to_string());
     let breaks: Vec<_> = node.work.steps().filter_map(|s| if let Step::Break(p) = s { Some(p) } else { None }).collect();
+    let places: Vec<_> = node.work.steps().filter_map(|s| if let Step::Place { against, face } = s { Some(face.adjacent(against)) } else { None }).collect();
     let before: Vec<_> = breaks.into_iter().filter_map(|p| Some((p, name(bot, p)?))).collect();
+    let empty: Vec<_> = places.into_iter().filter(|p| !solid(bot, *p)).collect();
     let done = execute::perform(bot, &node, &pilot.opts().scaffold).await;
-    let dug = before.into_iter().filter(|(p, _)| bot.block_at(*p).is_some_and(|(_, s)| s.is_air() || s.is_liquid())).collect();
+    let dug = before.into_iter().filter(|(p, _)| !solid(bot, *p)).collect();
+    let worked = Worked { dug, placed: empty.into_iter().filter(|p| solid(bot, *p)).collect() };
     let status = match done {
         Ok(()) => Ok(status).inspect(|_| pilot.work_done()),
         Err(ActionError::Disconnected) => Err(ActionError::Disconnected),
@@ -153,5 +164,5 @@ pub(super) async fn step(pilot: &mut Pilot, bot: &mut Bot) -> (Result<NavStatus,
             pilot.work_failed(e.to_string()).map(|()| status)
         }
     };
-    (status, dug)
+    (status, worked)
 }

@@ -44,7 +44,7 @@ pub struct Run {
 /// Places the first of the act's blocks that `held` has, as the server would: from within reach, against a
 /// solid neighbour, not into the player.
 fn fill(g: &Grid, m: &Movement, act: &Act, held: &[&str]) -> Result<(), ActionError> {
-    let Act::Fill { pos, blocks } = act;
+    let Act::Fill { pos, blocks } = act else { return Err(ActionError::NotPossible(format!("{act:?} is not simulated"))) };
     let feet = m.position().expect("started");
     let eye = [feet[0], feet[1] + 1.62, feet[2]];
     let look = SimLook { g, target: None };
