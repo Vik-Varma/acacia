@@ -56,11 +56,14 @@ half of the side faces; panes, fences, walls, torches and other partial blocks a
    first with a scaffold block; seals outside the footprint stay (`status.seals`). Scaffold the pilot stands on in
    a cell where air belongs is left until the cleanup.
 3. Places, bottom up, nearest first: first anything clickable from where the bot stands, then a walk to a stand
-   for the lowest. A placement's state depends on the click and the player's facing, so a stand is a spot whose
-   eye makes some click give the target (`reach::stands`, `reach::click_for`), with extra reach slack for the
-   pilot stopping off-centre. Stands may be over air: the pilot pillars up (`allow_bridge`), and the blocks it
-   places arrive as `Event::Placed` and count as scaffold. Gravity blocks wait for their support; a cell with
-   nothing clickable around it gets a scaffold column up to it.
+   for the lowest. A cell is never placed while the cell under it is still open (covering it takes away the
+   click on the face below). A placement's state depends on the click and the player's facing, so a stand is a
+   spot whose eye makes some click give the target (`reach::stands`, `reach::click_for`), with extra reach slack
+   for the pilot stopping off-centre. Stands are keyed as the pathfinder keys standing spots: on a bottom slab
+   the spot is the slab's own cell, feet 0.5 up (a cell above a bottom slab is no spot, and goals there were
+   unreachable). Stands may be over air: the pilot pillars up (`allow_bridge`), never through cells the
+   structure still has to fill, and the blocks it places arrive as `Event::Placed` and count as scaffold.
+   Gravity blocks wait for their support; a cell with nothing clickable around it gets a scaffold column up to it.
 4. Restock when the next placement's item is missing (`build/restock.rs`): everything the open placements still
    need minus the inventory, from the nearest station not yet found without it. A station that brought no more of
    an item is marked lacking it (cleared after 30 s of waiting).
@@ -68,10 +71,25 @@ half of the side faces; panes, fences, walls, torches and other partial blocks a
 6. Done once every cell is right and no scaffold stands; the outcome is an error if cells were given up.
 
 Failures: an act failing 4 times, a cell placed wrong more than 3 times, or 45 rests with nowhere to do it from
-gives the cell up (`status.failed`). A cell with no stand rests 40 ticks so others go first. The goal being driven
-is kept while its task is open (a new goal restarts the pilot); a goal just reached that still allows no click
-rests its task instead of being asked for again (the arbiter would hold still). In the air the builder keeps
-driving the committed goal, so jumps and pillars finish.
+gives the cell up (`status.failed`). A cell with no stand rests 40 ticks so others go first. The committed task
+comes first in every rank and keeps its goal while open: re-picking the nearest each tick switched goals as the
+bot moved, and every switch restarts the pilot (live: always moving, never arriving). A goal just reached that
+still allows no click rests its task instead of being asked for again (the arbiter would hold still). In the air
+the builder keeps driving the committed goal, so jumps and pillars finish.
+
+`Builder::explain_for(bot)` lists each open placement with its held count, the click it has from where the bot
+stands and the stands it could use: the first thing to read when a build stalls (`examples/build.rs` prints it).
+
+## Evidence
+
+- Sim (`pathfind/tests/build_tests.rs`, own BDS placement model in `build_sim.rs`): mixed 5×3×5 house with
+  mismatches, restock by need, resume, support column cleanup, liquid seal; house16 (`--ignored`, release)
+  block-exact in 1953 ticks.
+- Live, strict BDS 1.26.52.3, fresh world, test pack off (`examples/build.rs`, 2026-10-17): house16 from two
+  barrels, junk in the footprint, the bot disconnected after 150 placements and a fresh one resumed from the
+  saved job. Observer diff 0 cells; 588 placed, 29 broken, 4 restocks, 32 corrections, 2357 ticks (512 s).
+- An offline bot that reconnects to BDS comes back with an empty inventory (position kept): what the killed bot
+  carried is lost, so the live stations hold the house twice over.
 
 ## Not in B1
 
