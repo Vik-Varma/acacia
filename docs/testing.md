@@ -63,7 +63,7 @@ for every tick our position is off by more than 0.0001, so each correction is a 
   (`OBS_MODE=walk`: walks) from `OBS_START=x,z` on the pad while bot B logs the `MovePlayer` broadcasts of A to
   `OBSERVE_LOG`: the server's own position every tick, which a correction only shows once it is 1e-6 off. Compare
   with A's trace replayed under `RUST_LOG=acacia_bot::movement=trace` (DESIGN.md "Off-axis ulp corrections").
-- Movement and pathfind runs on testbox (`examples/course.rs`, `examples/goto.rs`, `examples/processes.rs`, `examples/confirmed.rs`, `examples/build.rs`, `place_probe`, `observe`, `yaw_sweep`) use a
+- Movement and pathfind runs on testbox (`examples/course.rs`, `examples/goto.rs`, `examples/processes.rs`, `examples/confirmed.rs`, `examples/build.rs`, `examples/swarm_build.rs`, `place_probe`, `observe`, `yaw_sweep`) use a
   strict instance with the test pack off: `tools/testbox-bds.sh unpack` (with that instance's `BDS_DIR`/`BDS_PORT`;
   `pack` turns it back on), then `reset` before every run. The pack (`tools/actiontest-pack`) rebuilds a scene
   round each joining player 40 ticks after the spawn: blocks and a water pool in the way, mobs, a hunger effect.

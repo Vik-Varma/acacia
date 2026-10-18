@@ -19,6 +19,7 @@ impl Process for Builder {
         self.tick = cx.tick;
         self.check_restock(cx.look);
         let needs = self.survey(cx.look);
+        self.sync(cx, &needs);
         self.scaffold.retain(|p| cx.look.solid(*p) != Some(false));
         // In the air: keep driving (a jump or pillar in progress), or wait to land before acting.
         let mut next = match &self.commit {
@@ -26,19 +27,23 @@ impl Process for Builder {
             _ => Next::Hold(Phase::Building, Vec::new()),
         };
         // A task wanting the goal just reached could not act from there after all: let it rest and ask again.
+        let mut planned = false;
         for _ in 0..8 {
             if !cx.on_ground {
                 break;
             }
-            next = plan::next(self, cx, &needs);
+            (next, planned) = (plan::next(self, cx, &needs), true);
             match &next {
                 Next::Go(_, task, goal) if self.arrived.as_ref() == Some(goal) => {
                     tracing::debug!(?task, ?goal, "build stand reached but no click from there");
                     self.rest(*task);
-                    next = Next::Hold(Phase::Building, Vec::new());
+                    (next, planned) = (Next::Hold(Phase::Building, Vec::new()), false);
                 }
                 _ => break,
             }
+        }
+        if planned && matches!(&next, Next::Hold(p, _) if *p != Phase::Restocking) {
+            self.exhausted();
         }
         let (phase, missing, want) = match next {
             Next::Act(phase, act) => {
@@ -50,7 +55,10 @@ impl Process for Builder {
                 (phase, Vec::new(), Want::Go(goal))
             }
             Next::Hold(phase, missing) => (phase, missing, Want::Hold),
-            Next::Done(result) => (Phase::Done, Vec::new(), Want::Done(result)),
+            Next::Done(result) => {
+                self.leave();
+                (Phase::Done, Vec::new(), Want::Done(result))
+            }
         };
         if phase == Phase::Waiting {
             let since = *self.waiting_since.get_or_insert(self.tick);
@@ -94,14 +102,15 @@ impl Process for Builder {
             (Act::Break { pos }, Err(e)) => self.fail(*pos, e),
             (Act::Fill { pos, .. }, Ok(())) => {
                 if self.index.contains_key(pos) || !self.seals.contains(pos) {
-                    self.scaffold.insert(*pos);
+                    self.add_scaffold(*pos);
                 }
             }
             (Act::Fill { pos, .. }, Err(e)) => {
                 self.seals.remove(pos);
                 self.fail(*pos, e);
             }
-            (Act::Restock { .. }, r) => {
+            (Act::Restock { station, .. }, r) => {
+                self.close_station(*station);
                 if let Err(e) = r {
                     tracing::debug!(%e, "restock failed");
                 }
@@ -112,7 +121,7 @@ impl Process for Builder {
 
     fn observe(&mut self, event: &Event) {
         if let Event::Placed { pos } = event {
-            self.scaffold.insert(*pos);
+            self.add_scaffold(*pos);
         }
     }
 

@@ -2,6 +2,8 @@
 //! is operator, and a floating stone pad to build test terrain on.
 #![allow(dead_code)]
 
+pub mod house;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -83,6 +85,11 @@ impl Pad {
     }
 
     /// The same pad moved `dx` blocks along x (one pad per bot when several share a server).
+    /// The block the pad floats over (pass to [`Pad::at`] to share a pad).
+    pub fn origin(&self) -> [i32; 3] {
+        self.spawn
+    }
+
     pub fn shifted(self, dx: i32) -> Pad {
         let [x, y, z] = self.spawn;
         Pad { spawn: [x + dx, y, z], ..self }

@@ -1,4 +1,4 @@
-# Schematic builder (B1)
+# Schematic builder (B1, B2)
 
 `acacia_bot::build`: a `.mcstructure` placed block-exact by a [`Builder`] process (C2), every break and place
 server-confirmed (C3). Roadmap: `baritone-roadmap.md` B1.
@@ -71,7 +71,9 @@ half of the side faces; panes, fences, walls, torches and other partial blocks a
 6. Done once every cell is right and no scaffold stands; the outcome is an error if cells were given up.
 
 Failures: an act failing 4 times, a cell placed wrong more than 3 times, or 45 rests with nowhere to do it from
-gives the cell up (`status.failed`). A cell with no stand rests 40 ticks so others go first. The committed task
+gives the cell up (`status.failed`). A cell given up only for want of a stand is tried again (up to 3 times)
+once nothing else can be done: the build around it changes what reaches it (live, a floor cell's stands came
+back once the pillars beside it were gone). A cell with no stand rests 40 ticks so others go first. The committed task
 comes first in every rank and keeps its goal while open: re-picking the nearest each tick switched goals as the
 bot moved, and every switch restarts the pilot (live: always moving, never arriving). A goal just reached that
 still allows no click rests its task instead of being asked for again (the arbiter would hold still). In the air
@@ -90,10 +92,40 @@ stands and the stands it could use: the first thing to read when a build stalls 
   saved job. Observer diff 0 cells; 588 placed, 29 broken, 4 restocks, 32 corrections, 2357 ticks (512 s).
 - An offline bot that reconnects to BDS comes back with an empty inventory (position kept): what the killed bot
   carried is lost, so the live stations hold the house twice over.
+- Swarm sim (`pathfind/tests/swarm_sim.rs`, bots ticked in turn on one grid, each with its own inventory):
+  house16 by two bots in 1047 ticks against one bot's 1953 (0.54×), block-exact, no scaffold left; a bot stopped
+  at tick 80 has its tile taken over after the lease and the other finishes; two bots restocking a 16×16 floor
+  from a barrel holding exactly the floor both build, neither holding more than two stacks. Board rules:
+  `build/tests/board.rs`.
+- Live one-bot runs without a restart (`examples/swarm_build.rs` with `BOTS=1`, 2026-10-17) did not finish on
+  three fresh worlds: a floor cell in the junk corner ([2, 0, 2] of the structure) was given up each time
+  (placed-wrong or no-stand counts; not yet logged which), and once the pilot's pillar under the back wall was
+  refused four times (C3's loop bail) and the wall cells it served were given up. The B1 pass above is the only
+  live finish so far.
 
-## Not in B1
+## Swarm (B2: `build/board.rs`, `build/swarm.rs`)
+
+Several builders share one job through a `TaskBoard` (`Builder::with_board(board, name)`; without one a builder
+is exactly B1). `LocalBoard` serves bots in one process; a networked board can implement the same trait.
+
+- Regions: square tiles of the footprint (`BuildJob::tile`, default 8; cells outside the footprint, such as
+  scaffold, belong to the nearest tile). A bot claims the nearest tile with open work (a cell to place, break,
+  drain or visit, or scaffold to remove) that no other bot holds, and acts only inside it.
+- Leases: a bot heartbeats every 20 ticks with its feet; a lease lapses after the board's lease time without one
+  (live: 10 s), and the tile goes back to the pool. The board stores no progress: whoever claims a tile next
+  surveys it, so a dropped bot's half-done tile needs nothing special.
+- Support across borders: placements still need a solid neighbour in the world, so a cell whose support is in an
+  unbuilt neighbouring tile simply isn't doable yet. A tile with nothing doable is given back and skipped for 60
+  ticks, and the bot claims another; a bot finishes only when the whole job is done and no scaffold stands.
+- Stations: a bot restocks only its tile's remaining need (two bots taking the whole job's need would each empty
+  the barrel), and one bot at a time opens a station (`open_station`, held under the same lease).
+- Room: stands within 1.5 blocks of another bot are not used, no block goes into another bot's body, and pillars
+  stay out of tiles other bots hold. Scaffold is shared through the board, so whoever holds its tile removes it.
+  The pilot itself does not see other bots.
+
+## Not in B1/B2
 
 - Portable shulker restock (place, take, break, pick up); stations must be placed containers.
 - Crafting missing items; dumping junk when the inventory is full (drops from clearing are picked up).
 - Line of sight: clicks only need the face to point towards the eye.
-- Swarm claims: the job is per cell and stateless, so B2's leases can split it.
+- Other bots as pilot obstacles; a networked board.

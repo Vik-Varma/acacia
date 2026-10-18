@@ -1,5 +1,5 @@
-//! Restocking by remaining need: everything the open placements still need, minus what the inventory holds, from
-//! the nearest station not yet found without it.
+//! Restocking by remaining need: everything the open placements (of the held region, when sharing) still need,
+//! minus what the inventory holds, from the nearest station not yet found without it.
 
 use std::collections::BTreeMap;
 
@@ -17,6 +17,7 @@ pub(super) fn shortfall(b: &Builder, cx: &Ctx, needs: &[Need]) -> Vec<(String, u
     let mut want: BTreeMap<String, u32> = BTreeMap::new();
     for (c, n) in b.cells.iter().zip(needs) {
         if *n == Need::Place
+            && b.mine(c.pos)
             && !b.given_up(c.pos)
             && let Some(item) = rules::item(&c.target)
         {
@@ -47,6 +48,10 @@ pub(super) fn fetch(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Option<Next> {
     let (i, pos) = station;
     if !in_reach(eye, pos) {
         return Some(Next::Go(Phase::Restocking, pos, Goal::Near(pos, 2.5)));
+    }
+    // One bot at a time in a container: two taking for the same need at once would both see the full stock.
+    if !b.open_station(pos) {
+        return Some(Next::Hold(Phase::Restocking, Vec::new()));
     }
     let before = want.iter().map(|(item, _)| (item.clone(), cx.look.count(item))).collect();
     b.restock = Some(Restock { station: i, before });

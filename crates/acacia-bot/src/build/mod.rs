@@ -1,7 +1,8 @@
 //! Schematic building: a `.mcstructure` placed block-exact by a [`Builder`] process, which re-surveys the world
 //! every tick (so a restart resumes from what is there), restocks from stations by remaining need, and cleans
-//! up its scaffold. Design: acacia-pathfind/docs/builder.md.
+//! up its scaffold. Several builders can share a job through a [`TaskBoard`]. Design: acacia-pathfind/docs/builder.md.
 
+mod board;
 mod builder;
 mod check;
 mod job;
@@ -13,10 +14,12 @@ mod rules;
 mod status;
 mod structure;
 mod survey;
+mod swarm;
 mod transform;
 #[cfg(test)]
 pub(crate) mod tests;
 
+pub use board::{LocalBoard, RegionId, TaskBoard};
 pub use builder::{BuildError, Builder};
 pub use check::{check, Mismatch};
 pub use job::BuildJob;

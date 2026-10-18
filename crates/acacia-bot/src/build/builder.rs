@@ -22,6 +22,9 @@ const RETRY_TICKS: u64 = 20;
 const REST_TICKS: u64 = 40;
 /// Rests (40 ticks each) before a cell nothing reaches is given up: a minute and a half.
 const MAX_RESTS: u32 = 45;
+/// Times a cell given up for want of a stand is tried again once nothing else can be done (the build around it
+/// changes what reaches it).
+const MAX_REVIVES: u32 = 3;
 
 pub(super) struct Cell {
     pub pos: BlockPos,
@@ -34,6 +37,7 @@ pub(super) struct Tries {
     pub places: u32,
     /// Times nowhere was found to do it from.
     pub rests: u32,
+    pub revives: u32,
     pub next_at: u64,
 }
 
@@ -72,6 +76,10 @@ pub struct Builder {
     pub(super) arrived: Option<crate::pathfind::Goal>,
     pub(super) tick: u64,
     pub(super) waiting_since: Option<u64>,
+    /// The footprint's x/z bounds (regions tile it).
+    pub(super) lo: [i32; 2],
+    pub(super) hi: [i32; 2],
+    pub(super) swarm: Option<super::swarm::Swarm>,
     status: StatusHandle,
 }
 
@@ -100,7 +108,12 @@ impl Builder {
         let index = cells.iter().enumerate().map(|(i, c)| (c.pos, i)).collect();
         let stations = job.stations.iter().map(|&pos| Station { pos, lacks: HashSet::new() }).collect();
         let status = Arc::new(Mutex::new(BuildStatus { cells: cells.len(), ..BuildStatus::default() }));
+        let bound = |f: fn(i32, i32) -> i32, i: usize, start: i32| cells.iter().map(|c| c.pos[i]).fold(start, f);
+        let (lo, hi) = ([bound(i32::min, 0, i32::MAX), bound(i32::min, 2, i32::MAX)], [bound(i32::max, 0, i32::MIN), bound(i32::max, 2, i32::MIN)]);
         Self {
+            lo,
+            hi,
+            swarm: None,
             job,
             cells,
             index,
@@ -115,6 +128,10 @@ impl Builder {
             waiting_since: None,
             status,
         }
+    }
+
+    pub fn job(&self) -> &BuildJob {
+        &self.job
     }
 
     /// Progress, readable while the builder runs inside [`crate::pathfind::Processes`].
@@ -148,6 +165,19 @@ impl Builder {
     pub(super) fn rest(&mut self, pos: BlockPos) {
         let t = self.tries.entry(pos).or_default();
         (t.rests, t.next_at) = (t.rests + 1, self.tick + REST_TICKS);
+        if t.rests == MAX_RESTS + 1 {
+            tracing::debug!(?pos, "build cell given up: no stand");
+        }
+    }
+
+    /// Clears the rests of cells given up only for want of a stand; false: none left to try again.
+    pub(super) fn revive(&mut self) -> bool {
+        let mut any = false;
+        for (pos, t) in self.tries.iter_mut().filter(|(_, t)| t.rests > MAX_RESTS && t.fails < MAX_FAILS && t.places <= MAX_PLACES && t.revives < MAX_REVIVES) {
+            tracing::debug!(?pos, revives = t.revives, "build cell tried again");
+            (t.rests, t.revives, any) = (0, t.revives + 1, true);
+        }
+        any
     }
 
     pub(super) fn given_up(&self, pos: BlockPos) -> bool {

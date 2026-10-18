@@ -22,15 +22,22 @@ pub struct BuildJob {
     /// Item identifiers for temporary blocks (pillars, supports, liquid seals), in preference order.
     #[serde(default = "default_scaffold")]
     pub scaffold: Vec<String>,
+    /// Side of the square footprint regions bots claim when sharing the job through a board.
+    #[serde(default = "default_tile")]
+    pub tile: i32,
 }
 
 fn default_scaffold() -> Vec<String> {
     DEFAULT_SCAFFOLD.iter().map(|s| s.to_string()).collect()
 }
 
+fn default_tile() -> i32 {
+    8
+}
+
 impl BuildJob {
     pub fn new(structure: impl Into<PathBuf>, at: Transform) -> Self {
-        Self { structure: structure.into(), at, stations: Vec::new(), fill_only: false, scaffold: default_scaffold() }
+        Self { structure: structure.into(), at, stations: Vec::new(), fill_only: false, scaffold: default_scaffold(), tile: default_tile() }
     }
 
     pub fn to_json(&self) -> String {

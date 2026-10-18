@@ -7,7 +7,7 @@ use super::grid::Grid;
 use crate::build::{Block, Structure};
 use crate::pathfind::process::{Act, Arbiter};
 
-const ORIGIN: BlockPos = [3, 1, 3];
+pub(super) const ORIGIN: BlockPos = [3, 1, 3];
 
 fn b(name: &str, props: &str) -> Option<Block> {
     Some(Block::new(name, props))
@@ -41,7 +41,7 @@ fn house() -> Structure {
 const ITEMS: &[(&str, u32)] = &[("oak_planks", 64), ("cobblestone", 64), ("oak_log", 8), ("oak_slab", 8), ("furnace", 2), ("oak_stairs", 8), ("torch", 4), ("dirt", 64)];
 
 /// Cells whose block or click-decided states differ from the target.
-fn wrong(g: &Grid, s: &Structure) -> Vec<(BlockPos, String, String)> {
+pub(super) fn wrong(g: &Grid, s: &Structure) -> Vec<(BlockPos, String, String)> {
     let skip = |k: &str| k.contains("connection") || k.contains("corner");
     s.cells()
         .filter_map(|(p, t)| {
@@ -54,7 +54,7 @@ fn wrong(g: &Grid, s: &Structure) -> Vec<(BlockPos, String, String)> {
         .collect()
 }
 
-fn scaffold_left(g: &Grid) -> Vec<BlockPos> {
+pub(super) fn scaffold_left(g: &Grid) -> Vec<BlockPos> {
     let mut out = Vec::new();
     for x in -6..16 {
         for y in 1..10 {
@@ -92,23 +92,38 @@ fn builds_a_mixed_structure_block_exact() {
 #[test]
 #[ignore = "slow in debug: cargo test --release -- --ignored builds_house16"]
 fn builds_house16() {
+    house16_from(&Grid::floor(-20, 40), [0.5, 1.0, 0.5]);
+}
+
+#[test]
+#[ignore = "slow in debug: cargo test --release -- --ignored builds_house16"]
+fn builds_house16_as_live() {
+    // examples/build.rs's pad: junk in the footprint, the barrels beside it, the bot's start.
     let g = Grid::floor(-20, 40);
+    let at = |p: BlockPos| [ORIGIN[0] + p[0], ORIGIN[1] + p[1], ORIGIN[2] + p[2]];
+    g.fill(at([2, 0, 2]), at([4, 1, 4]), "dirt");
+    g.fill(at([8, 2, 10]), at([9, 2, 11]), "stone");
+    g.set_state(at([-4, 0, -2]), "barrel", "").set_state(at([-3, 0, -2]), "barrel", "");
+    house16_from(&g, [ORIGIN[0] as f32 - 3.5, 1.0, ORIGIN[2] as f32 + 8.5]);
+}
+
+fn house16_from(g: &Grid, start: [f32; 3]) {
     let s = crate::build::tests::house16::house16();
     let items: Vec<(&str, u32)> = ["cobblestone", "oak_planks", "oak_log", "glass_pane", "oak_slab", "oak_stairs", "torch", "ladder", "oak_fence", "cobblestone_wall", "stone_button", "furnace", "dispenser", "observer", "piston", "dirt"]
         .iter()
         .map(|i| (*i, 400))
         .collect();
-    let mut w = World::new(&g, &items);
+    let mut w = World::new(g, &items);
     let (proc, status) = builder(&s, ORIGIN, &[]);
     let mut arb = Arbiter::new();
     let id = arb.add(proc, 10);
-    let ticks = run(&mut w, [0.5, 1.0, 0.5], &mut arb, id, 60_000);
+    let ticks = run(&mut w, start, &mut arb, id, 60_000);
     let st = status.lock().unwrap().clone();
     eprintln!("{ticks} ticks, {st:?}");
     explain(&w, &s, ORIGIN).iter().take(30).for_each(|l| eprintln!("OPEN {l}"));
     assert_eq!(arb.outcome(id), Some(&Ok(())), "status {st:?}");
-    assert_eq!(wrong(&g, &s), Vec::new());
-    assert_eq!(scaffold_left(&g), Vec::<BlockPos>::new());
+    assert_eq!(wrong(g, &s), Vec::new());
+    assert_eq!(scaffold_left(g), Vec::<BlockPos>::new());
 }
 
 #[test]

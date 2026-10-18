@@ -7,23 +7,8 @@ mod support;
 
 use std::time::Instant;
 
-use acacia_bot::build::{check, BuildJob, BuildStatus, Builder, Phase, Structure, Transform};
-use acacia_bot::pathfind::process::{BlockView, Status};
-use acacia_bot::pathfind::Processes;
-use acacia_bot::Bot;
-use support::{Error, Pad, corrections};
-
-const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/build/house16.mcstructure");
-const MAX_TICKS: u32 = 40_000;
-/// Footprint corner (pad offset).
-const AT: [i32; 3] = [4, 0, -8];
-const STATIONS: [[i32; 3]; 2] = [[0, 0, -10], [1, 0, -10]];
-/// Stacks per barrel, as (item, stacks): the house twice over. An offline bot that reconnects comes back with an
-/// empty inventory (BDS 1.26.52, seen 2026-10-17), so what the killed bot took is gone.
-const STOCK: [&[(&str, u32)]; 2] = [
-    &[("cobblestone", 9), ("oak_planks", 6), ("oak_log", 2), ("glass_pane", 2), ("oak_slab", 3), ("oak_stairs", 1)],
-    &[("torch", 2), ("ladder", 2), ("oak_fence", 2), ("cobblestone_wall", 2), ("stone_button", 2), ("furnace", 2), ("dispenser", 2), ("observer", 2), ("piston", 2), ("oak_stairs", 1)],
-];
+use acacia_bot::build::{BuildJob, BuildStatus, Builder, Phase};
+use support::{house, Error};
 
 fn env<T: std::str::FromStr>(name: &str, default: T) -> T {
     std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
@@ -38,22 +23,15 @@ async fn main() -> Result<(), Error> {
     let observer = args.next().unwrap_or_else(|| "BuildObs".into());
     let kill_at: u32 = env("KILL_AT", 150);
     let (mut a, pad) = support::connect(&server, &name).await?;
-    let junk = [([6, 0, -6], [8, 1, -4], "dirt"), ([12, 2, 2], [13, 2, 3], "stone")];
-    pad.build(&mut a, &junk, 5).await?;
-    stock(&mut a, &pad).await?;
-    for c in ["/clear @s", "/give @s diamond_pickaxe", "/give @s dirt 64"] {
-        pad.run(&a, c);
-        a.wait_ticks(4).await?;
-    }
+    let job = house::setup(&mut a, &pad).await?;
+    house::kit(&mut a, &pad).await?;
     pad.teleport(&mut a, [0.5, 0.0, 0.5], 180.0).await?;
-    let mut job = BuildJob::new(FIXTURE, Transform { origin: pad.block(AT), ..Transform::default() });
-    job.stations = STATIONS.iter().map(|&s| pad.block(s)).collect();
     let saved = job.to_json();
     let started = Instant::now();
-    let (first, mut fixes) = run(&mut a, job, kill_at).await?;
-    let mut total = first.clone();
-    if kill_at > 0 && first.1.phase != Phase::Done {
-        println!("killed after {} ticks: {:?}", first.0, first.1);
+    let (ticks, first, mut fixes) = house::drive(&mut a, Builder::new(job)?, kill_at, &name).await?;
+    let mut total = (ticks, first.clone());
+    if kill_at > 0 && first.phase != Phase::Done {
+        println!("killed after {ticks} ticks: {first:?}");
         a.disconnect().await;
         let (mut b, _) = support::connect(&server, &name).await?;
         let inv = b.state().inventory.main.iter().filter(|s| !s.is_empty()).count();
@@ -62,89 +40,22 @@ async fn main() -> Result<(), Error> {
             pad.run(&b, c);
             b.wait_ticks(4).await?;
         }
-        let (second, more) = run(&mut b, BuildJob::from_json(&saved)?, 0).await?;
-        fixes += more;
-        total = (first.0 + second.0, BuildStatus { placed: first.1.placed + second.1.placed, broken: first.1.broken + second.1.broken, restocks: first.1.restocks + second.1.restocks, ..second.1 });
+        let (more, second, f) = house::drive(&mut b, Builder::new(BuildJob::from_json(&saved)?)?, 0, &name).await?;
+        fixes += f;
+        total = (ticks + more, BuildStatus { placed: first.placed + second.placed, broken: first.broken + second.broken, restocks: first.restocks + second.restocks, ..second });
         pad.go_home(&mut b).await?;
         b.disconnect().await;
     } else {
         pad.go_home(&mut a).await?;
         a.disconnect().await;
     }
-    let structure = Structure::load(&std::fs::read(FIXTURE)?)?;
-    let at = BuildJob::from_json(&saved)?.at;
-    let (mut o, _) = support::connect(&server, &observer).await?;
-    let spot = pad.block([12, 9, 0]);
-    pad.run(&o, &format!("/tp @s {} {} {}", spot[0] as f32 + 0.5, spot[1], spot[2] as f32 + 0.5));
-    o.wait_ticks(80).await?;
-    let wrong = check(&structure, &at, |p| view(&o, p));
-    o.disconnect().await;
+    let wrong = house::observe(&server, &observer, &pad, &BuildJob::from_json(&saved)?).await?;
     let (ticks, s) = total;
     println!(
-        "{} after {ticks} ticks ({:.0} s): {} placed, {} broken, {} restocks, {} corrections, {} mismatches, unsupported {:?}, failed {:?}, scaffold {}",
+        "{} after {ticks} ticks ({:.0} s): {} placed, {} broken, {} restocks, {fixes} corrections, {} mismatches, unsupported {:?}, failed {:?}, scaffold {}",
         if wrong.is_empty() && s.phase == Phase::Done { "PASS" } else { "FAIL" },
-        started.elapsed().as_secs_f32(), s.placed, s.broken, s.restocks, fixes, wrong.len(), s.unsupported, s.failed, s.scaffold
+        started.elapsed().as_secs_f32(), s.placed, s.broken, s.restocks, wrong.len(), s.unsupported, s.failed, s.scaffold
     );
     wrong.iter().take(20).for_each(|m| println!("  {:?}: want {} found {}", m.pos, m.want, m.found));
     Ok(())
-}
-
-fn view(bot: &Bot, p: [i32; 3]) -> Option<BlockView> {
-    bot.block_state(p).map(BlockView::of)
-}
-
-/// Places the barrels and fills them.
-async fn stock(a: &mut Bot, pad: &Pad) -> Result<(), Error> {
-    for (station, items) in STATIONS.iter().zip(STOCK) {
-        let [x, y, z] = pad.block(*station);
-        pad.run(a, &format!("/setblock {x} {y} {z} barrel"));
-        a.wait_ticks(2).await?;
-        let mut slot = 0;
-        for (item, stacks) in items {
-            for _ in 0..*stacks {
-                pad.run(a, &format!("/replaceitem block {x} {y} {z} slot.container {slot} {item} 64"));
-                a.wait_ticks(2).await?;
-                slot += 1;
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Builds until done, `kill_at` placements, or the tick cap; returns ticks, the last status and corrections.
-async fn run(bot: &mut Bot, job: BuildJob, kill_at: u32) -> Result<((u32, BuildStatus), u32), Error> {
-    let before = corrections(bot);
-    let diag = Builder::new(job.clone())?;
-    let (mut last_done, mut still) = (0, 0);
-    let builder = Builder::new(job)?;
-    let status = builder.status();
-    let mut procs = Processes::new();
-    let id = procs.add(builder, 10);
-    let mut ticks = 0;
-    loop {
-        let st = procs.tick(bot).await?;
-        ticks += 1;
-        let s = status.lock().expect("status").clone();
-        if ticks % 400 == 0 {
-            println!("tick {ticks}: {:?} done {}/{} place {} break {} placed {} restocks {} missing {:?}", s.phase, s.done, s.cells, s.to_place, s.to_break, s.placed, s.restocks, s.missing);
-        }
-        (still, last_done) = if s.done == last_done { (still + 1, last_done) } else { (0, s.done) };
-        if still > 0 && still % 1000 == 0 {
-            let m = bot.movement();
-            println!("STALL at {:?} ground {:?} status {st:?} failed {:?}", m.and_then(|m| m.position()), m.map(|m| m.on_ground()), s.failed);
-            let state = bot.state();
-            let inv: Vec<String> = state.inventory.main.iter().filter(|s| !s.is_empty()).map(|s| format!("{}x{}", state.items.name(s.network_id).unwrap_or("?"), s.count)).collect();
-            println!("  INV {inv:?}");
-            diag.explain_for(bot).iter().take(12).for_each(|l| println!("  OPEN {l}"));
-        }
-        if st == Status::Empty || procs.outcome(id).is_some() {
-            println!("outcome {:?}", procs.outcome(id));
-            let mut s = s;
-            s.phase = if procs.outcome(id) == Some(&Ok(())) { Phase::Done } else { s.phase };
-            return Ok(((ticks, s), corrections(bot) - before));
-        }
-        if (kill_at > 0 && s.placed >= kill_at) || ticks >= MAX_TICKS || still > 3000 {
-            return Ok(((ticks, s), corrections(bot) - before));
-        }
-    }
 }

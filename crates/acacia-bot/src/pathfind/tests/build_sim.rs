@@ -24,12 +24,18 @@ pub struct World<'a> {
     pub log: Vec<Act>,
     /// Feet where the last run ended.
     pub end: Vec3,
+    /// Feet of the other simulated bots: blocks can't be placed into them.
+    pub others: Vec<Vec3>,
 }
 
 impl<'a> World<'a> {
     pub fn new(g: &'a Grid, inv: &[(&str, u32)]) -> Self {
-        Self { g, inv: inv.iter().map(|(k, v)| (format!("minecraft:{k}"), *v)).collect(), stations: HashMap::new(), log: Vec::new(), end: [0.0; 3] }
+        Self { g, inv: items(inv), stations: HashMap::new(), log: Vec::new(), end: [0.0; 3], others: Vec::new() }
     }
+}
+
+pub fn items(inv: &[(&str, u32)]) -> HashMap<String, u32> {
+    inv.iter().map(|(k, v)| (format!("minecraft:{k}"), *v)).collect()
 }
 
 struct SimLook<'a>(&'a World<'a>);
@@ -68,7 +74,10 @@ fn eye(m: &Movement) -> Vec3 {
 }
 
 fn in_body(m: &Movement, p: BlockPos) -> bool {
-    let f = m.position().expect("started");
+    body_at(m.position().expect("started"), p)
+}
+
+fn body_at(f: Vec3, p: BlockPos) -> bool {
     let o = |lo: f32, hi: f32, c: i32| lo < (c + 1) as f32 && hi > c as f32;
     o(f[0] - 0.3, f[0] + 0.3, p[0]) && o(f[1], f[1] + 1.8, p[1]) && o(f[2] - 0.3, f[2] + 0.3, p[2])
 }
@@ -149,6 +158,7 @@ fn act(w: &mut World, m: &Movement, act: &Act) -> Result<(), ActionError> {
     w.log.push(act.clone());
     let e = eye(m);
     let far = |p: BlockPos| block_distance(e, p) > BLOCK_REACH;
+    let in_body = |m: &Movement, p: BlockPos| in_body(m, p) || w.others.iter().any(|o| body_at(*o, p));
     let look = SimLook(&*w);
     match act {
         Act::Place { item, against, face, click } => {
@@ -213,50 +223,54 @@ pub fn builder(s: &Structure, origin: BlockPos, stations: &[BlockPos]) -> (Build
 
 /// Runs `arb` from `start` until `id` finishes or `max_ticks` pass; returns the ticks taken.
 pub fn run(w: &mut World, start: Vec3, arb: &mut Arbiter, id: ProcId, max_ticks: u32) -> u32 {
-    let world = w.g.physics();
     let mut m = Movement::new();
     m.start(start, 0.0, 0.0);
     for tick in 0..max_ticks {
-        let pos = m.position().expect("started");
-        let decision = arb.decide(pos, m.on_ground(), &SimLook(&*w));
-        match decision {
-            Decision::Go => {
-                let pilot = arb.pilot_mut().expect("routed");
-                let opts = pilot.search_opts(Some(blocks(64)), 20.0);
-                let result = pilot.drive(&w.g.terrain(), &mut m, opts, &mut |job: SearchJob| answered(job.run(&w.g.terrain())));
-                let mut placed = Vec::new();
-                if result == Ok(NavStatus::Working) {
-                    let node = pilot.pending_work().expect("work due");
-                    placed = node.work.steps().filter_map(|s| if let Step::Place { against, face } = s { Some(face.adjacent(against)) } else { None }).collect();
-                    perform(w.g, &world, &mut m, &node);
-                    pilot.work_done();
-                }
-                if !matches!(result, Ok(NavStatus::Searching | NavStatus::Moving | NavStatus::Working)) {
-                    m.controls.stop();
-                }
-                if let Err(e) = &result {
-                    eprintln!("DRIVE FAIL tick {tick} at {pos:?}: {e}");
-                }
-                arb.placed(placed);
-                arb.drove(result, Vec::new());
-            }
-            Decision::Act(pid, a) => {
-                m.controls.stop();
-                let result = act(w, &m, &a);
-                if let Err(e) = &result {
-                    eprintln!("ACT FAIL tick {tick} {a:?}: {e}");
-                }
-                arb.acted(pid, &a, &result);
-            }
-            Decision::Hold | Decision::Idle | Decision::Empty => m.controls.stop(),
-        }
-        w.end = pos;
+        step(w, &mut m, arb, tick);
         if arb.outcome(id).is_some() {
             return tick;
         }
-        m.tick(&world);
+        m.tick(&w.g.physics());
     }
     max_ticks
+}
+
+/// One tick of `arb` deciding and the world answering (movement not yet ticked).
+pub fn step(w: &mut World, m: &mut Movement, arb: &mut Arbiter, tick: u32) {
+    let world = w.g.physics();
+    let pos = m.position().expect("started");
+    match arb.decide(pos, m.on_ground(), &SimLook(&*w)) {
+        Decision::Go => {
+            let pilot = arb.pilot_mut().expect("routed");
+            let opts = pilot.search_opts(Some(blocks(64)), 20.0);
+            let result = pilot.drive(&w.g.terrain(), m, opts, &mut |job: SearchJob| answered(job.run(&w.g.terrain())));
+            let mut placed = Vec::new();
+            if result == Ok(NavStatus::Working) {
+                let node = pilot.pending_work().expect("work due");
+                placed = node.work.steps().filter_map(|s| if let Step::Place { against, face } = s { Some(face.adjacent(against)) } else { None }).collect();
+                perform(w.g, &world, m, &node);
+                pilot.work_done();
+            }
+            if !matches!(result, Ok(NavStatus::Searching | NavStatus::Moving | NavStatus::Working)) {
+                m.controls.stop();
+            }
+            if let Err(e) = &result {
+                eprintln!("DRIVE FAIL tick {tick} at {pos:?}: {e}");
+            }
+            arb.placed(placed);
+            arb.drove(result, Vec::new());
+        }
+        Decision::Act(pid, a) => {
+            m.controls.stop();
+            let result = act(w, m, &a);
+            if let Err(e) = &result {
+                eprintln!("ACT FAIL tick {tick} {a:?}: {e}");
+            }
+            arb.acted(pid, &a, &result);
+        }
+        Decision::Hold | Decision::Idle | Decision::Empty => m.controls.stop(),
+    }
+    w.end = pos;
 }
 
 /// Why each open placement of `s` is not being done from where the last run ended.
