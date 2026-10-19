@@ -48,6 +48,7 @@ pub struct Governor {
     samples: u32,
     in_flight: u32,
     last_sent: Option<u64>,
+    sent_this_tick: u32,
     /// Ticks since the movement's last setback, as of this tick.
     setback_age: Option<u64>,
     sent: u64,
@@ -63,6 +64,7 @@ impl Governor {
     pub fn tick(&mut self, setback_age: Option<u64>) {
         self.tick += 1;
         self.setback_age = setback_age;
+        self.sent_this_tick = 0;
     }
 
     pub fn now(&self) -> u64 {
@@ -124,6 +126,7 @@ impl Governor {
     /// An action went out (a retry of one counts again).
     pub fn sent(&mut self, retry: bool) {
         self.last_sent = Some(self.tick);
+        self.sent_this_tick += 1;
         self.sent += 1;
         self.retries += u64::from(retry);
         if !retry {
@@ -134,6 +137,11 @@ impl Governor {
     /// An action was confirmed or given up on.
     pub fn settled(&mut self) {
         self.in_flight = self.in_flight.saturating_sub(1);
+    }
+
+    /// Actions sent in the current tick.
+    pub fn sent_this_tick(&self) -> u32 {
+        self.sent_this_tick
     }
 
     pub fn in_flight(&self) -> u32 {

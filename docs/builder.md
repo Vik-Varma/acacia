@@ -149,10 +149,16 @@ is exactly B1). `LocalBoard` serves bots in one process; a networked board can i
 
 ## Open (2026-10-19)
 
-The two-bot ratio. Next, in order: group placements by item and skip the equip pause under the Optimal
-profile; pipeline placements (predict, send without awaiting each echo, governor in-flight cap); aim and click in
-one tick without the post-act tick; stands chosen for several cells; then a dependency-graph ready-set scheduler
-with soft regions instead of tiles (`research/build-scheduling-robotics.md`, `research/build-scheduling-game-bots.md`).
+The two-bot ratio. Item grouping and pipelining are in (above). Next: stands chosen for several cells, then a
+dependency-graph ready-set scheduler with soft regions instead of tiles (`research/build-scheduling-robotics.md`,
+`research/build-scheduling-game-bots.md`, `research/build-algorithms-deep.md`).
+
+Tried and dropped (2026-10-19): faster placement pacing. Clicking in the turn's own tick, a second placement in
+the same tick, and no tick after a placement: with any two of the three, BDS silently ignored ~15% of placements
+(no echo, no refusal; house16 retries 70-125 against 1-5), and one of them alone still left a mismatch. The
+standing-still probe (`examples/place_rate.rs`, 6 a tick kept) did not catch it. Line-of-sight checks and
+treating unconfirmed blocks as no support, added on the theory that hidden clicks were dropped, did not change
+the rate and cost ~65 s of walking (stands farther away); the drops follow the pacing, not the view.
 
 ## Not in B1/B2
 

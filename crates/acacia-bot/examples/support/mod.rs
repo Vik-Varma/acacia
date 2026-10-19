@@ -61,6 +61,17 @@ pub async fn connect_config(server: &str, name: &str, config: BotConfig) -> Resu
     Ok((bot, Pad { spawn, commander: Commander::Own }))
 }
 
+/// Ends the process after `MAX_SECS` (default `default_secs`) of wall time, whatever the runtime is doing: a
+/// thread, so a spinning or stuck task can't hold a live run for 20+ minutes (it did, 2026-10-19).
+pub fn watchdog(default_secs: u64) {
+    let secs = std::env::var("MAX_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(default_secs);
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(secs));
+        eprintln!("WATCHDOG: no finish after {secs} s, exiting");
+        std::process::exit(3);
+    });
+}
+
 pub fn corrections(bot: &Bot) -> u32 {
     bot.movement().map_or(0, |m| m.corrections)
 }

@@ -29,6 +29,7 @@ async fn main() -> Result<(), Error> {
     let (na, nb) = (args.next().unwrap_or_else(|| "BuildA".into()), args.next().unwrap_or_else(|| "BuildB".into()));
     let observer = args.next().unwrap_or_else(|| "BuildObs".into());
     let (bots, kill_at): (u32, u32) = (env("BOTS", 2), env("KILL_AT", 0));
+    support::watchdog(900);
     let (mut a, pad) = support::connect(&server, &na).await?;
     let job = house::setup(&mut a, &pad, &env("SCENE", "house16".to_string())).await?;
     house::kit(&mut a, &pad).await?;

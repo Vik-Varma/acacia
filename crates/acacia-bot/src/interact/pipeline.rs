@@ -123,6 +123,9 @@ impl Bot {
             confirm = confirm.predicted();
         }
         self.click_block(against, face, click, SwingSource::Build)?;
+        let speed = self.movement.as_ref().and_then(|m| m.state()).map_or(0.0, |s| s.vel[0].hypot(s.vel[2]));
+        let (dist, support) = (super::block_distance(self.eye_position(), against), self.block_at(against).map_or("?", |(_, s)| s.name));
+        tracing::debug!(?target, nth = self.governor.sent_this_tick(), speed, dist, ?face, support, "pipelined placement sent");
         let replaced = (before.block_runtime_id != 0 && half_slab.is_none()).then(|| self.predict_block(target, before.block_runtime_id)).flatten();
         let predicted = self.state.inventory.held().clone();
         self.in_flight.push(target, confirm, Undo { replaced, extra: StackUndo { slot, before, predicted } });

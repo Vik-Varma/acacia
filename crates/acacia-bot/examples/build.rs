@@ -25,6 +25,7 @@ async fn main() -> Result<(), Error> {
     let name = args.next().unwrap_or_else(|| "Builder".into());
     let observer = args.next().unwrap_or_else(|| "BuildObs".into());
     let scene: String = env("SCENE", "house16".to_string());
+    support::watchdog(if scene == "house16" { 900 } else { 240 });
     let kill_at: u32 = env("KILL_AT", if scene == "house16" { 150 } else { 0 });
     let (mut a, pad) = support::connect(&server, &name).await?;
     let job = house::setup(&mut a, &pad, &scene).await?;
