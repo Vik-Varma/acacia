@@ -27,9 +27,14 @@ pub struct Limits {
     pub min_gap_ticks: u64,
 }
 
+impl Limits {
+    /// BDS kept 6 placements a tick from one spot (place_rate probe, 2026-10-19); 4 leaves room.
+    pub const DEFAULT_IN_FLIGHT: u32 = 4;
+}
+
 impl Default for Limits {
     fn default() -> Self {
-        Self { max_in_flight: 2, min_gap_ticks: 1 }
+        Self { max_in_flight: Self::DEFAULT_IN_FLIGHT, min_gap_ticks: 1 }
     }
 }
 

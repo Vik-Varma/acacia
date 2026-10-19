@@ -16,6 +16,7 @@ mod leaps_shaped;
 mod macro_start;
 mod perf;
 mod pilot_sim;
+mod pipeline_sim;
 mod process_sim;
 mod rollout;
 mod search;

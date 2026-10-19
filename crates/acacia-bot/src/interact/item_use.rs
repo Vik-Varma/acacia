@@ -84,6 +84,23 @@ impl Bot {
     /// [`Bot::place_block`] clicking at `click` (relative to `against`'s minimum corner), which picks a slab's
     /// half or a stair's upside-down bit. A half slab in the target cell may be clicked into to make it double.
     pub async fn place_block_at(&mut self, against: BlockPos, face: Face, click: Vec3) -> Result<(), ActionError> {
+        let (target, half_slab) = self.aim_placement(against, face, click).await?;
+        let makes_entity = self.held_name().is_some_and(|n| n.ends_with("boat") || n.ends_with("minecart"));
+        if makes_entity || self.block_at(target).is_none() {
+            return self.click_block(against, face, click, SwingSource::Build);
+        }
+        self.admit_action().await?;
+        let result = self.place_confirmed(against, face, click, half_slab).await;
+        self.governor.settled();
+        result.map_err(|e| match e {
+            ActionError::Rejected(why) => ActionError::Rejected(format!("placing at {target:?}: {why}")),
+            e => e,
+        })
+    }
+
+    /// Checks a placement against `face` of `against` and turns to the click point; returns the target cell and
+    /// the half slab already in it, if any.
+    pub(crate) async fn aim_placement(&mut self, against: BlockPos, face: Face, click: Vec3) -> Result<(BlockPos, Option<u32>), ActionError> {
         if self.state.inventory.held().is_empty() {
             return Err(ActionError::NotPossible("nothing held to place".into()));
         }
@@ -113,17 +130,7 @@ impl Bot {
         let t = Instant::now();
         self.look_at([m[0] + click[0], m[1] + click[1], m[2] + click[2]]).await?;
         self.act_timing.add(crate::act_timing::Phase::Aim, t.elapsed());
-        let makes_entity = self.held_name().is_some_and(|n| n.ends_with("boat") || n.ends_with("minecart"));
-        if makes_entity || self.block_at(target).is_none() {
-            return self.click_block(against, face, click, SwingSource::Build);
-        }
-        self.admit_action().await?;
-        let result = self.place_confirmed(against, face, click, half_slab).await;
-        self.governor.settled();
-        result.map_err(|e| match e {
-            ActionError::Rejected(why) => ActionError::Rejected(format!("placing at {target:?}: {why}")),
-            e => e,
-        })
+        Ok((target, half_slab))
     }
 
     /// Clicks, then waits for the server's echo; clicks again while the cell stays empty. A refused click's

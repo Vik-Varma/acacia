@@ -29,6 +29,8 @@ pub enum Status {
 #[derive(Default)]
 pub struct Processes {
     arbiter: Arbiter,
+    /// Placements sent without awaiting their echo, by target: whose they are, to tell it how they went.
+    sent: std::collections::HashMap<BlockPos, (ProcId, super::Act)>,
 }
 
 impl Processes {
@@ -79,6 +81,11 @@ impl Processes {
             return Ok(Status::Idle);
         };
         let (pos, on_ground) = (live.pos, movement.on_ground());
+        for (target, result) in bot.settle_placements() {
+            if let Some((id, act)) = self.sent.remove(&target) {
+                self.arbiter.acted(id, &act, &result);
+            }
+        }
         let t = std::time::Instant::now();
         let decision = self.arbiter.decide(pos, on_ground, &BotLook(bot));
         bot.act_timing.add(Phase::Plan, t.elapsed());
@@ -105,12 +112,24 @@ impl Processes {
                 bot.stop_pathing();
                 let t = std::time::Instant::now();
                 let human = self.arbiter.get(id).is_some_and(|p| p.opts().search.profile == MovementProfile::Human);
-                let result = act::perform(bot, &act, human).await;
+                // Optimal: placements go out without awaiting their echo; their outcome comes on a later tick.
+                let result = match &act {
+                    super::Act::Place { .. } if !human => match act::send_place(bot, &act).await {
+                        Ok(target) => {
+                            self.sent.insert(target, (id, act.clone()));
+                            None
+                        }
+                        Err(e) => Some(Err(e)),
+                    },
+                    _ => Some(act::perform(bot, &act, human).await),
+                };
                 bot.act_timing.add(Phase::Act, t.elapsed());
-                if result == Err(ActionError::Disconnected) {
-                    return Err(ActionError::Disconnected);
+                if let Some(result) = result {
+                    if result == Err(ActionError::Disconnected) {
+                        return Err(ActionError::Disconnected);
+                    }
+                    self.arbiter.acted(id, &act, &result);
                 }
-                self.arbiter.acted(id, &act, &result);
                 Status::Acted
             }
             Decision::Hold => Status::Holding,
@@ -172,5 +191,13 @@ impl Look for BotLook<'_> {
 
     fn held(&self) -> Option<&str> {
         self.0.state.items.name(self.0.state.inventory.held().network_id)
+    }
+
+    fn in_flight(&self, pos: BlockPos) -> bool {
+        self.0.placements_in_flight().any(|p| p == pos)
+    }
+
+    fn any_in_flight(&self) -> bool {
+        !self.0.in_flight.is_empty()
     }
 }

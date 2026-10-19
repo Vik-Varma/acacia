@@ -40,6 +40,16 @@ pub(super) async fn perform(bot: &mut Bot, act: &Act, human: bool) -> Result<(),
     }
 }
 
+/// Sends an [`Act::Place`] without awaiting its echo (Optimal profile); returns the target cell, whose outcome
+/// [`Bot::settle_placements`] gives on a later tick.
+pub(super) async fn send_place(bot: &mut Bot, act: &Act) -> Result<BlockPos, ActionError> {
+    let Act::Place { item, against, face, click } = act else { unreachable!("placements only") };
+    let slot = bot.find_item(item).ok_or_else(|| ActionError::NotPossible(format!("no {item} to place")))?;
+    hand(bot, slot, false).await?;
+    bot.place_sent(*against, *face, *click).await?;
+    Ok(face.adjacent(*against))
+}
+
 /// Brings `slot` to the hand, timed as a switch when the held item changed (see [`crate::act_timing`]).
 async fn hand(bot: &mut Bot, slot: SlotRef, human: bool) -> Result<(), ActionError> {
     let stack = slot.stack(&bot.state).filter(|s| !s.is_empty()).cloned();

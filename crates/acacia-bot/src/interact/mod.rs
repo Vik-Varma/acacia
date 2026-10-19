@@ -20,7 +20,7 @@
 
 mod break_time;
 pub(crate) mod breaking;
-mod confirm;
+pub(crate) mod confirm;
 mod container;
 mod direct;
 mod entity;
@@ -28,6 +28,7 @@ pub(crate) mod equipment;
 mod geometry;
 mod item_use;
 pub(crate) mod legacy;
+pub(crate) mod pipeline;
 pub(crate) mod wire;
 
 #[cfg(test)]

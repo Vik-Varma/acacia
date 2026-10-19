@@ -105,7 +105,8 @@ fn fill(b: &Builder, pos: BlockPos) -> Act {
 
 pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     let eye = cx.eye();
-    let open = |b: &Builder, i: usize, n: Need| needs[i] == n && !b.resting(b.cells[i].pos) && b.mine(b.cells[i].pos);
+    // A cell with a placement in flight shows the prediction, not the server's block: leave it until decided.
+    let open = |b: &Builder, i: usize, n: Need| needs[i] == n && !b.resting(b.cells[i].pos) && b.mine(b.cells[i].pos) && !cx.look.in_flight(b.cells[i].pos);
     let mut order: Vec<usize> = (0..b.cells.len()).collect();
     // The committed task first while it is still open: switching goals restarts the pilot.
     let committed = b.commit.as_ref().map(|(p, _)| *p);
@@ -209,7 +210,7 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     if let Some(i) = order.iter().copied().find(|&i| needs[i] == Need::Unknown && b.mine(b.cells[i].pos)) {
         return Next::Go(Phase::Surveying, b.cells[i].pos, Goal::Near(b.cells[i].pos, 3.0));
     }
-    let pending = needs.iter().enumerate().any(|(i, n)| matches!(n, Need::Place | Need::Break | Need::Drain) && !b.given_up(b.cells[i].pos) && !(*n == Need::Break && held(b, i)));
+    let pending = cx.look.any_in_flight() || needs.iter().enumerate().any(|(i, n)| matches!(n, Need::Place | Need::Break | Need::Drain) && !b.given_up(b.cells[i].pos) && !(*n == Need::Break && held(b, i)));
     if pending {
         b.revive();
         return Next::Hold(if missing.is_empty() { Phase::Building } else { Phase::Waiting }, missing);

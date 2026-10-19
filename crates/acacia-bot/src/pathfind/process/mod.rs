@@ -110,6 +110,14 @@ pub trait Look {
     fn held(&self) -> Option<&str> {
         None
     }
+    /// A placement into `pos` is sent and not yet confirmed (the cell shows a prediction).
+    fn in_flight(&self, _pos: BlockPos) -> bool {
+        false
+    }
+    /// Any placement is sent and not yet confirmed.
+    fn any_in_flight(&self) -> bool {
+        false
+    }
 }
 
 pub struct Ctx<'a> {

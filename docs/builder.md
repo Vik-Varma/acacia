@@ -118,6 +118,9 @@ stands and the stands it could use: the first thing to read when a build stalls 
 - Switches without the container-click pause (Human: a 50-200 ms key press; Optimal: none), held item ranked
   first, no clicks onto interactive blocks: one bot 271 s (-42%), switch time 2.9 s (191 switches), retries 3
   (were 42: a pillar started on a station barrel, whose click opens it). Ladder scene 55 s (was 74).
+- Pipelined placements (Optimal; `interact::pipeline`, governor cap 4 in flight; BDS kept 6 a tick from one
+  spot, `examples/place_rate.rs`): one bot 213 s, acts 62 s (p50 49 ms), echo waits overlapped; sim
+  `pipeline_sim` (refused, lost and late echoes, no ghosts, never done with placements in flight).
 
 ## Swarm (B2: `build/board.rs`, `build/swarm.rs`)
 

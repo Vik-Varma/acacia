@@ -37,7 +37,10 @@ impl Bot {
                 }
                 Some(Step::Tick) => Ok(Progress::Tick),
                 Some(Step::Idle) => continue,
-                Some(Step::Packet(packet)) => Ok(Progress::Packet(packet)),
+                Some(Step::Packet(packet)) => {
+                    self.note_echo(&packet);
+                    Ok(Progress::Packet(packet))
+                }
             };
         }
     }

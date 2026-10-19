@@ -74,6 +74,7 @@ pub struct Bot {
     closed: Option<DisconnectReason>,
     pub(crate) governor: Governor,
     pub(crate) act_timing: crate::act_timing::ActTiming,
+    pub(crate) in_flight: crate::interact::pipeline::Pipeline<crate::interact::pipeline::StackUndo>,
     lag: Option<LagLine>,
 }
 
@@ -142,6 +143,7 @@ impl Bot {
             closed: None,
             governor: Governor::default(),
             act_timing: Default::default(),
+            in_flight: Default::default(),
             lag: config.lag.map(LagLine::new),
         })
     }
