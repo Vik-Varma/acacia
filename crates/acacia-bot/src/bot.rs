@@ -73,6 +73,7 @@ pub struct Bot {
     strict: bool,
     closed: Option<DisconnectReason>,
     pub(crate) governor: Governor,
+    pub(crate) act_timing: crate::act_timing::ActTiming,
     lag: Option<LagLine>,
 }
 
@@ -140,6 +141,7 @@ impl Bot {
             strict: config.strict,
             closed: None,
             governor: Governor::default(),
+            act_timing: Default::default(),
             lag: config.lag.map(LagLine::new),
         })
     }

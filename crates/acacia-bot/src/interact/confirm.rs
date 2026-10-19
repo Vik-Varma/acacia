@@ -153,6 +153,7 @@ impl Bot {
     /// Lets ticks pass until `c` decides. A first try's echo feeds the governor's round-trip estimate.
     pub(crate) async fn await_confirm(&mut self, pos: BlockPos, c: &mut Confirm, sent_at: Instant) -> Result<Verdict, ActionError> {
         let at = block_coordinates(pos);
+        let t = Instant::now();
         loop {
             let echoed = self.next_tick(|_, p| is_update_at(p, &at)).await?;
             let verdict = c.check(self.governor.now(), self.block_at(pos), echoed);
@@ -160,6 +161,10 @@ impl Bot {
                 self.governor.sample(sent_at.elapsed());
             }
             if verdict != Verdict::Wait {
+                self.act_timing.add(crate::act_timing::Phase::Echo, t.elapsed());
+                if verdict == Verdict::Retry {
+                    self.act_timing.retry();
+                }
                 tracing::debug!(?pos, ?verdict, tries = c.tries(), "action confirmation");
                 return Ok(verdict);
             }
@@ -168,9 +173,11 @@ impl Bot {
 
     /// Lets ticks pass until the governor allows another action, then counts it as sent.
     pub(crate) async fn admit_action(&mut self) -> Result<(), ActionError> {
+        let t = Instant::now();
         while !self.governor.may_send() {
             self.next_tick(|_, _| false).await?;
         }
+        self.act_timing.add(crate::act_timing::Phase::Admit, t.elapsed());
         self.governor.sent(false);
         Ok(())
     }

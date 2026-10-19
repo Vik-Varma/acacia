@@ -31,8 +31,10 @@ fn default_scaffold() -> Vec<String> {
     DEFAULT_SCAFFOLD.iter().map(|s| s.to_string()).collect()
 }
 
+/// Small enough that the last work spreads over several tiles (live house16 with 8: one bot idled through the
+/// tail while the other finished its tile; see docs/builder.md "Swarm").
 fn default_tile() -> i32 {
-    8
+    4
 }
 
 impl BuildJob {

@@ -106,7 +106,9 @@ impl Bot {
             return Err(ActionError::NotPossible(format!("block {against:?} is {distance:.2} blocks away")));
         }
         let m = block_min(against);
+        let t = Instant::now();
         self.look_at([m[0] + click[0], m[1] + click[1], m[2] + click[2]]).await?;
+        self.act_timing.add(crate::act_timing::Phase::Aim, t.elapsed());
         let makes_entity = self.held_name().is_some_and(|n| n.ends_with("boat") || n.ends_with("minecart"));
         if makes_entity || self.block_at(target).is_none() {
             return self.click_block(against, face, click, SwingSource::Build);

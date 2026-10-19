@@ -19,6 +19,8 @@ const MAX_FAILS: u32 = 4;
 /// Placements that came out wrong (and were broken again) before a cell is given up.
 const MAX_PLACES: u32 = 3;
 const RETRY_TICKS: u64 = 20;
+/// Ticks a stand the pilot failed to reach is left out.
+const AVOID_TICKS: u64 = 400;
 const REST_TICKS: u64 = 40;
 /// Rests (40 ticks each) before a cell nothing reaches is given up: a minute and a half.
 const MAX_RESTS: u32 = 45;
@@ -43,7 +45,16 @@ pub(super) struct Tries {
 
 impl Tries {
     fn given_up(&self) -> bool {
-        self.fails >= MAX_FAILS || self.places > MAX_PLACES || self.rests > MAX_RESTS
+        self.why().is_some()
+    }
+
+    fn why(&self) -> Option<&'static str> {
+        match () {
+            _ if self.fails >= MAX_FAILS => Some("acts failed"),
+            _ if self.places > MAX_PLACES => Some("placed wrong"),
+            _ if self.rests > MAX_RESTS => Some("no stand"),
+            _ => None,
+        }
     }
 }
 
@@ -74,6 +85,8 @@ pub struct Builder {
     pub(super) commit: Option<(BlockPos, crate::pathfind::Goal)>,
     /// The goal the pilot reached: asking for it again would only hold still (the arbiter keeps an arrived route).
     pub(super) arrived: Option<crate::pathfind::Goal>,
+    /// Stand feet the pilot failed to reach, until the tick.
+    pub(super) avoid: HashMap<BlockPos, u64>,
     pub(super) tick: u64,
     pub(super) waiting_since: Option<u64>,
     /// The footprint's x/z bounds (regions tile it).
@@ -124,6 +137,7 @@ impl Builder {
             restock: None,
             commit: None,
             arrived: None,
+            avoid: HashMap::new(),
             tick: 0,
             waiting_since: None,
             status,
@@ -170,6 +184,28 @@ impl Builder {
         }
     }
 
+    /// Feet in `cell` are not used: next to another bot, or a stand the pilot recently failed to reach.
+    pub(super) fn shunned(&self, cell: BlockPos) -> bool {
+        self.crowded(cell) || self.avoid.get(&cell).is_some_and(|t| *t > self.tick)
+    }
+
+    /// The pilot could not get to `goal` (a refused pillar, no route): its stands are left out for a while and
+    /// the task rests (a revivable give-up) instead of failing; the cell itself was never tried.
+    pub(super) fn unreached(&mut self, task: BlockPos, goal: &crate::pathfind::Goal) {
+        let until = self.tick + AVOID_TICKS;
+        let mut mark = |g: &crate::pathfind::Goal| {
+            if let crate::pathfind::Goal::Block(p) = g {
+                self.avoid.insert(*p, until);
+            }
+        };
+        match goal {
+            crate::pathfind::Goal::Or(gs) => gs.iter().for_each(&mut mark),
+            g => mark(g),
+        }
+        self.avoid.retain(|_, t| *t > self.tick);
+        self.rest(task);
+    }
+
     /// Clears the rests of cells given up only for want of a stand; false: none left to try again.
     pub(super) fn revive(&mut self) -> bool {
         let mut any = false;
@@ -212,7 +248,7 @@ impl Builder {
         let count = |n: Need| needs.iter().filter(|x| **x == n).count();
         (s.done, s.to_place, s.to_break, s.unknown, s.kept) = (count(Need::Done), count(Need::Place), count(Need::Break) + count(Need::Drain), count(Need::Unknown), count(Need::Kept));
         s.unsupported = self.cells.iter().zip(needs).filter(|(_, n)| **n == Need::Unsupported).map(|(c, _)| (c.pos, c.target.name.clone())).collect();
-        s.failed = self.tries.iter().filter(|(_, t)| t.given_up()).map(|(p, _)| *p).collect();
+        s.failed = self.tries.iter().filter_map(|(p, t)| t.why().map(|w| (*p, w))).collect();
         s.scaffold = self.scaffold.iter().filter(|p| look.solid(**p) == Some(true)).count();
         s.seals = self.seals.iter().copied().collect();
         (s.phase, s.missing) = (phase, missing);

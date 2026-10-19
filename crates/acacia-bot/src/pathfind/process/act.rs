@@ -1,8 +1,11 @@
 //! Does an [`Act`] with the bot's own actions.
 
+use std::time::Instant;
+
 use acacia_physics::BlockPos;
 
 use super::Act;
+use crate::act_timing::Phase;
 use crate::interact::{block_distance, Face, BLOCK_REACH};
 use crate::survival::Destination;
 use crate::{ActionError, Bot};
@@ -21,16 +24,37 @@ pub(super) async fn perform(bot: &mut Bot, act: &Act) -> Result<(), ActionError>
             if bot.block_at(*pos).is_some_and(|(_, s)| s.is_air() || s.is_liquid()) {
                 return Ok(());
             }
-            bot.equip_best_tool(*pos).await?;
+            let (held, t) = (held(bot), Instant::now());
+            let r = bot.equip_best_tool(*pos).await;
+            equipped(bot, held, t);
+            r?;
             bot.break_block(*pos).await
         }
-        Act::Restock { station, items } => restock(bot, *station, items).await,
+        Act::Restock { station, items } => {
+            let t = Instant::now();
+            let r = restock(bot, *station, items).await;
+            bot.act_timing.add(Phase::Restock, t.elapsed());
+            r
+        }
     }
 }
 
 async fn hold(bot: &mut Bot, item: &str) -> Result<(), ActionError> {
     let slot = bot.find_item(item).ok_or_else(|| ActionError::NotPossible(format!("no {item} to place")))?;
-    bot.equip(slot, Destination::Hand).await
+    let (before, t) = (held(bot), Instant::now());
+    let r = bot.equip(slot, Destination::Hand).await;
+    equipped(bot, before, t);
+    r
+}
+
+fn held(bot: &Bot) -> i32 {
+    bot.state.inventory.held().network_id
+}
+
+/// Times an equip that started at `t` holding `before`: a switch when the held item changed.
+fn equipped(bot: &mut Bot, before: i32, t: Instant) {
+    let phase = if held(bot) == before { Phase::EquipSame } else { Phase::EquipSwitch };
+    bot.act_timing.add(phase, t.elapsed());
 }
 
 /// Places the first of `blocks` held into `pos`; done once the server shows a block there.
@@ -49,7 +73,10 @@ async fn fill(bot: &mut Bot, pos: BlockPos, blocks: &[String]) -> Result<(), Act
     let face = face.ok_or_else(|| ActionError::NotPossible(format!("nothing to place against around {pos:?} within reach")))?;
     let slot = blocks.iter().find_map(|b| bot.find_item(b));
     let slot = slot.ok_or_else(|| ActionError::NotPossible(format!("none of {blocks:?} to fill {pos:?} with")))?;
-    bot.equip(slot, Destination::Hand).await?;
+    let (before, t) = (held(bot), Instant::now());
+    let r = bot.equip(slot, Destination::Hand).await;
+    equipped(bot, before, t);
+    r?;
     bot.place_block(against(pos, face), face).await
 }
 

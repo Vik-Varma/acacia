@@ -15,6 +15,8 @@ tar czf - -C "$root" --exclude=target --exclude=.testserver --exclude=.tokens --
   | retry ssh $opts testbox "tar xzf - -C $remote" || exit 1
 args=$(printf '%q ' "$@")
 retry ssh $opts testbox "cd $remote || exit; rm -f test.log test.done; { nohup sh -c '~/.cargo/bin/cargo +stable test $args >test.log 2>&1; echo \$? >test.done' </dev/null >/dev/null 2>&1 & }" || exit 1
+# DETACH=1: leave it running; check $remote/test.done later (local polls get reaped on low-memory machines).
+[ -n "${DETACH:-}" ] && { echo "launched in $remote"; exit 0; }
 # Poll with short calls; a single long ssh would die with the link.
 until ssh $opts testbox "test -f $remote/test.done" 2>/dev/null; do sleep 15; done
 retry ssh $opts testbox "cd $remote; grep -E '^(error|warning)|^\s+--> |test result|FAILED|panicked' test.log | head -60; echo exit: \$(cat test.done)"

@@ -1,7 +1,8 @@
-//! Live check of the schematic builder (acacia-pathfind/docs/builder.md): builds `tests/fixtures/build/
-//! house16.mcstructure` on the pad from two barrel stations, with junk in the footprint to clear. The bot is
-//! disconnected after `KILL_AT` placements (default 150; 0: never) and a fresh one resumes from the saved job.
-//! Afterwards an observer bot compares every cell with the structure. Needs the test pack off.
+//! Live check of the schematic builder (acacia-pathfind/docs/builder.md): builds `SCENE` (default `house16`, the
+//! acceptance build; small scenes in `support/house.rs`) on the pad from two barrel stations, with junk to clear.
+//! The bot is disconnected after `KILL_AT` placements (default 150 for house16, else 0; 0: never) and a fresh one
+//! resumes from the saved job. Afterwards an observer bot compares every cell with the structure. Needs the test
+//! pack off.
 //! `cargo run --release -p acacia-bot --example build -- <server> <name> <observer>`
 mod support;
 
@@ -9,6 +10,8 @@ use std::time::Instant;
 
 use acacia_bot::build::{BuildJob, BuildStatus, Builder, Phase};
 use support::{house, Error};
+
+const LINGER: u32 = 200;
 
 fn env<T: std::str::FromStr>(name: &str, default: T) -> T {
     std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
@@ -21,9 +24,10 @@ async fn main() -> Result<(), Error> {
     let server = args.next().unwrap_or_else(|| "127.0.0.1:19170".into());
     let name = args.next().unwrap_or_else(|| "Builder".into());
     let observer = args.next().unwrap_or_else(|| "BuildObs".into());
-    let kill_at: u32 = env("KILL_AT", 150);
+    let scene: String = env("SCENE", "house16".to_string());
+    let kill_at: u32 = env("KILL_AT", if scene == "house16" { 150 } else { 0 });
     let (mut a, pad) = support::connect(&server, &name).await?;
-    let job = house::setup(&mut a, &pad).await?;
+    let job = house::setup(&mut a, &pad, &scene).await?;
     house::kit(&mut a, &pad).await?;
     pad.teleport(&mut a, [0.5, 0.0, 0.5], 180.0).await?;
     let saved = job.to_json();
@@ -46,13 +50,15 @@ async fn main() -> Result<(), Error> {
         pad.go_home(&mut b).await?;
         b.disconnect().await;
     } else {
+        // Stay a while: a cell BDS is still mining out (an unfinished break) only shows up later.
+        a.wait_ticks(LINGER).await?;
         pad.go_home(&mut a).await?;
         a.disconnect().await;
     }
     let wrong = house::observe(&server, &observer, &pad, &BuildJob::from_json(&saved)?).await?;
     let (ticks, s) = total;
     println!(
-        "{} after {ticks} ticks ({:.0} s): {} placed, {} broken, {} restocks, {fixes} corrections, {} mismatches, unsupported {:?}, failed {:?}, scaffold {}",
+        "{scene} {} after {ticks} ticks ({:.0} s): {} placed, {} broken, {} restocks, {fixes} corrections, {} mismatches, unsupported {:?}, failed {:?}, scaffold {}",
         if wrong.is_empty() && s.phase == Phase::Done { "PASS" } else { "FAIL" },
         started.elapsed().as_secs_f32(), s.placed, s.broken, s.restocks, wrong.len(), s.unsupported, s.failed, s.scaffold
     );

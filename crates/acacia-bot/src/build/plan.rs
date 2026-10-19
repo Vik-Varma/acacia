@@ -71,7 +71,7 @@ fn break_at(cx: &Ctx, pos: BlockPos, phase: Phase, b: &Builder) -> Option<Next> 
         return Some(Next::Act(phase, Act::Break { pos }));
     }
     let above = [pos[0], pos[1] + 1, pos[2]];
-    go(phase, pos, stands(pos, cx.pos, cx.look, &Keep { feet: &|f| f == above || b.crowded(f), pillar: &|c| unbuilt(b, cx.look, c) }, &|_| true, STANDS), b)
+    go(phase, pos, stands(pos, cx.pos, cx.look, &Keep { feet: &|f| f == above || no_stand(b, cx.look, f), pillar: &|c| unbuilt(b, cx.look, c) }, &|_| true, STANDS), b)
 }
 
 /// A liquid next to `pos` that breaking it would let in (from above or the sides), not held back by a target.
@@ -82,10 +82,21 @@ fn leak(b: &Builder, look: &dyn Look, pos: BlockPos) -> Option<BlockPos> {
     })
 }
 
-/// Pillars stay out of cells the structure fills that are still empty (dirt in a wall would have to be dug out
-/// again), and out of regions other bots hold.
+/// A cell the structure fills that is still empty.
+fn fills_later(b: &Builder, look: &dyn Look, c: BlockPos) -> bool {
+    b.target(c).is_some_and(|t| !t.is_air()) && look.solid(c) != Some(true)
+}
+
+/// Pillars stay out of cells the structure still fills (dirt in a wall would have to be dug out again), and out
+/// of regions other bots hold.
 fn unbuilt(b: &Builder, look: &dyn Look, c: BlockPos) -> bool {
-    (b.target(c).is_some_and(|t| !t.is_air()) && look.solid(c) != Some(true)) || b.theirs(c)
+    fills_later(b, look, c) || b.theirs(c)
+}
+
+/// Feet in `f` are no stand: body in a cell the structure still fills (live: the bot stood in the unbuilt top
+/// of a ladder column on a narrow wall and could reach nothing from there), or shunned.
+fn no_stand(b: &Builder, look: &dyn Look, f: BlockPos) -> bool {
+    b.shunned(f) || fills_later(b, look, f) || fills_later(b, look, [f[0], f[1] + 1, f[2]])
 }
 
 fn fill(b: &Builder, pos: BlockPos) -> Act {
@@ -122,7 +133,7 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
         };
         let next = match act {
             Some(act) if in_reach(eye, pos) && free(b, cx, pos) => Some(Next::Act(Phase::Building, act)),
-            Some(_) => go(Phase::Building, pos, stands(pos, cx.pos, cx.look, &Keep { feet: &|f| b.crowded(f), pillar: &|c| unbuilt(b, cx.look, c) }, &|_| true, STANDS), b),
+            Some(_) => go(Phase::Building, pos, stands(pos, cx.pos, cx.look, &Keep { feet: &|f| no_stand(b, cx.look, f), pillar: &|c| unbuilt(b, cx.look, c) }, &|_| true, STANDS), b),
             None => break_at(cx, pos, Phase::Building, b),
         };
         match next {
@@ -179,7 +190,7 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     }
     for (i, _) in ready.iter().take(SEARCHES) {
         let (pos, target) = (b.cells[*i].pos, b.cells[*i].target.clone());
-        let keep = Keep { feet: &|f| b.crowded(f), pillar: &|c| unbuilt(b, cx.look, c) };
+        let keep = Keep { feet: &|f| no_stand(b, cx.look, f), pillar: &|c| unbuilt(b, cx.look, c) };
         let found = stands(pos, cx.pos, cx.look, &keep, &|e| click_for(pos, &target, e, cx.look, STAND_SLACK).is_some(), STANDS);
         match go(Phase::Building, pos, found, b) {
             Some(next) => return next,
@@ -254,5 +265,5 @@ fn support(b: &Builder, cx: &Ctx, pos: BlockPos) -> Option<Next> {
     if in_reach(cx.eye(), cell) && free(b, cx, cell) {
         return Some(Next::Act(Phase::Building, fill(b, cell)));
     }
-    go(Phase::Building, cell, stands(cell, cx.pos, cx.look, &Keep { feet: &|f| f == cell || b.crowded(f), pillar: &|c| unbuilt(b, cx.look, c) }, &|_| true, STANDS), b)
+    go(Phase::Building, cell, stands(cell, cx.pos, cx.look, &Keep { feet: &|f| f == cell || no_stand(b, cx.look, f), pillar: &|c| unbuilt(b, cx.look, c) }, &|_| true, STANDS), b)
 }

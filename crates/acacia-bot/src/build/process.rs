@@ -4,11 +4,26 @@ use super::builder::Builder;
 use super::plan::{self, Next};
 use super::status::Phase;
 use crate::pathfind::process::{Act, Ctx, Event, Process, Want};
-use crate::pathfind::GotoOpts;
+use crate::pathfind::{Goal, GotoOpts};
 use crate::ActionError;
 
 /// Ticks of waiting before stations are asked again (they may have been refilled).
 const ASK_AGAIN: u64 = 600;
+/// Arrival tolerance at a stand beside its cell: under 0.5 minus the builder's body margin (`plan::BODY`).
+const STAND_TOLERANCE: f32 = 0.1;
+
+fn stands_of(goal: &Goal) -> Box<dyn Iterator<Item = acacia_physics::BlockPos> + '_> {
+    match goal {
+        Goal::Block(p) => Box::new(std::iter::once(*p)),
+        Goal::Or(gs) => Box::new(gs.iter().flat_map(stands_of)),
+        _ => Box::new(std::iter::empty()),
+    }
+}
+
+/// `cell` is next to (or in) the body of a player standing at feet cell `feet`.
+fn beside(cell: acacia_physics::BlockPos, feet: acacia_physics::BlockPos) -> bool {
+    (cell[0] - feet[0]).abs() <= 1 && (cell[2] - feet[2]).abs() <= 1 && (feet[1]..=feet[1] + 1).contains(&cell[1])
+}
 
 impl Process for Builder {
     fn name(&self) -> &str {
@@ -75,6 +90,14 @@ impl Process for Builder {
 
     fn opts(&self) -> GotoOpts {
         let mut opts = GotoOpts { scaffold: self.job.scaffold.clone(), ..GotoOpts::default() };
+        // Stop near the stand's centre when the cell is beside the body: at the default 0.25 off, the body overlaps
+        // it (live: a ladder cell beside its stand was never placed). Only there: arriving within 0.1 everywhere
+        // cost two bots ~20% more time.
+        if let Some((task, goal)) = &self.commit
+            && stands_of(goal).any(|f| beside(*task, f))
+        {
+            opts.tolerance = STAND_TOLERANCE;
+        }
         opts.search.allow_bridge = true;
         opts
     }
@@ -85,8 +108,9 @@ impl Process for Builder {
     }
 
     fn failed(&mut self, e: &ActionError) -> bool {
-        if let Some((task, _)) = self.commit.take() {
-            self.fail(task, e);
+        if let Some((task, goal)) = self.commit.take() {
+            tracing::debug!(?task, ?goal, %e, "build drive failed");
+            self.unreached(task, &goal);
         }
         false
     }

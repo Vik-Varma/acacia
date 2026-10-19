@@ -2,12 +2,42 @@
 //! p10 31 / p50 47 / p90 64 ms gaps and an occasional two inputs in one batch
 //! (vanilla mitm capture). Tick n never fires before n × 51 ms, so the bot is
 //! never ahead of 20/s.
+//!
+//! `ACACIA_TICK_SCALE` (default 1) runs every tick-derived wall duration that many times faster, for a test
+//! BDS patched to tick faster (testbox work/bds-pathfind4 `tps.sh`); per-tick behaviour stays the same.
 
 use std::collections::hash_map::RandomState;
 use std::hash::BuildHasher;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use tokio::time::Instant;
+
+/// `ACACIA_TICK_SCALE`, read once; anything but a finite positive number is 1.
+pub(crate) fn tick_scale() -> f64 {
+    static SCALE: OnceLock<f64> = OnceLock::new();
+    *SCALE.get_or_init(|| {
+        std::env::var("ACACIA_TICK_SCALE").ok().and_then(|v| v.parse().ok()).filter(|s: &f64| s.is_finite() && *s > 0.0).unwrap_or(1.0)
+    })
+}
+
+/// `d` at [`tick_scale`]; exactly `d` at scale 1.
+pub(crate) fn scaled(d: Duration) -> Duration {
+    scaled_by(d, tick_scale())
+}
+
+/// Inverse of [`scaled`]: a wall duration in vanilla-tick time.
+pub(crate) fn unscaled(d: Duration) -> Duration {
+    scaled_by(d, 1.0 / tick_scale())
+}
+
+fn scaled_by(d: Duration, scale: f64) -> Duration {
+    if scale == 1.0 {
+        d
+    } else {
+        d.div_f64(scale)
+    }
+}
 
 const PERIOD: Duration = Duration::from_millis(51);
 /// Each tick fires up to this long after its slot; gaps then spread triangularly over ±JITTER.
@@ -28,11 +58,17 @@ pub(crate) struct Fire {
 pub(crate) struct Cadence {
     slot: Duration,
     rng: u64,
+    scale: f64,
 }
 
 impl Cadence {
+    #[cfg(test)]
     pub fn new(seed: u64) -> Self {
-        Self { slot: Duration::ZERO, rng: seed }
+        Self::with_scale(seed, 1.0)
+    }
+
+    pub fn with_scale(seed: u64, scale: f64) -> Self {
+        Self { slot: Duration::ZERO, rng: seed, scale }
     }
 
     /// The next firing after `now`. A caller late by more than [`SLACK`] slides the schedule
@@ -40,14 +76,16 @@ impl Cadence {
     /// sleepers up to 16 ms late) would stretch every period and run the client at 16 ticks a
     /// second (measured 2026-10-11).
     pub fn next(&mut self, now: Duration) -> Fire {
-        let due = self.slot + PERIOD;
-        self.slot = if now > due + SLACK { now } else { due };
+        let period = scaled_by(PERIOD, self.scale);
+        let due = self.slot + period;
+        self.slot = if now > due + scaled_by(SLACK, self.scale) { now } else { due };
         let mut ticks = 1;
         if self.random().is_multiple_of(BURST_ONE_IN) {
-            self.slot += PERIOD;
+            self.slot += period;
             ticks = 2;
         }
-        Fire { at: self.slot + Duration::from_millis(self.random() % (JITTER_MS + 1)), ticks }
+        let jitter = Duration::from_millis(self.random() % (JITTER_MS + 1));
+        Fire { at: self.slot + scaled_by(jitter, self.scale), ticks }
     }
 
     fn random(&mut self) -> u64 {
@@ -78,7 +116,7 @@ pub(crate) struct Ticker {
 
 impl Ticker {
     pub fn new() -> Self {
-        let mut cadence = Cadence::new(seed());
+        let mut cadence = Cadence::with_scale(seed(), tick_scale());
         let next = cadence.next(Duration::ZERO);
         Self { start: Instant::now(), cadence, next }
     }
@@ -93,7 +131,7 @@ impl Ticker {
 
     /// A frame hitch: the next firing comes `pause` later and carries two ticks, as vanilla's do.
     pub fn stall(&mut self, pause: Duration) {
-        self.next.at += pause;
+        self.next.at += scaled(pause);
         self.next.ticks = 2;
     }
 }
@@ -147,6 +185,17 @@ mod tests {
         }
         let mean = now.as_millis() as f64 / f64::from(ticks);
         assert!((50.5..52.5).contains(&mean), "mean {mean}");
+    }
+
+    #[test]
+    fn a_tick_scale_compresses_the_same_schedule() {
+        let (mut one, mut two) = (Cadence::new(9), Cadence::with_scale(9, 2.0));
+        let (mut a, mut b) = (Fire { at: Duration::ZERO, ticks: 0 }, Fire { at: Duration::ZERO, ticks: 0 });
+        for _ in 0..1_000 {
+            (a, b) = (one.next(a.at), two.next(b.at));
+            assert_eq!(a.ticks, b.ticks);
+            assert!(a.at.abs_diff(b.at * 2) <= Duration::from_micros(1), "{a:?} vs {b:?}");
+        }
     }
 
     #[test]

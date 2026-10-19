@@ -32,7 +32,7 @@ pub trait TaskBoard: Send + Sync {
 }
 
 enum Clock {
-    /// Milliseconds since creation.
+    /// Milliseconds since creation, in vanilla-tick time (`ACACIA_TICK_SCALE`).
     Wall(Instant),
     /// Set by the caller (simulations count ticks).
     Manual(AtomicU64),
@@ -77,7 +77,7 @@ impl LocalBoard {
 
     fn now(&self) -> u64 {
         match &self.clock {
-            Clock::Wall(t) => t.elapsed().as_millis() as u64,
+            Clock::Wall(t) => crate::cadence::unscaled(t.elapsed()).as_millis() as u64,
             Clock::Manual(t) => t.load(Ordering::Relaxed),
         }
     }

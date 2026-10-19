@@ -1,7 +1,8 @@
 //! Server-authoritative block breaking through `PlayerAuthInput` block actions (Geyser
 //! `BlockBreakHandler`, Boar `ServerBreakBlockValidator`): `StartBreak`, `ContinueBreak` every tick,
-//! then `ContinueBreak` + `PredictBreak` on the tick the vanilla break time runs out. Geyser counts
-//! one tick of progress for each of those three, so the prediction lands exactly at full progress.
+//! then `ContinueBreak` + `PredictBreak` + `AbortBreak` on the tick the vanilla break time runs out
+//! ([`wire::break_step`]). Geyser counts one tick of progress for each of Start, Continue and Predict,
+//! so the prediction lands exactly at full progress.
 
 use std::time::Instant;
 
@@ -60,10 +61,15 @@ impl Bot {
 
     /// Mines, then waits for the server's echo; re-mines while the server shows the block unchanged.
     async fn break_confirmed(&mut self, pos: BlockPos, face: Face, ticks: u32) -> Result<(), ActionError> {
+        let t = Instant::now();
         self.look_at(block_center(pos)).await?;
+        self.act_timing.add(crate::act_timing::Phase::Aim, t.elapsed());
         let mut confirm: Option<Confirm> = None;
         loop {
-            if self.mine(pos, face, ticks).await? {
+            let t = Instant::now();
+            let gone = self.mine(pos, face, ticks).await?;
+            self.act_timing.add(crate::act_timing::Phase::Mine, t.elapsed());
+            if gone {
                 return Ok(());
             }
             let sent_at = Instant::now();
@@ -95,23 +101,26 @@ impl Bot {
         }
     }
 
+    /// Ends a break that finished early (`AbortBreak` with the next tick; see [`wire::break_step`]).
+    pub(crate) fn end_break(&mut self, pos: BlockPos, face: Face) {
+        if let Some(m) = self.movement.as_mut() {
+            m.pending_actions.push(wire::block_action(Action::AbortBreak, pos, face));
+        }
+    }
+
     /// Sends the block actions for `ticks` ticks. `Ok(true)` if the block disappeared on its own
     /// before the prediction was due.
     async fn mine(&mut self, pos: BlockPos, face: Face, ticks: u32) -> Result<bool, ActionError> {
         for tick in 0..ticks {
-            let step = if tick == 0 { Action::StartBreak } else { Action::ContinueBreak };
-            let mut actions = vec![wire::block_action(step, pos, face)];
-            if tick + 1 == ticks {
-                actions.push(wire::block_action(Action::PredictBreak, pos, face));
-            }
             if let Some(m) = self.movement.as_mut() {
-                m.pending_actions.extend(actions);
+                m.pending_actions.extend(wire::break_step(tick, ticks, pos, face, false));
             }
             if tick % SWING_EVERY == 0 {
                 self.swing_from(Some(SwingSource::Mine));
             }
             self.next_tick(|_, _| false).await?;
             if tick + 1 < ticks && self.is_air(pos) {
+                self.end_break(pos, face);
                 return Ok(true);
             }
         }

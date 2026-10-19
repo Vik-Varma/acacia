@@ -31,7 +31,10 @@ pub(super) struct Swarm {
 impl Builder {
     /// Shares the job with other builders on `board`, under the name `who` (unique per bot).
     pub fn with_board(mut self, board: Arc<dyn TaskBoard>, who: impl Into<String>) -> Self {
-        let swarm = Swarm { board, who: who.into(), held: None, skip: HashMap::new(), beat: None, taken: HashSet::new(), others: Vec::new() };
+        let who = who.into();
+        // On the board from now (feet unknown: NaN crowds nobody), so others count this bot from their first restock.
+        board.heartbeat(&who, [f32::NAN; 3]);
+        let swarm = Swarm { board, who, held: None, skip: HashMap::new(), beat: None, taken: HashSet::new(), others: Vec::new() };
         self.swarm = Some(swarm);
         self
     }
@@ -126,6 +129,11 @@ impl Builder {
             s.board.release(&s.who);
             self.commit = None;
         }
+    }
+
+    /// Bots sharing the job (1 without a board).
+    pub(super) fn sharers(&self) -> u32 {
+        self.swarm.as_ref().map_or(1, |s| s.board.others(&s.who).len() as u32 + 1)
     }
 
     /// The board lets this bot open `station` now (always without a board).

@@ -112,16 +112,13 @@ impl Bot {
     pub(crate) fn tick_mining(&mut self) {
         let Some(mut m) = self.mining else { return };
         if self.block_at(m.pos).is_none_or(|(_, s)| s.is_air()) {
+            if m.done > 0 {
+                self.end_break(m.pos, m.face);
+            }
             self.mining = None;
             return;
         }
-        let step = if m.done == 0 { Action::StartBreak } else { Action::ContinueBreak };
-        let mut actions = vec![wire::block_action(step, m.pos, m.face)];
-        // Creative: StartBreak alone destroys at once (BDS `GameMode::startDestroyBlock`); a
-        // Predict there without a Continue before it would only roll the block back.
-        if m.done + 1 >= m.ticks && !m.creative {
-            actions.push(wire::block_action(Action::PredictBreak, m.pos, m.face));
-        }
+        let actions = wire::break_step(m.done, m.ticks, m.pos, m.face, m.creative);
         if let Some(movement) = self.movement.as_mut() {
             movement.pending_actions.extend(actions);
         }

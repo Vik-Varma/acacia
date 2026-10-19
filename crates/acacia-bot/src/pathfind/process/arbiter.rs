@@ -164,11 +164,16 @@ impl Arbiter {
 
     fn route_to(&mut self, id: ProcId, goal: Goal) -> Decision {
         let tick = self.tick;
+        if self.route.as_ref().is_some_and(|r| r.owner == id && r.goal == goal && r.arrived) {
+            // Told again, not held silently: a process asking anew may have forgotten (the builder after an act at
+            // the stand held there forever, live).
+            if self.with(id, |p| p.arrived()) == Some(true) {
+                self.finish(id, Ok(()));
+            }
+            return Decision::Hold;
+        }
         match &mut self.route {
             Some(r) if r.owner == id && r.goal == goal => {
-                if r.arrived {
-                    return Decision::Hold;
-                }
                 // Not driven last tick: the path no longer starts where the bot is.
                 if r.driven_at + 1 < tick {
                     r.pilot.interrupt();

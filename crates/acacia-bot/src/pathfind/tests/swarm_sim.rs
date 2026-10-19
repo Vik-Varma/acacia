@@ -106,6 +106,33 @@ fn two_bots_build_house16_in_well_under_one_bots_time() {
 }
 
 #[test]
+#[ignore = "slow in debug: cargo test --release -- --ignored dropped_after"]
+fn house16_finishes_when_a_bot_drops_after_restocking() {
+    // Live 2026-10-18: the kill run on share restock held forever after the drop.
+    let s = crate::build::tests::house16::house16();
+    let g = Grid::floor(-20, 40);
+    let station = [-2, 1, -2];
+    g.set_state(station, "barrel", "");
+    let mut w = World::new(&g, &[]);
+    w.stations.insert(station, house16_items().into_iter().map(|(i, n)| (format!("minecraft:{i}"), n * 2)).collect());
+    let board = Arc::new(LocalBoard::manual(LEASE));
+    let mut bots: Vec<SimBot> = [("a", [0.5, 1.0, 0.5]), ("b", [2.5, 1.0, 0.5])]
+        .into_iter()
+        .map(|(who, start)| {
+            let (b, st) = builder(&s, ORIGIN, &[station]);
+            bot(b, st, &board, who, start, &[("dirt", 64)])
+        })
+        .collect();
+    bots[1].stop_at = Some(600);
+    let ticks = run_many(&mut w, &mut bots, &board, 30_000);
+    let (a, b) = (bots[0].status.lock().unwrap().clone(), bots[1].status.lock().unwrap().clone());
+    eprintln!("{ticks} ticks: a {a:?}\nb {b:?}");
+    assert!(b.restocks > 0 && b.placed > 0, "b restocked and built before it dropped");
+    assert_eq!(bots[0].arb.outcome(bots[0].id), Some(&Ok(())), "a {a:?}");
+    assert_eq!(wrong(&g, &s), Vec::new());
+}
+
+#[test]
 fn a_dropped_bots_region_returns_to_the_pool() {
     let g = Grid::floor(-20, 30);
     let s = plank_floor(10);
@@ -129,13 +156,14 @@ fn a_dropped_bots_region_returns_to_the_pool() {
 }
 
 #[test]
-fn bots_restock_only_their_regions_need() {
+fn bots_restock_only_their_share_of_the_need() {
     let g = Grid::floor(-20, 30);
     let station = [0, 1, 0];
     g.set_state(station, "barrel", "");
     let s = plank_floor(16);
     let mut w = World::new(&g, &[]);
-    // Exactly the floor (four stacks, a stack per region): a bot taking for the whole job would leave the other none.
+    // Exactly the floor (four stacks): a bot taking for the whole job would leave the other none. The first bot
+    // reaches the barrel on its first tick, before the other has ticked: a share must count it all the same.
     w.stations.insert(station, [("minecraft:oak_planks".to_string(), 256)].into());
     let board = Arc::new(LocalBoard::manual(LEASE));
     let mut bots: Vec<SimBot> = [("a", [1.5, 1.0, 0.5]), ("b", [0.5, 1.0, 1.5])]

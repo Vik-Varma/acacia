@@ -5,6 +5,7 @@ use acacia_physics::{BlockPos, Vec3};
 use super::arbiter::{Arbiter, Decision};
 use super::act;
 use super::{BlockView, Look, ProcId, Process, Target};
+use crate::act_timing::Phase;
 use crate::pathfind::goto::step;
 use crate::pathfind::{NavStatus, Pilot};
 use crate::{ActionError, Bot};
@@ -78,7 +79,10 @@ impl Processes {
             return Ok(Status::Idle);
         };
         let (pos, on_ground) = (live.pos, movement.on_ground());
+        let t = std::time::Instant::now();
         let decision = self.arbiter.decide(pos, on_ground, &BotLook(bot));
+        bot.act_timing.add(Phase::Plan, t.elapsed());
+        let acting = matches!(decision, Decision::Act(..));
         if matches!(decision, Decision::Hold | Decision::Idle | Decision::Empty) {
             bot.stop_pathing();
         }
@@ -99,7 +103,9 @@ impl Processes {
             }
             Decision::Act(id, act) => {
                 bot.stop_pathing();
+                let t = std::time::Instant::now();
                 let result = act::perform(bot, &act).await;
+                bot.act_timing.add(Phase::Act, t.elapsed());
                 if result == Err(ActionError::Disconnected) {
                     return Err(ActionError::Disconnected);
                 }
@@ -114,7 +120,11 @@ impl Processes {
             bot.stop_pathing();
             return Ok(Status::Empty);
         }
+        let t = std::time::Instant::now();
         bot.next_tick(|_, _| false).await?;
+        if acting {
+            bot.act_timing.add(Phase::PostTick, t.elapsed());
+        }
         Ok(status)
     }
 }

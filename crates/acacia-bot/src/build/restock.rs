@@ -1,5 +1,6 @@
-//! Restocking by remaining need: everything the open placements (of the held region, when sharing) still need,
-//! minus what the inventory holds, from the nearest station not yet found without it.
+//! Restocking by remaining need: everything the open placements still need (sharing a job: this bot's share,
+//! the need over the bots on the board), minus what the inventory holds, from the nearest station not yet found
+//! without it. A share, not the held tile's need: per small tile each bot walked back after nearly every tile.
 
 use std::collections::BTreeMap;
 
@@ -17,14 +18,14 @@ pub(super) fn shortfall(b: &Builder, cx: &Ctx, needs: &[Need]) -> Vec<(String, u
     let mut want: BTreeMap<String, u32> = BTreeMap::new();
     for (c, n) in b.cells.iter().zip(needs) {
         if *n == Need::Place
-            && b.mine(c.pos)
             && !b.given_up(c.pos)
             && let Some(item) = rules::item(&c.target)
         {
             *want.entry(item).or_default() += rules::items_per_cell(&c.target);
         }
     }
-    let mut out: Vec<(String, u32)> = want.into_iter().filter_map(|(item, n)| n.checked_sub(cx.look.count(&item)).filter(|d| *d > 0).map(|d| (item, d))).collect();
+    let share = b.sharers();
+    let mut out: Vec<(String, u32)> = want.into_iter().filter_map(|(item, n)| n.div_ceil(share).checked_sub(cx.look.count(&item)).filter(|d| *d > 0).map(|d| (item, d))).collect();
     out.sort_by(|a, b| b.1.cmp(&a.1));
     out
 }

@@ -30,8 +30,8 @@ pub struct BuildStatus {
     pub kept: usize,
     /// Targets outside the builder's block set, skipped.
     pub unsupported: Vec<(BlockPos, String)>,
-    /// Cells given up on after repeated failures.
-    pub failed: Vec<BlockPos>,
+    /// Cells given up on after repeated failures, with why ("acts failed", "placed wrong", "no stand").
+    pub failed: Vec<(BlockPos, &'static str)>,
     /// Temporary blocks still standing.
     pub scaffold: usize,
     /// Seals left in place outside the footprint, holding liquids back.

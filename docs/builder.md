@@ -62,7 +62,10 @@ half of the side faces; panes, fences, walls, torches and other partial blocks a
    for the pilot stopping off-centre. Stands are keyed as the pathfinder keys standing spots: on a bottom slab
    the spot is the slab's own cell, feet 0.5 up (a cell above a bottom slab is no spot, and goals there were
    unreachable). Stands may be over air: the pilot pillars up (`allow_bridge`), never through cells the
-   structure still has to fill, and the blocks it places arrive as `Event::Placed` and count as scaffold.
+   structure still has to fill, and the blocks it places arrive as `Event::Placed` and count as scaffold. A
+   stand's feet and head stay out of cells the structure still fills (live: the bot stood in the unbuilt top of a
+   ladder column and reached nothing from there). Stands are driven to with a 0.1 arrival tolerance: at the
+   default 0.25 the body overlaps the cell next to the stand and the click is never allowed.
    Gravity blocks wait for their support; a cell with nothing clickable around it gets a scaffold column up to it.
 4. Restock when the next placement's item is missing (`build/restock.rs`): everything the open placements still
    need minus the inventory, from the nearest station not yet found without it. A station that brought no more of
@@ -71,9 +74,10 @@ half of the side faces; panes, fences, walls, torches and other partial blocks a
 6. Done once every cell is right and no scaffold stands; the outcome is an error if cells were given up.
 
 Failures: an act failing 4 times, a cell placed wrong more than 3 times, or 45 rests with nowhere to do it from
-gives the cell up (`status.failed`). A cell given up only for want of a stand is tried again (up to 3 times)
-once nothing else can be done: the build around it changes what reaches it (live, a floor cell's stands came
-back once the pillars beside it were gone). A cell with no stand rests 40 ticks so others go first. The committed task
+gives the cell up (`status.failed`, with the reason). A cell given up only for want of a stand is tried again
+(up to 3 times) once nothing else can be done: the build around it changes what reaches it. A cell with no stand
+rests 40 ticks so others go first. A drive the pilot gives up on (no route, a refused pillar) is not the cell's
+failure: the stands it drove to are left out for 400 ticks and the task rests. The committed task
 comes first in every rank and keeps its goal while open: re-picking the nearest each tick switched goals as the
 bot moved, and every switch restarts the pilot (live: always moving, never arriving). A goal just reached that
 still allows no click rests its task instead of being asked for again (the arbiter would hold still). In the air
@@ -86,42 +90,63 @@ stands and the stands it could use: the first thing to read when a build stalls 
 
 - Sim (`pathfind/tests/build_tests.rs`, own BDS placement model in `build_sim.rs`): mixed 5×3×5 house with
   mismatches, restock by need, resume, support column cleanup, liquid seal; house16 (`--ignored`, release)
-  block-exact in 1953 ticks.
+  block-exact in 2231 ticks.
 - Live, strict BDS 1.26.52.3, fresh world, test pack off (`examples/build.rs`, 2026-10-17): house16 from two
   barrels, junk in the footprint, the bot disconnected after 150 placements and a fresh one resumed from the
   saved job. Observer diff 0 cells; 588 placed, 29 broken, 4 restocks, 32 corrections, 2357 ticks (512 s).
 - An offline bot that reconnects to BDS comes back with an empty inventory (position kept): what the killed bot
   carried is lost, so the live stations hold the house twice over.
 - Swarm sim (`pathfind/tests/swarm_sim.rs`, bots ticked in turn on one grid, each with its own inventory):
-  house16 by two bots in 1047 ticks against one bot's 1953 (0.54×), block-exact, no scaffold left; a bot stopped
+  house16 by two bots in 976 ticks against one bot's 2231 (0.44×), block-exact, no scaffold left; a bot stopped
   at tick 80 has its tile taken over after the lease and the other finishes; two bots restocking a 16×16 floor
   from a barrel holding exactly the floor both build, neither holding more than two stacks. Board rules:
   `build/tests/board.rs`.
-- Live one-bot runs without a restart (`examples/swarm_build.rs` with `BOTS=1`, 2026-10-17) did not finish on
-  three fresh worlds: a floor cell in the junk corner ([2, 0, 2] of the structure) was given up each time
-  (placed-wrong or no-stand counts; not yet logged which), and once the pilot's pillar under the back wall was
-  refused four times (C3's loop bail) and the wall cells it served were given up. The B1 pass above is the only
-  live finish so far.
+- The B1 pass above needed its restart: without one, house16 failed on the last junk cell broken before the
+  placing ([2, 0, 2], "placed wrong"), also at B1's commit. BDS kept destroying that cell (planks gone every
+  3.3 s, their break time without an axe) because breaks never ended; every break now ends with `AbortBreak`
+  (`interact::wire::break_step`; `StopBreak` does not end it: junk scene, Stop failed, Abort passed).
+- Live scenes (`examples/build.rs` `SCENE=`, seconds each, regression checks; fresh world, stock 20 TPS):
+  `wall` (wall with log ends and slab rim) PASS 46 s; `junk` (floor under a furnace where junk stood) PASS 43 s
+  with Abort; `ladder` (wall over a floor with a ladder column) PASS 75 s (843 ticks before the 0.1 stand
+  tolerance, 2079 with the stand rule alone; 230 after), also at 2× TPS (`ACACIA_TICK_SCALE=2`).
+- Live house16 one bot, no restart (`examples/swarm_build.rs BOTS=1`): PASS, 454 s, observer diff 0.
+- Live house16 two bots (tile 4): PASS each time, 266/298/296/275 s against one bot's 454 s (0.59-0.66, mean
+  0.63): the 0.6 bar is not met. Kill run (B dropped after 150 placements, never back): PASS 394 s, diff 0.
+- Where a placement's time goes (`act_timing`, printed by the examples; one bot, house16, 470 s): acts 323 s,
+  of them equip with a hotbar switch 198 s (235 switches, mean 842 ms: the human equip pause), echo wait 79 s
+  (mean 120 ms), the tick after each act 31 s, aim 28 s, mining 24 s; planning CPU 3 s.
 
 ## Swarm (B2: `build/board.rs`, `build/swarm.rs`)
 
 Several builders share one job through a `TaskBoard` (`Builder::with_board(board, name)`; without one a builder
 is exactly B1). `LocalBoard` serves bots in one process; a networked board can implement the same trait.
 
-- Regions: square tiles of the footprint (`BuildJob::tile`, default 8; cells outside the footprint, such as
+- Regions: square tiles of the footprint (`BuildJob::tile`, default 4; cells outside the footprint, such as
   scaffold, belong to the nearest tile). A bot claims the nearest tile with open work (a cell to place, break,
-  drain or visit, or scaffold to remove) that no other bot holds, and acts only inside it.
-- Leases: a bot heartbeats every 20 ticks with its feet; a lease lapses after the board's lease time without one
-  (live: 10 s), and the tile goes back to the pool. The board stores no progress: whoever claims a tile next
-  surveys it, so a dropped bot's half-done tile needs nothing special.
+  drain or visit, or scaffold to remove) that no other bot holds, and acts only inside it. With 8 (four tiles
+  on house16) one bot idled through the tail while the other finished its tile: 361 s against 266-298 s with 4;
+  2 was worse again (295-309 s). Tiles are a stopgap: see "Open".
+- Leases: a builder joins the board when given it and heartbeats every 20 ticks with its feet; a lease lapses
+  after the board's lease time without one (live: 10 s; vanilla-tick time under `ACACIA_TICK_SCALE`), and the
+  tile goes back to the pool. The board stores no progress: whoever claims a tile next surveys it, so a dropped
+  bot's half-done tile needs nothing special.
 - Support across borders: placements still need a solid neighbour in the world, so a cell whose support is in an
   unbuilt neighbouring tile simply isn't doable yet. A tile with nothing doable is given back and skipped for 60
   ticks, and the bot claims another; a bot finishes only when the whole job is done and no scaffold stands.
-- Stations: a bot restocks only its tile's remaining need (two bots taking the whole job's need would each empty
-  the barrel), and one bot at a time opens a station (`open_station`, held under the same lease).
+- Stations: a bot restocks its share of the job's remaining need (the need over the bots on the board: two bots
+  each taking the whole need would empty the barrel, and per small tile they walked back after nearly every
+  tile), and one bot at a time opens a station (`open_station`, held under the same lease).
 - Room: stands within 1.5 blocks of another bot are not used, no block goes into another bot's body, and pillars
   stay out of tiles other bots hold. Scaffold is shared through the board, so whoever holds its tile removes it.
-  The pilot itself does not see other bots.
+  The pilot itself does not see other bots: its terrain memo, rollout cache and sim-verified macro moves are
+  keyed on blocks only, so moving obstacles there is not a small change.
+
+## Open (2026-10-19)
+
+The two-bot ratio. Next, in order: group placements by item and skip the equip pause under the Optimal
+profile; pipeline placements (predict, send without awaiting each echo, governor in-flight cap); aim and click in
+one tick without the post-act tick; stands chosen for several cells; then a dependency-graph ready-set scheduler
+with soft regions instead of tiles (`research/build-scheduling-robotics.md`, `research/build-scheduling-game-bots.md`).
 
 ## Not in B1/B2
 

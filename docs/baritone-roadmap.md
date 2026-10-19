@@ -20,7 +20,7 @@ Movement milestone detail: `pathfind-plan.md`.
 | C2 | Process layer (priority, pre-empt, pause/resume) with Goto, Follow, Backfill (`process-layer.md`, done 2026-10-17) | Follow pre-empts and resumes Goto; Backfill restores every dug cell |
 | C3 | Server-confirmed actions: place/break as tasks done only on the server's echo, timeout + retry, pause on correction; one lag/rate governor every module asks (`confirmed-actions.md`, done 2026-10-17) | dig/bridge courses with injected lag: 0 ghost blocks, 0 loops |
 | B1 | Schematic builder: `.mcstructure` load, layer/support ordering, scaffold + cleanup, liquid sealing, registered stations, restock by remaining need (shulker/ender chest), resumable job (`builder.md`, done 2026-10-17) | 16×16×8 mixed-block build block-exact on strict BDS, survives a restart mid-build |
-| B2 | Swarm build: task board, claims, expiring leases, dropped bot's work returns to pool (`builder.md` "Swarm"; sim done, live open) | 2 bots ≤ 0.6× 1-bot time; killing one mid-build still completes |
+| B2 | Swarm build: task board, claims, expiring leases, dropped bot's work returns to pool (`builder.md` "Swarm"; kill bar met, ratio open (0.59-0.66) → scheduler rework, `builder.md` "Open") | 2 bots ≤ 0.6× 1-bot time; killing one mid-build still completes |
 | B3 | Presets: map art (staircased, colour-need restock), highway (dig + pave + repair) | 128×128 map art block-exact; 200-block highway segment |
 | R1 | Persistent swarm chunk cache; path through cached chunks; block scan + ore index | 2,000-block goto into unloaded terrain; cache survives restart |
 | R2 | Seed-aware routing via sapling-worldgen's exact BDS port | goto through never-loaded chunks matches real terrain |

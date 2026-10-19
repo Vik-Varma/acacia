@@ -5,6 +5,9 @@
 
 use std::time::Duration;
 
+use crate::cadence::{scaled, unscaled};
+
+/// These wall durations are all per-tick quantities: read them through [`scaled`] (see `cadence`).
 const TICK: Duration = Duration::from_millis(50);
 /// Before any echo was measured.
 const DEFAULT_RTT: Duration = Duration::from_millis(150);
@@ -84,21 +87,21 @@ impl Governor {
     }
 
     pub fn lagging(&self) -> bool {
-        self.rtt().is_some_and(|r| r > LAGGING)
+        self.rtt().is_some_and(|r| r > scaled(LAGGING))
     }
 
     /// How long to wait for an action's echo before re-reading the cell.
     pub fn timeout(&self) -> Duration {
         let wait = match self.srtt {
-            None => DEFAULT_RTT * 4,
-            Some(s) => Duration::from_secs_f32(s + 4.0 * self.rttvar) + 2 * TICK,
+            None => scaled(DEFAULT_RTT * 4),
+            Some(s) => Duration::from_secs_f32(s + 4.0 * self.rttvar) + 2 * scaled(TICK),
         };
-        wait.clamp(MIN_TIMEOUT, MAX_TIMEOUT)
+        wait.clamp(scaled(MIN_TIMEOUT), scaled(MAX_TIMEOUT))
     }
 
     /// [`Governor::timeout`] in client ticks.
     pub fn timeout_ticks(&self) -> u64 {
-        self.timeout().as_millis().div_ceil(TICK.as_millis()) as u64
+        unscaled(self.timeout()).as_millis().div_ceil(TICK.as_millis()) as u64
     }
 
     /// The server set the bot back within the last [`SETTLE_TICKS`].

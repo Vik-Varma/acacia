@@ -30,7 +30,7 @@ async fn main() -> Result<(), Error> {
     let observer = args.next().unwrap_or_else(|| "BuildObs".into());
     let (bots, kill_at): (u32, u32) = (env("BOTS", 2), env("KILL_AT", 0));
     let (mut a, pad) = support::connect(&server, &na).await?;
-    let job = house::setup(&mut a, &pad).await?;
+    let job = house::setup(&mut a, &pad, &env("SCENE", "house16".to_string())).await?;
     house::kit(&mut a, &pad).await?;
     pad.teleport(&mut a, [0.5, 0.0, 0.5], 180.0).await?;
     let started = Instant::now();
