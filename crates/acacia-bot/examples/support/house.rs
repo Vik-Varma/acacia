@@ -25,7 +25,8 @@ const STOCK: [&[(&str, u32)]; 2] = [
 
 /// The structure for `scene` and junk to clear (pad offsets): `house16`; `wall`, house16's wall with its log
 /// ends and slab rim; `ladder`, the same wall over a floor with house16's ladder column inside (live 2026-10-18:
-/// the bot climbed the half-built ladder and stranded in its top cell, every stand below unreachable); `junk`, a plank floor under a
+/// the bot climbed the half-built ladder and stranded in its top cell, every stand below unreachable); `logrow`, a
+/// floor strip with house16's x-axis log row between cobblestone ends; `junk`, a plank floor under a
 /// furnace where junk dirt stood (the cell BDS kept mining out).
 fn scene(name: &str) -> Result<(PathBuf, Vec<Fill<'static>>), Error> {
     let at = |p: [i32; 3]| [AT[0] + p[0], AT[1] + p[1], AT[2] + p[2]];
@@ -63,6 +64,22 @@ fn scene(name: &str) -> Result<(PathBuf, Vec<Fill<'static>>), Error> {
                 }
             }
             (1..5).for_each(|y| put(&mut s, [4, y, 1], "ladder", "facing_direction=3"));
+            (s, vec![])
+        }
+        "logrow" => {
+            // house16's floor at its x-axis log row: cobblestone ends, logs between, planks either side (live
+            // 2026-10-19: the log beside the cobblestone end ended air).
+            let mut s = Structure::new([8, 1, 3]);
+            for x in 0..8 {
+                for z in 0..3 {
+                    let (n, p) = match () {
+                        _ if x == 0 || x == 7 => ("cobblestone", ""),
+                        _ if z == 1 => ("oak_log", "pillar_axis=x"),
+                        _ => ("oak_planks", ""),
+                    };
+                    put(&mut s, [x, 0, z], n, p);
+                }
+            }
             (s, vec![])
         }
         "junk" => {
