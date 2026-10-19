@@ -23,6 +23,9 @@ pub(crate) const USE_RELEASE: Range = (60, 250);
 pub(crate) const HUNGER_NOTICE: Range = (800, 3000);
 /// Between selecting a hotbar slot and pressing use (capture: 0.6, 1.05, 2.6 s), and before switching back after eating.
 pub(crate) const HOTBAR_SWITCH: Range = (500, 1100);
+/// A number key or scroll to another hotbar slot while building, before the next click: 1-4 ticks
+/// (placeholder, no capture yet; the container CLICK range was used before and made switches 0.8 s).
+pub(crate) const HOTBAR_KEY: Range = (50, 200);
 /// Typing on a sign or book page: per character after a TYPE_BASE, capped.
 pub(crate) const TYPE_PER_CHAR_MS: u64 = 180;
 pub(crate) const TYPE_MAX_MS: u64 = 40_000;

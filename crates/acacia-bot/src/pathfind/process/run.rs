@@ -7,7 +7,7 @@ use super::act;
 use super::{BlockView, Look, ProcId, Process, Target};
 use crate::act_timing::Phase;
 use crate::pathfind::goto::step;
-use crate::pathfind::{NavStatus, Pilot};
+use crate::pathfind::{MovementProfile, NavStatus, Pilot};
 use crate::{ActionError, Bot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,7 +104,8 @@ impl Processes {
             Decision::Act(id, act) => {
                 bot.stop_pathing();
                 let t = std::time::Instant::now();
-                let result = act::perform(bot, &act).await;
+                let human = self.arbiter.get(id).is_some_and(|p| p.opts().search.profile == MovementProfile::Human);
+                let result = act::perform(bot, &act, human).await;
                 bot.act_timing.add(Phase::Act, t.elapsed());
                 if result == Err(ActionError::Disconnected) {
                     return Err(ActionError::Disconnected);
@@ -167,5 +168,9 @@ impl Look for BotLook<'_> {
 
     fn free_slots(&self) -> u32 {
         self.0.state.inventory.main.iter().filter(|s| s.is_empty()).count() as u32
+    }
+
+    fn held(&self) -> Option<&str> {
+        self.0.state.items.name(self.0.state.inventory.held().network_id)
     }
 }

@@ -165,7 +165,9 @@ impl Bot {
                 if verdict == Verdict::Retry {
                     self.act_timing.retry();
                 }
-                tracing::debug!(?pos, ?verdict, tries = c.tries(), "action confirmation");
+                let held = self.state.items.name(self.state.inventory.held().network_id).unwrap_or("-");
+                let cell = self.block_at(pos).map_or("unloaded", |(_, s)| s.name);
+                tracing::debug!(?pos, ?verdict, tries = c.tries(), echoed, ms = t.elapsed().as_millis() as u64, held, cell, "action confirmation");
                 return Ok(verdict);
             }
         }

@@ -106,6 +106,10 @@ pub trait Look {
     fn free_slots(&self) -> u32 {
         0
     }
+    /// The held item's identifier.
+    fn held(&self) -> Option<&str> {
+        None
+    }
 }
 
 pub struct Ctx<'a> {

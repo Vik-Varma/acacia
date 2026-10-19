@@ -7,7 +7,7 @@ use super::confirm::{unpredict, Confirm, Expect, Verdict};
 use super::geometry::{block_distance, block_min, face_point, facing_face, BLOCK_REACH};
 use super::legacy::{self, SlotChange};
 use super::wire::{self, SwingSource};
-use super::Face;
+use super::{is_interactive, Face};
 use crate::human::STOP_USE_ON;
 use crate::reflex::Reflex;
 use crate::state::ItemStack;
@@ -100,6 +100,10 @@ impl Bot {
         }
         if self.block_at(against).is_some_and(|(_, s)| s.is_air()) {
             return Err(ActionError::NotPossible(format!("nothing to place against at {against:?}")));
+        }
+        let sneaking = self.movement.as_ref().is_some_and(|m| m.controls.sneak);
+        if !sneaking && self.block_at(against).is_some_and(|(_, s)| is_interactive(s)) {
+            return Err(ActionError::NotPossible(format!("clicking {against:?} would use it, not place against it")));
         }
         let distance = block_distance(self.eye_position(), against);
         if distance > BLOCK_REACH {

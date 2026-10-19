@@ -161,6 +161,9 @@ fn footing(look: &dyn Look, cell: BlockPos) -> Option<Stand> {
         match () {
             _ if b.liquid => return None,
             _ if bottom_slab(&b) => return None,
+            // A pillar's first block is clicked onto this one: a click on a container opens it instead (live:
+            // dirt onto a station barrel refused 3 times over).
+            _ if n > 0 && b.interactive => return None,
             _ if b.solid() && (b.full || b.name.ends_with("_slab")) => return Some(Stand { feet: cell, lift: 0.0, pillar: n }),
             _ if b.solid() => return None,
             _ => {}

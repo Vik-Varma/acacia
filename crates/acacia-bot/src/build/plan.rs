@@ -174,6 +174,8 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
         }
         ready.push((i, item));
     }
+    // The held item first: every switch costs an equip (live: 235 switches, a third of a build's time).
+    ready.sort_by_key(|(_, item)| Some(item.as_str()) != cx.look.held());
     // Whatever can be clicked from here first (still lowest first), then walk for the lowest.
     for (i, item) in &ready {
         let (pos, target) = (b.cells[*i].pos, &b.cells[*i].target);

@@ -115,6 +115,9 @@ stands and the stands it could use: the first thing to read when a build stalls 
 - Where a placement's time goes (`act_timing`, printed by the examples; one bot, house16, 470 s): acts 323 s,
   of them equip with a hotbar switch 198 s (235 switches, mean 842 ms: the human equip pause), echo wait 79 s
   (mean 120 ms), the tick after each act 31 s, aim 28 s, mining 24 s; planning CPU 3 s.
+- Switches without the container-click pause (Human: a 50-200 ms key press; Optimal: none), held item ranked
+  first, no clicks onto interactive blocks: one bot 271 s (-42%), switch time 2.9 s (191 switches), retries 3
+  (were 42: a pillar started on a station barrel, whose click opens it). Ladder scene 55 s (was 74).
 
 ## Swarm (B2: `build/board.rs`, `build/swarm.rs`)
 

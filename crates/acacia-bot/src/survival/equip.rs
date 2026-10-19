@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::human::{CLICK, HOTBAR_SWITCH};
+use crate::human::{CLICK, HOTBAR_KEY, HOTBAR_SWITCH};
 use crate::items::SlotRef;
 use crate::state::{Inventory, ItemStack};
 use crate::{ActionError, Bot};
@@ -139,19 +139,27 @@ impl Bot {
     }
 
     async fn equip_hand(&mut self, from: SlotRef, stack: &ItemStack) -> Result<(), ActionError> {
+        self.equip_hand_paced(from, stack, true).await
+    }
+
+    /// Brings `from` to the hand; `human`: pause as a player does first (a key press for a hotbar slot, a
+    /// screen click for one moved up from the inventory), none when false (the Optimal profile).
+    pub(crate) async fn equip_hand_paced(&mut self, from: SlotRef, stack: &ItemStack, human: bool) -> Result<(), ActionError> {
         if from == SlotRef::Main(self.state.inventory.selected_hotbar_slot) {
             return Ok(());
         }
-        let target = match from {
-            SlotRef::Main(i) if i < Inventory::HOTBAR_SLOTS => i,
+        let (target, range) = match from {
+            SlotRef::Main(i) if i < Inventory::HOTBAR_SLOTS => (i, HOTBAR_KEY),
             _ => {
                 let target = hotbar_target(&self.state.inventory);
                 self.wear(from, stack, SlotRef::Main(target), whole(stack)).await?;
-                target
+                (target, CLICK)
             }
         };
-        let pause = self.human.between(CLICK);
-        self.pause(pause).await?;
+        if human {
+            let pause = self.human.between(range);
+            self.pause(pause).await?;
+        }
         // Also resent when the selection is unchanged: the held item changed, and Boar checks uses
         // against the item from the last MobEquipment.
         self.select_hotbar(target)
