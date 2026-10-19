@@ -69,6 +69,9 @@ for every tick our position is off by more than 0.0001, so each correction is a 
   round each joining player 40 ticks after the spawn: blocks and a water pool in the way, mobs, a hunger effect.
   It lands about when a goto plans, so a run's start depends on that race; it hid a stuck-start bug for a day
   (docs/pathfind-plan.md, "Core fixes").
+- Testbox jobs (`tools/remote-run.sh`, `tools/remote-test.sh`, `DETACH=1` to return at once) run under
+  `tools/testbox-guard.sh`: killed with their process group on `TIMEOUT` or `STALL` seconds without output
+  (done file 124 / 125); `tools/testbox-watch.sh` prints a line per job that finishes.
 - `tools/physics/drill.sh <names>` runs scripted drills (`crates/acacia-bot/examples/drills.rs`), exact control
   sequences that isolate one variable.
 - `cargo run -p acacia-bot --example flight -- <server> <name> [rounds]` drills creative flight (crates/acacia-physics

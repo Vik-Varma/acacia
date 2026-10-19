@@ -17,7 +17,8 @@ tar czf - -C "$root" --exclude=target --exclude=.testserver --exclude=.tokens --
 [ "${1:-}" = cargo ] && set -- cargo +stable "${@:2}"
 printf 'export PATH=$HOME/.cargo/bin:$PATH\n%s\n' "$(printf '%q ' "$@")" \
   | retry ssh $opts testbox "cat > $remote/run.sh" || exit 1
-retry ssh $opts testbox "cd $remote || exit; rm -f run.log run.done; { nohup sh -c 'sh run.sh >run.log 2>&1; echo \$? >run.done' </dev/null >/dev/null 2>&1 & }" || exit 1
+# TIMEOUT (default 1200 s) and STALL (default 300 s without output) kill a hung run: see testbox-guard.sh.
+retry ssh $opts testbox "cd $remote || exit; rm -f run.log run.done; { nohup sh tools/testbox-guard.sh run.sh run.log run.done ${TIMEOUT:-1200} ${STALL:-300} </dev/null >/dev/null 2>&1 & }" || exit 1
 # DETACH=1: leave it running; check $remote/run.done later (local polls get reaped on low-memory machines).
 [ -n "${DETACH:-}" ] && { echo "launched in $remote"; exit 0; }
 # Poll with short calls; a single long ssh would die with the link.

@@ -14,7 +14,9 @@ retry ssh $opts testbox "mkdir -p $remote && find $remote -mindepth 1 -maxdepth 
 tar czf - -C "$root" --exclude=target --exclude=.testserver --exclude=.tokens --exclude=.git . \
   | retry ssh $opts testbox "tar xzf - -C $remote" || exit 1
 args=$(printf '%q ' "$@")
-retry ssh $opts testbox "cd $remote || exit; rm -f test.log test.done; { nohup sh -c '~/.cargo/bin/cargo +stable test $args >test.log 2>&1; echo \$? >test.done' </dev/null >/dev/null 2>&1 & }" || exit 1
+printf '%s\n' "~/.cargo/bin/cargo +stable test $args" | retry ssh $opts testbox "cat > $remote/test.sh" || exit 1
+# TIMEOUT (default 1800 s) and STALL (default 600 s without output) kill a hung run: see testbox-guard.sh.
+retry ssh $opts testbox "cd $remote || exit; rm -f test.log test.done; { nohup sh tools/testbox-guard.sh test.sh test.log test.done ${TIMEOUT:-1800} ${STALL:-600} </dev/null >/dev/null 2>&1 & }" || exit 1
 # DETACH=1: leave it running; check $remote/test.done later (local polls get reaped on low-memory machines).
 [ -n "${DETACH:-}" ] && { echo "launched in $remote"; exit 0; }
 # Poll with short calls; a single long ssh would die with the link.
