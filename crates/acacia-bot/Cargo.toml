@@ -17,7 +17,7 @@ socks = ["acacia-client/socks"]
 [dependencies]
 acacia-client.workspace = true
 acacia-molang.workspace = true
-acacia-physics.workspace = true
+acacia-physics = { workspace = true, features = ["acacia-world"] }
 acacia-world.workspace = true
 async-trait = "0.1"
 bytes = "1.12.1"
