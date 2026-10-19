@@ -1,0 +1,21 @@
+name: Feature request
+description: Something a vanilla client can do that acacia can't yet, or an API you need
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What you want
+      description: What it is for, and what you would write with it.
+    validations:
+      required: true
+  - type: textarea
+    id: vanilla
+    attributes:
+      label: How the vanilla client does it
+      description: The packets or behaviour involved, if you know them. A capture helps.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do now
+      description: Workarounds you use, or other libraries that have it.
