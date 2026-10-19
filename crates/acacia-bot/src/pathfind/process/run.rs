@@ -113,15 +113,17 @@ impl Processes {
                 let t = std::time::Instant::now();
                 let human = self.arbiter.get(id).is_some_and(|p| p.opts().search.profile == MovementProfile::Human);
                 // Optimal: placements go out without awaiting their echo; their outcome comes on a later tick.
-                let result = match &act {
-                    super::Act::Place { .. } if !human => match act::send_place(bot, &act).await {
+                let paced = pacing(&act, human, &bot.governor);
+                let result = match paced {
+                    Pacing::Hold => None,
+                    Pacing::Send => match act::send_place(bot, &act).await {
                         Ok(target) => {
                             self.sent.insert(target, (id, act.clone()));
                             None
                         }
                         Err(e) => Some(Err(e)),
                     },
-                    _ => Some(act::perform(bot, &act, human).await),
+                    Pacing::Await => Some(act::perform(bot, &act, human).await),
                 };
                 bot.act_timing.add(Phase::Act, t.elapsed());
                 if let Some(result) = result {
@@ -130,7 +132,7 @@ impl Processes {
                     }
                     self.arbiter.acted(id, &act, &result);
                 }
-                Status::Acted
+                if paced == Pacing::Hold { Status::Holding } else { Status::Acted }
             }
             Decision::Hold => Status::Holding,
             Decision::Idle => Status::Idle,
@@ -147,6 +149,43 @@ impl Processes {
         }
         Ok(status)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Pacing {
+    /// Send without awaiting the echo.
+    Send,
+    /// Not this tick: the in-flight cap is full. Never wait for it inside the tick: in-flight placements are
+    /// decided only at the start of a tick, so that wait never ends (live: the bot went silent, twice).
+    Hold,
+    /// Perform and await (Human, and everything but placements).
+    Await,
+}
+
+pub(crate) fn pacing(act: &super::Act, human: bool, governor: &crate::governor::Governor) -> Pacing {
+    match act {
+        super::Act::Place { .. } if !human && !governor.may_send() => Pacing::Hold,
+        super::Act::Place { .. } if !human => Pacing::Send,
+        _ => Pacing::Await,
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn a_full_in_flight_cap_holds_instead_of_waiting_inside_the_tick() {
+    use crate::governor::{Governor, Limits};
+    let place = super::Act::Place { item: "minecraft:dirt".into(), against: [0, 0, 0], face: crate::interact::Face::Up, click: [0.5, 1.0, 0.5] };
+    let mut g = Governor::default();
+    for _ in 0..Limits::DEFAULT_IN_FLIGHT {
+        assert_eq!(pacing(&place, false, &g), Pacing::Send);
+        g.sent(false);
+        g.tick(None);
+    }
+    assert_eq!(pacing(&place, false, &g), Pacing::Hold, "cap full");
+    assert_eq!(pacing(&place, true, &g), Pacing::Await, "Human awaits each placement");
+    assert_eq!(pacing(&super::Act::Break { pos: [0, 0, 0] }, false, &g), Pacing::Await);
+    g.settled();
+    assert_eq!(pacing(&place, false, &g), Pacing::Send, "one decided: room again");
 }
 
 impl Bot {

@@ -149,9 +149,19 @@ is exactly B1). `LocalBoard` serves bots in one process; a networked board can i
 
 ## Open (2026-10-19)
 
-The two-bot ratio. Item grouping and pipelining are in (above). Next: stands chosen for several cells, then a
-dependency-graph ready-set scheduler with soft regions instead of tiles (`research/build-scheduling-robotics.md`,
-`research/build-scheduling-game-bots.md`, `research/build-algorithms-deep.md`).
+The two-bot ratio. Item grouping and pipelining are in (above); one bot builds house16 in ~208-213 s. A full
+in-flight cap holds a pipelined placement for the tick instead of waiting inside it (`process::run::pacing`):
+waiting there never ended, since in-flight placements are decided only at the start of a tick (live: the bot
+went silent mid-build).
+
+- A floor log, house16 local [1, 0, 7] (`pillar_axis=x`, beside the cobblestone border), ended air in a step-2
+  run (retries 3). The `logrow` scene builds that row cleanly, so it needs the full build's context; a traced
+  house16 run (build, interact and `acacia_bot::world=trace`) shows its history.
+- Step 4: stands chosen for many ready cells (greedy weighted set cover, counting cells enabled by earlier
+  placements from the same stand; batch by item per stand), measured with the act timing table, house16 kept
+  block-exact. Then a dependency-graph ready-set scheduler with soft regions instead of tiles
+  (`research/build-scheduling-robotics.md`, `research/build-scheduling-game-bots.md`,
+  `research/build-algorithms-deep.md`).
 
 Tried and dropped (2026-10-19): faster placement pacing. Clicking in the turn's own tick, a second placement in
 the same tick, and no tick after a placement: with any two of the three, BDS silently ignored ~15% of placements
