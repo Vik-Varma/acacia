@@ -115,6 +115,18 @@ pub(crate) fn unpredict(now: &ItemStack, predicted: &ItemStack, before: &ItemSta
     (now == predicted && predicted != before).then(|| before.clone())
 }
 
+/// The slot with a failed placement's item given back, whatever later predictions did to it since: with several
+/// placements from one stack in flight, [`unpredict`]'s exact match never held, the count fell behind the
+/// server's, and a slot read empty that the server still filled (live: moves into it refused, status 50).
+/// `None`: the slot now holds something else; the server's own update decides it.
+pub(crate) fn give_back(now: &ItemStack, predicted: &ItemStack, before: &ItemStack) -> Option<ItemStack> {
+    let consumed = before.count.checked_sub(if predicted.is_empty() { 0 } else { predicted.count }).filter(|c| *c > 0)?;
+    if now.is_empty() {
+        return Some(ItemStack { count: consumed, ..before.clone() });
+    }
+    (now.network_id == before.network_id && now.stack_network_id == before.stack_network_id).then(|| ItemStack { count: now.count + consumed, ..now.clone() })
+}
+
 /// A server block update for layer 0 of `at`, in any of the packets the world tracker applies.
 fn is_update_at(p: &RawPacket, at: &BlockCoordinates) -> bool {
     match p.id {

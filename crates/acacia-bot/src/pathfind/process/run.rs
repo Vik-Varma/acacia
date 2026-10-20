@@ -113,7 +113,7 @@ impl Processes {
                 let t = std::time::Instant::now();
                 let human = self.arbiter.get(id).is_some_and(|p| p.opts().search.profile == MovementProfile::Human);
                 // Optimal: placements go out without awaiting their echo; their outcome comes on a later tick.
-                let paced = pacing(&act, human, &bot.governor);
+                let paced = pacing(&act, human, &bot.governor, needs_stack_request(bot, &act) && !bot.in_flight.is_empty());
                 let result = match paced {
                     Pacing::Hold => None,
                     Pacing::Send => match act::send_place(bot, &act).await {
@@ -155,16 +155,25 @@ impl Processes {
 pub(crate) enum Pacing {
     /// Send without awaiting the echo.
     Send,
-    /// Not this tick: the in-flight cap is full. Never wait for it inside the tick: in-flight placements are
-    /// decided only at the start of a tick, so that wait never ends (live: the bot went silent, twice).
+    /// Not this tick: the in-flight cap is full (never wait for it inside the tick: in-flight placements are
+    /// decided only at the start of a tick, so that wait never ends; live: the bot went silent, twice), or the
+    /// item has to be moved into the hotbar while placements are in flight: BDS re-ids a stack it places from,
+    /// and a move naming the old id is refused (status 50, FailedToValidateDstSlot; live: a floor log given up).
     Hold,
     /// Perform and await (Human, and everything but placements).
     Await,
 }
 
-pub(crate) fn pacing(act: &super::Act, human: bool, governor: &crate::governor::Governor) -> Pacing {
+/// The placement's item is outside the hotbar: equipping it is an item stack request.
+fn needs_stack_request(bot: &Bot, act: &super::Act) -> bool {
+    let super::Act::Place { item, .. } = act else { return false };
+    matches!(bot.find_item(item), Some(crate::items::SlotRef::Main(i)) if i >= crate::state::Inventory::HOTBAR_SLOTS)
+}
+
+/// `moving`: the placement's item must be moved into the hotbar while placements are in flight.
+pub(crate) fn pacing(act: &super::Act, human: bool, governor: &crate::governor::Governor, moving: bool) -> Pacing {
     match act {
-        super::Act::Place { .. } if !human && !governor.may_send() => Pacing::Hold,
+        super::Act::Place { .. } if !human && (!governor.may_send() || moving) => Pacing::Hold,
         super::Act::Place { .. } if !human => Pacing::Send,
         _ => Pacing::Await,
     }
@@ -177,15 +186,16 @@ fn a_full_in_flight_cap_holds_instead_of_waiting_inside_the_tick() {
     let place = super::Act::Place { item: "minecraft:dirt".into(), against: [0, 0, 0], face: crate::interact::Face::Up, click: [0.5, 1.0, 0.5] };
     let mut g = Governor::default();
     for _ in 0..Limits::DEFAULT_IN_FLIGHT {
-        assert_eq!(pacing(&place, false, &g), Pacing::Send);
+        assert_eq!(pacing(&place, false, &g, false), Pacing::Send);
         g.sent(false);
         g.tick(None);
     }
-    assert_eq!(pacing(&place, false, &g), Pacing::Hold, "cap full");
-    assert_eq!(pacing(&place, true, &g), Pacing::Await, "Human awaits each placement");
-    assert_eq!(pacing(&super::Act::Break { pos: [0, 0, 0] }, false, &g), Pacing::Await);
+    assert_eq!(pacing(&place, false, &g, false), Pacing::Hold, "cap full");
+    assert_eq!(pacing(&place, true, &g, false), Pacing::Await, "Human awaits each placement");
+    assert_eq!(pacing(&super::Act::Break { pos: [0, 0, 0] }, false, &g, false), Pacing::Await);
     g.settled();
-    assert_eq!(pacing(&place, false, &g), Pacing::Send, "one decided: room again");
+    assert_eq!(pacing(&place, false, &g, false), Pacing::Send, "one decided: room again");
+    assert_eq!(pacing(&place, false, &g, true), Pacing::Hold, "a move into the hotbar waits for the in-flight ones");
 }
 
 impl Bot {

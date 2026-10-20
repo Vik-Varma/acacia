@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use acacia_world::BlockRegistry;
 
-use super::{unpredict, Confirm, Expect, Verdict};
+use super::{give_back, unpredict, Confirm, Expect, Verdict};
 use crate::cadence::splitmix;
 use crate::governor::Governor;
 use crate::state::ItemStack;
@@ -206,4 +206,15 @@ fn a_refused_placement_gives_the_block_back() {
     assert_eq!(unpredict(&left, &left, &block), Some(block.clone()), "slot still as predicted: undo");
     let server = ItemStack { count: 7, ..block.clone() };
     assert_eq!(unpredict(&server, &left, &block), None, "the server set the slot since: keep its stack");
+}
+
+#[test]
+fn a_failed_pipelined_placement_gives_its_item_back_past_later_predictions() {
+    let two = ItemStack { network_id: 5, count: 2, block_runtime_id: 3, stack_network_id: Some(9), ..ItemStack::default() };
+    let one = ItemStack { count: 1, ..two.clone() };
+    // Both placements predicted (2 -> 1 -> empty); the first then fails: one item back, not "no match".
+    assert_eq!(give_back(&ItemStack::default(), &one, &two), Some(one.clone()));
+    assert_eq!(give_back(&one, &ItemStack::default(), &one), Some(two.clone()), "the last one's back too");
+    let other = ItemStack { network_id: 6, count: 4, ..ItemStack::default() };
+    assert_eq!(give_back(&other, &one, &two), None, "another item there now: the server's update decides");
 }

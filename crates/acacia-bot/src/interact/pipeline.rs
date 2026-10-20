@@ -11,7 +11,7 @@ use acacia_client::proto::{Packet, RawPacket};
 use acacia_physics::{BlockPos, Vec3};
 use acacia_world::BlockState;
 
-use super::confirm::{unpredict, Confirm, Expect, Verdict};
+use super::confirm::{give_back, Confirm, Expect, Verdict};
 use super::wire::SwingSource;
 use super::Face;
 use crate::act_timing::Phase;
@@ -173,7 +173,7 @@ impl Bot {
                         self.unpredict_block(d.target, old);
                     }
                     let main = &mut self.state.inventory.main[usize::from(s.slot)];
-                    if let Some(back) = unpredict(main, &s.predicted, &s.before) {
+                    if let Some(back) = give_back(main, &s.predicted, &s.before) {
                         *main = back;
                     }
                 }
