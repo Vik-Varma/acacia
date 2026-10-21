@@ -87,6 +87,10 @@ pub struct Builder {
     pub(super) arrived: Option<crate::pathfind::Goal>,
     /// Stand feet the pilot failed to reach, until the tick.
     pub(super) avoid: HashMap<BlockPos, u64>,
+    /// Cells with a thin target (`rules::thin`): the pilot keeps the body out of them (`SearchOpts::no_body`).
+    pub(super) thin: Arc<HashSet<BlockPos>>,
+    /// Walks failed in a row (an arrival or an act resets it); see `process::opts`.
+    pub(super) failed_walks: u32,
     /// Cells already built (a block target that matches): the pilot's own work leaves them alone
     /// (`SearchOpts::keep`). Built cells only: keeping every block target cost one bot 267 s against 200 s
     /// (live house16), its paths walking round unbuilt floor instead of over scaffold there.
@@ -123,6 +127,7 @@ impl Builder {
             .map(|(local, b)| Cell { pos: job.at.apply(structure.size, local), target: job.at.block(b) })
             .collect();
         let index = cells.iter().enumerate().map(|(i, c)| (c.pos, i)).collect();
+        let thin = Arc::new(cells.iter().filter(|c| super::rules::thin(&c.target.name)).map(|c| c.pos).collect());
         let stations = job.stations.iter().map(|&pos| Station { pos, lacks: HashSet::new() }).collect();
         let status = Arc::new(Mutex::new(BuildStatus { cells: cells.len(), ..BuildStatus::default() }));
         Self {
@@ -140,6 +145,8 @@ impl Builder {
             commit: None,
             arrived: None,
             avoid: HashMap::new(),
+            thin,
+            failed_walks: 0,
             keep: Arc::default(),
             tick: 0,
             waiting_since: None,

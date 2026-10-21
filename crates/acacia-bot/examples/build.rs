@@ -42,7 +42,7 @@ async fn main() -> Result<(), Error> {
         let (mut b, _) = support::connect(&server, &name).await?;
         let inv = b.state().inventory.main.iter().filter(|s| !s.is_empty()).count();
         println!("restarted with {inv} stacks in the inventory");
-        for c in ["/give @s diamond_pickaxe", "/give @s dirt 64"] {
+        for c in ["/give @s diamond_pickaxe", "/give @s diamond_shovel", "/give @s dirt 64"] {
             pad.run(&b, c);
             b.wait_ticks(4).await?;
         }

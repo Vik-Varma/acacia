@@ -116,14 +116,14 @@ impl Processes {
                 let paced = pacing(&act, human, &bot.governor, needs_stack_request(bot, &act) && !bot.in_flight.is_empty());
                 let result = match paced {
                     Pacing::Hold => None,
-                    Pacing::Send => match act::send_place(bot, &act).await {
+                    Pacing::Send => match bounded(act::send_place(bot, &act)).await {
                         Ok(target) => {
                             self.sent.insert(target, (id, act.clone()));
                             None
                         }
                         Err(e) => Some(Err(e)),
                     },
-                    Pacing::Await => Some(act::perform(bot, &act, human).await),
+                    Pacing::Await => Some(bounded(act::perform(bot, &act, human)).await),
                 };
                 bot.act_timing.add(Phase::Act, t.elapsed());
                 if let Some(result) = result {
@@ -162,6 +162,18 @@ pub(crate) enum Pacing {
     Hold,
     /// Perform and await (Human, and everything but placements).
     Await,
+}
+
+/// Longest an act may take before it fails as timed out (a restock moves a few stacks in well under a second).
+const ACT_LIMIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// `act` failing with [`ActionError::Timeout`] after [`ACT_LIMIT`]: an awaited reply that never came held a live
+/// build for 820 s until its watchdog (2026-10-21, an act at tick 705; the journal names the next one).
+async fn bounded<T>(act: impl std::future::Future<Output = Result<T, ActionError>>) -> Result<T, ActionError> {
+    tokio::time::timeout(ACT_LIMIT, act).await.unwrap_or_else(|_| {
+        tracing::warn!("act timed out after {ACT_LIMIT:?}");
+        Err(ActionError::Timeout)
+    })
 }
 
 /// The placement's item is outside the hotbar: equipping it is an item stack request.

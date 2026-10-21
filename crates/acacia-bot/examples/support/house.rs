@@ -124,9 +124,10 @@ pub async fn setup(a: &mut Bot, pad: &Pad, name: &str) -> Result<BuildJob, Error
     Ok(job)
 }
 
-/// Empties the inventory, then a pickaxe and scaffold dirt.
+/// Empties the inventory, then a pickaxe, a shovel and scaffold dirt. Without the shovel each scaffold dirt
+/// took the hand's ~780 ms to break (34 a house, live).
 pub async fn kit(bot: &mut Bot, pad: &Pad) -> Result<(), Error> {
-    for c in ["/clear @s", "/give @s diamond_pickaxe", "/give @s dirt 64"] {
+    for c in ["/clear @s", "/give @s diamond_pickaxe", "/give @s diamond_shovel", "/give @s dirt 64"] {
         pad.run(bot, c);
         bot.wait_ticks(4).await?;
     }

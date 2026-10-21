@@ -148,6 +148,19 @@ pub fn findings(lines: &[Line]) -> Vec<String> {
         let mut rests: HashMap<BlockPos, usize> = HashMap::new();
         let mut switched: HashMap<BlockPos, usize> = HashMap::new();
         let mut no_click = 0;
+        // WALK_STUCK: failed walks in a row that never left the spot.
+        let (mut stuck, mut worst, mut why) = (0, 0, None);
+        for l in lines.iter().filter(|l| l.bot == bot) {
+            if let Entry::WalkEnd { end, dist, err, .. } = &l.e {
+                stuck = if *end == WalkEnd::Failed && *dist < 0.5 { stuck + 1 } else { 0 };
+                if stuck > worst {
+                    (worst, why) = (stuck, err.clone());
+                }
+            }
+        }
+        if worst >= 3 {
+            out.push(format!("WALK_STUCK {bot} {worst} failed walks in a row without moving, last {why:?}"));
+        }
         for l in lines.iter().filter(|l| l.bot == bot) {
             match &l.e {
                 Entry::Rest { cell } => *rests.entry(*cell).or_default() += 1,

@@ -11,8 +11,6 @@ use super::board::TaskBoard;
 use super::builder::Builder;
 use crate::pathfind::process::Ctx;
 
-/// Ticks between heartbeats (the lease must outlast several).
-const BEAT: u64 = 20;
 /// Stands closer than this (horizontally) to another bot are not used.
 const ROOM: f32 = 1.5;
 /// Blocks of travel added for work outside the bot's home band: it goes there only when home has nothing
@@ -26,7 +24,6 @@ const GRACE: u64 = 40;
 pub(super) struct Swarm {
     board: Arc<dyn TaskBoard>,
     who: String,
-    beat: Option<u64>,
     claimed: Vec<BlockPos>,
     /// Cells acted on, with the tick: claimed until [`GRACE`] runs out.
     acted: Vec<(BlockPos, u64)>,
@@ -46,7 +43,7 @@ impl Builder {
         let who = who.into();
         // On the board from now (feet unknown: NaN crowds nobody), so others count this bot from their first restock.
         board.heartbeat(&who, [f32::NAN; 3]);
-        self.swarm = Some(Swarm { board, who, beat: None, claimed: Vec::new(), acted: Vec::new(), taken: HashSet::new(), others: Vec::new(), home: ((0, 1), 0, i32::MIN..i32::MAX) });
+        self.swarm = Some(Swarm { board, who, claimed: Vec::new(), acted: Vec::new(), taken: HashSet::new(), others: Vec::new(), home: ((0, 1), 0, i32::MIN..i32::MAX) });
         self
     }
 
@@ -102,10 +99,9 @@ impl Builder {
     /// Heartbeat, the others' claims and feet, and scaffold shared both ways.
     pub(super) fn sync(&mut self, cx: &Ctx) {
         let Some(s) = &mut self.swarm else { return };
-        if s.beat.is_none_or(|b| cx.tick >= b + BEAT) {
-            s.board.heartbeat(&s.who, cx.pos);
-            s.beat = Some(cx.tick);
-        }
+        // Every tick: feet a second old let the other bot place a pane into this one's body (sim: trapped in a
+        // window for good, "Stuck 10 times" on every walk).
+        s.board.heartbeat(&s.who, cx.pos);
         (s.taken, s.others) = (s.board.taken(&s.who), s.board.others(&s.who));
         let rank = s.board.rank(&s.who);
         if rank != s.home.0 {

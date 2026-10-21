@@ -41,6 +41,9 @@ pub struct SearchOpts {
     /// every cell its structure fills; live sim: a pillar through a torch's cell replaced the torch, again and
     /// again).
     pub keep: Option<Arc<std::collections::HashSet<BlockPos>>>,
+    /// Cells no move may end with the body in (feet or head): the builder's thin targets (panes, fences, walls),
+    /// beside which a body fits but which then wall it in (live: a window cell, every walk "Stuck" after).
+    pub no_body: Option<Arc<std::collections::HashSet<BlockPos>>>,
 }
 
 impl Default for SearchOpts {
@@ -59,6 +62,7 @@ impl Default for SearchOpts {
             max_rollout_ticks: 400_000,
             favour: None,
             keep: None,
+            no_body: None,
         }
     }
 }

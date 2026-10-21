@@ -7,9 +7,10 @@ use crate::state::Entity;
 /// Attack/interact reach from the eye along the aim ray. Boar allows 3.005 (to a hitbox grown by
 /// 0.1); Java's entity interaction range is 3.0.
 pub const ENTITY_REACH: f32 = 3.0;
-/// Block reach from the eye to the nearest point of the block. Geyser rejects beyond 5.5 (Java
-/// block interaction range 4.5 + 1); vanilla survival reach is 4.5.
-pub const BLOCK_REACH: f32 = 4.5;
+/// Block reach from the eye to the nearest point of the block: what an act may ask for. BDS 1.26.52 kept
+/// placements 6.7 off (`examples/place_rate.rs`, 2026-10-21); Geyser rejects beyond 5.5 (Java's 4.5 + 1).
+/// Callers plan with less (the builder: `build::reach`).
+pub const BLOCK_REACH: f32 = 6.0;
 
 /// Player hitbox; used for entities missing from [`HITBOXES`].
 const ENTITY_WIDTH: f32 = 0.6;

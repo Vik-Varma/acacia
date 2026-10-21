@@ -47,7 +47,18 @@ pub enum Entry {
     },
     WalkStart { task: BlockPos, stands: Vec<BlockPos> },
     /// `acts`: acts done while the walk was under way (clicks in reach before arriving).
-    WalkEnd { task: BlockPos, end: WalkEnd, ticks: u64, ms: u64, dist: f32, #[serde(default)] acts: u32 },
+    WalkEnd {
+        task: BlockPos,
+        end: WalkEnd,
+        ticks: u64,
+        ms: u64,
+        dist: f32,
+        #[serde(default)]
+        acts: u32,
+        /// Why the pilot gave up (failed walks).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        err: Option<String>,
+    },
     /// A cell set aside for a while (no stand, no click from the stand, failed acts).
     Rest { cell: BlockPos },
 }
@@ -152,6 +163,11 @@ impl Journal {
 
     /// Ends the walk under way, if any.
     pub fn walk_end(&self, tick: u64, end: WalkEnd) {
+        self.walk_failed(tick, end, None);
+    }
+
+    /// Ends the walk under way, if any, with the pilot's reason for giving up.
+    pub fn walk_failed(&self, tick: u64, end: WalkEnd, err: Option<String>) {
         let (walk, feet) = {
             let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
             (inner.walk.take(), inner.feet)
@@ -159,7 +175,7 @@ impl Journal {
         let Some(w) = walk else { return };
         let d = [feet[0] - w.from[0], feet[1] - w.from[1], feet[2] - w.from[2]];
         let dist = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
-        self.write(tick, Entry::WalkEnd { task: w.task, end, ticks: tick - w.tick, ms: self.t(tick).saturating_sub(w.t), dist, acts: w.acts });
+        self.write(tick, Entry::WalkEnd { task: w.task, end, ticks: tick - w.tick, ms: self.t(tick).saturating_sub(w.t), dist, acts: w.acts, err });
     }
 }
 

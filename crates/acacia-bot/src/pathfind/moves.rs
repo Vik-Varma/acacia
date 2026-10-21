@@ -65,6 +65,8 @@ pub(crate) struct Ctx<'k> {
     pub macros: Option<Macros<'k>>,
     /// [`SearchOpts::keep`](super::SearchOpts::keep).
     pub keep: Option<&'k std::collections::HashSet<acacia_physics::BlockPos>>,
+    /// [`SearchOpts::no_body`](super::SearchOpts::no_body).
+    pub no_body: Option<&'k std::collections::HashSet<acacia_physics::BlockPos>>,
 }
 
 impl Ctx<'_> {
@@ -86,6 +88,15 @@ pub(crate) fn offset(p: BlockPos, dx: i32, dy: i32, dz: i32) -> BlockPos {
 }
 
 pub(crate) fn successors<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, at: (Entry, &Momentum), ctx: &Ctx, out: &mut Vec<Edge>) {
+    let first = out.len();
+    expand(t, p, from, at, ctx, out);
+    if let Some(k) = ctx.no_body {
+        let kept: Vec<Edge> = out.drain(first..).filter(|e| !k.contains(&e.pos) && !k.contains(&offset(e.pos, 0, 1, 0))).collect();
+        out.extend(kept);
+    }
+}
+
+fn expand<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, at: (Entry, &Momentum), ctx: &Ctx, out: &mut Vec<Edge>) {
     if let Some(m) = &ctx.macros {
         macros::successors(t, p, from, at, m, out);
     }

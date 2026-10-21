@@ -18,11 +18,17 @@ const WALK: f32 = 2.0;
 /// A pillar block counts as this much travel: it is climbed, and broken again at the cleanup.
 const PILLAR: f32 = 12.0;
 
+/// Ready placements whose stands are scored per tick: [`SEARCHES`], or `BUILD_SEARCHES` for an A/B.
+fn searches() -> usize {
+    static N: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *N.get_or_init(|| std::env::var("BUILD_SEARCHES").ok().and_then(|v| v.parse().ok()).unwrap_or(SEARCHES))
+}
+
 /// `ready`: placements that can be done once in reach, best rank first; `committed`: the task the pilot drives
 /// to, kept while it is still ready (a new goal restarts the pilot).
 pub(super) fn walk(b: &mut Builder, cx: &Ctx, ready: &[(usize, String)], committed: Option<BlockPos>) -> Option<Next> {
     let mut candidates: Vec<(BlockPos, Stand)> = Vec::new();
-    for (k, (i, _)) in ready.iter().take(SEARCHES).enumerate() {
+    for (k, (i, _)) in ready.iter().take(searches()).enumerate() {
         let (pos, target) = (b.cells[*i].pos, b.cells[*i].target.clone());
         let keep = Keep { feet: &|f| no_stand(b, cx.look, f), pillar: &|c| unbuilt(b, cx.look, c) };
         let found = stands(pos, cx.pos, cx.look, &keep, &|e| click_for(pos, &target, e, cx.look, STAND_SLACK).is_some(), STANDS);

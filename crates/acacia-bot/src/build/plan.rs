@@ -18,8 +18,9 @@ use crate::ActionError;
 const TRIES: usize = 24;
 /// Stands handed to the pilot at once (it takes the cheapest it can reach).
 pub(super) const STANDS: usize = 3;
-/// Placements whose stands are searched per tick (the search tries every face from every spot).
-pub(super) const SEARCHES: usize = 6;
+/// Placements whose stands are searched per tick (the search tries every face from every spot). Live house16
+/// A/B (tools/build-ab.sh, 3 runs each): 24 against 6 took one bot 178 s against 195, two bots 108 against 122.
+pub(super) const SEARCHES: usize = 24;
 const BODY: f32 = 0.35;
 
 pub(super) enum Next {

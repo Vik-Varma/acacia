@@ -11,6 +11,8 @@ use crate::ActionError;
 
 /// Ticks of waiting before stations are asked again (they may have been refilled).
 const ASK_AGAIN: u64 = 600;
+/// Failed walks in a row after which path work may break and fill built cells.
+const ESCAPE_AFTER: u32 = 2;
 /// Arrival tolerance at a stand beside its cell: under 0.5 minus the builder's body margin (`plan::BODY`).
 const STAND_TOLERANCE: f32 = 0.1;
 
@@ -71,6 +73,10 @@ impl Process for Builder {
                 }
                 _ => break,
             }
+        }
+        if let Some(c) = self.wedged(cx) {
+            tracing::debug!(?c, "build bot wedged against a thin block; breaking it");
+            next = Next::Act(Phase::Building, Act::Break { pos: c });
         }
         // Every tick on the ground, planned or not: a hold that skipped the claim kept the last one, and the other
         // bot waited on it for good (live: two slabs it could click, 150 s).
@@ -153,18 +159,27 @@ impl Process for Builder {
             opts.tolerance = STAND_TOLERANCE;
         }
         opts.search.allow_bridge = true;
-        opts.search.keep = Some(self.keep.clone());
+        // Walks failing in a row may be walled in by built cells (live: on a wall top, every walk "Stuck"): then
+        // path work may go through them, and the survey rebuilds what it breaks.
+        if self.failed_walks < ESCAPE_AFTER {
+            opts.search.keep = Some(self.keep.clone());
+        }
+        opts.search.no_body = Some(self.thin.clone());
         opts
     }
 
     fn arrived(&mut self) -> bool {
+        self.failed_walks = 0;
         self.end_walk(WalkEnd::Arrived);
         self.arrived = self.commit.take().map(|(_, goal)| goal);
         false
     }
 
     fn failed(&mut self, e: &ActionError) -> bool {
-        self.end_walk(WalkEnd::Failed);
+        self.failed_walks += 1;
+        if let Some(j) = &self.journal {
+            j.walk_failed(self.tick, WalkEnd::Failed, Some(e.to_string()));
+        }
         if let Some((task, goal)) = self.commit.take() {
             tracing::debug!(?task, ?goal, %e, "build drive failed");
             self.unreached(task, &goal);
@@ -173,6 +188,9 @@ impl Process for Builder {
     }
 
     fn acted(&mut self, act: &Act, result: &Result<(), ActionError>) {
+        if result.is_ok() {
+            self.failed_walks = 0;
+        }
         let (kind, item) = match act {
             Act::Place { item, .. } => (Kind::Place, Some(item.clone())),
             Act::Break { .. } => (Kind::Break, None),
@@ -222,6 +240,17 @@ impl Process for Builder {
 }
 
 impl Builder {
+    /// After failed walks, a thin block (pane, fence, wall, bars) in the feet or head cell: the body fits beside
+    /// it but the pathfinder sees the cell as solid, so no walk starts (live and sim: the outer half of a window
+    /// cell, every walk "Stuck 10 times" until the run ended).
+    fn wedged(&self, cx: &Ctx) -> Option<acacia_physics::BlockPos> {
+        if self.failed_walks < ESCAPE_AFTER || !cx.on_ground {
+            return None;
+        }
+        let feet = cx.pos.map(|v| v.floor() as i32);
+        [feet, [feet[0], feet[1] + 1, feet[2]]].into_iter().find(|c| cx.look.block(*c).is_some_and(|v| v.solid() && !v.full && super::rules::thin(v.name)))
+    }
+
     fn end_walk(&self, end: WalkEnd) {
         if let Some(j) = &self.journal {
             j.walk_end(self.tick, end);

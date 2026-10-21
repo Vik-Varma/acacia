@@ -81,6 +81,12 @@ pub fn items_per_cell(target: &Block) -> u32 {
     if is_double_slab(&target.name) { 2 } else { 1 }
 }
 
+/// A block a body fits beside within its cell (panes, bars, fences, walls), so a player can end up inside the
+/// cell it fills; see `SearchOpts::no_body`.
+pub fn thin(name: &str) -> bool {
+    ["pane", "iron_bars", "fence", "_wall"].iter().any(|k| name.contains(k)) && !name.contains("gate")
+}
+
 pub fn gravity(name: &str) -> bool {
     let n = name.trim_start_matches("minecraft:");
     matches!(n, "sand" | "red_sand" | "gravel" | "suspicious_sand" | "suspicious_gravel") || n.ends_with("concrete_powder")

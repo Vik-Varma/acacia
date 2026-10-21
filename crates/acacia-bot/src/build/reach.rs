@@ -5,16 +5,28 @@ use acacia_physics::{BlockPos, Vec3};
 
 use super::rules;
 use super::structure::Block;
-use crate::interact::{Face, BLOCK_REACH};
+use crate::interact::Face;
 use crate::movement::EYE_HEIGHT;
 use crate::pathfind::process::{BlockView, Look};
 
-/// Margin under the server's reach.
+/// Margin under the reach the builder plans with.
 const MARGIN: f32 = 0.35;
 /// More margin when choosing a stand: the pilot stops up to its tolerance off the cell's centre.
 pub const STAND_SLACK: f32 = 0.45;
+/// The reach stands are planned with (BDS keeps clicks to 6.7, `interact::BLOCK_REACH`). Live house16 A/B
+/// (tools/build-ab.sh): 5.5 against Java's 4.5 took one bot ~146 s against 161 s, two bots ~94 against 105.
+const PLAN_REACH: f32 = 5.5;
+
+/// [`PLAN_REACH`], or `BUILD_REACH` for an A/B (capped at the act limit).
+fn plan_reach() -> f32 {
+    static R: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
+    *R.get_or_init(|| std::env::var("BUILD_REACH").ok().and_then(|v| v.parse().ok()).unwrap_or(PLAN_REACH).min(crate::interact::BLOCK_REACH))
+}
+
 /// How far around a cell stands are looked for.
-const RADIUS: i32 = 4;
+fn radius() -> i32 {
+    plan_reach().ceil() as i32 - 1
+}
 /// Pillar stands (over air) up to this many blocks above the ground under them.
 const MAX_PILLAR: i32 = 6;
 
@@ -57,7 +69,7 @@ pub fn in_reach(eye: Vec3, p: BlockPos) -> bool {
 }
 
 pub fn within(eye: Vec3, p: BlockPos, slack: f32) -> bool {
-    dist_to_block(eye, p) <= BLOCK_REACH - MARGIN - slack
+    dist_to_block(eye, p) <= plan_reach() - MARGIN - slack
 }
 
 /// The eye is on the outer side of `face` of the block at `p`: the face can be seen.
@@ -122,9 +134,9 @@ pub struct Keep<'a> {
 
 /// Up to `limit` spots near `pos` the bot can stand at (or pillar up to) with `ok(eye)`, cheapest from `from` first.
 pub fn stands(pos: BlockPos, from: Vec3, look: &dyn Look, keep: &Keep, ok: &dyn Fn(Vec3) -> bool, limit: usize) -> Vec<Stand> {
-    let mut all = Vec::new();
-    for dx in -RADIUS..=RADIUS {
-        for dz in -RADIUS..=RADIUS {
+    let (mut all, r) = (Vec::new(), radius());
+    for dx in -r..=r {
+        for dz in -r..=r {
             for dy in -3..=1 {
                 let feet = [pos[0] + dx, pos[1] + dy, pos[2] + dz];
                 let Some(s) = footing(look, feet) else { continue };

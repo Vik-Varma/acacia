@@ -113,6 +113,33 @@ stands and the stands it could use: the first thing to read when a build stalls 
 - Live house16 two bots (claims and home bands, 2026-10-21): PASS each time, 125/108/118 s against one bot's
   184/193 s (0.56-0.68, mean 0.62): the 0.6 bar is met in one run of three. Kill run (B dropped after 150
   placements, never back): PASS 180 s, diff 0. Earlier with 4×4 tiles: 266-298 s against 454 s (mean 0.63).
+- Live house16 after the speed round below (2026-10-21, `tools/build-ab.sh 4 one:BOTS=1 two:BOTS=2`): 8/8
+  PASS, one bot 157.5 s (sd 12), two bots 96.8 s (sd 9), 0.61.
+
+## Measuring (2026-10-21)
+
+- Journals: each builder writes `journal/<bot>.jsonl` (`build::journal`: a line per tick with what it wanted,
+  why it held, the cell and what it shows, claims; acts, walks, rests). The examples print `build::findings` at
+  the end: time by hold reason, walk statistics, and named findings (`DOUBLE_PLACE`, `LONG_HOLD`,
+  `STALE_CLAIM`, `REST_LOOP`, `WALK_NO_ACT`, `GOAL_THRASH`, `WALK_STUCK`) with every wrong cell's history.
+- A/B: `tools/build-ab.sh <runs> name:ENV=v,...` builds once on testbox and spreads the runs over the three
+  20 TPS pathfind BDS, variants interleaved, as one detached job (a local reap can't stop it). Live spread is
+  ±7-15 s per run; 3-4 runs per side are the least to trust a 10% change. `BUILD_SEARCHES` and `BUILD_REACH`
+  stay as knobs for later A/Bs.
+- What it found and changed, each judged live:
+  - The pilot stood a tick on every new path (searched with the keys up, drove the next tick): it now drives
+    in the tick its quick search lands; one bot's searching time 24 s -> 16 s.
+  - Scaffold dirt broke at the hand's ~780 ms (the kit had no shovel): the examples give a shovel.
+  - Stands scored for 24 ready cells, not 6 (one bot 195 -> 178 s, two 122 -> 108 s); reach 5.5, not 4.5 (BDS
+    kept clicks 6.7 off, `examples/place_rate.rs`; one bot 161 -> 146 s, two 105 -> 94 s).
+  - A bot could end in the outer half of a window cell (a pane beside its body, the cell solid to the planner)
+    and fail every walk "Stuck 10 times" until the run ended (live 2 of ~12 one-bot runs, sim once): moves no
+    longer end with the body in a thin target's cell (`SearchOpts::no_body`), and after two failed walks a thin
+    block in the body's cells is broken (rebuilt later).
+  - Each bot posts its feet every tick, not every 20 (sim: the other bot placed into a body a second stale).
+  - Every act fails as timed out after 10 s (one live act hung 820 s until the watchdog; cause not found).
+  - The live pad resets below the build limit (bots rejoin on the last pad; at y 340 nothing placed).
+- Double slabs take two placements: `DOUBLE_PLACE` counts against the cell's target.
 - Where a placement's time goes (`act_timing`, printed by the examples; one bot, house16, 470 s): acts 323 s,
   of them equip with a hotbar switch 198 s (235 switches, mean 842 ms: the human equip pause), echo wait 79 s
   (mean 120 ms), the tick after each act 31 s, aim 28 s, mining 24 s; planning CPU 3 s.
@@ -153,14 +180,13 @@ is exactly B1). `LocalBoard` serves bots in one process; a networked board can i
 
 ## Open (2026-10-21)
 
-The two-bot ratio: mean 0.62 live, 0.6 in one run of three. A full in-flight cap holds a pipelined placement
-for the tick instead of waiting inside it (`process::run::pacing`): waiting there never ended, since in-flight
-placements are decided only at the start of a tick (live: the bot went silent mid-build).
+The two-bot ratio: 0.61 live (8 runs). A full in-flight cap holds a pipelined placement for the tick instead of
+waiting inside it (`process::run::pacing`): waiting there never ended, since in-flight placements are decided
+only at the start of a tick (live: the bot went silent mid-build).
 
-- Where two bots lose: walks per bot fall to ~50-55 (one bot: ~103) but each still takes ~1 s against 0.85 s,
-  and moving is ~45% of a bot's time. Next: chain-expanded reach (cells an earlier placement from the same
-  stand makes ready) and a cluster tour instead of the best stand from here (`research/build-algorithms-deep.md`
-  §5 items 4-6).
+- Next, in order (`research/build-iteration-tooling.md`, `build-walk-overhead.md`, `build-throughput-deep.md`):
+  short swarm scenes per bug with injected lag; the sim with per-bot delayed visibility and a millisecond time
+  model fitted to journals; placing while walking. Acting is now the largest share (~2 ticks a placement).
 - Stands (`build/cover.rs`): the stand reaching the most ready cells for its travel, not the stand of the
   first cell. Live one bot it was neutral (200 s against 187-196); it gives the swarm its claim batches.
 - Path work keeps out of built cells (`SearchOpts::keep`; sim: a pillar through a torch's cell replaced it
