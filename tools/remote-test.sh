@@ -11,7 +11,7 @@ retry() { for i in 1 2 3 4 5; do "$@" && return 0; echo "retry $i: $1" >&2; slee
 
 # Clear old sources (keep the build cache) so files deleted locally don't linger remotely.
 retry ssh $opts testbox "mkdir -p $remote && find $remote -mindepth 1 -maxdepth 1 ! -name target -exec rm -rf {} +"
-tar czf - -C "$root" --exclude=target --exclude=.testserver --exclude=.tokens --exclude=.git . \
+tar czf - -C "$root" --exclude=target --exclude=./assets/looks --exclude=.testserver --exclude=.tokens --exclude=.git . \
   | retry ssh $opts testbox "tar xzf - -C $remote" || exit 1
 args=$(printf '%q ' "$@")
 retry ssh $opts testbox "cd $remote || exit; rm -f test.log test.done; { nohup sh -c '~/.cargo/bin/cargo +stable test $args >test.log 2>&1; echo \$? >test.done' </dev/null >/dev/null 2>&1 & }" || exit 1

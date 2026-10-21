@@ -11,7 +11,8 @@ retry() { for i in 1 2 3 4 5; do "$@" && return 0; echo "retry $i: $1" >&2; slee
 retry ssh $opts testbox "mkdir -p $remote"
 # Sources are dropped first, so a file deleted or turned into a directory module here goes there too
 # (tar restores the rest with their mtimes: nothing rebuilds for it).
-tar czf - -C "$root" --exclude=target --exclude=.testserver --exclude=.tokens --exclude=.git . \
+# Baked looks stay out (hundreds of MB): testbox bakes its own.
+tar czf - -C "$root" --exclude=target --exclude=./assets/looks --exclude=.testserver --exclude=.tokens --exclude=.git . \
   | retry ssh $opts testbox "find $remote/crates $remote/tools -name '*.rs' -delete 2>/dev/null; tar xzf - -C $remote" || exit 1
 [ "${1:-}" = cargo ] && set -- cargo +stable "${@:2}"
 printf 'export PATH=$HOME/.cargo/bin:$PATH\n%s\n' "$(printf '%q ' "$@")" \
