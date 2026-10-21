@@ -9,7 +9,7 @@ use super::builder::{Builder, Restock};
 use super::plan::Next;
 use super::reach::in_reach;
 use super::rules;
-use super::status::Phase;
+use super::status::{HoldWhy, Phase};
 use super::survey::Need;
 use crate::pathfind::process::{Act, Ctx};
 use crate::pathfind::Goal;
@@ -53,7 +53,7 @@ pub(super) fn fetch(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Option<Next> {
     }
     // One bot at a time in a container: two taking for the same need at once would both see the full stock.
     if !b.open_station(pos) {
-        return Some(Next::Hold(Phase::Restocking, Vec::new()));
+        return Some(Next::Hold(Phase::Restocking, Vec::new(), HoldWhy::Station));
     }
     let before = want.iter().map(|(item, _)| (item.clone(), cx.look.count(item))).collect();
     b.restock = Some(Restock { station: i, before });

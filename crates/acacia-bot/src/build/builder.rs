@@ -96,6 +96,7 @@ pub struct Builder {
     /// Cells to claim on the board for the step just planned (`swarm`).
     pub(super) batch: Vec<BlockPos>,
     pub(super) swarm: Option<super::swarm::Swarm>,
+    pub(super) journal: Option<Arc<super::journal::Journal>>,
     status: StatusHandle,
 }
 
@@ -127,6 +128,7 @@ impl Builder {
         Self {
             batch: Vec::new(),
             swarm: None,
+            journal: None,
             job,
             cells,
             index,
@@ -180,6 +182,8 @@ impl Builder {
     pub(super) fn rest(&mut self, pos: BlockPos) {
         let t = self.tries.entry(pos).or_default();
         (t.rests, t.next_at) = (t.rests + 1, self.tick + REST_TICKS);
+        self.note(super::journal::Entry::Rest { cell: pos });
+        let t = &self.tries[&pos];
         if t.rests == MAX_RESTS + 1 {
             tracing::debug!(?pos, "build cell given up: no stand");
         }

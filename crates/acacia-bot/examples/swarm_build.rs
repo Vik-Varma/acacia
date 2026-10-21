@@ -34,16 +34,18 @@ async fn main() -> Result<(), Error> {
     let job = house::setup(&mut a, &pad, &env("SCENE", "house16".to_string())).await?;
     house::kit(&mut a, &pad).await?;
     pad.teleport(&mut a, [0.5, 0.0, 0.5], 180.0).await?;
+    house::fresh_journals();
     let started = Instant::now();
     let (ra, rb) = if bots < 2 {
-        (house::drive(&mut a, Builder::new(job.clone())?, 0, &na).await?, None)
+        (house::drive(&mut a, house::journaled(Builder::new(job.clone())?, &na)?, 0, &na).await?, None)
     } else {
         let (mut b, pb) = support::connect(&server, &nb).await?;
         let pb = pb.at(pad.origin());
         house::kit(&mut b, &pb).await?;
         pb.teleport(&mut b, [2.5, 0.0, 0.5], 180.0).await?;
         let board: Arc<dyn TaskBoard> = Arc::new(LocalBoard::new(LEASE_MS));
-        let (ba, bb) = (Builder::new(job.clone())?.with_board(board.clone(), na.as_str()), Builder::new(job.clone())?.with_board(board, nb.as_str()));
+        let ba = house::journaled(Builder::new(job.clone())?.with_board(board.clone(), na.as_str()), &na)?;
+        let bb = house::journaled(Builder::new(job.clone())?.with_board(board, nb.as_str()), &nb)?;
         let (ra, rb) = tokio::join!(house::drive(&mut a, ba, 0, &na), second(b, &pb, bb, kill_at, &nb));
         (ra?, Some(rb?))
     };
@@ -60,6 +62,7 @@ async fn main() -> Result<(), Error> {
     }
     println!("{} with {bots} bot(s): {ticks} ticks ({secs:.0} s), {} mismatches", if wrong.is_empty() && done { "PASS" } else { "FAIL" }, wrong.len());
     wrong.iter().take(20).for_each(|m| println!("  {:?}: want {} found {}", m.pos, m.want, m.found));
+    house::report(&wrong);
     Ok(())
 }
 

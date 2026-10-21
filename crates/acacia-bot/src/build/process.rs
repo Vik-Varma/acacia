@@ -1,8 +1,9 @@
 //! [`Builder`] as a [`Process`]: survey, pick the next step (`plan`), drive or act, learn from the outcome.
 
 use super::builder::Builder;
+use super::journal::{self, Entry, Kind, WalkEnd};
 use super::plan::{self, Next};
-use super::status::Phase;
+use super::status::{HoldWhy, Phase};
 use super::survey::Need;
 use crate::pathfind::process::{Act, Ctx, Event, Process, Want};
 use crate::pathfind::{Goal, GotoOpts};
@@ -53,7 +54,7 @@ impl Process for Builder {
         // In the air: keep driving (a jump or pillar in progress), or wait to land before acting.
         let mut next = match &self.commit {
             Some((task, goal)) if !cx.on_ground => Next::Go(Phase::Building, *task, goal.clone()),
-            _ => Next::Hold(Phase::Building, Vec::new()),
+            _ => Next::Hold(Phase::Building, Vec::new(), HoldWhy::InAir),
         };
         // A task wanting the goal just reached could not act from there after all: let it rest and ask again.
         for _ in 0..8 {
@@ -66,7 +67,7 @@ impl Process for Builder {
                     tracing::debug!(?task, ?goal, "build stand reached but no click from there");
                     self.rest(*task);
                     self.batch.clear();
-                    next = Next::Hold(Phase::Building, Vec::new());
+                    next = Next::Hold(Phase::Building, Vec::new(), HoldWhy::ArrivedNoClick);
                 }
                 _ => break,
             }
@@ -86,27 +87,48 @@ impl Process for Builder {
             }
             // Another bot claimed it first (bots plan in turn): ask again next tick.
             if !self.claim_batch(acting_on, matches!(next, Next::Act(..))) {
-                next = Next::Hold(Phase::Building, Vec::new());
+                next = Next::Hold(Phase::Building, Vec::new(), HoldWhy::ClaimLost);
             }
         }
+        let (mut why, mut cell) = (None, None);
         let (phase, missing, want) = match next {
             Next::Act(phase, act) => {
                 self.arrived = None;
+                cell = cell_of(&act);
                 (phase, Vec::new(), Want::Act(act))
             }
             Next::Go(phase, task, goal) => {
                 if self.commit.as_ref().is_none_or(|(_, g)| *g != goal) {
                     self.bump(|s| s.walks += 1);
+                    if let Some(j) = &self.journal {
+                        j.walk_start(cx.tick, cx.pos, task, stands_of(&goal).collect());
+                    }
                 }
                 self.commit = Some((task, goal.clone()));
+                cell = Some(task);
                 (phase, Vec::new(), Want::Go(goal))
             }
-            Next::Hold(phase, missing) => (phase, missing, Want::Hold),
+            Next::Hold(phase, missing, w) => {
+                why = Some(w);
+                (phase, missing, Want::Hold)
+            }
             Next::Done(result) => {
                 self.leave();
                 (Phase::Done, Vec::new(), Want::Done(result))
             }
         };
+        if self.journal.is_some() {
+            let (claimed, taken) = self.claims();
+            let kind = match &want {
+                Want::Act(_) => journal::Want::Act,
+                Want::Go(_) => journal::Want::Go,
+                Want::Done(_) => journal::Want::Done,
+                _ => journal::Want::Hold,
+            };
+            let to_place = needs.iter().filter(|n| **n == Need::Place).count();
+            let saw = cell.and_then(|c| cx.look.block(c)).map(|v| format!("{}[{}]", v.name, v.props));
+            self.note(Entry::Tick { feet: cx.pos, want: kind, phase, why, cell, saw, claimed, taken, to_place });
+        }
         if phase == Phase::Waiting {
             let since = *self.waiting_since.get_or_insert(self.tick);
             if self.tick - since > ASK_AGAIN {
@@ -136,11 +158,13 @@ impl Process for Builder {
     }
 
     fn arrived(&mut self) -> bool {
+        self.end_walk(WalkEnd::Arrived);
         self.arrived = self.commit.take().map(|(_, goal)| goal);
         false
     }
 
     fn failed(&mut self, e: &ActionError) -> bool {
+        self.end_walk(WalkEnd::Failed);
         if let Some((task, goal)) = self.commit.take() {
             tracing::debug!(?task, ?goal, %e, "build drive failed");
             self.unreached(task, &goal);
@@ -149,6 +173,15 @@ impl Process for Builder {
     }
 
     fn acted(&mut self, act: &Act, result: &Result<(), ActionError>) {
+        let (kind, item) = match act {
+            Act::Place { item, .. } => (Kind::Place, Some(item.clone())),
+            Act::Break { .. } => (Kind::Break, None),
+            Act::Fill { .. } => (Kind::Fill, None),
+            Act::Restock { .. } => (Kind::Restock, None),
+        };
+        let cell = cell_of(act);
+        let target = cell.and_then(|c| self.target(c)).map(|t| t.name.clone());
+        self.note(Entry::Acted { kind, cell, item, target, err: result.as_ref().err().map(|e| e.to_string()) });
         match (act, result) {
             (Act::Place { against, face, .. }, Ok(())) => {
                 self.tries.entry(face.adjacent(*against)).or_default().places += 1;
@@ -183,6 +216,15 @@ impl Process for Builder {
     }
 
     fn lost_control(&mut self) {
+        self.end_walk(WalkEnd::Lost);
         self.commit = None;
+    }
+}
+
+impl Builder {
+    fn end_walk(&self, end: WalkEnd) {
+        if let Some(j) = &self.journal {
+            j.walk_end(self.tick, end);
+        }
     }
 }

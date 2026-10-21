@@ -7,7 +7,7 @@ use super::builder::Builder;
 use super::reach::{click_for, in_reach, stands, Keep, Stand, STAND_SLACK};
 use super::restock;
 use super::rules;
-use super::status::Phase;
+use super::status::{HoldWhy, Phase};
 use super::survey::Need;
 use crate::interact::Face;
 use crate::pathfind::process::{Act, Ctx, Look};
@@ -27,7 +27,7 @@ pub(super) enum Next {
     /// Drive to the goal for the task at the cell.
     Go(Phase, BlockPos, Goal),
     /// Stand still; the items no station has.
-    Hold(Phase, Vec<String>),
+    Hold(Phase, Vec<String>, HoldWhy),
     Done(Result<(), ActionError>),
 }
 
@@ -213,7 +213,12 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     let pending = cx.look.any_in_flight() || needs.iter().enumerate().any(|(i, n)| matches!(n, Need::Place | Need::Break | Need::Drain) && !b.given_up(b.cells[i].pos) && !(*n == Need::Break && held(b, i)));
     if pending {
         b.revive();
-        return Next::Hold(if missing.is_empty() { Phase::Building } else { Phase::Waiting }, missing);
+        let why = match () {
+            _ if !missing.is_empty() => HoldWhy::Missing,
+            _ if cx.look.any_in_flight() => HoldWhy::InFlight,
+            _ => HoldWhy::Blocked,
+        };
+        return Next::Hold(if missing.is_empty() { Phase::Building } else { Phase::Waiting }, missing, why);
     }
 
     // Scaffold, top down; seals outside the footprint stay.
@@ -227,10 +232,10 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
         }
     }
     if !standing.is_empty() {
-        return Next::Hold(Phase::Cleaning, Vec::new());
+        return Next::Hold(Phase::Cleaning, Vec::new(), HoldWhy::Cleaning);
     }
     if b.revive() {
-        return Next::Hold(Phase::Building, Vec::new());
+        return Next::Hold(Phase::Building, Vec::new(), HoldWhy::Revive);
     }
     let failed = b.cells.iter().filter(|c| b.given_up(c.pos)).count() + b.scaffold.iter().filter(|p| b.given_up(**p) && cx.look.solid(**p) == Some(true)).count();
     Next::Done(if failed == 0 { Ok(()) } else { Err(ActionError::NotPossible(format!("{failed} cells could not be built"))) })

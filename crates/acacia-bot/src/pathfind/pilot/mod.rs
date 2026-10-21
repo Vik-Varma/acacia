@@ -175,16 +175,18 @@ impl Pilot {
             self.drop_follower(true);
         }
         self.poll_ahead();
-        let Some(follower) = &mut self.follower else {
+        if self.follower.is_none() {
             // After a divergence the controls carry the bot on through the air while it re-plans.
             if !self.diverged_in_air || movement.on_ground() {
                 movement.controls.stop();
             }
             if !self.guard.waiting() {
-                self.plan(terrain, live, opts, true, spawn)?;
+                self.plan(terrain, live.clone(), opts.clone(), true, &mut *spawn)?;
             }
-            return Ok(NavStatus::Searching);
-        };
+        }
+        // A quick search that found its path drives in the same tick (live builder: a standing tick per walk and
+        // per act mid-walk was a quarter of its moving time).
+        let Some(follower) = &mut self.follower else { return Ok(NavStatus::Searching) };
         let pos = live.pos;
         let feet = pos.map(|v| v.floor() as i32);
         let sense = Sense { pos, on_ground: movement.on_ground(), in_water: terrain.cell(feet).is_water() };

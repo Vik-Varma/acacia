@@ -4,7 +4,8 @@
 
 use std::path::PathBuf;
 
-use acacia_bot::build::{check, Block, BuildJob, BuildStatus, Builder, Mismatch, Phase, Structure, Transform};
+use acacia_bot::build::journal::Journal;
+use acacia_bot::build::{check, findings, Block, BuildJob, BuildStatus, Builder, Mismatch, Phase, Structure, Transform};
 use acacia_bot::pathfind::process::{BlockView, Status};
 use acacia_bot::pathfind::Processes;
 use acacia_bot::Bot;
@@ -154,11 +155,12 @@ pub async fn drive(bot: &mut Bot, builder: Builder, kill_at: u32, label: &str) -
         let st = procs.tick(bot).await?;
         ticks += 1;
         let mut s = status.lock().expect("status").clone();
+        // Moving by the pilot's state: searching ticks hold the keys (research/build-walk-overhead.md).
         let key = match st {
-            Status::Moving(_) => "moving",
-            Status::Holding => "holding",
-            Status::Acted => "acting",
-            _ => "idle",
+            Status::Moving(nav) => format!("moving.{nav:?}"),
+            Status::Holding => "holding".into(),
+            Status::Acted => "acting".into(),
+            _ => "idle".into(),
         };
         *split.entry(format!("{key}/{:?}", s.phase)).or_default() += t0.elapsed();
         if ticks % 400 == 0 {
@@ -184,6 +186,29 @@ pub async fn drive(bot: &mut Bot, builder: Builder, kill_at: u32, label: &str) -
             println!("{label} act timing:\n{}", bot.act_timing().table());
             return Ok((ticks, s, super::corrections(bot) - before));
         }
+    }
+}
+
+/// Where the run's journals go (`BUILD_JOURNAL`, default `journal/` in the working directory).
+fn journal_dir() -> PathBuf {
+    std::env::var_os("BUILD_JOURNAL").map_or_else(|| "journal".into(), PathBuf::from)
+}
+
+/// Clears the journals of an earlier run.
+pub fn fresh_journals() {
+    let _ = std::fs::remove_dir_all(journal_dir());
+}
+
+/// `builder` writing its journal as `name`.
+pub fn journaled(builder: Builder, name: &str) -> Result<Builder, Error> {
+    Ok(builder.with_journal(std::sync::Arc::new(Journal::create(&journal_dir(), name)?)))
+}
+
+/// Prints the journals' summary and findings, and the history of every wrong cell.
+pub fn report(wrong: &[Mismatch]) {
+    match findings::report(&journal_dir(), &wrong.iter().take(20).map(|m| m.pos).collect::<Vec<_>>()) {
+        Ok(lines) => lines.iter().for_each(|l| println!("{l}")),
+        Err(e) => println!("no journal report: {e}"),
     }
 }
 

@@ -19,6 +19,9 @@ pub type Fill<'a> = ([i32; 3], [i32; 3], &'a str);
 
 /// The pad floats this far above the bot's spawn, clear of terrain and stray water.
 const PAD_HEIGHT: i32 = 40;
+/// A spawn above this starts the pad from [`RESET_BASE`] instead.
+const HIGHEST_BASE: i32 = 220;
+const RESET_BASE: i32 = 120;
 /// Pad extent (offsets from the origin); the floor is the five layers below y 0.
 pub const PAD_MIN: [i32; 3] = [-3, -5, -12];
 pub const PAD_MAX: [i32; 3] = [24, 10, 12];
@@ -52,7 +55,12 @@ pub async fn connect_config(server: &str, name: &str, config: BotConfig) -> Resu
         bot.wait_ticks(1).await?;
     }
     bot.wait_ticks(20).await?;
-    let spawn = bot.block_position().expect("movement started");
+    let mut spawn = bot.block_position().expect("movement started");
+    // Bots left on a pad rejoin there, and each run's pad floats PAD_HEIGHT higher: past the build limit (y 319)
+    // nothing places, and live builds held for their whole run (2026-10-21, pad at 340).
+    if spawn[1] > HIGHEST_BASE {
+        spawn[1] = RESET_BASE;
+    }
     println!("pad origin {spawn:?} + {PAD_HEIGHT} up");
     for cmd in ["/difficulty peaceful", "/kill @e[type=!player]"] {
         bot.client().command(cmd);

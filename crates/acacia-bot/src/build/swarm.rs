@@ -142,6 +142,11 @@ impl Builder {
         ok
     }
 
+    /// Cells this bot holds and cells other bots hold (0, 0 without a board).
+    pub(super) fn claims(&self) -> (usize, usize) {
+        self.swarm.as_ref().map_or((0, 0), |s| (s.claimed.len(), s.taken.len()))
+    }
+
     /// Bots sharing the job (1 without a board).
     pub(super) fn sharers(&self) -> u32 {
         self.swarm.as_ref().map_or(1, |s| s.board.others(&s.who).len() as u32 + 1)

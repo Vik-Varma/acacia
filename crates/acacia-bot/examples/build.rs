@@ -32,8 +32,9 @@ async fn main() -> Result<(), Error> {
     house::kit(&mut a, &pad).await?;
     pad.teleport(&mut a, [0.5, 0.0, 0.5], 180.0).await?;
     let saved = job.to_json();
+    house::fresh_journals();
     let started = Instant::now();
-    let (ticks, first, mut fixes) = house::drive(&mut a, Builder::new(job)?, kill_at, &name).await?;
+    let (ticks, first, mut fixes) = house::drive(&mut a, house::journaled(Builder::new(job)?, &name)?, kill_at, &name).await?;
     let mut total = (ticks, first.clone());
     if kill_at > 0 && first.phase != Phase::Done {
         println!("killed after {ticks} ticks: {first:?}");
@@ -45,7 +46,8 @@ async fn main() -> Result<(), Error> {
             pad.run(&b, c);
             b.wait_ticks(4).await?;
         }
-        let (more, second, f) = house::drive(&mut b, Builder::new(BuildJob::from_json(&saved)?)?, 0, &name).await?;
+        let resumed = house::journaled(Builder::new(BuildJob::from_json(&saved)?)?, &format!("{name}-resumed"))?;
+        let (more, second, f) = house::drive(&mut b, resumed, 0, &name).await?;
         fixes += f;
         total = (ticks + more, BuildStatus { placed: first.placed + second.placed, broken: first.broken + second.broken, restocks: first.restocks + second.restocks, ..second });
         pad.go_home(&mut b).await?;
@@ -64,5 +66,6 @@ async fn main() -> Result<(), Error> {
         started.elapsed().as_secs_f32(), s.placed, s.broken, s.restocks, wrong.len(), s.unsupported, s.failed, s.scaffold
     );
     wrong.iter().take(20).for_each(|m| println!("  {:?}: want {} found {}", m.pos, m.want, m.found));
+    house::report(&wrong);
     Ok(())
 }
