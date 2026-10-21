@@ -22,9 +22,11 @@ mod screenshot;
 mod sign_text;
 mod sky;
 mod sprites;
+mod stages;
 mod store;
 mod ui;
 mod weather;
+mod world_pass;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -38,6 +40,7 @@ use entities::EntityPass;
 use crack::CrackPass;
 pub use crack::load_stages as load_crack_stages;
 use outline::OutlinePass;
+use stages::StageClock;
 use ui::UiPass;
 pub use outline::Outline;
 use sky::SkyPass;
@@ -195,8 +198,10 @@ impl Renderer {
 
     /// Draws a frame from `camera`, with `ui` (its atlas and this frame's quads) over it.
     pub fn render(&mut self, camera: &Camera, ui: Option<(&acacia_ui::Atlas, &[acacia_ui::Quad])>) -> FrameStats {
+        let mut clock = StageClock::start();
         let (cam_block, cam_frac) = camera.split_position();
         self.take_updates(cam_block);
+        clock.mark("updates");
         self.textures.animate(&self.queue, (self.started.elapsed().as_secs_f64() * 20.0) as u64);
         self.prepare_particles(camera);
         let world = self.scene.as_ref().map(|s| s.world().clone());
@@ -207,6 +212,7 @@ impl Renderer {
         self.cloud_pass.prepare(&self.device, &self.queue, camera.position, clouds, crate::sky::cloud_tint(self.weather), self.started.elapsed().as_secs_f64());
         self.bolt_pass.prepare(&self.device, &self.queue, &self.bolts, camera.position);
         self.prepare_shadows(camera.position);
+        clock.mark("effects");
 
         let view_proj = camera.view_proj();
         let realm = self.world().map_or(Realm::Overworld, |w| Realm::of(&w.dimension()));
@@ -237,6 +243,7 @@ impl Renderer {
         }
         self.sign_text.prepare(&self.device, &self.queue, self.ui_pass.texture.as_ref(), self.block_models.sign_text(), camera.position, light_at);
         drop(light);
+        clock.mark("entities+ui");
         let frustum = Frustum::new(view_proj);
         let reachable = self
             .scene
@@ -252,42 +259,19 @@ impl Renderer {
             pending: self.scene.as_ref().map_or(0, Scene::pending),
         };
 
+        clock.mark("cull");
         let Some(frame) = device::acquire_or_reconfigure(&self.surface, &self.device, &self.config) else { return stats };
+        clock.mark("acquire");
         let view = frame.texture.create_view(&Default::default());
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("frame") });
-        {
-            let mut pass = pipeline::begin_pass(&mut encoder, &view, &self.depth, fog.color);
-            if let Some(sky) = sky_pass {
-                sky.draw(&mut pass, realm);
-            }
-            for (pipeline, draws) in [(&self.pipelines.solid, &solid), (&self.pipelines.translucent, &translucent)] {
-                pass.set_pipeline(pipeline);
-                pass.set_bind_group(0, &self.bind_group, &[]);
-                for d in draws {
-                    pass.draw(d.first * 6..(d.first + d.count) * 6, d.slot..d.slot + 1);
-                }
-                if std::ptr::eq(pipeline, &self.pipelines.solid) {
-                    self.entities.draw(&mut pass);
-                    self.sign_text.draw(&mut pass);
-                }
-            }
-            self.entities.draw_blended(&mut pass);
-            self.shadow_pass.draw(&mut pass);
-            self.particles.draw(&self.device, &mut pass, &self.globals, &self.textures.view, &self.sampler);
-            if !fog.in_fluid {
-                self.cloud_pass.draw(&mut pass);
-            }
-            self.bolt_pass.draw(&mut pass);
-            self.weather_pass.draw(&mut pass);
-            self.crack_pass.draw(&mut pass);
-            self.outline_pass.draw(&mut pass);
-            self.screen_effect.draw(&mut pass);
-        }
+        self.world_pass(&mut encoder, &view, [&solid, &translucent], realm, &fog);
         if atlas.is_some() {
             self.ui_pass.draw(&mut encoder, &frame.texture);
         }
         self.draw_over_ui(&mut encoder, &view);
+        clock.mark("encode");
         self.queue.submit([encoder.finish()]);
+        clock.mark("submit");
         if let Some(path) = self.screenshot.take() {
             match screenshot::save(&self.device, &self.queue, &frame.texture, &path) {
                 Ok(()) => tracing::info!(path = %path.display(), "screenshot"),
@@ -295,6 +279,8 @@ impl Renderer {
             }
         }
         self.queue.present(frame);
+        clock.mark("present");
+        clock.report();
         stats
     }
 }

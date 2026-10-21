@@ -110,7 +110,10 @@ impl Ui {
         } else {
             Theme { style: java::STYLE, ..bedrock::load(&bedrock_root, font_root) }
         };
-        tracing::info!(font = font_root.is_some(), "ui themes");
+        match font_root {
+            Some(_) => tracing::info!("ui themes"),
+            None => tracing::warn!(looked = %java_root.display(), "no font, so no text: bake the Java look (tools/lookbake) or point ACACIA_LOOKS at one"),
+        }
         let lang = Lang::load(&bedrock_root.join("texts/en_US.lang"));
         let foil = |look| looks.get(look).look.foil;
         let (bedrock, java) = (Skin::new(bedrock_theme, &bedrock_root, foil(LookChoice::Bedrock)), Skin::new(java_theme, &java_root, foil(LookChoice::Java)));

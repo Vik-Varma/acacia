@@ -36,9 +36,11 @@ pub fn state_key(state: &BlockState) -> String {
 }
 
 impl LookPack {
-    /// `$ACACIA_LOOKS`, else `assets/looks` under the working directory, then the look's name.
+    /// `$ACACIA_LOOKS`, else `looks` beside the resource pack ([`Pack::default_dir`]: `assets/looks`
+    /// by default), then the look's name.
     pub fn default_dir(name: &str) -> PathBuf {
-        std::env::var_os("ACACIA_LOOKS").map_or_else(|| PathBuf::from("assets/looks"), PathBuf::from).join(name)
+        let beside_pack = || Pack::default_dir().parent().map_or_else(|| PathBuf::from("assets"), PathBuf::from).join("looks");
+        std::env::var_os("ACACIA_LOOKS").map_or_else(beside_pack, PathBuf::from).join(name)
     }
 
     /// Bakes the vanilla registry's blocks from a Bedrock resource pack.

@@ -1,5 +1,6 @@
 //! Per-runtime-id render data: shape, render layer, texture-array layer and tint per face.
 
+mod facing;
 mod lever;
 pub mod model;
 pub mod placed;
@@ -159,30 +160,7 @@ fn face_names(pack: &Pack, state: &BlockState) -> Option<[String; 6]> {
             _ => None,
         })
         .or_else(|| pack.texture(name).map(|_| std::array::from_fn(|_| name.to_owned())))?;
-    Some(orient(faces, state))
-}
-
-/// Applies `pillar_axis` and `minecraft:cardinal_direction` (blocks.json fronts face south).
-fn orient(mut f: [String; 6], state: &BlockState) -> [String; 6] {
-    let (top, bottom, side) = (f[2].clone(), f[3].clone(), f[4].clone());
-    match state.property("pillar_axis") {
-        Some("x") => f = [top.clone(), bottom, side.clone(), side.clone(), side.clone(), side],
-        Some("z") => f = [side.clone(), side.clone(), side.clone(), side, top.clone(), bottom],
-        _ => {}
-    }
-    let turns = match state.property("minecraft:cardinal_direction") {
-        Some("west") => 1,
-        Some("north") => 2,
-        Some("east") => 3,
-        _ => 0,
-    };
-    // South, west, north, east: each turn moves a face one step along this ring.
-    const RING: [usize; 4] = [4, 1, 5, 0];
-    let old = f.clone();
-    for i in 0..4 {
-        f[RING[(i + turns) % 4]] = old[RING[i]].clone();
-    }
-    f
+    Some(facing::orient(faces, state))
 }
 
 fn build_block(state: &BlockState, faces: Option<[String; 6]>, textures: &mut Textures) -> RenderBlock {
@@ -227,7 +205,7 @@ fn build_block(state: &BlockState, faces: Option<[String; 6]>, textures: &mut Te
         textures: resolved.map(|r| r.layer),
         tint: tint::faces(name),
         material,
-        turns: [0; 6],
+        turns: facing::turns(state),
         random: None,
         offset: None,
         occludes,

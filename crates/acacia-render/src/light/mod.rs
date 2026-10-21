@@ -68,13 +68,14 @@ fn run(world: &World, data: &RwLock<LightData>, changes: &Receiver<ChunkChange>,
             }
         }
         batch.extend(changes.try_iter());
-        let mut d = data.write();
         if last_unload_check.elapsed() >= UNLOAD_CHECK {
             last_unload_check = Instant::now();
+            let mut d = data.write();
             let gone: Vec<_> = d.columns.iter().copied().filter(|&(x, z)| world.get(x, z).is_none()).collect();
             gone.into_iter().for_each(|(x, z)| lighter.drop_column(&mut d, x, z));
         }
-        apply(&lighter, &mut d, &batch);
+        apply(&lighter, data, &batch);
+        let mut d = data.write();
         let touched = d.take_touched();
         d.generation += 1;
         drop(d);
@@ -88,7 +89,9 @@ fn run(world: &World, data: &RwLock<LightData>, changes: &Receiver<ChunkChange>,
 }
 
 /// Relights each column with a column or section change once, and updates single blocks elsewhere.
-fn apply(lighter: &Lighter, d: &mut LightData, batch: &[ChunkChange]) {
+/// The lock is taken per column: a whole batch (a join's view) takes seconds, and each frame reads the
+/// light to shade entities.
+fn apply(lighter: &Lighter, data: &RwLock<LightData>, batch: &[ChunkChange]) {
     let mut relight: FxHashSet<(i32, i32)> = FxHashSet::default();
     for c in batch {
         if let ChunkChange::Column { x, z } | ChunkChange::Section { x, z, .. } = *c {
@@ -96,13 +99,14 @@ fn apply(lighter: &Lighter, d: &mut LightData, batch: &[ChunkChange]) {
         }
     }
     for &(x, z) in &relight {
-        lighter.relight_column(d, x, z);
+        lighter.relight_column(&mut data.write(), x, z);
     }
+    let mut d = data.write();
     for c in batch {
         if let ChunkChange::Block { x, y, z } = *c
             && !relight.contains(&(x >> 4, z >> 4))
         {
-            lighter.update_block(d, x, y, z);
+            lighter.update_block(&mut d, x, y, z);
         }
     }
 }

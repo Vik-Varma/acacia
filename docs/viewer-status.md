@@ -103,6 +103,18 @@ unit or pack tests only.
   had none, one had one and one had five, each in mid-jump (the same route run again had none,
   so it is not a block on the way); and once, standing where it joined, the player was
   corrected 19 times in 6 s (two later joins: none). The user has not yet said how it feels.
+  2026-10-21 ("sprint teleports back / cancels"): releasing Ctrl with W held ended our sprint but
+  not the server's, which then corrected every ~1.3 s (13 times in one sprint-jump run). The key
+  now latches with mouse input (DESIGN.md "Movement vs the servers"): 0 corrections in 7 runs.
+  Draw stalls of 0.3 to 5.4 s were the light thread holding its write lock over a whole batch of
+  columns (each frame reads light for entities and particles); it now locks per column: worst draw
+  0.25 s in the same walk, 100 to 250 ms hitches for ~5 s after joining remain. Slow draws log
+  their stages (`RUST_LOG=frame=warn`, `gpu/stages.rs`).
+- **Text:** the only font is the Java look's `ascii.png`: without a baked Java look the viewer
+  has no text (it warns). Baked looks are found beside `ACACIA_ASSETS` (`<pack>/../looks`).
+- **Six-way blocks** (pistons, dispensers, droppers, observers) face their `facing_direction`
+  (`blocks/facing.rs`): seen live from the front (2026-10-21); the top faces of sideways ones are
+  laid out by Java's models, not seen.
   `RUST_LOG=moves=debug,keys=debug` logs every correction with the blocks under the feet, the
   position and longest tick gap each 20 ticks, and each scripted key.
 - **Performance:** on a GPU only a light scene was measured (2026-10-11, Intel Arc integrated,
