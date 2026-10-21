@@ -33,7 +33,7 @@ impl Movement {
         self.vehicle_correction = None;
         // The server's flying flag is adopted again on the first tick there.
         self.server_flying = None;
-        (self.prev_jump, self.prev_impulse, self.tapped_sprint) = (false, false, false);
+        (self.prev_jump, self.prev_impulse, self.latched_sprint) =(false, false, false);
         (self.sprint_trigger, self.fly_taps) = (0, 0);
     }
 

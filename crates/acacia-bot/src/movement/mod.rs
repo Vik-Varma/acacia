@@ -128,8 +128,8 @@ pub struct Movement {
     /// Ticks left in which pressing forward again starts a sprint (double tap).
     sprint_trigger: u32,
     prev_impulse: bool,
-    /// The sprint was started by a double tap, so it outlives the (unheld) sprint key.
-    tapped_sprint: bool,
+    /// The sprint outlives the (unheld) sprint key: a double tap started it, or a keyboard client's key did.
+    latched_sprint: bool,
     effects: Effects,
     equipment: Equipment,
     /// The flying flag of the server's last `UpdateAbilities` (see `set_abilities`).
@@ -175,7 +175,7 @@ impl Movement {
             sprint_trigger: 0,
             recorded_want_down: None,
             prev_impulse: false,
-            tapped_sprint: false,
+            latched_sprint: false,
             effects: Effects::default(),
             equipment: Equipment::default(),
             server_flying: None,
@@ -404,7 +404,7 @@ impl Movement {
             }
         }
         self.prev_impulse = impulse;
-        self.tapped_sprint = (self.tapped_sprint && st.sprinting || double_tap) && !c.sprint;
+        self.latched_sprint = if c.sprint { self.mouse_input } else { self.latched_sprint && st.sprinting || double_tap };
         let jump = flight::fly_jump(&mut self.fly_taps, &c, &st.flight);
         let input = Input {
             move_vector: keys(c.strafe, c.forward),
@@ -413,9 +413,10 @@ impl Movement {
             jump,
             sneak: c.sneak,
             want_down: self.recorded_want_down.unwrap_or(c.sneak),
-            // Strict BDS 1.26.52 ends a key sprint when the key is released (fuzz: 94% of such ticks were
-            // corrected); a double-tap sprint has no key and lasts while forward is held.
-            sprint: c.sprint || double_tap || (self.tapped_sprint && st.sprinting && forward),
+            // A touch bot's key sprint ends with the key (strict BDS 1.26.52 fuzz, touch input: 94% of
+            // key-released sprinting ticks were corrected). A keyboard client's key sprint, like a double-tap
+            // one, lasts while forward is held (vanilla Bedrock; accepted by strict BDS with mouse input).
+            sprint: c.sprint || double_tap || (self.latched_sprint && st.sprinting && forward),
             using_item: self.using_item,
             glide: c.glide,
             ..Input::default()

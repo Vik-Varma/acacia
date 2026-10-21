@@ -149,8 +149,10 @@ the proxy (`crates/acacia-mitm/src/transfer.rs`). What is left: [mitm-next.md](m
 - Movement vs the servers (verified with `examples/course.rs` and `examples/drills.rs` on BDS and the lab):
   - Keyboard input is only ever -1/0/1: BDS moves at full speed whenever Up is set, whatever the
     move vector says, so fractional input drifts until corrected. `Controls` quantizes (movement/mod.rs).
-  - The sprint key only starts a sprint: it lasts until forward is released (Movement latches it;
-    BDS and Boar ignore StopSprinting with forward held). Diagonal keys are normalized to length 1
+  - With mouse input the sprint key only starts a sprint: it lasts until forward is released (Movement
+    latches it; strict BDS 1.26.52 keeps sprinting through our StopSprinting with forward held, and
+    corrected every ~1.3 s, 2026-10-21). With touch input a key sprint ends with the key (fuzz,
+    4805df7); only a double-tap one is latched. Diagonal keys are normalized to length 1
     before the simulation's 0.98 input scale, as the client does.
   - `PlayerAuthInput.position` is feet + 1.62 in every pose; the pose eye height is for raycasts only.
   - BDS stamps corrections with the input tick whose end state they give, a teleport stamped T holds
