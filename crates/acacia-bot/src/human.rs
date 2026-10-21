@@ -23,6 +23,9 @@ pub(crate) const USE_RELEASE: Range = (60, 250);
 pub(crate) const HUNGER_NOTICE: Range = (800, 3000);
 /// Between selecting a hotbar slot and pressing use (capture: 0.6, 1.05, 2.6 s), and before switching back after eating.
 pub(crate) const HOTBAR_SWITCH: Range = (500, 1100);
+/// A number key or scroll to another hotbar slot while building, before the next click: 1-4 ticks
+/// (placeholder, no capture yet; the container CLICK range was used before and made switches 0.8 s).
+pub(crate) const HOTBAR_KEY: Range = (50, 200);
 /// Typing on a sign or book page: per character after a TYPE_BASE, capped.
 pub(crate) const TYPE_PER_CHAR_MS: u64 = 180;
 pub(crate) const TYPE_MAX_MS: u64 = 40_000;
@@ -58,6 +61,16 @@ pub(crate) const EQUIP_RESYNC: Range = (60, 250);
 pub(crate) const START_SLEEP: Range = (400, 650);
 /// Server `Animate WakeUp` to `PlayerAction StopSleeping` (n=1: 105 ms).
 pub(crate) const WAKE_REPLY: Range = (80, 160);
+
+// Movement aim (pathfind `MovementProfile::Human`): placeholders until a vanilla capture fits them.
+/// Share of the remaining yaw error turned per tick.
+pub(crate) const AIM_EASE: f32 = 0.5;
+/// Fastest turn per tick, degrees.
+pub(crate) const AIM_MAX_TURN_DEG: f32 = 30.0;
+/// Per-tick aim noise, degrees (uniform ±).
+pub(crate) const AIM_JITTER_DEG: f32 = 1.5;
+/// How far (blocks) a move's start may sit from where the plan put it.
+pub(crate) const START_SLOP: f32 = 0.05;
 
 pub(crate) struct Human {
     rng: u64,

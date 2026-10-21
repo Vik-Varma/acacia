@@ -1,0 +1,103 @@
+//! Long gotos over several segments (milestone C1): the next segment is planned ahead and spliced on, so the
+//! bot runs through the joins. The 500-block runs take minutes in debug, so they are ignored by default:
+//! `cargo test --release -p acacia-bot --lib tests::segments -- --ignored --nocapture`.
+
+use super::drive::{PROFILES, macro_opts, standing};
+use super::grid::Grid;
+use acacia_physics::Vec3;
+
+use super::pilot_sim::{Flight, Sky, fly};
+use crate::pathfind::{Goal, GotoOpts, MovementProfile};
+
+/// Slower than this (blocks/tick) near a join counts as stopping there (walking is 0.216).
+const MIN_JOIN_SPEED: f32 = 0.15;
+/// Ticks either side of passing a join that are checked.
+const JOIN_WINDOW: usize = 10;
+/// Moving back faster than this (blocks/tick) counts as turning round.
+const BACK_SPEED: f32 = 0.01;
+
+/// A stone lane 7 wide along +x from x -5 to `len`, feet at y 1: two-block gaps at 100 and 300, a raised
+/// stretch (one block up) from 200 to 230.
+fn lane(len: i32) -> Grid {
+    let g = Grid::sized(len / 16 + 2);
+    g.fill([-5, 0, -3], [len, 0, 3], "stone");
+    for x in [100, 300].into_iter().filter(|&x| x < len) {
+        g.fill([x, 0, -3], [x + 1, 0, 3], "air");
+    }
+    if len > 230 {
+        g.fill([200, 1, -3], [230, 1, 3], "stone");
+    }
+    g
+}
+
+fn opts(profile: MovementProfile) -> GotoOpts {
+    GotoOpts { search: macro_opts(profile), seed: Some(1), ..GotoOpts::default() }
+}
+
+#[test]
+#[ignore = "slow in debug; run in release"]
+fn long_goto_runs_through_the_joins() {
+    let g = lane(505);
+    let goal = Goal::Block([500, 1, 0]);
+    let mut bad = Vec::new();
+    for profile in PROFILES {
+        let sky = Sky { horizon: Some(5), delay: 0, max_ticks: 4000 };
+        let f = fly(&g, &mut standing([0.5, 1.0, 0.5]), goal.clone(), opts(profile), sky);
+        let speeds = f.join_speeds(JOIN_WINDOW);
+        eprintln!("JOINS {profile:?}: {} ticks, {} joins, {} searches, {} diverged, slowest near each join {speeds:.3?}", f.ticks, f.joins.len(), f.searches, f.divergences);
+        let back = turned_back(&f, goal_x(&goal));
+        eprintln!("BACKWARDS {profile:?}: {back:.2?}");
+        let ok = f.result.is_ok() && f.joins.len() >= 3 && f.replans == 0 && speeds.iter().all(|&s| s > MIN_JOIN_SPEED) && back.is_empty();
+        if !ok {
+            bad.push(format!("{profile:?}: {:?}, {} joins, {} re-plans, speeds {speeds:?}", f.result, f.joins.len(), f.replans));
+        }
+    }
+    assert!(bad.is_empty(), "{bad:#?}");
+}
+
+fn goal_x(goal: &Goal) -> f32 {
+    match goal {
+        Goal::Block(p) => p[0] as f32 + 0.5,
+        _ => unreachable!("lane goals are blocks"),
+    }
+}
+
+/// Ticks moving back (-x) on the lane, away from the goal's last block (settling there may step back).
+fn turned_back(f: &Flight, goal_x: f32) -> Vec<(usize, Vec3)> {
+    f.backwards(BACK_SPEED).into_iter().filter(|(_, p)| goal_x - p[0] > 1.5).collect()
+}
+
+/// `Human` seed 1 sprint-jumped past a shortcut's target at x 146 and turned round to stand in it (fixed: a
+/// shortcut landing just past its target ends there).
+#[test]
+#[ignore = "slow in debug; run in release"]
+fn human_runs_on_past_a_shortcut_target() {
+    let g = lane(200);
+    let goal = Goal::Block([190, 1, 0]);
+    let sky = Sky { horizon: Some(5), delay: 0, max_ticks: 2000 };
+    let f = fly(&g, &mut standing([0.5, 1.0, 0.5]), goal.clone(), opts(MovementProfile::Human), sky);
+    assert_eq!(f.result, Ok(()));
+    assert_eq!(turned_back(&f, goal_x(&goal)), Vec::new());
+}
+
+/// A plan-ahead answering after the bot reached the segment's end: it waits there, then carries on.
+#[test]
+#[ignore = "slow in debug; run in release"]
+fn late_splice_waits_at_the_join() {
+    let g = lane(150);
+    let sky = Sky { horizon: Some(3), delay: 140, max_ticks: 3000 };
+    let f = fly(&g, &mut standing([0.5, 1.0, 0.5]), Goal::Block([145, 1, 0]), opts(MovementProfile::Optimal), sky);
+    eprintln!("LATE {} ticks, joins {:?}, speeds {:.3?}", f.ticks, f.joins, f.join_speeds(JOIN_WINDOW));
+    assert_eq!(f.result, Ok(()));
+    assert!(!f.joins.is_empty() && f.replans == 0);
+}
+
+/// Without a horizon the whole lane is one search: the same goal, no joins (the baseline the joins are run against).
+#[test]
+#[ignore = "slow in debug; run in release"]
+fn short_goto_has_no_joins() {
+    let g = lane(60);
+    let sky = Sky { horizon: None, delay: 0, max_ticks: 600 };
+    let f = fly(&g, &mut standing([0.5, 1.0, 0.5]), Goal::Block([55, 1, 0]), opts(MovementProfile::Optimal), sky);
+    assert_eq!((f.result, f.joins.len()), (Ok(()), 0));
+}

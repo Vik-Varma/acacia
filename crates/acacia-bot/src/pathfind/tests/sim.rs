@@ -15,7 +15,7 @@ pub struct Run {
     pub end: Vec3,
 }
 
-fn sense(g: &Grid, m: &Movement) -> Sense {
+pub fn sense(g: &Grid, m: &Movement) -> Sense {
     let pos = m.position().expect("started");
     let feet = [pos[0].floor() as i32, pos[1].floor() as i32, pos[2].floor() as i32];
     Sense { pos, on_ground: m.on_ground(), in_water: g.terrain().cell(feet).is_water() }
@@ -23,7 +23,7 @@ fn sense(g: &Grid, m: &Movement) -> Sense {
 
 /// Does a node's work in the grid the way the navigator does it on a server: breaks and doors at
 /// once, placing after the same maneuvers.
-fn perform(g: &Grid, world: &PhysicsWorld, m: &mut Movement, node: &PathNode) {
+pub fn perform(g: &Grid, world: &PhysicsWorld, m: &mut Movement, node: &PathNode) {
     for step in node.work.steps() {
         match step {
             Step::Break(pos) => {
@@ -71,7 +71,8 @@ pub fn run_with(g: &Grid, start: Vec3, goal: Goal, max_ticks: u32, search_opts: 
     for tick in 0..max_ticks {
         let sense = sense(g, &m);
         let pos = sense.pos;
-        match follower.tick(&sense, &mut m.controls) {
+        let live = m.fork();
+        match follower.tick(&sense, live.as_ref(), &world, &mut m.controls) {
             FollowStatus::Moving => {}
             FollowStatus::Work => {
                 let node = *follower.pending_work().expect("work due");

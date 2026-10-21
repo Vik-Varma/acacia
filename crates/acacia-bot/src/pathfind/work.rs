@@ -5,7 +5,7 @@ use acacia_physics::BlockPos;
 use crate::interact::Face;
 
 /// One world change, done standing at the move's start.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Step {
     Break(BlockPos),
     /// Place a scaffold block against `face` of `against`.

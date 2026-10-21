@@ -3,6 +3,8 @@
 
 use acacia_physics::constants::{CLIMB_SPEED, NORMAL_GRAVITY, NORMAL_GRAVITY_MULTIPLIER};
 
+use super::profile::MovementProfile;
+
 pub const WALK: f32 = 20.0 / 4.317;
 pub const SPRINT: f32 = 20.0 / 5.612;
 pub const WALK_OFF: f32 = WALK * 0.8;
@@ -17,6 +19,27 @@ pub const DANGER_NEAR: f32 = 20.0;
 pub const LONG_JUMP_PENALTY: f32 = 2.0;
 /// Sprint cost per block: turns heuristic distance into ticks (Baritone `costHeuristic`).
 pub const COST_HEURISTIC: f32 = 3.563;
+/// Steady sprint-jumping on flat ground: 0.35633 blocks per tick, one hop per 12 ticks (measured by
+/// `tests::hops::steady_hop_speed_bounds_the_heuristic`).
+pub const HOP_SPEED: f32 = 0.3563;
+pub const HOP_TICKS: f32 = 12.0;
+/// Least ticks a run from standing loses against steady hops over three blocks or more (measured 4.1 at the
+/// first landing; `tests::hops::steady_hop_speed_bounds_the_heuristic` checks the bound).
+pub const MACRO_STARTUP: f32 = 4.0;
+/// Ticks a classic move from standing loses getting up to speed, which its per-block cost leaves out (measured
+/// 4.2–4.7 over 5–60 blocks by `tests::perf::cost_skew_report`; the other ~3 of the skew is settling at the goal,
+/// the same for every plan). Macro moves simulate theirs.
+pub const CLASSIC_STARTUP: f32 = 4.0;
+
+/// Fewest ticks per block any move achieves with macro moves on: steady hops (plus the `Human` jump
+/// hesitation, unless plain sprinting is faster), rounded down so the heuristic stays admissible.
+pub fn macro_ticks_per_block(profile: MovementProfile) -> f32 {
+    let hop = match profile {
+        MovementProfile::Optimal => 1.0 / HOP_SPEED,
+        MovementProfile::Human => ((HOP_TICKS + HUMAN_JUMP) / (HOP_TICKS * HOP_SPEED)).min(SPRINT),
+    };
+    (hop * 100.0).floor() / 100.0
+}
 /// Sneaking to an edge to bridge (Baritone `SNEAK_ONE_BLOCK_COST`).
 pub const SNEAK: f32 = 20.0 / 1.3;
 /// On top of the break time, for tool switches and the risk (Baritone `blockBreakAdditionalPenalty`).
@@ -27,6 +50,11 @@ pub const MAX_DIG_TICKS: u32 = 600;
 pub const PLACE: f32 = 20.0;
 /// Opening a door or gate: aim, click, wait for the update.
 pub const DOOR: f32 = 10.0;
+/// `Human`: a person hesitates before each jump of a macro move.
+pub const HUMAN_JUMP: f32 = 2.0;
+/// `Human`: cost of a landing with no margin, falling to 0 at [`RISK_MARGIN`] blocks from the cell's sides.
+pub const RISK: f32 = 6.0;
+pub const RISK_MARGIN: f32 = 0.3;
 
 /// Placing a block with `left` scaffold blocks remaining: dearer as they run out.
 pub fn place(left: u32) -> f32 {

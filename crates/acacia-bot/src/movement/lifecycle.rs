@@ -33,8 +33,8 @@ impl Movement {
         self.vehicle_correction = None;
         // The server's flying flag is adopted again on the first tick there.
         self.server_flying = None;
-        (self.prev_jump, self.prev_impulse, self.latched_sprint) =(false, false, false);
-        (self.sprint_trigger, self.fly_taps) = (0, 0);
+        self.prev_jump = false;
+        self.keys = Default::default();
     }
 
     /// Replaces the simulated position and velocity as of the end of input `tick`.

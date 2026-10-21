@@ -57,6 +57,21 @@ for every tick our position is off by more than 0.0001, so each correction is a 
 - `tools/physics/fuzz.sh <rounds> [seed]` builds random terrain on a pad (water, lava, slime, honey, ladders, scaffolding,
   powder snow...) and drives random inputs over it, recording a trace (`.testserver/traces/*.btrc`: the server's movement
   packets plus every input we sent). It prints the seed; `FUZZ_BOTS=n` runs n offline bots in parallel.
+- `cargo run --release -p acacia-bot --example yaw_sweep -- <server> <name> [count] [variants] [ticks]` walks or
+  bunny-hops from rest at random yaws and counts corrections per variant (run it on a reset world).
+- `cargo run --release -p acacia-bot --example observe -- <server> <nameA> <nameB> [count] [ticks]`: bot A sprint-hops
+  (`OBS_MODE=walk`: walks) from `OBS_START=x,z` on the pad while bot B logs the `MovePlayer` broadcasts of A to
+  `OBSERVE_LOG`: the server's own position every tick, which a correction only shows once it is 1e-6 off. Compare
+  with A's trace replayed under `RUST_LOG=acacia_bot::movement=trace` (DESIGN.md "Off-axis ulp corrections").
+- Movement and pathfind runs on testbox (`examples/course.rs`, `examples/goto.rs`, `examples/processes.rs`, `examples/confirmed.rs`, `examples/build.rs`, `examples/swarm_build.rs`, `place_probe`, `observe`, `yaw_sweep`) use a
+  strict instance with the test pack off: `tools/testbox-bds.sh unpack` (with that instance's `BDS_DIR`/`BDS_PORT`;
+  `pack` turns it back on), then `reset` before every run. The pack (`tools/actiontest-pack`) rebuilds a scene
+  round each joining player 40 ticks after the spawn: blocks and a water pool in the way, mobs, a hunger effect.
+  It lands about when a goto plans, so a run's start depends on that race; it hid a stuck-start bug for a day
+  (docs/pathfind-plan.md, "Core fixes").
+- Testbox jobs (`tools/remote-run.sh`, `tools/remote-test.sh`, `DETACH=1` to return at once) run under
+  `tools/testbox-guard.sh`: killed with their process group on `TIMEOUT` or `STALL` seconds without output
+  (done file 124 / 125); `tools/testbox-watch.sh` prints a line per job that finishes.
 - `tools/physics/drill.sh <names>` runs scripted drills (`crates/acacia-bot/examples/drills.rs`), exact control
   sequences that isolate one variable.
 - `cargo run -p acacia-bot --example flight -- <server> <name> [rounds]` drills creative flight (crates/acacia-physics
@@ -66,11 +81,12 @@ for every tick our position is off by more than 0.0001, so each correction is a 
   (docs/DESIGN.md "Dimension travel"): overworld, Nether and End by command, then by a Nether portal and End portal
   blocks, printing each arrival's and walk's corrections and the distance from the server's own position.
 - `cargo run -p acacia-bot --example replay -- <trace> [--verbose]` replays a trace offline through the current code
-  and reports server corrections we disagree with (`--correction-tolerance`, default 0.001) and ticks that differ from
-  what the live bot did. "Diverged from the recording" means the replay would send other inputs than were recorded:
+  and reports server corrections we disagree with (`--correction-tolerance`, default 0.001; 0 compares bit-exactly,
+  and `--verbose` prints both velocities) and ticks that differ from what the live bot did. "Diverged from the recording" means the replay would send other inputs than were recorded:
   rules that change our own input flags (sprint, swim, jump starts) can only be judged by a fresh live run.
 - `crates/acacia-bot/tests/trace_regression.rs` replays the regression set in `crates/acacia-bot/tests/traces`
-  (gzipped bot traces from the local BDS) and fails if a trace gains mismatches.
+  (gzipped bot traces from the local BDS) and fails if a trace gains mismatches. Each trace has its own
+  correction tolerance: `course-human-linux` (testbox Linux BDS) is checked bit-exactly.
 - Fuzz and drills need an online account in `./.tokens` of the checkout they run from (`@default`, or `ACCOUNT=@name`).
 
 The loop:

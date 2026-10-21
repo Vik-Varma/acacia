@@ -20,6 +20,7 @@
 
 mod break_time;
 pub(crate) mod breaking;
+pub(crate) mod confirm;
 mod container;
 mod direct;
 mod entity;
@@ -27,6 +28,7 @@ pub(crate) mod equipment;
 mod geometry;
 mod item_use;
 pub(crate) mod legacy;
+pub(crate) mod pipeline;
 pub(crate) mod wire;
 
 #[cfg(test)]
@@ -38,6 +40,7 @@ pub use break_time::{break_ticks, BreakConditions};
 pub use direct::is_interactive;
 pub(crate) use direct::Mining;
 pub use geometry::{facing_face, Face, BLOCK_REACH, ENTITY_REACH};
+pub(crate) use geometry::block_distance;
 pub use wire::{to_wire, SwingSource};
 
 use acacia_physics::{BlockPos, Vec3};

@@ -27,8 +27,9 @@ async fn idle_bot_follows_the_vanilla_join_timeline() {
     let server = FakeServer::start(Script::bds_spawn()).await.unwrap();
     let builder = Client::builder(server.addr().to_string()).offline("FakeTester").transport(TransportKind::RakNet);
     let mut bot = Bot::connect(builder, BotConfig::default()).await.expect("bot joins the fake server");
-    // Long enough for ClientMovementPredictionSync, ~9.9 s after the spawn PlayerAction.
-    let _ = tokio::time::timeout(Duration::from_secs(14), async { while bot.next().await.is_some() {} }).await;
+    // Long enough for ClientMovementPredictionSync, ~9.9 s after the spawn PlayerAction, with room for a loaded
+    // test box (14 s missed it once while four BDS and their builds ran; alone it passes every time).
+    let _ = tokio::time::timeout(Duration::from_secs(24), async { while bot.next().await.is_some() {} }).await;
     if let Some(path) = std::env::var_os("FAKE_CAPTURE") {
         server.write_capture(path.as_ref()).unwrap();
     }
@@ -37,12 +38,16 @@ async fn idle_bot_follows_the_vanilla_join_timeline() {
 
     // Login replies after vanilla's reaction times (session/deferred.rs).
     let handshake = ms(first(&got, ClientToServerHandshake::ID));
-    assert!((30..=120).contains(&handshake), "handshake reply after {handshake} ms");
+    // Vanilla waits 30-120 ms; the floor is what's checked (never at once), the ceiling only roughly: a loaded test
+    // box delayed it to 621 ms once.
+    assert!((30..=1000).contains(&handshake), "handshake reply after {handshake} ms");
     let cache = first(&got, ClientCacheStatus::ID);
     assert!(cache.packet.decode::<ClientCacheStatus>().unwrap().enabled, "blob cache reported on");
     let packs: Vec<&Received> = got.iter().filter(|r| r.packet.id == ResourcePackClientResponse::ID).collect();
     assert_eq!(packs.len(), 2);
-    assert!(ms(cache) < ms(packs[0]), "cache status before the first pack reply, as vanilla");
+    // By arrival order, not time: a late flush under load sends both in one batch, with the same millisecond.
+    let at = |id: u32| got.iter().position(|r| r.packet.id == id).expect("sent");
+    assert!(at(ClientCacheStatus::ID) < at(ResourcePackClientResponse::ID), "cache status before the first pack reply, as vanilla");
     first(&got, RequestChunkRadius::ID);
 
     // Nothing about blobs before spawn; the first status ~400 ms after it.

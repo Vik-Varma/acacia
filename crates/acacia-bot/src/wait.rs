@@ -37,7 +37,10 @@ impl Bot {
                 }
                 Some(Step::Tick) => Ok(Progress::Tick),
                 Some(Step::Idle) => continue,
-                Some(Step::Packet(packet)) => Ok(Progress::Packet(packet)),
+                Some(Step::Packet(packet)) => {
+                    self.note_echo(&packet);
+                    Ok(Progress::Packet(packet))
+                }
             };
         }
     }
@@ -83,9 +86,9 @@ impl Bot {
         }
     }
 
-    /// Lets `ticks` movement ticks (50 ms each) pass while processing packets.
+    /// Lets `ticks` movement ticks (50 ms each, `cadence::scaled`) pass while processing packets.
     pub async fn wait_ticks(&mut self, ticks: u32) -> Result<(), ActionError> {
-        self.pause(Duration::from_millis(50 * u64::from(ticks))).await
+        self.pause(crate::cadence::scaled(Duration::from_millis(50 * u64::from(ticks)))).await
     }
 
     /// Lets `duration` pass while processing packets.

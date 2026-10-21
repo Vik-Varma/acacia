@@ -1,6 +1,9 @@
+use acacia_client::proto::packets::{ChangeDimension, CorrectPlayerMovePrediction, CorrectPlayerMovePredictionPredictionType};
 use acacia_client::proto::types::{Vec2f, Vec3f};
+use acacia_client::proto::RawPacket;
 
 use super::*;
+use crate::state::Me;
 use crate::state::queries::test_support::raw;
 
 const ME: Me = Me { runtime_entity_id: 1, unique_entity_id: -1 };

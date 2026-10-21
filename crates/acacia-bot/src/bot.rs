@@ -8,7 +8,9 @@ use acacia_client::proto::RawPacket;
 use acacia_client::{Client, ClientBuilder, ConnectError, DisconnectReason, Event, MemoryBlobStore, PacketFilter};
 use crate::cadence::Ticker;
 use crate::events::{BotEvent, EventSource, Events};
+use crate::governor::Governor;
 use crate::human::Human;
+use crate::lag::LagLine;
 use crate::items::RequestIds;
 use crate::movement::{Controls, Idle, Movement};
 use crate::prediction_sync::PredictionSync;
@@ -70,6 +72,10 @@ pub struct Bot {
     spawned: bool,
     strict: bool,
     closed: Option<DisconnectReason>,
+    pub(crate) governor: Governor,
+    pub(crate) act_timing: crate::act_timing::ActTiming,
+    pub(crate) in_flight: crate::interact::pipeline::Pipeline<crate::interact::pipeline::StackUndo>,
+    lag: Option<LagLine>,
 }
 
 impl Bot {
@@ -135,6 +141,10 @@ impl Bot {
             spawned: false,
             strict: config.strict,
             closed: None,
+            governor: Governor::default(),
+            act_timing: Default::default(),
+            in_flight: Default::default(),
+            lag: config.lag.map(LagLine::new),
         })
     }
 
@@ -211,8 +221,17 @@ impl Bot {
             let rejected = world.rejected.drain(..).filter(|_| self.strict);
             self.pending.extend(rejected.map(BotEvent::Violation));
         }
+        if let Some(packet) = self.lag.as_mut().and_then(|l| l.pop_due(tokio::time::Instant::now())) {
+            self.apply(&packet);
+            return Some(Step::Packet(packet));
+        }
+        let lagged = self.lag.as_ref().and_then(LagLine::next_at);
         tokio::select! {
             event = self.client.recv() => match event? {
+                Event::Packet(packet) if self.lag.is_some() => {
+                    self.lag.as_mut()?.push(tokio::time::Instant::now(), packet);
+                    Some(Step::Idle)
+                }
                 Event::Packet(packet) => {
                     self.apply(&packet);
                     Some(Step::Packet(packet))
@@ -226,6 +245,7 @@ impl Bot {
                     Some(Step::Disconnected(reason))
                 }
             },
+            _ = tokio::time::sleep_until(lagged.unwrap_or_else(tokio::time::Instant::now)), if lagged.is_some() => Some(Step::Idle),
             ticks = self.ticker.wait() => {
                 (0..ticks).for_each(|_| self.on_tick());
                 Some(Step::Tick)

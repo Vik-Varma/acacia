@@ -5,6 +5,8 @@
 //! locking and no background work beyond the client's own connection task.
 
 pub mod books;
+pub mod act_timing;
+pub mod build;
 mod bot;
 mod cadence;
 mod config;
@@ -12,7 +14,9 @@ mod elytra;
 pub mod events;
 mod fishing;
 pub mod forms;
+pub mod governor;
 mod human;
+mod lag;
 pub mod interact;
 pub mod items;
 pub mod movement;
@@ -39,5 +43,6 @@ pub mod trace;
 pub use acacia_client::{self as client, proto, ConnectError, DisconnectReason, Reason, Violation};
 pub use bot::Bot;
 pub use config::BotConfig;
+pub use lag::Lag;
 pub use events::{BotEvent, Events};
 pub use state::GameState;

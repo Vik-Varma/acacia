@@ -29,11 +29,18 @@ pub struct Cell {
     pub flags: u16,
     /// Layer-0 runtime id (`u32::MAX` when not loaded).
     pub block: u32,
+    /// Layer-1 (liquid) runtime id (`u32::MAX` when not loaded).
+    pub liquid: u32,
 }
 
 impl Cell {
     pub fn has(&self, flags: u16) -> bool {
         self.flags & flags != 0
+    }
+
+    /// The block and liquid ids together: cells with equal ids are equal.
+    pub(crate) fn id(&self) -> u64 {
+        u64::from(self.block) << 32 | u64::from(self.liquid)
     }
 
     pub fn is_water(&self) -> bool {

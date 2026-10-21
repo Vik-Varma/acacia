@@ -1,104 +1,25 @@
 //! A* over feet block positions with Baritone's best-partial-path fallback (azalea `astar/mod.rs`).
 
-use std::cmp::Ordering;
-use std::collections::BinaryHeap;
-use std::collections::hash_map::Entry;
-use std::time::{Duration, Instant};
+use std::cell::Cell;
+use std::time::Instant;
 
-use acacia_physics::{BlockPos, Vec3};
+use acacia_physics::{BlockPos, PlayerState, Vec3};
 
+use super::cache::RolloutCache;
+use super::exit::{Exits, has_exit};
+use super::frontier::{Frontier, Popped, Rec};
 use super::goal::Goal;
-use super::kit::Kit;
+use super::macros::{self, MACRO_TIME_SHARE, MacroStats, Macros};
+use super::costs::CLASSIC_STARTUP;
 use super::moves::{self, Ctx, Edge, MoveKind};
-use super::terrain::{Blocks, EPS, PosMap, Spot, Terrain};
-use super::work::Work;
-use super::PathNode;
+use super::node::{Entry, Momentum, NodeKey, run_entry};
+pub use super::opts::{Path, SearchOpts};
+use super::reach::{self, Reaches};
+use super::solve::Miss;
+use super::terrain::{Blocks, EPS, Spot, Terrain};
 
-/// Partial-path candidates are the best nodes by `h + g / c` for each coefficient (Baritone).
-const COEFFICIENTS: [f32; 7] = [1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 15.0];
-const MIN_IMPROVEMENT: f32 = 0.01;
-
-#[derive(Debug, Clone)]
-pub struct SearchOpts {
-    pub max_nodes: usize,
-    pub budget: Duration,
-    /// Allow gap jumps.
-    pub parkour: bool,
-    /// Break blocks in the way (costed by break time with the best tool in `kit`).
-    pub allow_dig: bool,
-    /// Place scaffold blocks from `kit` to cross gaps and to pillar up.
-    pub allow_bridge: bool,
-    /// Open wooden doors, fence gates and trapdoors in the way.
-    pub open_doors: bool,
-    /// Tools and blocks to plan with; [`Bot::goto`](crate::Bot::goto) fills it from the inventory.
-    pub kit: Kit,
-}
-
-impl Default for SearchOpts {
-    fn default() -> Self {
-        Self {
-            max_nodes: 200_000,
-            budget: Duration::from_secs(2),
-            parkour: true,
-            allow_dig: false,
-            allow_bridge: false,
-            open_doors: true,
-            kit: Kit::default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Path {
-    /// Nodes after the start, in order.
-    pub nodes: Vec<PathNode>,
-    /// False when the search ran out of budget or options: `nodes` then leads to the node that
-    /// looked closest to the goal.
-    pub complete: bool,
-    /// Estimated ticks.
-    pub cost: f32,
-    /// Nodes expanded.
-    pub visited: usize,
-}
-
-#[derive(Clone, Copy)]
-struct Rec {
-    pos: BlockPos,
-    spot: Spot,
-    kind: MoveKind,
-    parent: u32,
-    g: f32,
-    /// Scaffold blocks the path to here places.
-    placed: u32,
-    /// Index into the search's work list, `NO_WORK` for plain moves.
-    work: u32,
-}
-
-const NO_WORK: u32 = u32::MAX;
-
-struct Open {
-    f: f32,
-    g: f32,
-    index: u32,
-}
-
-impl PartialEq for Open {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == Ordering::Equal
-    }
-}
-impl Eq for Open {}
-impl PartialOrd for Open {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl Ord for Open {
-    // Min-heap on f; ties go to the deeper node.
-    fn cmp(&self, other: &Self) -> Ordering {
-        other.f.total_cmp(&self.f).then(self.g.total_cmp(&other.g))
-    }
-}
+/// Slower than this (blocks per tick) on the ground counts as standing.
+const AT_REST: f32 = 0.05;
 
 /// Node whose spot contains the feet at `feet` (the player may be off-centre, falling or swimming):
 /// the feet cell itself, else the nearest valid neighbour cell.
@@ -121,92 +42,115 @@ pub fn start_node<B: Blocks>(t: &Terrain<B>, feet: Vec3) -> Option<(BlockPos, Sp
     best.map(|(_, p, s)| (p, s))
 }
 
+/// Searches from a player standing at `feet`.
 pub fn search<B: Blocks>(t: &Terrain<B>, feet: Vec3, goal: &Goal, opts: &SearchOpts) -> Path {
+    let mut st = PlayerState::new(feet);
+    st.on_ground = true;
+    search_from(t, &st, goal, opts)
+}
+
+/// Searches from the player's live state: its momentum is the start node's, and its attributes and
+/// effects shape every macro move.
+pub fn search_from<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal, opts: &SearchOpts) -> Path {
+    search_cached(t, live, goal, opts, &RolloutCache::default())
+}
+
+/// [`search_from`] reusing (and adding to) the macro-move results in `cache`; they are dropped first if
+/// they were found for another profile or player.
+pub fn search_cached<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal, opts: &SearchOpts, cache: &RolloutCache) -> Path {
     let started = Instant::now();
-    let empty = |complete| Path { nodes: Vec::new(), complete, cost: 0.0, visited: 0 };
-    let Some((start, spot)) = start_node(t, feet) else { return empty(false) };
+    let empty = |complete| Path { nodes: Vec::new(), complete, unreachable: false, cost: 0.0, visited: 0, macro_stats: MacroStats::default() };
+    let Some((start, spot)) = start_node(t, live.pos) else { return empty(false) };
     if goal.success(start) {
         return empty(true);
     }
-    let mut recs = vec![Rec { pos: start, spot, kind: MoveKind::Walk, parent: u32::MAX, g: 0.0, placed: 0, work: NO_WORK }];
-    let mut works: Vec<Work> = Vec::new();
-    let mut index = PosMap::default();
-    index.insert(start, 0u32);
-    let mut open = BinaryHeap::from([Open { f: 0.0, g: 0.0, index: 0 }]);
-    let mut best = [0u32; 7];
-    let mut best_score = [goal.heuristic(start); 7];
-    let mut edges: Vec<Edge> = Vec::with_capacity(32);
-    let mut visited = 0;
-    let mut ctx = Ctx {
-        parkour: opts.parkour,
-        dig: opts.allow_dig,
-        bridge: opts.allow_bridge,
-        doors: opts.open_doors,
-        kit: &opts.kit,
-        blocks_left: 0,
+    let entry = match live.on_ground {
+        false => Entry::Air,
+        true if live.vel[0].hypot(live.vel[2]) < AT_REST => Entry::Rest,
+        true => run_entry(live.vel),
     };
+    let start = NodeKey { entry, ..NodeKey::rest(start) };
+    let speed = opts.speed();
+    let mut front = Frontier::new(Rec::start(start, spot, Momentum::snap(live, start.pos)), goal, speed, opts.favour.as_deref());
+    let mut edges: Vec<Edge> = Vec::with_capacity(32);
+    let (mut visited, mut leaps) = (0, 0usize);
+    let macros = opts.macros.then(|| Macros {
+        profile: opts.profile,
+        leaps: opts.parkour,
+        hops: opts.hops,
+        base: live,
+        cache: cache.claim(opts.profile, live),
+        budget: opts.max_rollout_ticks,
+        deadline: started + opts.budget / MACRO_TIME_SHARE,
+        stats: Cell::default(),
+    });
+    let mut ctx = Ctx { parkour: opts.parkour, dig: opts.allow_dig, bridge: opts.allow_bridge, doors: opts.open_doors, kit: &opts.kit, blocks_left: 0, macros, keep: opts.keep.as_deref(), no_body: opts.no_body.as_deref() };
+    let stats = |ctx: &Ctx| ctx.macros.as_ref().map_or_else(MacroStats::default, |m| m.stats.get());
+    let (mut cut, mut reaches, mut exits) = (false, Reaches::default(), Exits::default());
 
-    while let Some(Open { g, index: i, .. }) = open.pop() {
-        let rec = &recs[i as usize];
-        if g > rec.g {
-            continue;
-        }
-        if goal.success(rec.pos) {
-            return Path { nodes: reconstruct(&recs, &works, i), complete: true, cost: g, visited };
+    while let Some(popped) = front.pop() {
+        let i = match popped {
+            Popped::Node(i) => i,
+            Popped::Leap(l) => {
+                leaps += 1;
+                if leaps % 8 == 0 && started.elapsed() >= opts.budget {
+                    cut = true;
+                    break;
+                }
+                let (Some(m), r) = (&ctx.macros, front.recs[l.parent as usize]) else { continue };
+                // From the search's start, the bot's real facing (it may face away); other nodes face their leap.
+                match macros::leap(t, r.key.pos, &r.mom, l.cand, l.parent == 0, m) {
+                    Ok(e) => {
+                        debug_assert!(e.cost >= l.floor - 1e-3, "leap {:?} -> {:?} cost {} under its floor {}", r.key.pos, e.pos, e.cost, l.floor);
+                        front.relax(l.parent, &e)
+                    }
+                    Err(Miss::Short) => front.fell_short(&l),
+                    Err(Miss::Other) => {}
+                }
+                continue;
+            }
+        };
+        let rec = front.recs[i as usize];
+        if goal.success(rec.key.pos) {
+            return Path { nodes: front.reconstruct(i), complete: true, unreachable: false, cost: rec.raw, visited, macro_stats: stats(&ctx) };
         }
         visited += 1;
-        if visited >= opts.max_nodes || (visited % 512 == 0 && started.elapsed() >= opts.budget) {
+        // Checked often: a node with macro moves costs many rollouts.
+        if visited >= opts.max_nodes || (visited % 8 == 0 && started.elapsed() >= opts.budget) {
+            cut = true;
             break;
         }
         edges.clear();
-        let placed = rec.placed;
-        ctx.blocks_left = opts.kit.blocks.saturating_sub(placed);
-        moves::successors(t, rec.pos, rec.spot, &ctx, &mut edges);
-        for e in &edges {
-            let g2 = g + e.cost;
-            let mut next = Rec { pos: e.pos, spot: e.spot, kind: e.kind, parent: i, g: g2, placed: placed + e.work.places(), work: NO_WORK };
-            let j = match index.entry(e.pos) {
-                Entry::Occupied(o) => {
-                    let j = *o.get();
-                    if recs[j as usize].g <= g2 {
-                        continue;
-                    }
-                    j
+        ctx.blocks_left = opts.kit.blocks.saturating_sub(rec.placed);
+        moves::successors(t, rec.key.pos, rec.spot, (rec.key.entry, &rec.mom), &ctx, &mut edges);
+        if i == 0 && live.vel[0].hypot(live.vel[2]) < AT_REST {
+            // Classic moves from standing pay their run-up, as the simulated macro moves beside them do.
+            let walks = |e: &&mut Edge| e.mac.is_none() && e.work.is_empty() && !e.spot.wet && matches!(e.kind, MoveKind::Walk | MoveKind::Ascend | MoveKind::Descend | MoveKind::Parkour);
+            edges.iter_mut().filter(walks).for_each(|e| e.cost += CLASSIC_STARTUP);
+        }
+        edges.iter().for_each(|e| front.relax(i, e));
+        if let Some(m) = &ctx.macros {
+            for c in macros::leap_candidates(t, rec.key.pos, rec.spot, (rec.key.entry, &rec.mom), m) {
+                // Down into a basin with no way on (a pit floor): never on a path to the goal.
+                if c.q[1] < rec.key.pos[1] && !c.to.wet &&!exits.open(t, c.q, c.to, opts, goal) {
+                    continue;
                 }
-                Entry::Vacant(v) => {
-                    let j = recs.len() as u32;
-                    recs.push(next);
-                    v.insert(j);
-                    j
-                }
-            };
-            if !e.work.is_empty() {
-                next.work = works.len() as u32;
-                works.push(e.work);
-            }
-            recs[j as usize] = next;
-            let h = goal.heuristic(e.pos);
-            open.push(Open { f: g2 + h, g: g2, index: j });
-            for (k, c) in COEFFICIENTS.iter().enumerate() {
-                let score = h + g2 / c;
-                if best_score[k] - score > MIN_IMPROVEMENT {
-                    (best[k], best_score[k]) = (j, score);
-                }
+                let reach = reaches.get(&rec.mom, live);
+                front.queue_leap(i, c, reach::leap_floor(t, rec.key.pos, &rec.mom, &c, reach, live, opts.profile));
             }
         }
     }
-    let pick = best.iter().copied().find(|&b| b != 0).unwrap_or(0);
-    let cost = recs[pick as usize].g;
-    Path { nodes: reconstruct(&recs, &works, pick), complete: false, cost, visited }
-}
-
-fn reconstruct(recs: &[Rec], works: &[Work], mut i: u32) -> Vec<PathNode> {
-    let mut nodes = Vec::new();
-    while let Some(r) = recs.get(i as usize).filter(|r| r.parent != u32::MAX) {
-        let work = works.get(r.work as usize).copied().unwrap_or_default();
-        nodes.push(PathNode { pos: r.pos, feet: r.spot.feet, kind: r.kind, wet: r.spot.wet, work });
-        i = r.parent;
+    let macro_stats = stats(&ctx);
+    let unreachable = !cut && !macro_stats.exhausted && !t.saw_unloaded();
+    let mut pick = front.best.iter().copied().find(|&b| b != 0).unwrap_or(0);
+    // Back off a dead end to the last node on the way that still leads somewhere.
+    while pick != 0 {
+        let r = front.recs[pick as usize];
+        if has_exit(t, r.key.pos, r.spot, opts, r.placed) {
+            break;
+        }
+        pick = r.parent;
     }
-    nodes.reverse();
-    nodes
+    let cost = front.recs[pick as usize].raw;
+    Path { nodes: front.reconstruct(pick), complete: false, unreachable, cost, visited, macro_stats }
 }

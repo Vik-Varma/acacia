@@ -12,6 +12,7 @@ const SPAWN_WAIT_TICKS: u32 = 100;
 impl Bot {
     /// One client tick: scheduled actions, then idle input or the physics simulation.
     pub(super) fn on_tick(&mut self) {
+        self.governor.tick(self.movement.as_ref().and_then(|m| m.setback_age()));
         self.tick_respawn();
         self.tick_reflexes();
         self.tick_survival();

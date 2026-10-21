@@ -133,6 +133,15 @@ fn block_actions_ride_in_auth_input() {
     assert_eq!(decoded.block_action.unwrap()[1].face, 2);
 }
 
+#[test]
+fn a_break_ends_with_abort_break_or_bds_keeps_destroying_the_cell() {
+    let (p, f) = ([1, -60, 2], Face::North);
+    let steps: Vec<Vec<Action>> = (0..3).map(|t| wire::break_step(t, 3, p, f, false).into_iter().map(|a| a.action).collect()).collect();
+    assert_eq!(steps, vec![vec![Action::StartBreak], vec![Action::ContinueBreak], vec![Action::ContinueBreak, Action::PredictBreak, Action::AbortBreak]]);
+    let creative: Vec<Action> = wire::break_step(0, 1, p, f, true).into_iter().map(|a| a.action).collect();
+    assert_eq!(creative, vec![Action::StartBreak, Action::AbortBreak]);
+}
+
 fn idle_input() -> PlayerAuthInput {
     let raw = hex_fixture("player_auth_input");
     raw.decode().unwrap()

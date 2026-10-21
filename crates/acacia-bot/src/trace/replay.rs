@@ -43,6 +43,8 @@ pub struct CorrectionDiff {
     pub server: Vec3,
     /// Distance between our velocity and the server's at that tick.
     pub delta_err: Option<f32>,
+    /// Our velocity and the server's at that tick.
+    pub deltas: (Option<Vec3>, Vec3),
     /// The eye position and velocity the recorded client sent for that tick (a real client's own physics).
     pub sent: Option<(Vec3, Vec3)>,
     /// Explained by what the client had not been sent yet rather than a disagreement: a correction to a
@@ -166,7 +168,8 @@ pub fn replay(events: &[Event], tolerance: f32, resync: bool) -> Report {
                         Some(None) => true,
                         None => false,
                     });
-                    report.corrections.push(CorrectionDiff { tick, mark: mark.clone(), ours: pos, server, delta_err: delta, sent, explained, blocks });
+                    let deltas = (ours.get(&tick).map(|&(_, d)| d), vec3(&c.delta));
+                    report.corrections.push(CorrectionDiff { tick, mark: mark.clone(), ours: pos, server, delta_err: delta, deltas, sent, explained, blocks });
                 }
                 let _ = movement.apply(p, &state.me());
             }

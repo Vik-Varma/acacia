@@ -97,6 +97,11 @@ impl Bot {
         self.block_at(pos).map(|(_, s)| s.name)
     }
 
+    /// The tracked block at `pos` with its properties (registry form: `key=value`, sorted, comma separated).
+    pub fn block_state(&self, pos: BlockPos) -> Option<&acacia_world::BlockState> {
+        self.block_at(pos).map(|(_, s)| s)
+    }
+
     /// The block being mined and how far along (0 to 1), for a crack overlay.
     pub fn mining_progress(&self) -> Option<(BlockPos, f32)> {
         self.mining.map(|m| (m.pos, m.done as f32 / m.ticks as f32))
@@ -107,16 +112,13 @@ impl Bot {
     pub(crate) fn tick_mining(&mut self) {
         let Some(mut m) = self.mining else { return };
         if self.block_at(m.pos).is_none_or(|(_, s)| s.is_air()) {
+            if m.done > 0 {
+                self.end_break(m.pos, m.face);
+            }
             self.mining = None;
             return;
         }
-        let step = if m.done == 0 { Action::StartBreak } else { Action::ContinueBreak };
-        let mut actions = vec![wire::block_action(step, m.pos, m.face)];
-        // Creative: StartBreak alone destroys at once (BDS `GameMode::startDestroyBlock`); a
-        // Predict there without a Continue before it would only roll the block back.
-        if m.done + 1 >= m.ticks && !m.creative {
-            actions.push(wire::block_action(Action::PredictBreak, m.pos, m.face));
-        }
+        let actions = wire::break_step(m.done, m.ticks, m.pos, m.face, m.creative);
         if let Some(movement) = self.movement.as_mut() {
             movement.pending_actions.extend(actions);
         }
@@ -136,6 +138,6 @@ impl Bot {
         let places = held.block_runtime_id != 0 || self.held_name().is_some_and(|n| n.ends_with("boat") || n.ends_with("minecart"));
         let interactive = self.block_at(pos).is_some_and(|(_, s)| is_interactive(s));
         let build = places && (sneaking || !interactive);
-        self.click_block(pos, face, if build { SwingSource::Build } else { SwingSource::Interact })
+        self.click_block(pos, face, face.click_offset(), if build { SwingSource::Build } else { SwingSource::Interact })
     }
 }

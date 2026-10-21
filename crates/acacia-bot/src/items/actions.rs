@@ -136,7 +136,11 @@ impl Bot {
     /// Applies an accepted request's prediction and the server's slot updates.
     pub(crate) fn finish_request(&mut self, plan: Plan, response: &ItemStackResponsesItem) -> Result<(), ActionError> {
         tracing::debug!(?response, "item stack response");
-        check_status(response)?;
+        if let Err(e) = check_status(response) {
+            let main: Vec<String> = self.state.inventory.main.iter().enumerate().filter(|(_, s)| !s.is_empty()).map(|(i, s)| format!("{i}:{}x{}#{:?}", s.network_id, s.count, s.stack_network_id)).collect();
+            tracing::debug!(%e, ?main, "item stack request refused; believed main inventory");
+            return Err(e);
+        }
         plan.commit(&mut self.state, response);
         Ok(())
     }

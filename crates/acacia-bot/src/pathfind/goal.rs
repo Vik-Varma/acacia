@@ -16,6 +16,33 @@ pub enum Goal {
     Or(Vec<Goal>),
 }
 
+/// How a goal turns distance into ticks.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Speed {
+    /// Ticks per horizontal block.
+    pub per_block: f32,
+    /// Ticks lost getting up to speed from standing (at most; less over short distances).
+    pub startup: f32,
+    /// Height is gained or lost during the horizontal run (macro moves), not after it: the larger term counts.
+    pub overlap: bool,
+}
+
+impl Speed {
+    /// Classic moves: sprinting, then climbing or falling (azalea's heuristics, which Baritone also uses).
+    pub const CLASSIC: Speed = Speed { per_block: COST_HEURISTIC, startup: 0.0, overlap: false };
+
+    fn combine(&self, xz: f32, y: f32) -> f32 {
+        if self.overlap { xz.max(y) } else { xz + y }
+    }
+
+    /// Ticks for `blocks` horizontally; `rest`: starting from standing. Classic moves cost `SPRINT` a block
+    /// from rest, so the startup never exceeds what they save over `per_block`.
+    pub(crate) fn run(&self, blocks: f32, rest: bool) -> f32 {
+        let startup = if rest { self.startup.min((SPRINT - self.per_block).max(0.0) * blocks) } else { 0.0 };
+        blocks * self.per_block + startup
+    }
+}
+
 impl Goal {
     pub fn success(&self, p: BlockPos) -> bool {
         match self {
@@ -27,18 +54,23 @@ impl Goal {
         }
     }
 
-    /// Estimated ticks to the goal (azalea's heuristics, which Baritone also uses).
+    /// Estimated ticks to the goal for classic moves.
     pub fn heuristic(&self, p: BlockPos) -> f32 {
+        self.estimate(p, Speed::CLASSIC, false)
+    }
+
+    /// Estimated ticks to the goal at speed `s`; `rest`: from standing.
+    pub(crate) fn estimate(&self, p: BlockPos, s: Speed, rest: bool) -> f32 {
         match self {
-            Goal::Block(g) => xz((g[0] - p[0]) as f32, (g[2] - p[2]) as f32) + y((g[1] - p[1]) as f32),
+            Goal::Block(g) => s.combine(s.run(xz((g[0] - p[0]) as f32, (g[2] - p[2]) as f32), rest), y((g[1] - p[1]) as f32)),
             Goal::Near(g, r) => {
                 let d = dist_sq(p, *g).sqrt();
-                let exact = Goal::Block(*g).heuristic(p);
+                let exact = Goal::Block(*g).estimate(p, s, rest);
                 if d <= *r { 0.0 } else { exact * (1.0 - r / d) }
             }
-            Goal::XZ(x, z) => xz((x - p[0]) as f32, (z - p[2]) as f32),
+            Goal::XZ(x, z) => s.run(xz((x - p[0]) as f32, (z - p[2]) as f32), rest),
             Goal::Y(gy) => y((gy - p[1]) as f32),
-            Goal::Or(goals) => goals.iter().map(|g| g.heuristic(p)).fold(f32::INFINITY, f32::min),
+            Goal::Or(goals) => goals.iter().map(|g| g.estimate(p, s, rest)).fold(f32::INFINITY, f32::min),
         }
     }
 }
@@ -48,10 +80,11 @@ fn dist_sq(a: BlockPos, b: BlockPos) -> f32 {
     d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
 }
 
+/// Octile distance (blocks).
 fn xz(dx: f32, dz: f32) -> f32 {
     let (x, z) = (dx.abs(), dz.abs());
     let (diagonal, straight) = if x < z { (x, z - x) } else { (z, x - z) };
-    (diagonal * SQRT_2 + straight) * COST_HEURISTIC
+    diagonal * SQRT_2 + straight
 }
 
 fn y(dy: f32) -> f32 {

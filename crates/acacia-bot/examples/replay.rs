@@ -52,6 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         for c in &mismatches {
             println!("corr {:6} {:16} ours {:?} server {:?} err {:?} delta err {:?} [{}]", c.tick, label(&c.mark), c.ours, c.server, c.error(), c.delta_err, c.blocks);
+            println!("     delta ours {:?} server {:?}", c.deltas.0, c.deltas.1);
             if let (Some((pos, delta)), Some(ours)) = (c.sent, c.ours) {
                 println!("     sent {pos:?} {delta:?}: client-server {:.5}, ours-client {:.5}", dist(pos, c.server), dist(ours, pos));
             }

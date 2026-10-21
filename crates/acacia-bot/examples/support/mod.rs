@@ -2,6 +2,8 @@
 //! is operator, and a floating stone pad to build test terrain on.
 #![allow(dead_code)]
 
+pub mod house;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -17,6 +19,9 @@ pub type Fill<'a> = ([i32; 3], [i32; 3], &'a str);
 
 /// The pad floats this far above the bot's spawn, clear of terrain and stray water.
 const PAD_HEIGHT: i32 = 40;
+/// A spawn above this starts the pad from [`RESET_BASE`] instead.
+const HIGHEST_BASE: i32 = 220;
+const RESET_BASE: i32 = 120;
 /// Pad extent (offsets from the origin); the floor is the five layers below y 0.
 pub const PAD_MIN: [i32; 3] = [-3, -5, -12];
 pub const PAD_MAX: [i32; 3] = [24, 10, 12];
@@ -30,6 +35,11 @@ pub async fn connect(server: &str, name: &str) -> Result<(Bot, Pad), Error> {
 
 /// [`connect`] recording to `record`, sharing terrain with other bots through `worlds`.
 pub async fn connect_with(server: &str, name: &str, record: Option<PathBuf>, worlds: SharedWorlds) -> Result<(Bot, Pad), Error> {
+    connect_config(server, name, BotConfig { record, shared_worlds: worlds, ..BotConfig::default() }).await
+}
+
+/// [`connect`] with `config` (physics forced on).
+pub async fn connect_config(server: &str, name: &str, config: BotConfig) -> Result<(Bot, Pad), Error> {
     let mut builder = Client::builder(server);
     builder = match name.strip_prefix('@') {
         Some(account) => {
@@ -39,19 +49,35 @@ pub async fn connect_with(server: &str, name: &str, record: Option<PathBuf>, wor
         }
         None => builder.offline(name),
     };
-    let config = BotConfig { physics: true, record, shared_worlds: worlds, ..BotConfig::default() };
+    let config = BotConfig { physics: true, ..config };
     let mut bot = Bot::connect(builder, config).await?;
     while bot.movement().is_none_or(|m| !m.is_started()) {
         bot.wait_ticks(1).await?;
     }
     bot.wait_ticks(20).await?;
-    let spawn = bot.block_position().expect("movement started");
+    let mut spawn = bot.block_position().expect("movement started");
+    // Bots left on a pad rejoin there, and each run's pad floats PAD_HEIGHT higher: past the build limit (y 319)
+    // nothing places, and live builds held for their whole run (2026-10-21, pad at 340).
+    if spawn[1] > HIGHEST_BASE {
+        spawn[1] = RESET_BASE;
+    }
     println!("pad origin {spawn:?} + {PAD_HEIGHT} up");
     for cmd in ["/difficulty peaceful", "/kill @e[type=!player]"] {
         bot.client().command(cmd);
         bot.wait_ticks(2).await?;
     }
     Ok((bot, Pad { spawn, commander: Commander::Own }))
+}
+
+/// Ends the process after `MAX_SECS` (default `default_secs`) of wall time, whatever the runtime is doing: a
+/// thread, so a spinning or stuck task can't hold a live run for 20+ minutes (it did, 2026-10-19).
+pub fn watchdog(default_secs: u64) {
+    let secs = std::env::var("MAX_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(default_secs);
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(secs));
+        eprintln!("WATCHDOG: no finish after {secs} s, exiting");
+        std::process::exit(3);
+    });
 }
 
 pub fn corrections(bot: &Bot) -> u32 {
@@ -78,6 +104,11 @@ impl Pad {
     }
 
     /// The same pad moved `dx` blocks along x (one pad per bot when several share a server).
+    /// The block the pad floats over (pass to [`Pad::at`] to share a pad).
+    pub fn origin(&self) -> [i32; 3] {
+        self.spawn
+    }
+
     pub fn shifted(self, dx: i32) -> Pad {
         let [x, y, z] = self.spawn;
         Pad { spawn: [x + dx, y, z], ..self }

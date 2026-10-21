@@ -9,12 +9,20 @@ opts="-o ConnectTimeout=20 -o ServerAliveInterval=10"
 # testbox's link drops connections intermittently
 retry() { for i in 1 2 3 4 5; do "$@" && return 0; echo "retry $i: $1" >&2; sleep 3; done; return 1; }
 
+if ssh $opts testbox "test -f $remote/test.log && ! test -f $remote/test.done"; then
+  echo "a test run is still going in $remote (no test.done); wait for it or use another REMOTE_DIR" >&2; exit 3
+fi
 # Clear old sources (keep the build cache) so files deleted locally don't linger remotely.
 retry ssh $opts testbox "mkdir -p $remote && find $remote -mindepth 1 -maxdepth 1 ! -name target -exec rm -rf {} +"
 tar czf - -C "$root" --exclude=target --exclude=./assets/looks --exclude=.testserver --exclude=.tokens --exclude=.git . \
   | retry ssh $opts testbox "tar xzf - -C $remote" || exit 1
 args=$(printf '%q ' "$@")
-retry ssh $opts testbox "cd $remote || exit; rm -f test.log test.done; { nohup sh -c '~/.cargo/bin/cargo +stable test $args >test.log 2>&1; echo \$? >test.done' </dev/null >/dev/null 2>&1 & }" || exit 1
+# REMOTE_ENV="A=1 B=2" sets env vars for the remote cargo (local ones aren't forwarded).
+printf '%s\n' "env ${REMOTE_ENV:-} ~/.cargo/bin/cargo +stable test $args" | retry ssh $opts testbox "cat > $remote/test.sh" || exit 1
+# TIMEOUT (default 1800 s) and STALL (default 600 s without output) kill a hung run: see testbox-guard.sh.
+retry ssh $opts testbox "cd $remote || exit; rm -f test.log test.done; { nohup sh tools/testbox-guard.sh test.sh test.log test.done ${TIMEOUT:-1800} ${STALL:-600} </dev/null >/dev/null 2>&1 & }" || exit 1
+# DETACH=1: leave it running; check $remote/test.done later (local polls get reaped on low-memory machines).
+[ -n "${DETACH:-}" ] && { echo "launched in $remote"; exit 0; }
 # Poll with short calls; a single long ssh would die with the link.
 until ssh $opts testbox "test -f $remote/test.done" 2>/dev/null; do sleep 15; done
 retry ssh $opts testbox "cd $remote; grep -E '^(error|warning)|^\s+--> |test result|FAILED|panicked' test.log | head -60; echo exit: \$(cat test.done)"

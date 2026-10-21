@@ -11,6 +11,9 @@ mod boat;
 mod clip;
 mod collide;
 pub mod constants;
+#[cfg(feature = "acacia-world")]
+pub mod registry_world;
+mod correction;
 mod flight;
 mod input;
 mod liquid;
@@ -21,6 +24,7 @@ mod movement;
 mod pose;
 mod push_out;
 mod sim;
+mod sinf;
 mod state;
 pub mod test_world;
 mod vehicle;

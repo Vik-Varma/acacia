@@ -1,0 +1,44 @@
+name: Bug report
+description: Something acacia does wrong, or differently from a vanilla client
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what acacia did, and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest program that shows it, or an example command.
+      placeholder: |
+        cargo run -p acacia-client --example afk -- 127.0.0.1:19132 Bot 10
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: acacia commit
+      placeholder: d8b6919
+    validations:
+      required: true
+  - type: input
+    id: server
+    attributes:
+      label: Server
+      description: BDS version, a Realm, a LAN world, or another server software.
+      placeholder: BDS 1.26.51, offline, RakNet
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: Windows 11
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Output around the problem, with `RUST_LOG=debug` if you can. Remove tokens and account names.
+      render: text
