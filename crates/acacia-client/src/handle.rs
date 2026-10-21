@@ -8,6 +8,7 @@ use tokio::sync::mpsc;
 use crate::client::ClientBuilder;
 use crate::driver::Command;
 use crate::login::Identity;
+use crate::packet_trace::PacketTrace;
 use crate::Event;
 
 /// A spawned connection. Dropping it disconnects.
@@ -17,6 +18,7 @@ pub struct Client {
     pub(crate) runtime_entity_id: u64,
     pub(crate) identity: Identity,
     pub(crate) blob_store: Option<Arc<dyn BlobStore>>,
+    pub(crate) trace: PacketTrace,
 }
 
 impl Client {
