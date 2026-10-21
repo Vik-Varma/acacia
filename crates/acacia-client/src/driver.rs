@@ -12,6 +12,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::filter::PacketFilter;
 use crate::pack_fetch;
+use crate::packet_trace::PacketTrace;
 use crate::socks5::Socks5Proxy;
 use crate::transport::Transport;
 use crate::Event;
@@ -44,6 +45,7 @@ pub(crate) struct Driver {
     pub events: mpsc::Sender<Event>,
     pub spawned: Option<oneshot::Sender<SpawnResult>>,
     pub filter: PacketFilter,
+    pub trace: PacketTrace,
     pub capacity: usize,
     /// The connection's proxy, for pack downloads too.
     pub proxy: Option<Socks5Proxy>,
@@ -77,8 +79,12 @@ impl Driver {
                             let _ = tx.send(Ok(runtime_entity_id));
                         }
                     }
-                    SessionEvent::Packet(p) if self.filter.allows(p.id) => pending.push_back(Event::Packet(p)),
-                    SessionEvent::Packet(_) => {}
+                    SessionEvent::Packet(p) => {
+                        self.trace.record(p.id, Instant::now());
+                        if self.filter.allows(p.id) {
+                            pending.push_back(Event::Packet(p));
+                        }
+                    }
                     SessionEvent::Violation(v) => pending.push_back(Event::Violation(v)),
                     SessionEvent::Disconnected(reason) => {
                         let _ = self.flush().await;

@@ -2,14 +2,14 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 
-use acacia_client::proto::packets::ContainerClose;
 use acacia_client::proto::types::InputData;
 use acacia_client::proto::RawPacket;
-use acacia_client::{Client, ClientBuilder, ConnectError, DisconnectReason, Event, MemoryBlobStore, PacketFilter};
+use acacia_client::{Client, ClientBuilder, ConnectError, DisconnectReason, Event, MemoryBlobStore, PacketFilter, PacketTraceSummary};
 use crate::cadence::Ticker;
 use crate::events::{BotEvent, EventSource, Events};
 use crate::governor::Governor;
 use crate::human::Human;
+use crate::interact::closing::PendingClose;
 use crate::lag::LagLine;
 use crate::items::RequestIds;
 use crate::movement::{Controls, Idle, Movement};
@@ -71,6 +71,8 @@ pub struct Bot {
     /// Physics bots: the simulation has started once, and the spawn packets went out with it.
     spawned: bool,
     strict: bool,
+    /// A client container close still settling (interact/closing.rs).
+    pub(crate) closing: Option<PendingClose>,
     closed: Option<DisconnectReason>,
     pub(crate) governor: Governor,
     pub(crate) act_timing: crate::act_timing::ActTiming,
@@ -140,6 +142,7 @@ impl Bot {
             travel: None,
             spawned: false,
             strict: config.strict,
+            closing: None,
             closed: None,
             governor: Governor::default(),
             act_timing: Default::default(),
@@ -162,6 +165,11 @@ impl Bot {
 
     pub fn client(&self) -> &Client {
         &self.client
+    }
+
+    /// Recent inbound packets (filtered ones too) and the server's silence, for stall diagnostics.
+    pub fn packet_trace(&self) -> PacketTraceSummary {
+        self.client.packet_trace()
     }
 
     pub fn state(&self) -> &GameState {
@@ -274,12 +282,7 @@ impl Bot {
         if let Err(e) = result {
             tracing::debug!(id = packet.id, error = %e, "tracker failed to decode packet");
         }
-        // Acknowledge server-initiated closes like vanilla: Geyser opens no further window until it gets this.
-        if let Ok(close) = packet.decode::<ContainerClose>()
-            && close.server
-        {
-            self.client.send(&ContainerClose { server: false, ..close });
-        }
+        self.on_container_close(packet);
         self.sync.apply(packet, self.state.player.runtime_entity_id);
         if let Some(subchunks) = &mut self.subchunks {
             subchunks.apply(packet);

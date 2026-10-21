@@ -132,6 +132,10 @@ the proxy (`crates/acacia-mitm/src/transfer.rs`). What is left: [mitm-next.md](m
   replies. See `session/handlers.rs`. Local BDS tests catch neither, so test against a live Geyser server.
 - Geyser ignores `ItemStackRequest`s unless an inventory screen is open; items/ opens and closes the own
   inventory around requests, and the bot acknowledges server-initiated `ContainerClose`.
+- Geyser answers a client close with an echo plus a server close that must be acked before the next command,
+  since it reuses window ids: see `interact/closing.rs`. Clicks in server-side GUIs often get no
+  `ItemStackResponse` (`ActionError::Timeout`, sent anyway). Chest GUIs are titled by the fake block entity's
+  `CustomName` (`Container::title`). `Bot::packet_trace` keeps the last 256 inbound packet ids for stall reports.
 - `MobEquipment` sends the held item **without** its stack id. Geyser (`CodecProcessor.fakeItemDescriptorRead`)
   reads a present id as a tagged variant and rejects the untagged form. That is an "Illegal packet": the lab
   disconnects, and on a live Geyser server it hung the session ("already online" on relog). BDS rejects the

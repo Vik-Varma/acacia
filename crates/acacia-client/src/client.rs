@@ -15,6 +15,7 @@ use crate::driver::{Command, Driver};
 use crate::friend::FriendJoin;
 use crate::pack_cache;
 use crate::filter::PacketFilter;
+use crate::packet_trace::PacketTrace;
 use crate::login::build_login;
 use crate::route;
 use crate::lan::LanServer;
@@ -281,6 +282,7 @@ impl ClientBuilder {
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
         let (ev_tx, ev_rx) = mpsc::channel(self.event_capacity);
         let (spawn_tx, spawn_rx) = oneshot::channel();
+        let trace = PacketTrace::default();
         let driver = Driver {
             session,
             wire: route.wire,
@@ -289,6 +291,7 @@ impl ClientBuilder {
             events: ev_tx,
             spawned: Some(spawn_tx),
             filter: self.filter,
+            trace: trace.clone(),
             capacity: self.event_capacity,
             proxy: self.proxy.clone(),
             _signaling: route.keepalive,
@@ -298,7 +301,7 @@ impl ClientBuilder {
 
         let result = tokio::time::timeout(self.login_timeout, spawn_rx).await;
         match result {
-            Ok(Ok(Ok(runtime_entity_id))) => Ok(Client { commands: cmd_tx, events: ev_rx, runtime_entity_id, identity, blob_store }),
+            Ok(Ok(Ok(runtime_entity_id))) => Ok(Client { commands: cmd_tx, events: ev_rx, runtime_entity_id, identity, blob_store, trace }),
             Ok(Ok(Err(reason))) => Err(ConnectError::Disconnected(reason)),
             Ok(Err(_)) => Err(ConnectError::Disconnected(DisconnectReason::LocalClose)),
             Err(_) => {
