@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and help
+    url: https://discord.gg/DNFJBJBVPr
+    about: Ask on the Discord.
+  - name: Security vulnerability
+    url: https://github.com/acacia-rs/acacia/security/advisories/new
+    about: Report it privately; see SECURITY.md.

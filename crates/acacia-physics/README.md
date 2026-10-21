@@ -1,6 +1,6 @@
 # acacia-physics
 
-Bedrock player movement simulation: a network-free, dependency-free Rust port of
+Bedrock player movement simulation: a network-free, dependency-free (by default) Rust port of
 [oomph-ac/bedsim](https://github.com/oomph-ac/bedsim) (MIT), commit
 `34d11dc576aeb56a7f7f0541dbb5a600cc443488` (2026-09-16). The f32 operation order of bedsim is
 kept, down to chewxy/math32 `Sin`/`Cos`; the sine table is BDS's own (see "Deliberate deviations"). Module names follow the
@@ -22,6 +22,10 @@ bedsim files (`movement.rs` = `simulateMovement`, `collide.rs` = `tryCollisions`
   (`acacia-bot` sets the effects from `MobEffect` and the equipment from the worn armour).
 - `WorldView`: `block_collisions(pos)` (block-local boxes), `block(pos) -> BlockPhysics`, plus the defaulted
   `collisions(area)` and `is_area_loaded(area)`. `test_world::TestWorld` is a synthetic grid.
+- Feature `acacia-world` (the crate's one dependency, off by default): `registry_world::RegistryWorld { view,
+  registry }` is the `WorldView` of any `Terrain` (acacia-world's `BlockAccess` plus loaded columns) whose ids
+  an acacia-world `BlockRegistry` names: the bot's `ChunkView`, or a server's level (sapling).
+  `block_physics(registry, id, liquid_layer)` is the per-cell rule on its own.
 - Vehicles a player drives, not from bedsim but fitted to strict BDS (docs/research/riding-fishing-elytra.md
   "Horse", "Boat"): `horse(feet, yaw, speed)` + `horse_tick(state, &mut HorseJump, &RiderInput, world)` run a
   horse as a `PlayerState` with its own box, step and unscaled keys; `boat_tick(&mut BoatState, keys, world)`

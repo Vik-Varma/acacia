@@ -7,7 +7,12 @@ description = "Minecraft: Bedrock Edition player movement simulation"
 repository.workspace = true
 rust-version.workspace = true
 
+[features]
+# `registry_world`: the `WorldView` of a chunk view or a server's level, from acacia-world's registry.
+acacia-world = ["dep:acacia-world"]
+
 [dependencies]
+acacia-world = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json = "1"

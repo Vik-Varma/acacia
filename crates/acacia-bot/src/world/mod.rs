@@ -9,7 +9,7 @@ mod near;
 mod tests;
 
 pub use adapter::PhysicsWorld;
-pub(crate) use adapter::block_physics;
+pub(crate) use acacia_physics::registry_world::block_physics;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, Weak};

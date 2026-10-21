@@ -120,6 +120,11 @@ Requires Rust 1.98 or newer. For a local server to test against, see [docs/testi
 - [docs/testing.md](docs/testing.md): local BDS setup, examples and test commands
 - `cargo doc --open` for the API reference
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues privately, as [SECURITY.md](SECURITY.md)
+describes.
+
 ## License
 
 [MIT](LICENSE). Includes MIT-licensed data and code from minecraft-data, Boar, bedsim and gophertunnel;
