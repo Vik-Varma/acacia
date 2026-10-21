@@ -10,6 +10,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Instant;
 
+use crate::capture::Capture;
 use crate::link::{Fate, Impairment, Link};
 
 const MAX_DATAGRAM: usize = 65_536;
@@ -94,31 +95,39 @@ impl Queue {
     }
 }
 
-/// Passes a datagram through `link`, queueing it to be sent where it arrives.
-fn pass(link: &Mutex<Link>, counters: &Counters, queue: &Queue, socket: &Arc<UdpSocket>, to: Option<SocketAddr>, data: &[u8]) {
-    counters.received.fetch_add(1, Relaxed);
-    let now = Instant::now();
-    let mut link = link.lock().expect("link lock");
-    let fate = link.admit(now, data.len());
-    counters.max_backlog.fetch_max(link.backlog(now) as u64, Relaxed);
-    drop(link);
-    match fate {
-        Fate::Lost => drop(counters.lost.fetch_add(1, Relaxed)),
-        Fate::Overflow => drop(counters.overflowed.fetch_add(1, Relaxed)),
-        Fate::Arrives(at) => queue.push(at, socket.clone(), to, data.to_vec()),
-    }
-}
-
 pub struct Proxy {
     pub up: Counters,
     pub down: Counters,
+    pub capture: Option<Capture>,
     queue: Queue,
 }
 
+impl Proxy {
+    /// Passes a datagram going `up` (or down) through `link`, queueing it to be sent where it
+    /// arrives.
+    fn pass(&self, up: bool, link: &Mutex<Link>, socket: &Arc<UdpSocket>, to: Option<SocketAddr>, data: &[u8]) {
+        let counters = if up { &self.up } else { &self.down };
+        counters.received.fetch_add(1, Relaxed);
+        let now = Instant::now();
+        let mut link = link.lock().expect("link lock");
+        let fate = link.admit(now, data.len());
+        counters.max_backlog.fetch_max(link.backlog(now) as u64, Relaxed);
+        drop(link);
+        if let Some(capture) = &self.capture {
+            capture.record(up, fate, data);
+        }
+        match fate {
+            Fate::Lost => drop(counters.lost.fetch_add(1, Relaxed)),
+            Fate::Overflow => drop(counters.overflowed.fetch_add(1, Relaxed)),
+            Fate::Arrives(at) => self.queue.push(at, socket.clone(), to, data.to_vec()),
+        }
+    }
+}
+
 /// Starts the proxy on `listen` for `server`; its threads run until the process ends.
-pub fn start(listen: SocketAddr, server: SocketAddr, up: Impairment, down: Impairment, seed: u64) -> std::io::Result<Arc<Proxy>> {
+pub fn start(listen: SocketAddr, server: SocketAddr, up: Impairment, down: Impairment, seed: u64, capture: Option<Capture>) -> std::io::Result<Arc<Proxy>> {
     let socket = Arc::new(UdpSocket::bind(listen)?);
-    let proxy = Arc::new(Proxy { up: Counters::default(), down: Counters::default(), queue: Queue::default() });
+    let proxy = Arc::new(Proxy { up: Counters::default(), down: Counters::default(), capture, queue: Queue::default() });
     let sender = proxy.clone();
     thread::spawn(move || sender.queue.send_forever([&sender.up, &sender.down]));
     let relay = proxy.clone();
@@ -140,7 +149,7 @@ pub fn start(listen: SocketAddr, server: SocketAddr, up: Impairment, down: Impai
                 flows.insert(client, (upstream, Arc::new(Mutex::new(Link::new(up, now, seed)))));
             }
             let (upstream, uplink) = &flows[&client];
-            pass(uplink, &relay.up, &relay.queue, upstream, None, &buffer[..size]);
+            relay.pass(true, uplink, upstream, None, &buffer[..size]);
         }
     });
     Ok(proxy)
@@ -159,7 +168,7 @@ fn spawn_downstream(proxy: Arc<Proxy>, upstream: Arc<UdpSocket>, socket: Arc<Udp
         let mut buffer = vec![0; MAX_DATAGRAM];
         loop {
             match upstream.recv(&mut buffer) {
-                Ok(size) => pass(&link, &proxy.down, &proxy.queue, &socket, Some(client), &buffer[..size]),
+                Ok(size) => proxy.pass(false, &link, &socket, Some(client), &buffer[..size]),
                 Err(error) if resets(&error) => continue,
                 Err(_) => break,
             }

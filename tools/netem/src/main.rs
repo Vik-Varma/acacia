@@ -1,5 +1,6 @@
 //! A UDP proxy that makes a link worse, for testing a server or client over one (README.md).
 
+mod capture;
 mod link;
 mod relay;
 
@@ -13,10 +14,11 @@ use link::Impairment;
 use relay::{Counters, Proxy};
 
 const USAGE: &str = "usage: netem --listen ADDR --to ADDR [--delay 150ms] [--jitter 20ms] [--loss 2] [--rate 1mbit] [--queue 256k]
-             [--up-<option> V | --down-<option> V] [--seed N] [--stats 1] [--for SECONDS]
+             [--up-<option> V | --down-<option> V] [--seed N] [--stats 1] [--for SECONDS] [--capture FILE]
   up is client to server, down server to client; an option without a direction sets both.
   --loss is a percentage, --rate bits a second (kbit, mbit), --queue bytes (k, m) waiting for the rate.
-  --stats prints a line every so many seconds (0: only the last); --for stops after so many.";
+  --stats prints a line every so many seconds (0: only the last); --for stops after so many.
+  --capture writes every datagram to FILE (capture.rs) for raknet_trace.py.";
 
 struct Options {
     listen: SocketAddr,
@@ -26,6 +28,7 @@ struct Options {
     seed: u64,
     stats: f64,
     run_for: Option<f64>,
+    capture: Option<String>,
 }
 
 fn duration(text: &str) -> Option<Duration> {
@@ -57,7 +60,7 @@ fn set(impairment: &mut Impairment, option: &str, value: &str) -> Option<()> {
 
 fn parse(args: &[String]) -> Result<Options, String> {
     let (mut listen, mut to, mut up, mut down) = (None, None, Impairment::default(), Impairment::default());
-    let (mut seed, mut stats, mut run_for) = (1, 1.0, None);
+    let (mut seed, mut stats, mut run_for, mut capture) = (1, 1.0, None, None);
     for pair in args.chunks(2) {
         let [flag, value] = pair else { return Err(format!("{} wants a value", pair[0])) };
         let wrong = || format!("bad {flag}: {value}");
@@ -68,6 +71,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
             "seed" => seed = value.parse().map_err(|_| wrong())?,
             "stats" => stats = value.parse().map_err(|_| wrong())?,
             "for" => run_for = Some(value.parse().map_err(|_| wrong())?),
+            "capture" => capture = Some(value.clone()),
             _ => {
                 let set_in = |impairment: &mut Impairment, option: &str| set(impairment, option, value).ok_or_else(wrong);
                 match (option.strip_prefix("up-"), option.strip_prefix("down-")) {
@@ -82,7 +86,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         }
     }
     let (Some(listen), Some(to)) = (listen, to) else { return Err("--listen and --to are needed".into()) };
-    Ok(Options { listen, to, up, down, seed, stats, run_for })
+    Ok(Options { listen, to, up, down, seed, stats, run_for, capture })
 }
 
 fn side(name: &str, counters: &Counters) -> String {
@@ -111,7 +115,15 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let proxy = match relay::start(options.listen, options.to, options.up, options.down, options.seed) {
+    let started = Instant::now();
+    let capture = match options.capture.as_deref().map(|path| capture::Capture::create(path, started)).transpose() {
+        Ok(capture) => capture,
+        Err(error) => {
+            eprintln!("netem: --capture: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let proxy = match relay::start(options.listen, options.to, options.up, options.down, options.seed, capture) {
         Ok(proxy) => proxy,
         Err(error) => {
             eprintln!("netem: {}: {error}", options.listen);
@@ -119,10 +131,12 @@ fn main() -> ExitCode {
         }
     };
     println!("netem {} -> {} | up {:?} | down {:?}", options.listen, options.to, options.up, options.down);
-    let started = Instant::now();
     let every = Duration::from_secs_f64(if options.stats > 0.0 { options.stats } else { 1.0 });
     loop {
         thread::sleep(every);
+        if let Some(capture) = &proxy.capture {
+            capture.flush();
+        }
         let elapsed = started.elapsed().as_secs_f64();
         if options.run_for.is_some_and(|stop| elapsed >= stop) {
             println!("{}", line(&proxy, "total"));

@@ -17,11 +17,28 @@ cargo run --release -p acacia-netem -- --listen 127.0.0.1:19196 --to 127.0.0.1:1
 - `--stats N` prints a line every N seconds: per direction the datagrams in, lost, dropped for a full
   queue, sent, kB sent and the largest queue seen. `--for N` stops after N seconds.
 
+## Reading RakNet's recovery
+
+`--capture FILE` writes every datagram with its time, direction and fate. Then run:
+
+```
+py -3 tools/netem/raknet_trace.py FILE...
+```
+
+For each direction it reports:
+- **Recoveries:** resends of messages whose last copy netem dropped, and how long they took.
+- **Spurious resends:** resends of messages whose last copy got through.
+- **ACK and NACK records** the other side sent.
+
 ## Timing sapling joins
 
 `tools/netem-pacing.sh <local sapling checkout> [radius]` runs `pacing.sh` on testbox:
 - a sapling `drill_server` on generated terrain;
-- one warm-up join straight to it, so later joins time the link and not generation;
-- one `join_timing` bot through netem per profile (clean, lossy, narrow, bad).
+- a bot that holds the view open, since generated columns nobody sees are dropped and made again;
+- a warm-up join;
+- one `join_timing` bot through netem per profile (clean, lossy, narrow, bad), with
+  `raknet_trace.py`'s reading of its capture.
 
 Each prints the time to spawn, to every column of the view and to the last section answer.
+`BDS_PORT=19250` also joins a BDS started with `BDS_DIR=work/bds-netem BDS_PORT=19250
+tools/testbox-bds.sh start` at each profile.
