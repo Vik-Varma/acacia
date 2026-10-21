@@ -221,6 +221,12 @@ impl Arbiter {
         }
     }
 
+    /// The placement the process in control would make while driving on ([`Process::en_route`]).
+    pub fn en_route(&mut self) -> Option<(ProcId, Act)> {
+        let id = self.active?;
+        self.with(id, |p| p.en_route()).flatten().map(|a| (id, a))
+    }
+
     pub fn acted(&mut self, id: ProcId, act: &Act, result: &Result<(), ActionError>) {
         self.with(id, |p| p.acted(act, result));
     }

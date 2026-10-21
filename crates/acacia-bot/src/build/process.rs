@@ -227,6 +227,15 @@ impl Process for Builder {
         }
     }
 
+    fn en_route(&mut self) -> Option<Act> {
+        let act = self.en_route.take()?;
+        if let Some(c) = cell_of(&act) {
+            self.hold(c);
+            self.note(Entry::EnRoute { cell: c });
+        }
+        Some(act)
+    }
+
     fn observe(&mut self, event: &Event) {
         if let Event::Placed { pos } = event {
             self.add_scaffold(*pos);

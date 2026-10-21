@@ -138,6 +138,14 @@ impl Builder {
         ok
     }
 
+    /// Keeps `p` claimed for the grace after acting on it, outside a planned step (an en-route placement).
+    pub(super) fn hold(&mut self, p: BlockPos) {
+        let tick = self.tick;
+        if let Some(s) = &mut self.swarm {
+            s.acted.push((p, tick));
+        }
+    }
+
     /// Cells this bot holds and cells other bots hold (0, 0 without a board).
     pub(super) fn claims(&self) -> (usize, usize) {
         self.swarm.as_ref().map_or((0, 0), |s| (s.claimed.len(), s.taken.len()))

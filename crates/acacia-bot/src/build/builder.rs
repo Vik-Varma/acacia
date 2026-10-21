@@ -99,6 +99,8 @@ pub struct Builder {
     pub(super) waiting_since: Option<u64>,
     /// Cells to claim on the board for the step just planned (`swarm`).
     pub(super) batch: Vec<BlockPos>,
+    /// A placement to make on the way, offered with this tick's walk (`en_route`).
+    pub(super) en_route: Option<crate::pathfind::process::Act>,
     pub(super) swarm: Option<super::swarm::Swarm>,
     pub(super) journal: Option<Arc<super::journal::Journal>>,
     status: StatusHandle,
@@ -132,6 +134,7 @@ impl Builder {
         let status = Arc::new(Mutex::new(BuildStatus { cells: cells.len(), ..BuildStatus::default() }));
         Self {
             batch: Vec::new(),
+            en_route: None,
             swarm: None,
             journal: None,
             job,

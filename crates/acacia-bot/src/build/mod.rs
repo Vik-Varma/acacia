@@ -6,6 +6,7 @@ mod board;
 mod builder;
 mod check;
 mod cover;
+mod en_route;
 pub mod findings;
 mod job;
 pub mod journal;

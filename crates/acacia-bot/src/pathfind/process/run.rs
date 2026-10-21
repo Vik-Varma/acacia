@@ -31,7 +31,10 @@ pub struct Processes {
     arbiter: Arbiter,
     /// Placements sent without awaiting their echo, by target: whose they are, to tell it how they went.
     sent: std::collections::HashMap<BlockPos, (ProcId, super::Act)>,
+    walk: en_route::Walk,
 }
+
+mod en_route;
 
 impl Processes {
     pub fn new() -> Self {
@@ -90,6 +93,9 @@ impl Processes {
         let decision = self.arbiter.decide(pos, on_ground, &BotLook(bot));
         bot.act_timing.add(Phase::Plan, t.elapsed());
         let acting = matches!(decision, Decision::Act(..));
+        if !matches!(decision, Decision::Go) {
+            self.walk.drop_aim();
+        }
         if matches!(decision, Decision::Hold | Decision::Idle | Decision::Empty) {
             bot.stop_pathing();
         }
@@ -104,8 +110,10 @@ impl Processes {
                 if !matches!(result, Ok(NavStatus::Searching | NavStatus::Moving | NavStatus::Working)) {
                     bot.stop_pathing();
                 }
+                let moving = result == Ok(NavStatus::Moving);
                 self.arbiter.placed(worked.placed);
                 self.arbiter.drove(result, worked.dug);
+                self.place_en_route(bot, moving).await?;
                 status
             }
             Decision::Act(id, act) => {

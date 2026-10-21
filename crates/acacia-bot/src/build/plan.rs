@@ -107,6 +107,7 @@ fn fill(b: &Builder, pos: BlockPos) -> Act {
 pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     let eye = cx.eye();
     b.batch.clear();
+    b.en_route = None;
     // A cell with a placement in flight shows the prediction, not the server's block: leave it until decided.
     let open = |b: &Builder, i: usize, n: Need| needs[i] == n && !b.resting(b.cells[i].pos) && b.mine(b.cells[i].pos) && !cx.look.in_flight(b.cells[i].pos);
     let mut order: Vec<usize> = (0..b.cells.len()).collect();
@@ -179,14 +180,21 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     }
     // The held item first: every switch costs an equip (live: 235 switches, a third of a build's time).
     ready.sort_by_key(|(_, item)| Some(item.as_str()) != cx.look.held());
-    // Whatever can be clicked from here first (still lowest first), then walk for the lowest.
-    let mut here = None;
+    // Whatever can be clicked from here first (still lowest first), then walk for the lowest. Walking, a click
+    // whose state needs no particular look is placed on the way instead of stopping for it (`en_route`).
+    let (mut here, walking) = (None, b.commit.is_some() && super::en_route::enabled() && super::en_route::plain_step(cx));
     for (i, item) in &ready {
         let (pos, target) = (b.cells[*i].pos, &b.cells[*i].target);
+        let slack = if walking { super::en_route::SLACK } else { 0.0 };
         if free(b, cx, pos)
-            && let Some(c) = click_for(pos, target, eye, cx.look, 0.0)
+            && let Some(c) = click_for(pos, target, eye, cx.look, slack)
         {
-            here.get_or_insert(Act::Place { item: item.clone(), against: c.against, face: c.face, click: c.click });
+            let act = Act::Place { item: item.clone(), against: c.against, face: c.face, click: c.click };
+            if walking && super::en_route::look_free(&target.name) {
+                b.en_route.get_or_insert(act);
+            } else {
+                here.get_or_insert(act);
+            }
             b.batch.push(pos);
         }
     }
@@ -200,6 +208,9 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     }
     if let Some(next) = super::cover::walk(b, cx, &ready, committed) {
         return next;
+    }
+    if let Some(act) = b.en_route.take() {
+        return Next::Act(Phase::Building, act);
     }
     // Nothing to click against: a scaffold column up to the lowest such cell.
     if let Some(pos) = unsupported {

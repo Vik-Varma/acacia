@@ -43,6 +43,18 @@ impl Controls {
         (self.forward, self.strafe, self.jump, self.sprint) = (0.0, 0.0, false, false);
     }
 
+    /// Keeps the world direction `course` walks in while facing this yaw: the nearest of the eight key
+    /// combinations (at most 22.5° off; the follower corrects it next tick), without sprint (it needs forward).
+    pub fn keep_course(&mut self, course: &Controls) {
+        if course.forward == 0.0 && course.strafe == 0.0 {
+            return;
+        }
+        let heading = course.yaw + (-course.strafe).atan2(course.forward).to_degrees();
+        let rel = ((heading - self.yaw + 540.0).rem_euclid(360.0) - 180.0) / 45.0;
+        let r = (rel.round() * 45.0).to_radians();
+        (self.forward, self.strafe, self.sprint) = (r.cos().round(), (-r.sin()).round(), false);
+    }
+
     /// Turns to face `target` from `eye` (both world positions).
     pub fn look_at(&mut self, eye: Vec3, target: Vec3) {
         let [dx, dy, dz] = [target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]];

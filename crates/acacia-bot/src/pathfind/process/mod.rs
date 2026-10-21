@@ -160,8 +160,14 @@ pub trait Process: Send {
         false
     }
 
-    /// A [`Want::Act`] was done (or not).
+    /// A [`Want::Act`] (or [`Process::en_route`] placement) was done (or not).
     fn acted(&mut self, _act: &Act, _result: &Result<(), ActionError>) {}
+
+    /// While its [`Want::Go`] drives on, an [`Act::Place`] to make without stopping (`process::en_route`).
+    /// Asked after `want` on driving ticks; taking it is up to the driver.
+    fn en_route(&mut self) -> Option<Act> {
+        None
+    }
 
     fn observe(&mut self, _event: &Event) {}
 

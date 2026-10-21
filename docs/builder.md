@@ -191,9 +191,18 @@ The two-bot ratio: 0.61 live (8 runs). A full in-flight cap holds a pipelined pl
 waiting inside it (`process::run::pacing`): waiting there never ended, since in-flight placements are decided
 only at the start of a tick (live: the bot went silent mid-build).
 
-- Next, in order (`research/build-iteration-tooling.md`, `build-walk-overhead.md`, `build-throughput-deep.md`):
-  short swarm scenes per bug with injected lag; the sim with per-bot delayed visibility and a millisecond time
-  model fitted to journals; placing while walking. Acting is now the largest share (~2 ticks a placement).
+- Next (`research/build-iteration-tooling.md`, `build-walk-overhead.md`, `build-throughput-deep.md`): short swarm
+  scenes per bug with injected lag; the sim's path-work cost (left out, see "Measuring"). Acting is the largest
+  share (~2 ticks a placement).
+
+Tried and kept off (2026-10-21): placing while walking (`BUILD_ENROUTE=1`; `process::run::en_route`,
+`build/en_route.rs`). On a plain walking step on the ground, a ready cell whose state needs no particular look
+is aimed at (keys remapped to keep the course, no sprint), clicked the next tick, then two ticks only walk.
+Live A/B, 4 runs each, all PASS: one bot 159.8 s against 148.8, two 91.8 against 106 (one 141 s outlier; ~94
+without). Only 12-63 cells a run went in en route against the model's ~98: most steps are macro runs and
+leaps (journal tally: Run 370, Parkour 249, Walk 103 of the refusals), and offering on those dropped the
+cells walked past (a first version placed 116 en route and saved nothing). To retry: clicks on run macros
+(their rollouts would have to include the remapped keys).
 - Stands (`build/cover.rs`): the stand reaching the most ready cells for its travel, not the stand of the
   first cell. Live one bot it was neutral (200 s against 187-196); it gives the swarm its claim batches.
 - Path work keeps out of built cells (`SearchOpts::keep`; sim: a pillar through a torch's cell replaced it

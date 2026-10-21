@@ -61,6 +61,8 @@ pub enum Entry {
     },
     /// A cell set aside for a while (no stand, no click from the stand, failed acts).
     Rest { cell: BlockPos },
+    /// A placement handed over to be made while walking on (its outcome comes as an `Acted` later).
+    EnRoute { cell: BlockPos },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
