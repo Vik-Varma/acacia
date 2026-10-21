@@ -53,7 +53,7 @@ async fn main() -> Result<(), Error> {
     let wrong = house::observe(&server, &observer, &pad, &job).await?;
     let done = ra.1.phase == Phase::Done || rb.as_ref().is_some_and(|r| r.1.phase == Phase::Done);
     let ticks = ra.0.max(rb.as_ref().map_or(0, |r| r.0));
-    let line = |n: &str, r: &Run| format!("{n}: {} ticks, {} placed, {} broken, {} restocks, {} corrections, {:?}", r.0, r.1.placed, r.1.broken, r.1.restocks, r.2, r.1.phase);
+    let line = |n: &str, r: &Run| format!("{n}: {} ticks, {} placed, {} broken, {} restocks, {} walks, {} corrections, {:?}", r.0, r.1.placed, r.1.broken, r.1.restocks, r.1.walks, r.2, r.1.phase);
     println!("{}", line(&na, &ra));
     if let Some(rb) = &rb {
         println!("{}", line(&nb, rb));

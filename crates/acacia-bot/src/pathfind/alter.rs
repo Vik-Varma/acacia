@@ -60,7 +60,7 @@ impl<'c, 'k> Clearing<'c, 'k> {
             }
             return true;
         }
-        let Some(cost) = self.dig.then(|| dig_cost(t, q, self.ctx.kit)).flatten() else { return false };
+        let Some(cost) = (self.dig && self.ctx.may_alter(q)).then(|| dig_cost(t, q, self.ctx.kit)).flatten() else { return false };
         if self.work.push(Step::Break(q)) {
             self.cost += cost;
         }
@@ -99,7 +99,7 @@ fn level<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, (dx, dz): (i32, i32
     let side = offset(p, dx, 0, dz);
     let below = t.cell(offset(side, 0, -1, 0));
     let bridge = !below.is_floor();
-    if bridge && !(ctx.bridge && ctx.blocks_left > 0 && below.is_open() && solid_under(t, p, from)) {
+    if bridge && !(ctx.bridge && ctx.blocks_left > 0 && below.is_open() && solid_under(t, p, from) && ctx.may_alter(offset(side, 0, -1, 0))) {
         return;
     }
     let feet = p[1] as f32;
@@ -155,7 +155,7 @@ pub(crate) fn vertical<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, ctx: 
 
 fn down<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, ctx: &Ctx, out: &mut Vec<Edge>) {
     let below = offset(p, 0, -1, 0);
-    if from.made & PLACED_FLOOR != 0 || !t.cell(offset(p, 0, -2, 0)).is_floor() {
+    if from.made & PLACED_FLOOR != 0 || !t.cell(offset(p, 0, -2, 0)).is_floor() || !ctx.may_alter(below) {
         return;
     }
     let Some(cost) = dig_cost(t, below, ctx.kit) else { return };
@@ -167,7 +167,7 @@ fn down<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, ctx: &Ctx, out: &mut
 
 fn pillar<B: Blocks>(t: &Terrain<B>, p: BlockPos, from: Spot, ctx: &Ctx, out: &mut Vec<Edge>) {
     let carved = from.made & CARVED != 0;
-    if !solid_under(t, p, from) || !(carved || t.cell(p).is_open()) {
+    if !solid_under(t, p, from) || !(carved || t.cell(p).is_open()) || !ctx.may_alter(p) {
         return;
     }
     let feet = p[1] as f32 + 1.0;

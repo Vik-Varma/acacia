@@ -113,6 +113,28 @@ fn pillars_up_and_scarce_blocks_cost_more() {
     assert!(scarce.complete && scarce.cost > p.cost, "{} vs {}", scarce.cost, p.cost);
 }
 
+#[test]
+fn path_work_never_places_into_or_breaks_a_kept_cell() {
+    // Sim 2026-10-20: a pillar up through a torch's cell (it doesn't collide) replaced the torch, again and again.
+    let g = Grid::floor(-10, 10);
+    g.fill([1, 1, -10], [5, 4, 10], "stone");
+    let free = find(&g, ORIGIN, [3, 5, 0], &with(false, true, blocks(64)));
+    let used: Vec<BlockPos> = free.nodes.iter().flat_map(|n| n.work.steps()).filter_map(|s| if let Step::Place { against, face } = s { Some(face.adjacent(against)) } else { None }).collect();
+    assert!(!used.is_empty(), "the free path pillars: {:?}", free.nodes);
+    let keep: std::collections::HashSet<BlockPos> = used.iter().copied().collect();
+    let o = SearchOpts { keep: Some(keep.clone().into()), ..with(true, true, Kit { blocks: 64, ..tool("minecraft:diamond_pickaxe") }) };
+    let kept = find(&g, ORIGIN, [3, 5, 0], &o);
+    assert!(kept.complete, "another way up: {kept:?}");
+    for s in kept.nodes.iter().flat_map(|n| n.work.steps()) {
+        let cell = match s {
+            Step::Place { against, face } => face.adjacent(against),
+            Step::Break(p) => p,
+            _ => continue,
+        };
+        assert!(!keep.contains(&cell), "work {s:?} touches a kept cell");
+    }
+}
+
 /// [`walled`] stone with a closed `name` (door or gate) at (2, 1, 0) facing along x.
 pub fn door_in_wall(name: &str) -> Grid {
     let g = walled("stone");

@@ -17,9 +17,9 @@ use crate::ActionError;
 /// Candidates tried per tick, in rank order, before settling for a later rank.
 const TRIES: usize = 24;
 /// Stands handed to the pilot at once (it takes the cheapest it can reach).
-const STANDS: usize = 3;
+pub(super) const STANDS: usize = 3;
 /// Placements whose stands are searched per tick (the search tries every face from every spot).
-const SEARCHES: usize = 6;
+pub(super) const SEARCHES: usize = 6;
 const BODY: f32 = 0.35;
 
 pub(super) enum Next {
@@ -48,7 +48,7 @@ fn free(b: &Builder, cx: &Ctx, p: BlockPos) -> bool {
 }
 
 /// Drives to the cheapest stands; the committed goal again when it is for the same task (a new goal restarts the pilot).
-fn go(phase: Phase, task: BlockPos, found: Vec<Stand>, b: &Builder) -> Option<Next> {
+pub(super) fn go(phase: Phase, task: BlockPos, found: Vec<Stand>, b: &Builder) -> Option<Next> {
     if let Some((t, goal)) = &b.commit
         && *t == task
         && !found.is_empty()
@@ -89,13 +89,13 @@ fn fills_later(b: &Builder, look: &dyn Look, c: BlockPos) -> bool {
 
 /// Pillars stay out of cells the structure still fills (dirt in a wall would have to be dug out again), and out
 /// of regions other bots hold.
-fn unbuilt(b: &Builder, look: &dyn Look, c: BlockPos) -> bool {
+pub(super) fn unbuilt(b: &Builder, look: &dyn Look, c: BlockPos) -> bool {
     fills_later(b, look, c) || b.theirs(c)
 }
 
 /// Feet in `f` are no stand: body in a cell the structure still fills (live: the bot stood in the unbuilt top
 /// of a ladder column on a narrow wall and could reach nothing from there), or shunned.
-fn no_stand(b: &Builder, look: &dyn Look, f: BlockPos) -> bool {
+pub(super) fn no_stand(b: &Builder, look: &dyn Look, f: BlockPos) -> bool {
     b.shunned(f) || fills_later(b, look, f) || fills_later(b, look, [f[0], f[1] + 1, f[2]])
 }
 
@@ -105,6 +105,7 @@ fn fill(b: &Builder, pos: BlockPos) -> Act {
 
 pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     let eye = cx.eye();
+    b.batch.clear();
     // A cell with a placement in flight shows the prediction, not the server's block: leave it until decided.
     let open = |b: &Builder, i: usize, n: Need| needs[i] == n && !b.resting(b.cells[i].pos) && b.mine(b.cells[i].pos) && !cx.look.in_flight(b.cells[i].pos);
     let mut order: Vec<usize> = (0..b.cells.len()).collect();
@@ -112,7 +113,7 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     let committed = b.commit.as_ref().map(|(p, _)| *p);
     order.sort_by(|&x, &y| {
         let (p, q) = (b.cells[x].pos, b.cells[y].pos);
-        (Some(q) == committed).cmp(&(Some(p) == committed)).then(dist(eye, p).total_cmp(&dist(eye, q)))
+        (Some(q) == committed).cmp(&(Some(p) == committed)).then((dist(eye, p) + b.away_cost(p)).total_cmp(&(dist(eye, q) + b.away_cost(q))))
     });
 
     // Breaks and drains, top down: seal leaks first.
@@ -178,27 +179,26 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     // The held item first: every switch costs an equip (live: 235 switches, a third of a build's time).
     ready.sort_by_key(|(_, item)| Some(item.as_str()) != cx.look.held());
     // Whatever can be clicked from here first (still lowest first), then walk for the lowest.
+    let mut here = None;
     for (i, item) in &ready {
         let (pos, target) = (b.cells[*i].pos, &b.cells[*i].target);
         if free(b, cx, pos)
             && let Some(c) = click_for(pos, target, eye, cx.look, 0.0)
         {
-            return Next::Act(Phase::Building, Act::Place { item: item.clone(), against: c.against, face: c.face, click: c.click });
+            here.get_or_insert(Act::Place { item: item.clone(), against: c.against, face: c.face, click: c.click });
+            b.batch.push(pos);
         }
+    }
+    if let Some(act) = here {
+        return Next::Act(Phase::Building, act);
     }
     // The committed task first: picking the nearest anew each tick switches goals as the bot moves, and the
     // pilot restarts on every switch.
     if let Some(at) = ready.iter().position(|(i, _)| Some(b.cells[*i].pos) == committed) {
         ready[..=at].rotate_right(1);
     }
-    for (i, _) in ready.iter().take(SEARCHES) {
-        let (pos, target) = (b.cells[*i].pos, b.cells[*i].target.clone());
-        let keep = Keep { feet: &|f| no_stand(b, cx.look, f), pillar: &|c| unbuilt(b, cx.look, c) };
-        let found = stands(pos, cx.pos, cx.look, &keep, &|e| click_for(pos, &target, e, cx.look, STAND_SLACK).is_some(), STANDS);
-        match go(Phase::Building, pos, found, b) {
-            Some(next) => return next,
-            None => b.rest(pos),
-        }
+    if let Some(next) = super::cover::walk(b, cx, &ready, committed) {
+        return next;
     }
     // Nothing to click against: a scaffold column up to the lowest such cell.
     if let Some(pos) = unsupported {

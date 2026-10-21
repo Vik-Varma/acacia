@@ -154,7 +154,30 @@ fn take(w: &mut World, item: &str) -> Result<(), ActionError> {
 }
 
 /// Does an act as the server would, from where the simulated player stands.
+/// `BUILD_WATCH=x,y,z`: every act touching that cell is printed (with the eye), for a cell's history.
+fn watched(p: BlockPos) -> bool {
+    static W: std::sync::OnceLock<Option<BlockPos>> = std::sync::OnceLock::new();
+    let w = W.get_or_init(|| {
+        let v: Vec<i32> = std::env::var("BUILD_WATCH").ok()?.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+        (v.len() == 3).then(|| [v[0], v[1], v[2]])
+    });
+    *w == Some(p)
+}
+
 fn act(w: &mut World, m: &Movement, act: &Act) -> Result<(), ActionError> {
+    let r = act_inner(w, m, act);
+    let cell = match act {
+        Act::Place { against, face, .. } => face.adjacent(*against),
+        Act::Break { pos } | Act::Fill { pos, .. } => *pos,
+        Act::Restock { station, .. } => *station,
+    };
+    if watched(cell) || matches!(act, Act::Place { against, .. } if watched(*against)) {
+        eprintln!("WATCH eye {:?} {act:?} -> {r:?}; now {:?}", eye(m), view(w.g, cell));
+    }
+    r
+}
+
+fn act_inner(w: &mut World, m: &Movement, act: &Act) -> Result<(), ActionError> {
     w.log.push(act.clone());
     let e = eye(m);
     let far = |p: BlockPos| block_distance(e, p) > BLOCK_REACH;
@@ -248,6 +271,9 @@ pub fn step(w: &mut World, m: &mut Movement, arb: &mut Arbiter, tick: u32) {
             if result == Ok(NavStatus::Working) {
                 let node = pilot.pending_work().expect("work due");
                 placed = node.work.steps().filter_map(|s| if let Step::Place { against, face } = s { Some(face.adjacent(against)) } else { None }).collect();
+                if node.work.steps().any(|s| matches!(s, Step::Place { against, face } if watched(face.adjacent(against))) || matches!(s, Step::Break(p) if watched(p))) {
+                    eprintln!("WATCH tick {tick} path work {:?} from {pos:?}", node.work.steps().collect::<Vec<_>>());
+                }
                 perform(w.g, &world, m, &node);
                 pilot.work_done();
             }

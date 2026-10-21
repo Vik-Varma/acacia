@@ -5,6 +5,7 @@
 mod board;
 mod builder;
 mod check;
+mod cover;
 mod job;
 mod plan;
 mod process;
@@ -19,7 +20,7 @@ mod transform;
 #[cfg(test)]
 pub(crate) mod tests;
 
-pub use board::{LocalBoard, RegionId, TaskBoard};
+pub use board::{LocalBoard, TaskBoard};
 pub use builder::{BuildError, Builder};
 pub use check::{check, Mismatch};
 pub use job::BuildJob;

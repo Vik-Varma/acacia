@@ -1,6 +1,6 @@
-//! Shared work for several builders on one job: footprint regions claimed under expiring leases, stations opened
-//! one bot at a time, and the scaffold every bot placed. Progress itself is never on the board: a region that
-//! comes back to the pool is surveyed again. Design: acacia-pathfind/docs/builder.md "Swarm".
+//! Shared work for several builders on one job: the cells each bot is about to work on, claimed under expiring
+//! leases, stations opened one bot at a time, and the scaffold every bot placed. Progress itself is never on the
+//! board: a claim that lapses leaves cells that whoever comes next surveys again. Design: acacia-pathfind/docs/builder.md "Swarm".
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
@@ -9,20 +9,19 @@ use std::time::Instant;
 
 use acacia_physics::{BlockPos, Vec3};
 
-/// A footprint tile, by tile index along x and z.
-pub type RegionId = (i32, i32);
-
 /// The board builders on one job share (in one process: [`LocalBoard`]; a networked one can implement it too).
 pub trait TaskBoard: Send + Sync {
-    /// The first of `wanted` not leased to another bot, now leased to `who` (dropping any other region it held).
-    fn claim(&self, who: &str, wanted: &[RegionId]) -> Option<RegionId>;
-    /// Renews `who`'s leases and posts where it stands; returns the region it still holds.
-    fn heartbeat(&self, who: &str, feet: Vec3) -> Option<RegionId>;
+    /// Of `wanted`, the cells no other bot holds, now held by `who` in place of what it held before.
+    fn claim(&self, who: &str, wanted: &[BlockPos]) -> Vec<BlockPos>;
+    /// Renews `who`'s leases and posts where it stands.
+    fn heartbeat(&self, who: &str, feet: Vec3);
     fn release(&self, who: &str);
-    /// Regions leased to other bots.
-    fn taken(&self, who: &str) -> HashSet<RegionId>;
+    /// Cells other bots hold.
+    fn taken(&self, who: &str) -> HashSet<BlockPos>;
     /// Feet of the other bots with live leases.
     fn others(&self, who: &str) -> Vec<Vec3>;
+    /// `who`'s place among the bots with live leases, by name, and how many there are.
+    fn rank(&self, who: &str) -> (usize, usize);
     /// Takes `station` for `who` until closed or its lease runs out; false: another bot has it open.
     fn open_station(&self, who: &str, station: BlockPos) -> bool;
     fn close_station(&self, who: &str, station: BlockPos);
@@ -39,7 +38,7 @@ enum Clock {
 }
 
 struct Bot {
-    region: Option<RegionId>,
+    cells: HashSet<BlockPos>,
     feet: Vec3,
     until: u64,
 }
@@ -49,6 +48,18 @@ struct State {
     bots: HashMap<String, Bot>,
     stations: HashMap<BlockPos, (String, u64)>,
     scaffold: HashSet<BlockPos>,
+}
+
+impl State {
+    fn bot(&mut self, who: &str, until: u64) -> &mut Bot {
+        let bot = self.bots.entry(who.to_string()).or_insert(Bot { cells: HashSet::new(), feet: [f32::NAN; 3], until });
+        bot.until = until;
+        bot
+    }
+
+    fn taken(&self, who: &str) -> HashSet<BlockPos> {
+        self.bots.iter().filter(|(k, _)| *k != who).flat_map(|(_, b)| b.cells.iter().copied()).collect()
+    }
 }
 
 /// A [`TaskBoard`] for builders in one process.
@@ -82,57 +93,56 @@ impl LocalBoard {
         }
     }
 
-    /// The state with expired leases dropped.
+    /// The state with expired leases dropped, and when a lease taken now would run out.
     fn live(&self) -> (std::sync::MutexGuard<'_, State>, u64) {
         let now = self.now();
         let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
         s.bots.retain(|_, b| b.until > now);
         s.stations.retain(|_, (_, until)| *until > now);
-        (s, now)
+        (s, now + self.lease)
     }
 }
 
 impl TaskBoard for LocalBoard {
-    fn claim(&self, who: &str, wanted: &[RegionId]) -> Option<RegionId> {
-        let (mut s, now) = self.live();
-        let taken: HashSet<RegionId> = s.bots.iter().filter(|(k, _)| *k != who).filter_map(|(_, b)| b.region).collect();
-        let pick = wanted.iter().copied().find(|r| !taken.contains(r));
-        let until = now + self.lease;
-        let bot = s.bots.entry(who.to_string()).or_insert(Bot { region: None, feet: [0.0; 3], until });
-        (bot.region, bot.until) = (pick, until);
-        pick
+    fn claim(&self, who: &str, wanted: &[BlockPos]) -> Vec<BlockPos> {
+        let (mut s, until) = self.live();
+        let taken = s.taken(who);
+        let got: Vec<BlockPos> = wanted.iter().copied().filter(|c| !taken.contains(c)).collect();
+        s.bot(who, until).cells = got.iter().copied().collect();
+        got
     }
 
-    fn heartbeat(&self, who: &str, feet: Vec3) -> Option<RegionId> {
-        let (mut s, now) = self.live();
-        let until = now + self.lease;
-        let bot = s.bots.entry(who.to_string()).or_insert(Bot { region: None, feet, until });
-        (bot.feet, bot.until) = (feet, until);
-        let region = bot.region;
+    fn heartbeat(&self, who: &str, feet: Vec3) {
+        let (mut s, until) = self.live();
+        s.bot(who, until).feet = feet;
         s.stations.values_mut().filter(|(k, _)| k == who).for_each(|(_, u)| *u = until);
-        region
     }
 
     fn release(&self, who: &str) {
         if let Some(b) = self.live().0.bots.get_mut(who) {
-            b.region = None;
+            b.cells.clear();
         }
     }
 
-    fn taken(&self, who: &str) -> HashSet<RegionId> {
-        self.live().0.bots.iter().filter(|(k, _)| *k != who).filter_map(|(_, b)| b.region).collect()
+    fn taken(&self, who: &str) -> HashSet<BlockPos> {
+        self.live().0.taken(who)
     }
 
     fn others(&self, who: &str) -> Vec<Vec3> {
         self.live().0.bots.iter().filter(|(k, _)| *k != who).map(|(_, b)| b.feet).collect()
     }
 
+    fn rank(&self, who: &str) -> (usize, usize) {
+        let s = self.live().0;
+        (s.bots.keys().filter(|k| k.as_str() < who).count(), s.bots.len().max(1))
+    }
+
     fn open_station(&self, who: &str, station: BlockPos) -> bool {
-        let (mut s, now) = self.live();
+        let (mut s, until) = self.live();
         match s.stations.get(&station) {
             Some((k, _)) if k != who => false,
             _ => {
-                s.stations.insert(station, (who.to_string(), now + self.lease));
+                s.stations.insert(station, (who.to_string(), until));
                 true
             }
         }

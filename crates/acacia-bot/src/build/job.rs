@@ -22,24 +22,15 @@ pub struct BuildJob {
     /// Item identifiers for temporary blocks (pillars, supports, liquid seals), in preference order.
     #[serde(default = "default_scaffold")]
     pub scaffold: Vec<String>,
-    /// Side of the square footprint regions bots claim when sharing the job through a board.
-    #[serde(default = "default_tile")]
-    pub tile: i32,
 }
 
 fn default_scaffold() -> Vec<String> {
     DEFAULT_SCAFFOLD.iter().map(|s| s.to_string()).collect()
 }
 
-/// Small enough that the last work spreads over several tiles (live house16 with 8: one bot idled through the
-/// tail while the other finished its tile; see docs/builder.md "Swarm").
-fn default_tile() -> i32 {
-    4
-}
-
 impl BuildJob {
     pub fn new(structure: impl Into<PathBuf>, at: Transform) -> Self {
-        Self { structure: structure.into(), at, stations: Vec::new(), fill_only: false, scaffold: default_scaffold(), tile: default_tile() }
+        Self { structure: structure.into(), at, stations: Vec::new(), fill_only: false, scaffold: default_scaffold() }
     }
 
     pub fn to_json(&self) -> String {

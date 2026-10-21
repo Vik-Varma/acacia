@@ -63,6 +63,15 @@ pub(crate) struct Ctx<'k> {
     pub blocks_left: u32,
     /// Macro moves, found by rollout; `None` plans classic moves only.
     pub macros: Option<Macros<'k>>,
+    /// [`SearchOpts::keep`](super::SearchOpts::keep).
+    pub keep: Option<&'k std::collections::HashSet<acacia_physics::BlockPos>>,
+}
+
+impl Ctx<'_> {
+    /// Path work may place into or break the cell.
+    pub fn may_alter(&self, p: acacia_physics::BlockPos) -> bool {
+        self.keep.is_none_or(|k| !k.contains(&p))
+    }
 }
 
 /// Highest feet rise a standing jump clears (apex ≈ 1.25 with the 0.42 jump velocity).

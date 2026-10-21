@@ -87,11 +87,14 @@ pub struct Builder {
     pub(super) arrived: Option<crate::pathfind::Goal>,
     /// Stand feet the pilot failed to reach, until the tick.
     pub(super) avoid: HashMap<BlockPos, u64>,
+    /// Cells already built (a block target that matches): the pilot's own work leaves them alone
+    /// (`SearchOpts::keep`). Built cells only: keeping every block target cost one bot 267 s against 200 s
+    /// (live house16), its paths walking round unbuilt floor instead of over scaffold there.
+    pub(super) keep: Arc<HashSet<BlockPos>>,
     pub(super) tick: u64,
     pub(super) waiting_since: Option<u64>,
-    /// The footprint's x/z bounds (regions tile it).
-    pub(super) lo: [i32; 2],
-    pub(super) hi: [i32; 2],
+    /// Cells to claim on the board for the step just planned (`swarm`).
+    pub(super) batch: Vec<BlockPos>,
     pub(super) swarm: Option<super::swarm::Swarm>,
     status: StatusHandle,
 }
@@ -121,11 +124,8 @@ impl Builder {
         let index = cells.iter().enumerate().map(|(i, c)| (c.pos, i)).collect();
         let stations = job.stations.iter().map(|&pos| Station { pos, lacks: HashSet::new() }).collect();
         let status = Arc::new(Mutex::new(BuildStatus { cells: cells.len(), ..BuildStatus::default() }));
-        let bound = |f: fn(i32, i32) -> i32, i: usize, start: i32| cells.iter().map(|c| c.pos[i]).fold(start, f);
-        let (lo, hi) = ([bound(i32::min, 0, i32::MAX), bound(i32::min, 2, i32::MAX)], [bound(i32::max, 0, i32::MIN), bound(i32::max, 2, i32::MIN)]);
         Self {
-            lo,
-            hi,
+            batch: Vec::new(),
             swarm: None,
             job,
             cells,
@@ -138,6 +138,7 @@ impl Builder {
             commit: None,
             arrived: None,
             avoid: HashMap::new(),
+            keep: Arc::default(),
             tick: 0,
             waiting_since: None,
             status,

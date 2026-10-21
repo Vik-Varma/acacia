@@ -41,6 +41,8 @@ pub struct BuildStatus {
     pub placed: u32,
     pub broken: u32,
     pub restocks: u32,
+    /// Goals the pilot was given (a goal kept across ticks counts once).
+    pub walks: u32,
 }
 
 pub type StatusHandle = Arc<Mutex<BuildStatus>>;

@@ -84,7 +84,7 @@ pub fn search_cached<B: Blocks>(t: &Terrain<B>, live: &PlayerState, goal: &Goal,
         deadline: started + opts.budget / MACRO_TIME_SHARE,
         stats: Cell::default(),
     });
-    let mut ctx = Ctx { parkour: opts.parkour, dig: opts.allow_dig, bridge: opts.allow_bridge, doors: opts.open_doors, kit: &opts.kit, blocks_left: 0, macros };
+    let mut ctx = Ctx { parkour: opts.parkour, dig: opts.allow_dig, bridge: opts.allow_bridge, doors: opts.open_doors, kit: &opts.kit, blocks_left: 0, macros, keep: opts.keep.as_deref() };
     let stats = |ctx: &Ctx| ctx.macros.as_ref().map_or_else(MacroStats::default, |m| m.stats.get());
     let (mut cut, mut reaches, mut exits) = (false, Reaches::default(), Exits::default());
 

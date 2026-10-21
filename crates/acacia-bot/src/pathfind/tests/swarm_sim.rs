@@ -82,7 +82,7 @@ fn two_bots_build_house16_in_well_under_one_bots_time() {
         let mut w = World::new(&g, &inv);
         let mut arb = Arbiter::new();
         let id = arb.add(builder(&s, ORIGIN, &[]).0, 10);
-        run(&mut w, [0.5, 1.0, 0.5], &mut arb, id, 60_000)
+        run(&mut w, [0.5, 1.0, 0.5], &mut arb, id, 8000)
     };
     let g = Grid::floor(-20, 40);
     let mut w = World::new(&g, &[]);
@@ -94,7 +94,8 @@ fn two_bots_build_house16_in_well_under_one_bots_time() {
             bot(b, st, &board, who, start, &inv)
         })
         .collect();
-    let two = run_many(&mut w, &mut bots, &board, 60_000);
+    // Caps ~2.5x the expected ticks: a looping bot fails here in minutes, not after the testbox timeout.
+    let two = run_many(&mut w, &mut bots, &board, 6000);
     for b in &bots {
         eprintln!("{:?}", b.status.lock().unwrap());
     }
@@ -124,7 +125,7 @@ fn house16_finishes_when_a_bot_drops_after_restocking() {
         })
         .collect();
     bots[1].stop_at = Some(600);
-    let ticks = run_many(&mut w, &mut bots, &board, 30_000);
+    let ticks = run_many(&mut w, &mut bots, &board, 8000);
     let (a, b) = (bots[0].status.lock().unwrap().clone(), bots[1].status.lock().unwrap().clone());
     eprintln!("{ticks} ticks: a {a:?}\nb {b:?}");
     assert!(b.restocks > 0 && b.placed > 0, "b restocked and built before it dropped");
@@ -133,7 +134,7 @@ fn house16_finishes_when_a_bot_drops_after_restocking() {
 }
 
 #[test]
-fn a_dropped_bots_region_returns_to_the_pool() {
+fn a_dropped_bots_claim_returns_to_the_pool() {
     let g = Grid::floor(-20, 30);
     let s = plank_floor(10);
     let mut w = World::new(&g, &[]);
@@ -141,8 +142,7 @@ fn a_dropped_bots_region_returns_to_the_pool() {
     let mut bots: Vec<SimBot> = [("a", [0.5, 1.0, 0.5]), ("b", [13.5, 1.0, 13.5])]
         .into_iter()
         .map(|(who, start)| {
-            let (mut b, st) = builder(&s, ORIGIN, &[]);
-            b = b.with_tile(5);
+            let (b, st) = builder(&s, ORIGIN, &[]);
             bot(b, st, &board, who, start, &[("oak_planks", 200), ("dirt", 64)])
         })
         .collect();

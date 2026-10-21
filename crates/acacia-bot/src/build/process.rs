@@ -3,6 +3,7 @@
 use super::builder::Builder;
 use super::plan::{self, Next};
 use super::status::Phase;
+use super::survey::Need;
 use crate::pathfind::process::{Act, Ctx, Event, Process, Want};
 use crate::pathfind::{Goal, GotoOpts};
 use crate::ActionError;
@@ -20,6 +21,15 @@ fn stands_of(goal: &Goal) -> Box<dyn Iterator<Item = acacia_physics::BlockPos> +
     }
 }
 
+/// The cell an act changes.
+fn cell_of(act: &Act) -> Option<acacia_physics::BlockPos> {
+    match act {
+        Act::Place { against, face, .. } => Some(face.adjacent(*against)),
+        Act::Break { pos } | Act::Fill { pos, .. } => Some(*pos),
+        _ => None,
+    }
+}
+
 /// `cell` is next to (or in) the body of a player standing at feet cell `feet`.
 fn beside(cell: acacia_physics::BlockPos, feet: acacia_physics::BlockPos) -> bool {
     (cell[0] - feet[0]).abs() <= 1 && (cell[2] - feet[2]).abs() <= 1 && (feet[1]..=feet[1] + 1).contains(&cell[1])
@@ -34,7 +44,11 @@ impl Process for Builder {
         self.tick = cx.tick;
         self.check_restock(cx.look);
         let needs = self.survey(cx.look);
-        self.sync(cx, &needs);
+        self.sync(cx);
+        let built = || self.cells.iter().zip(&needs).filter(|(c, n)| **n == Need::Done && !c.target.is_air()).map(|(c, _)| c.pos);
+        if built().count() != self.keep.len() {
+            self.keep = std::sync::Arc::new(built().collect());
+        }
         self.scaffold.retain(|p| cx.look.solid(*p) != Some(false));
         // In the air: keep driving (a jump or pillar in progress), or wait to land before acting.
         let mut next = match &self.commit {
@@ -42,23 +56,38 @@ impl Process for Builder {
             _ => Next::Hold(Phase::Building, Vec::new()),
         };
         // A task wanting the goal just reached could not act from there after all: let it rest and ask again.
-        let mut planned = false;
         for _ in 0..8 {
             if !cx.on_ground {
                 break;
             }
-            (next, planned) = (plan::next(self, cx, &needs), true);
+            next = plan::next(self, cx, &needs);
             match &next {
                 Next::Go(_, task, goal) if self.arrived.as_ref() == Some(goal) => {
                     tracing::debug!(?task, ?goal, "build stand reached but no click from there");
                     self.rest(*task);
-                    (next, planned) = (Next::Hold(Phase::Building, Vec::new()), false);
+                    self.batch.clear();
+                    next = Next::Hold(Phase::Building, Vec::new());
                 }
                 _ => break,
             }
         }
-        if planned && matches!(&next, Next::Hold(p, _) if *p != Phase::Restocking) {
-            self.exhausted();
+        // Every tick on the ground, planned or not: a hold that skipped the claim kept the last one, and the other
+        // bot waited on it for good (live: two slabs it could click, 150 s).
+        if cx.on_ground {
+            let acting_on = match &next {
+                Next::Act(_, act) => cell_of(act),
+                Next::Go(_, task, _) => Some(*task),
+                _ => None,
+            };
+            if let Some(p) = acting_on
+                && !self.batch.contains(&p)
+            {
+                self.batch.push(p);
+            }
+            // Another bot claimed it first (bots plan in turn): ask again next tick.
+            if !self.claim_batch(acting_on, matches!(next, Next::Act(..))) {
+                next = Next::Hold(Phase::Building, Vec::new());
+            }
         }
         let (phase, missing, want) = match next {
             Next::Act(phase, act) => {
@@ -66,6 +95,9 @@ impl Process for Builder {
                 (phase, Vec::new(), Want::Act(act))
             }
             Next::Go(phase, task, goal) => {
+                if self.commit.as_ref().is_none_or(|(_, g)| *g != goal) {
+                    self.bump(|s| s.walks += 1);
+                }
                 self.commit = Some((task, goal.clone()));
                 (phase, Vec::new(), Want::Go(goal))
             }
@@ -99,6 +131,7 @@ impl Process for Builder {
             opts.tolerance = STAND_TOLERANCE;
         }
         opts.search.allow_bridge = true;
+        opts.search.keep = Some(self.keep.clone());
         opts
     }
 

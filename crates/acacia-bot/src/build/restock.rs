@@ -1,6 +1,7 @@
 //! Restocking by remaining need: everything the open placements still need (sharing a job: this bot's share,
 //! the need over the bots on the board), minus what the inventory holds, from the nearest station not yet found
-//! without it. A share, not the held tile's need: per small tile each bot walked back after nearly every tile.
+//! without it. A share, not the need of the cells at hand: with 4×4 tiles (before cell claims) each bot walked
+//! back after nearly every tile.
 
 use std::collections::BTreeMap;
 

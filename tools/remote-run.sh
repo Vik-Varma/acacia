@@ -10,6 +10,10 @@ opts="-o ConnectTimeout=20 -o ServerAliveInterval=10"
 retry() { for i in 1 2 3 4 5; do "$@" && return 0; echo "retry $i: $1" >&2; sleep 3; done; return 1; }
 
 retry ssh $opts testbox "mkdir -p $remote"
+# A second launch into a busy dir would delete the running job's log; refuse instead.
+if ssh $opts testbox "test -f $remote/run.log && ! test -f $remote/run.done"; then
+  echo "a job is still running in $remote (no run.done); wait for it or use another REMOTE_DIR" >&2; exit 3
+fi
 # Sources are dropped first, so a file deleted or turned into a directory module here goes there too
 # (tar restores the rest with their mtimes: nothing rebuilds for it).
 tar czf - -C "$root" --exclude=target --exclude=.testserver --exclude=.tokens --exclude=.git . \

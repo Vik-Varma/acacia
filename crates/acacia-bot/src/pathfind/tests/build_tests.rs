@@ -117,10 +117,11 @@ fn house16_from(g: &Grid, start: [f32; 3]) {
     let (proc, status) = builder(&s, ORIGIN, &[]);
     let mut arb = Arbiter::new();
     let id = arb.add(proc, 10);
-    let ticks = run(&mut w, start, &mut arb, id, 60_000);
+    let ticks = run(&mut w, start, &mut arb, id, 8000);
     let st = status.lock().unwrap().clone();
     eprintln!("{ticks} ticks, {st:?}");
     explain(&w, &s, ORIGIN).iter().take(30).for_each(|l| eprintln!("OPEN {l}"));
+    eprintln!("scaffold left {:?}", scaffold_left(g));
     assert_eq!(arb.outcome(id), Some(&Ok(())), "status {st:?}");
     assert_eq!(wrong(g, &s), Vec::new());
     assert_eq!(scaffold_left(g), Vec::<BlockPos>::new());

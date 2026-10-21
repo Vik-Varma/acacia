@@ -110,8 +110,9 @@ stands and the stands it could use: the first thing to read when a build stalls 
   with Abort; `ladder` (wall over a floor with a ladder column) PASS 75 s (843 ticks before the 0.1 stand
   tolerance, 2079 with the stand rule alone; 230 after), also at 2× TPS (`ACACIA_TICK_SCALE=2`).
 - Live house16 one bot, no restart (`examples/swarm_build.rs BOTS=1`): PASS, 454 s, observer diff 0.
-- Live house16 two bots (tile 4): PASS each time, 266/298/296/275 s against one bot's 454 s (0.59-0.66, mean
-  0.63): the 0.6 bar is not met. Kill run (B dropped after 150 placements, never back): PASS 394 s, diff 0.
+- Live house16 two bots (claims and home bands, 2026-10-21): PASS each time, 125/108/118 s against one bot's
+  184/193 s (0.56-0.68, mean 0.62): the 0.6 bar is met in one run of three. Kill run (B dropped after 150
+  placements, never back): PASS 180 s, diff 0. Earlier with 4×4 tiles: 266-298 s against 454 s (mean 0.63).
 - Where a placement's time goes (`act_timing`, printed by the examples; one bot, house16, 470 s): acts 323 s,
   of them equip with a hotbar switch 198 s (235 switches, mean 842 ms: the human equip pause), echo wait 79 s
   (mean 120 ms), the tick after each act 31 s, aim 28 s, mining 24 s; planning CPU 3 s.
@@ -127,41 +128,44 @@ stands and the stands it could use: the first thing to read when a build stalls 
 Several builders share one job through a `TaskBoard` (`Builder::with_board(board, name)`; without one a builder
 is exactly B1). `LocalBoard` serves bots in one process; a networked board can implement the same trait.
 
-- Regions: square tiles of the footprint (`BuildJob::tile`, default 4; cells outside the footprint, such as
-  scaffold, belong to the nearest tile). A bot claims the nearest tile with open work (a cell to place, break,
-  drain or visit, or scaffold to remove) that no other bot holds, and acts only inside it. With 8 (four tiles
-  on house16) one bot idled through the tail while the other finished its tile: 361 s against 266-298 s with 4;
-  2 was worse again (295-309 s). Tiles are a stopgap: see "Open".
+- Claims: each tick a bot claims the cells of the step it planned (every ready cell its chosen stand reaches,
+  or the cell it acts on) in place of its last claim, plus each cell it acted on in the last 40 ticks (the
+  others see a block only once the server sends it: live, two slabs went into one cell). Cells another bot
+  holds are not planned; pillars stay a block away from them. A bot that holds still claims nothing else (a
+  hold that kept its old claim stalled both bots for good, live).
+- Home bands: the footprint is cut along its longer side into one band per live bot (board rank by name),
+  each with as many blocks to place; work outside a bot's band costs 10 blocks of travel, so it goes there
+  only when home has nothing near, and a dropped bot's band folds into the others. Replaced exclusive tiles
+  (4×4: one bot idled through the tail while the other finished its own; 0.59-0.71) and repelling from the
+  other bots' feet (the areas moved with the bots and overlapped: 133 walks of ~1.05 s against one bot's 103
+  of 0.85 s).
 - Leases: a builder joins the board when given it and heartbeats every 20 ticks with its feet; a lease lapses
-  after the board's lease time without one (live: 10 s; vanilla-tick time under `ACACIA_TICK_SCALE`), and the
-  tile goes back to the pool. The board stores no progress: whoever claims a tile next surveys it, so a dropped
-  bot's half-done tile needs nothing special.
-- Support across borders: placements still need a solid neighbour in the world, so a cell whose support is in an
-  unbuilt neighbouring tile simply isn't doable yet. A tile with nothing doable is given back and skipped for 60
-  ticks, and the bot claims another; a bot finishes only when the whole job is done and no scaffold stands.
+  after the board's lease time without one (live: 10 s; vanilla-tick time under `ACACIA_TICK_SCALE`), and its
+  claim and band go back to the pool. The board stores no progress: the next bot surveys the cells, so a dropped
+  bot's half-done work needs nothing special. A bot finishes only when the whole job is done and no scaffold stands.
 - Stations: a bot restocks its share of the job's remaining need (the need over the bots on the board: two bots
-  each taking the whole need would empty the barrel, and per small tile they walked back after nearly every
+  each taking the whole need would empty the barrel, and with 4×4 tiles they walked back after nearly every
   tile), and one bot at a time opens a station (`open_station`, held under the same lease).
-- Room: stands within 1.5 blocks of another bot are not used, no block goes into another bot's body, and pillars
-  stay out of tiles other bots hold. Scaffold is shared through the board, so whoever holds its tile removes it.
+- Room: stands within 1.5 blocks of another bot are not used and no block goes into another bot's body.
+  Scaffold is shared through the board; any bot not kept off it by a claim removes it.
   The pilot itself does not see other bots: its terrain memo, rollout cache and sim-verified macro moves are
   keyed on blocks only, so moving obstacles there is not a small change.
 
-## Open (2026-10-19)
+## Open (2026-10-21)
 
-The two-bot ratio. Item grouping and pipelining are in (above); one bot builds house16 in ~208-213 s. A full
-in-flight cap holds a pipelined placement for the tick instead of waiting inside it (`process::run::pacing`):
-waiting there never ended, since in-flight placements are decided only at the start of a tick (live: the bot
-went silent mid-build).
+The two-bot ratio: mean 0.62 live, 0.6 in one run of three. A full in-flight cap holds a pipelined placement
+for the tick instead of waiting inside it (`process::run::pacing`): waiting there never ended, since in-flight
+placements are decided only at the start of a tick (live: the bot went silent mid-build).
 
-- A floor log, house16 local [1, 0, 7] (`pillar_axis=x`, beside the cobblestone border), ended air in a step-2
-  run (retries 3). The `logrow` scene builds that row cleanly, so it needs the full build's context; a traced
-  house16 run (build, interact and `acacia_bot::world=trace`) shows its history.
-- Step 4: stands chosen for many ready cells (greedy weighted set cover, counting cells enabled by earlier
-  placements from the same stand; batch by item per stand), measured with the act timing table, house16 kept
-  block-exact. Then a dependency-graph ready-set scheduler with soft regions instead of tiles
-  (`research/build-scheduling-robotics.md`, `research/build-scheduling-game-bots.md`,
-  `research/build-algorithms-deep.md`).
+- Where two bots lose: walks per bot fall to ~50-55 (one bot: ~103) but each still takes ~1 s against 0.85 s,
+  and moving is ~45% of a bot's time. Next: chain-expanded reach (cells an earlier placement from the same
+  stand makes ready) and a cluster tour instead of the best stand from here (`research/build-algorithms-deep.md`
+  §5 items 4-6).
+- Stands (`build/cover.rs`): the stand reaching the most ready cells for its travel, not the stand of the
+  first cell. Live one bot it was neutral (200 s against 187-196); it gives the swarm its claim batches.
+- Path work keeps out of built cells (`SearchOpts::keep`; sim: a pillar through a torch's cell replaced it
+  again and again). Keeping out of every block target cost one bot 237-267 s against ~190: paths walked round
+  unbuilt floor instead of over scaffold there.
 
 Tried and dropped (2026-10-19): faster placement pacing. Clicking in the turn's own tick, a second placement in
 the same tick, and no tick after a placement: with any two of the three, BDS silently ignored ~15% of placements

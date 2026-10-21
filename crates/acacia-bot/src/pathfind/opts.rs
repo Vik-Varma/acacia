@@ -3,6 +3,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use acacia_physics::BlockPos;
+
 use super::costs;
 use super::favour::Favour;
 use super::goal::Speed;
@@ -35,6 +37,10 @@ pub struct SearchOpts {
     pub max_rollout_ticks: u64,
     /// Cells of the path being replaced, made cheaper to keep a re-plan on it; the navigator fills it.
     pub favour: Option<Arc<Favour>>,
+    /// Cells the path's own work never places into or breaks: what a caller is building there (the builder:
+    /// every cell its structure fills; live sim: a pillar through a torch's cell replaced the torch, again and
+    /// again).
+    pub keep: Option<Arc<std::collections::HashSet<BlockPos>>>,
 }
 
 impl Default for SearchOpts {
@@ -52,6 +58,7 @@ impl Default for SearchOpts {
             hops: true,
             max_rollout_ticks: 400_000,
             favour: None,
+            keep: None,
         }
     }
 }
