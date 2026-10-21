@@ -140,6 +140,13 @@ stands and the stands it could use: the first thing to read when a build stalls 
   - Every act fails as timed out after 10 s (one live act hung 820 s until the watchdog; cause not found).
   - The live pad resets below the build limit (bots rejoin on the last pad; at y 340 nothing placed).
 - Double slabs take two placements: `DOUBLE_PLACE` counts against the cell's target.
+- The sims (`pathfind/tests/build_sim.rs`) hold a bot for an act's live ticks (place 2, break 4, restock 4),
+  answer background searches 6 ticks late, and with `World::delay` (`LIVE_DELAY` = 3 in the two-bot house test)
+  a bot sees other bots' blocks late; the two-bot house test also journals both bots and fails on
+  `DOUBLE_PLACE`, `STALE_CLAIM` and `WALK_STUCK`. Sim house16: one bot ~105 s, two ~60 s (0.54-0.64 run to run)
+  against live 157.5 / 96.8 s: moving and acting each still ~35% short (path work, ~11 s live, is left out:
+  holding the bot for it broke pillars in the sim). It ranked reach 4.5 against 5.5 as live did but by 33%
+  against ~10% for one bot: trust it for bugs and direction, the live A/B for size.
 - Where a placement's time goes (`act_timing`, printed by the examples; one bot, house16, 470 s): acts 323 s,
   of them equip with a hotbar switch 198 s (235 switches, mean 842 ms: the human equip pause), echo wait 79 s
   (mean 120 ms), the tick after each act 31 s, aim 28 s, mining 24 s; planning CPU 3 s.

@@ -121,6 +121,8 @@ pub struct Journal {
     bot: String,
     /// None: simulated time.
     t0: Option<Instant>,
+    /// Simulated time: the world's tick, when the builder's own (decisions only) would skip ticks spent acting.
+    clock: Option<std::sync::Arc<std::sync::atomic::AtomicU64>>,
     inner: Mutex<Inner>,
 }
 
@@ -128,7 +130,13 @@ impl Journal {
     /// A journal for `bot` written to `out`; `wall`: timestamps from the clock, else from the tick.
     pub fn new(bot: impl Into<String>, out: Box<dyn Write + Send>, wall: bool) -> Self {
         let inner = Mutex::new(Inner { out: BufWriter::new(out), walk: None, feet: [0.0; 3] });
-        Self { bot: bot.into(), t0: wall.then(Instant::now), inner }
+        Self { bot: bot.into(), t0: wall.then(Instant::now), clock: None, inner }
+    }
+
+    /// Timestamps from `clock` (ticks) instead.
+    pub fn clocked(mut self, clock: std::sync::Arc<std::sync::atomic::AtomicU64>) -> Self {
+        self.clock = Some(clock);
+        self
     }
 
     /// `dir/<bot>.jsonl`, wall-clock timestamps.
@@ -138,7 +146,11 @@ impl Journal {
     }
 
     fn t(&self, tick: u64) -> u64 {
-        self.t0.map_or(tick * 50, |t0| t0.elapsed().as_millis() as u64)
+        match (&self.t0, &self.clock) {
+            (Some(t0), _) => t0.elapsed().as_millis() as u64,
+            (None, Some(c)) => c.load(std::sync::atomic::Ordering::Relaxed) * 50,
+            (None, None) => tick * 50,
+        }
     }
 
     pub fn write(&self, tick: u64, e: Entry) {

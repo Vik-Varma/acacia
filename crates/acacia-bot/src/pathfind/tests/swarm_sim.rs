@@ -5,9 +5,11 @@ use std::sync::Arc;
 
 use acacia_physics::{BlockPos, Vec3};
 
-use super::build_sim::{builder, items, run, step, World};
+use super::build_sim::{builder, items, run, step, World, LIVE_DELAY};
 use super::build_tests::{scaffold_left, wrong, ORIGIN};
 use super::grid::Grid;
+use crate::build::findings;
+use crate::build::journal::Journal;
 use crate::build::{Block, Builder, LocalBoard, StatusHandle, Structure};
 use crate::movement::Movement;
 use crate::pathfind::process::{Arbiter, ProcId};
@@ -25,6 +27,8 @@ struct SimBot {
     stop_at: Option<u32>,
     /// Most of one item ever held.
     most: u32,
+    /// The tick its last act stops holding it.
+    busy: u32,
 }
 
 fn bot(b: Builder, status: StatusHandle, board: &Arc<LocalBoard>, who: &str, start: Vec3, inv: &[(&str, u32)]) -> SimBot {
@@ -32,7 +36,13 @@ fn bot(b: Builder, status: StatusHandle, board: &Arc<LocalBoard>, who: &str, sta
     let id = arb.add(b.with_board(board.clone(), who), 10);
     let mut m = Movement::new();
     m.start(start, 0.0, 0.0);
-    SimBot { m, arb, id, inv: items(inv), status, stop_at: None, most: 0 }
+    SimBot { m, arb, id, inv: items(inv), status, stop_at: None, most: 0, busy: 0 }
+}
+
+/// `dir/<who>.jsonl`, for a journal `findings::report` reads back.
+fn journal_file(dir: &std::path::Path, who: &str) -> std::path::PathBuf {
+    std::fs::create_dir_all(dir).expect("journal dir");
+    dir.join(format!("{who}.jsonl"))
 }
 
 fn live(b: &SimBot, tick: u32) -> bool {
@@ -48,10 +58,14 @@ fn run_many(w: &mut World, bots: &mut [SimBot], board: &LocalBoard, max_ticks: u
                 continue;
             }
             w.others = bots.iter().enumerate().filter(|(j, o)| *j != k && live(o, tick)).filter_map(|(_, o)| o.m.position()).collect();
+            (w.me, w.now) = (k, tick);
+            w.clock.store(u64::from(tick), std::sync::atomic::Ordering::Relaxed);
             let b = &mut bots[k];
-            std::mem::swap(&mut w.inv, &mut b.inv);
-            step(w, &mut b.m, &mut b.arb, tick);
-            std::mem::swap(&mut w.inv, &mut b.inv);
+            if tick >= b.busy {
+                std::mem::swap(&mut w.inv, &mut b.inv);
+                b.busy = tick + step(w, &mut b.m, &mut b.arb, tick);
+                std::mem::swap(&mut w.inv, &mut b.inv);
+            }
             b.most = b.most.max(b.inv.values().copied().max().unwrap_or(0));
             b.m.tick(&w.g.physics());
         }
@@ -77,20 +91,31 @@ fn house16_items() -> Vec<(&'static str, u32)> {
 fn two_bots_build_house16_in_well_under_one_bots_time() {
     let s = crate::build::tests::house16::house16();
     let inv = house16_items();
+    let solo = std::env::temp_dir().join(format!("acacia-swarm-sim-solo-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&solo);
     let one = {
         let g = Grid::floor(-20, 40);
         let mut w = World::new(&g, &inv);
         let mut arb = Arbiter::new();
-        let id = arb.add(builder(&s, ORIGIN, &[]).0, 10);
+        let journal = Journal::new("solo", Box::new(std::fs::File::create(journal_file(&solo, "solo")).unwrap()), false).clocked(w.clock.clone());
+        let id = arb.add(builder(&s, ORIGIN, &[]).0.with_journal(Arc::new(journal)), 10);
         run(&mut w, [0.5, 1.0, 0.5], &mut arb, id, 8000)
     };
+    findings::report(&solo, &[]).unwrap().iter().for_each(|l| eprintln!("{l}"));
     let g = Grid::floor(-20, 40);
     let mut w = World::new(&g, &[]);
+    // Each bot sees the other's blocks late, as live: the double-placed slab only happens so.
+    w.delay = LIVE_DELAY;
     let board = Arc::new(LocalBoard::manual(LEASE));
+    let dir = std::env::temp_dir().join(format!("acacia-swarm-sim-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let clock = w.clock.clone();
     let mut bots: Vec<SimBot> = [("a", [0.5, 1.0, 0.5]), ("b", [2.5, 1.0, 0.5])]
         .into_iter()
         .map(|(who, start)| {
             let (b, st) = builder(&s, ORIGIN, &[]);
+            let journal = Journal::new(who, Box::new(std::fs::File::create(journal_file(&dir, who)).unwrap()), false).clocked(clock.clone());
+            let b = b.with_journal(Arc::new(journal));
             bot(b, st, &board, who, start, &inv)
         })
         .collect();
@@ -99,10 +124,15 @@ fn two_bots_build_house16_in_well_under_one_bots_time() {
     for b in &bots {
         eprintln!("{:?}", b.status.lock().unwrap());
     }
-    eprintln!("one bot {one} ticks, two bots {two} ticks: {:.2}", two as f32 / one as f32);
+    let report = findings::report(&dir, &wrong(&g, &s).iter().map(|m| m.0).collect::<Vec<_>>()).unwrap();
+    report.iter().for_each(|l| eprintln!("{l}"));
+    // Sim seconds against live (2026-10-21, 4 runs each): one bot 157.5 s, two bots 96.8 s.
+    eprintln!("one bot {one} ticks ({:.0} s), two bots {two} ticks ({:.0} s): {:.2}", one as f32 / 20.0, two as f32 / 20.0, two as f32 / one as f32);
     assert!(bots.iter().all(|b| b.arb.outcome(b.id) == Some(&Ok(()))));
     assert_eq!(wrong(&g, &s), Vec::new());
     assert_eq!(scaffold_left(&g), Vec::<BlockPos>::new());
+    let bugs: Vec<_> = report.iter().filter(|l| ["DOUBLE_PLACE", "STALE_CLAIM", "WALK_STUCK"].iter().any(|k| l.starts_with(k))).collect();
+    assert!(bugs.is_empty(), "{bugs:?}");
     // A regression bound, not the B2 bar: sim ticks are not live seconds (sim 0.41 against live 0.62 once, and
     // a pilot fix that sped one bot up moved it the other way). The bar is judged live: tools/build-ab.sh.
     assert!(two as f32 <= 0.7 * one as f32, "one {one} two {two}");
