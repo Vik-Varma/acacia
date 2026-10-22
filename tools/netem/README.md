@@ -26,6 +26,9 @@ py -3 tools/netem/raknet_trace.py FILE...
 ```
 
 For each direction it reports:
+- **Datagrams** sent, their size, and how many never reached netem. Those are gaps in the sequence
+  numbers, mostly a burst overflowing netem's socket buffer (212 kB on testbox). A real client's
+  buffer would drop them the same way.
 - **Recoveries:** resends of messages whose last copy netem dropped, and how long they took.
 - **Spurious resends:** resends of messages whose last copy got through.
 - **ACK and NACK records** the other side sent.
@@ -41,4 +44,6 @@ For each direction it reports:
 
 Each prints the time to spawn, to every column of the view and to the last section answer.
 `BDS_PORT=19250` also joins a BDS started with `BDS_DIR=work/bds-netem BDS_PORT=19250
-tools/testbox-bds.sh start` at each profile.
+tools/testbox-bds.sh start` at each profile. `RAKNET=local` builds sapling against this tree's
+acacia-raknet instead of the commit sapling pins, to judge a raknet change before it is pushed.
+Touch the changed files if a build ran since you edited them: synced files keep their mtimes.

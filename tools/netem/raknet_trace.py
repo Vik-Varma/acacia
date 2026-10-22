@@ -59,7 +59,8 @@ def records(data):
 
 class Side:
     def __init__(self):
-        self.sent = self.lost = self.full = 0
+        self.sent = self.lost = self.full = self.bytes = 0
+        self.seqs = set()
         self.acks = self.nacks = 0
         self.last = {}  # reliable index -> (time, fate) of its last copy
         self.recoveries = []
@@ -89,6 +90,8 @@ def read(path):
             side.first = seconds if side.first is None else side.first
             side.end = seconds
             side.sent += 1
+            side.bytes += len(data)
+            side.seqs.add(u24(data, 1))
             side.lost += fate == "lost"
             side.full += fate == "full"
             for index in frames(data):
@@ -107,8 +110,11 @@ def summary(name, side):
         return f"median {statistics.median(times) * 1000:.0f} ms, p90 {times[int(len(times) * 0.9)] * 1000:.0f} ms, max {times[-1] * 1000:.0f} ms"
 
     span = (side.end or 0) - (side.first or 0)
+    # Sequence numbers netem never saw: dropped before it, mostly by its own socket's receive buffer.
+    unseen = max(side.seqs) - min(side.seqs) + 1 - len(side.seqs) if side.seqs else 0
     return (
-        f"  {name}: {side.sent} datagrams over {span:.1f} s, {side.lost} lost, {side.full} dropped full; "
+        f"  {name}: {side.sent} datagrams ({side.bytes // 1000} kB, {side.bytes // max(side.sent, 1)} B each) "
+        f"over {span:.1f} s, {unseen} never reached netem, {side.lost} lost, {side.full} dropped full; "
         f"acked {side.acks}, nacked {side.nacks}\n"
         f"    recoveries {len(side.recoveries)} ({spread(side.recoveries)})\n"
         f"    spurious resends {len(side.spurious)} ({spread(side.spurious)})"

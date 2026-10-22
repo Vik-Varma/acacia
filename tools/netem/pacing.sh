@@ -4,7 +4,8 @@
 # sees them), a warm-up join, then a join through netem at each profile: its join_timing line and
 # raknet_trace.py's reading of the capture. With BDS_PORT set, each profile also joins that BDS.
 # env: SAPLING_DIR (a sapling checkout, relative to $HOME or absolute), RADIUS (8), PORT (19240;
-# netem listens on PORT + 1), BDS_PORT (a running BDS, optional).
+# netem listens on PORT + 1), BDS_PORT (a running BDS, optional), RAKNET=local (build sapling
+# against this tree's acacia-raknet instead of the rev it pins).
 set -u
 export PATH=$HOME/.cargo/bin:$PATH
 sapling=${SAPLING_DIR:?a sapling checkout}
@@ -12,10 +13,12 @@ case $sapling in /*) ;; *) sapling=$HOME/$sapling ;; esac
 radius=${RADIUS:-8}
 port=${PORT:-19240}
 proxy_port=$((port + 1))
+patch=()
+[ "${RAKNET:-}" = local ] && patch=(--config "patch.'https://github.com/acacia-rs/acacia'.acacia-raknet.path='$PWD/crates/acacia-raknet'")
 
 cargo +stable build -q --release -p acacia-netem || exit 1
 cargo +stable build -q --release -p acacia-bot --example join_timing || exit 1
-(cd "$sapling" && cargo +stable build -q --release -p sapling --example drill_server) || exit 1
+(cd "$sapling" && cargo +stable build -q --release "${patch[@]}" -p sapling --example drill_server) || exit 1
 
 SAPLING_DRILL_WORLD=generated "$sapling/target/release/examples/drill_server" "$port" >server.log 2>&1 &
 server=$!
