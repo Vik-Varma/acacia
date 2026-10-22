@@ -51,12 +51,16 @@ enum Via {
     Lan(LanServer),
 }
 
+/// Adjusts the Login's client data; see [`ClientBuilder::client_data`].
+pub(crate) type ClientDataFn = Box<dyn FnOnce(&mut acacia_auth::ClientData) + Send>;
+
 pub struct ClientBuilder {
     server: String,
     via: Via,
     /// The Login `Nonce` a friend's world handed out.
     nonce: Option<String>,
     skin: Option<acacia_auth::login::Skin>,
+    client_data: Option<ClientDataFn>,
     /// Held by the connection; dropping it leaves the friend's Xbox session.
     friend_session: Option<oneshot::Sender<()>>,
     blob_cache: BlobCache,
@@ -82,6 +86,7 @@ impl ClientBuilder {
             via: Via::Address,
             nonce: None,
             skin: None,
+            client_data: None,
             friend_session: None,
             blob_cache: BlobCache::Memory,
             blob_payloads: false,
@@ -113,6 +118,15 @@ impl ClientBuilder {
     /// Wears `skin` instead of the account's pool skin.
     pub fn skin(mut self, skin: acacia_auth::login::Skin) -> Self {
         self.skin = Some(skin);
+        self
+    }
+
+    /// Adjusts the Login's client data after Acacia fills in its defaults, which describe an Android
+    /// phone with touch input. A client on another platform sets `device_os`, the input modes and
+    /// the other device claims to what that platform sends. The skin from [`ClientBuilder::skin`] and
+    /// a friend's world's nonce are applied after `adjust` and take precedence.
+    pub fn client_data(mut self, adjust: impl FnOnce(&mut acacia_auth::ClientData) + Send + 'static) -> Self {
+        self.client_data = Some(Box::new(adjust));
         self
     }
 
@@ -265,7 +279,7 @@ impl ClientBuilder {
             Login::Online { credentials, .. } => format!("xbox:{}", credentials.xuid),
         };
         let blob_store = self.blob_cache.open(&account, self.blob_payloads);
-        let (key, login_request, identity) = build_login(self.login, offline_key, &route.server_address, self.nonce, self.skin);
+        let (key, login_request, identity) = build_login(self.login, offline_key, &route.server_address, self.nonce, self.skin, self.client_data);
         let cfg = SessionConfig {
             link: route.link,
             key,
