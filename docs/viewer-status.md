@@ -114,8 +114,9 @@ unit or pack tests only.
 - **Text:** the only font is the Java look's `ascii.png`: without a baked Java look the viewer
   has no text (it warns). Baked looks are found beside `ACACIA_ASSETS` (`<pack>/../looks`).
 - **Six-way blocks** (pistons, dispensers, droppers, observers) face their `facing_direction`
-  (`blocks/facing.rs`): seen live from the front (2026-10-21); the top faces of sideways ones are
-  laid out by Java's models, not seen.
+  (`blocks/facing.rs`): seen live from the front (2026-10-21), sideways pistons and dispensers also
+  from above (2026-10-22). The observer's top arrow points at its back as in Java's model, which
+  flips that face; not seen live (four testbox shots missed the row).
   `RUST_LOG=moves=debug,keys=debug` logs every correction with the blocks under the feet, the
   position and longest tick gap each 20 ticks, and each scripted key.
 - **Performance:** on a GPU only a light scene was measured (2026-10-11, Intel Arc integrated,

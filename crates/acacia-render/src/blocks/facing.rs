@@ -8,6 +8,7 @@ use acacia_world::BlockState;
 const NORMALS: [[i8; 3]; 6] = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
 const UP: [i8; 3] = [0, 1, 0];
 const NORTH: [i8; 3] = [0, 0, -1];
+const SOUTH: [i8; 3] = [0, 0, 1];
 /// Where a texture's top edge points on each face before any turn: up on the sides, north on the top
 /// and bottom.
 const TOP_EDGE: [[i8; 3]; 6] = [UP, UP, NORTH, NORTH, UP, UP];
@@ -77,7 +78,8 @@ fn six_way(state: &BlockState) -> Option<[(String, [i8; 3]); 6]> {
                 _ => 5,
             };
             let s = |t: &str, up| (t.to_owned(), up);
-            let top = || s("observer_top", NORTH);
+            // The arrow points away from the face, at the output (Java's model flips the up face's uv).
+            let top = || s("observer_top", SOUTH);
             (NORMALS[front], [s("observer_east", UP), s("observer_west", UP), top(), top(), s("observer_south", UP), s("observer_north", UP)])
         }
         _ => return None,
@@ -163,6 +165,14 @@ mod tests {
         let down = faces("minecraft:observer", "minecraft:facing_direction=down,powered_bit=0");
         assert_eq!([&down[3], &down[2]], ["observer_north", "observer_south"]);
         assert_eq!(faces("minecraft:observer", "minecraft:facing_direction=east,powered_bit=0")[0], "observer_north");
+    }
+
+    #[test]
+    fn an_observers_arrow_points_at_its_back() {
+        let north = turns(state("minecraft:observer", "minecraft:facing_direction=north,powered_bit=0"));
+        assert_eq!([north[2], north[3]], [2, 2]);
+        let east = turns(state("minecraft:observer", "minecraft:facing_direction=east,powered_bit=0"));
+        assert_eq!(east[2], 3, "three clockwise quarter turns seen from above point it west");
     }
 
     #[test]
