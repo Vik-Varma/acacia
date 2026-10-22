@@ -54,6 +54,9 @@ enum Via {
     Lan(LanServer),
 }
 
+/// Adjusts the Login's client data; see [`ClientBuilder::client_data`].
+pub(crate) type ClientDataFn = Box<dyn FnOnce(&mut acacia_auth::ClientData) + Send>;
+
 pub struct ClientBuilder {
     server: String,
     via: Via,
@@ -61,6 +64,7 @@ pub struct ClientBuilder {
     nonce: Option<String>,
     skin: Option<acacia_auth::login::Skin>,
     mouse_input: bool,
+    client_data: Option<ClientDataFn>,
     /// Held by the connection; dropping it leaves the friend's Xbox session.
     friend_session: Option<oneshot::Sender<()>>,
     blob_cache: BlobCache,
@@ -88,6 +92,7 @@ impl ClientBuilder {
             nonce: None,
             skin: None,
             mouse_input: false,
+            client_data: None,
             friend_session: None,
             blob_cache: BlobCache::Memory,
             blob_payloads: false,
@@ -129,6 +134,18 @@ impl ClientBuilder {
     /// Should match the input mode `PlayerAuthInput` reports.
     pub fn mouse_input(mut self, on: bool) -> Self {
         self.mouse_input = on;
+        self
+    }
+
+    /// Adjusts the Login's client data after Acacia fills in its defaults, which describe an Android
+    /// phone with touch input. A client on another platform sets `device_os`, the input modes and
+    /// the other device claims to what that platform sends. The skin from [`ClientBuilder::skin`] and
+    /// a friend's world's nonce are applied after `adjust` and take precedence.
+    pub fn client_data(
+        mut self,
+        adjust: impl FnOnce(&mut acacia_auth::ClientData) + Send + 'static,
+    ) -> Self {
+        self.client_data = Some(Box::new(adjust));
         self
     }
 
@@ -308,6 +325,7 @@ impl ClientBuilder {
             self.nonce,
             self.skin,
             self.mouse_input,
+            self.client_data,
         );
         let cfg = SessionConfig {
             link: route.link,
