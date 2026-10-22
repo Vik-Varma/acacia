@@ -110,7 +110,10 @@ unit or pack tests only.
   columns (each frame reads light for entities and particles); it now locks per column, and frames
   never wait on it (`gpu/light_probe.rs`: while it is held, last frame's values): no draw over
   100 ms after joining in two walks (before: 17 in the first 5 s). Slow draws log their stages
-  (`RUST_LOG=frame=warn`, `gpu/stages.rs`).
+  (`RUST_LOG=frame=warn`, `gpu/stages.rs`). The 0.8 to 4.3 s frame at joining, and 0.3 s ones
+  when a sound first played, were sound loading on the frame: it has its own thread now
+  (`audio.rs`). The world's setup still takes 0.1 to 0.9 s once per join (`frame=debug` logs
+  its steps; mostly the block table and the texture upload).
 - **Text:** the only font is the Java look's `ascii.png`: without a baked Java look the viewer
   has no text (it warns). Baked looks are found beside `ACACIA_ASSETS` (`<pack>/../looks`).
 - **Six-way blocks** (pistons, dispensers, droppers, observers) face their `facing_direction`

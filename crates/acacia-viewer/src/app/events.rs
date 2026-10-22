@@ -93,18 +93,24 @@ impl App {
     /// Draws `world` with the chosen look, meshing it anew.
     pub(super) fn show_world(&mut self, world: Arc<World>) {
         let Some(r) = &mut self.renderer else { return };
+        let start = Instant::now();
         let pack = self.looks.get(self.settings.look);
         r.look = pack.look;
+        let looked = start.elapsed();
         let table = Arc::new(pack.block_table(world.registry()));
+        let tabled = start.elapsed();
         self.entities.set_items(ItemModels::new(pack.clone(), table.clone()));
         self.table = Some(table.clone());
         self.ui.set_world(self.settings.look, pack.clone(), table.clone());
+        let ui = start.elapsed();
         if let Some(sheet) = acacia_render::particles::Sheet::load(pack.files()) {
             r.set_particle_sheet(sheet);
         }
         if let Some(glint) = acacia_render::glint::Images::load(pack.files()) {
             r.set_glint_textures(&glint);
         }
+        let effects = start.elapsed();
         r.set_world(world, table, &pack.atlas);
+        tracing::debug!(target: "frame", ?looked, ?tabled, ?ui, ?effects, total = ?start.elapsed(), "world shown");
     }
 }
