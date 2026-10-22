@@ -107,9 +107,10 @@ unit or pack tests only.
   not the server's, which then corrected every ~1.3 s (13 times in one sprint-jump run). The key
   now latches with mouse input (DESIGN.md "Movement vs the servers"): 0 corrections in 7 runs.
   Draw stalls of 0.3 to 5.4 s were the light thread holding its write lock over a whole batch of
-  columns (each frame reads light for entities and particles); it now locks per column: worst draw
-  0.25 s in the same walk, 100 to 250 ms hitches for ~5 s after joining remain. Slow draws log
-  their stages (`RUST_LOG=frame=warn`, `gpu/stages.rs`).
+  columns (each frame reads light for entities and particles); it now locks per column, and frames
+  never wait on it (`gpu/light_probe.rs`: while it is held, last frame's values): no draw over
+  100 ms after joining in two walks (before: 17 in the first 5 s). Slow draws log their stages
+  (`RUST_LOG=frame=warn`, `gpu/stages.rs`).
 - **Text:** the only font is the Java look's `ascii.png`: without a baked Java look the viewer
   has no text (it warns). Baked looks are found beside `ACACIA_ASSETS` (`<pack>/../looks`).
 - **Six-way blocks** (pistons, dispensers, droppers, observers) face their `facing_direction`

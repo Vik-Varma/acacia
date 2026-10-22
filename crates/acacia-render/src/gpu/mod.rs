@@ -10,6 +10,7 @@ mod fog;
 mod glint;
 mod globals;
 mod inputs;
+mod light_probe;
 mod outline;
 mod over;
 mod shadows;
@@ -96,6 +97,7 @@ pub struct Renderer {
     crack_pass: CrackPass,
     ui_pass: UiPass,
     particles: particle_feed::ParticleFeed,
+    light_cache: light_probe::LightCache,
     weather_pass: weather::WeatherPass,
     /// Rain, thunder and lightning: the falling streaks and the sky.
     pub weather: crate::sky::Weather,
@@ -174,6 +176,7 @@ impl Renderer {
             crack_pass,
             ui_pass,
             particles,
+            light_cache: Default::default(),
             weather_pass,
             weather: Default::default(),
             cloud_pass,
@@ -201,6 +204,7 @@ impl Renderer {
         let mut clock = StageClock::start();
         let (cam_block, cam_frac) = camera.split_position();
         self.take_updates(cam_block);
+        self.light_cache.next_frame();
         clock.mark("updates");
         self.textures.animate(&self.queue, (self.started.elapsed().as_secs_f64() * 20.0) as u64);
         self.prepare_particles(camera);
@@ -225,13 +229,9 @@ impl Renderer {
         }
         let globals = Globals::new(view_proj, (cam_block, cam_frac), fog.color, self.fog_distance, &self.look, fog.haze, has_sky, sky.darken);
         self.queue.write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
-        let light = self.scene.as_ref().map(|s| s.light().read());
-        // Outside lit columns an entity is as bright as open sky.
-        let light_at = |p: DVec3| {
-            let p = p.floor().as_ivec3();
-            let byte = light.as_ref().and_then(|l| l.light(p.x, p.y, p.z)).unwrap_or(15);
-            [f32::from(byte >> 4), f32::from(byte & 15)]
-        };
+        let light_data = self.scene.as_ref().map(|s| s.light().clone());
+        let light = self.light_cache.reader(light_data.as_deref());
+        let light_at = |p: DVec3| light.at(p);
         let blocks = self.block_models.near(camera.position, f64::from(self.fog_distance), self.started.elapsed().as_secs_f64() * 20.0);
         self.screen_effect.prepare(&self.queue, camera, fog.underwater, light_at(camera.position));
         self.entities.prepare(&self.device, &self.queue, &self.globals, self.entity_list.iter().chain(blocks), &self.ui_entities, camera.position, crate::glint::scroll(self.started.elapsed().as_millis() as u64), light_at);
