@@ -10,14 +10,13 @@ use crate::state::PlayerState;
 use crate::world::{LiquidKind, Traversal, WorldView};
 
 impl<W: WorldView + ?Sized> Sim<'_, W> {
-    /// The vertical traversal the player is in: the feet's block, else scaffolding underfoot or overlapped by the
-    /// box (BDS fuzz: a jump beside a column climbs it).
+    /// The vertical traversal the player is in: the feet's block, else scaffolding the box overlaps (BDS fuzz: a jump
+    /// beside a column climbs it). Scaffolding only underfoot doesn't count: on a column's top, held jump jumps (BDS
+    /// 1.26.52.3 trace "scaffolding 9 high, forward and jump held from inside the bottom, wall behind").
     pub(crate) fn traversal(&self, st: &PlayerState) -> Traversal {
         let own = self.w.block(block_pos(st.pos)).traversal;
         let is_scaffolding = |p: BlockPos| self.w.block(p).traversal == Traversal::Scaffolding;
-        if own == Traversal::None
-            && (st.supporting_block.is_some_and(is_scaffolding) || overlapped_cells(&st.bounding_box()).any(is_scaffolding))
-        {
+        if own == Traversal::None && overlapped_cells(&st.bounding_box()).any(is_scaffolding) {
             return Traversal::Scaffolding;
         }
         own

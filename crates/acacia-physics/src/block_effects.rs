@@ -46,6 +46,9 @@ pub(crate) fn apply_ascendable_movement(st: &mut PlayerState, traversal: Travers
                 return true;
             } else if st.pressing_ascend {
                 v[1] = 0.15;
+                // Each climbing tick holds jumping off for the usual delay: leaving the top of a column with jump
+                // held, BDS stood on it until 10 ticks after the last climb (same trace as `traversal`).
+                st.jump_delay = crate::constants::JUMP_DELAY_TICKS;
             }
         }
         Traversal::PowderSnow => {

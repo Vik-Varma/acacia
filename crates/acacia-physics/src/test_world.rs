@@ -76,6 +76,14 @@ impl TestBlock {
         const SOUL_SAND: &[Aabb] = &[b(0.0, 0.0, 0.0, 1.0, 0.875, 1.0)];
         const HONEY: &[Aabb] = &[b(0.0625, 0.0, 0.0625, 0.9375, 0.9375, 0.9375)];
         const BED: &[Aabb] = &[b(0.0, 0.0, 0.0, 1.0, 0.5625, 1.0)];
+        // The top and the four posts, as acacia-world's registry has them; `pose` decides when they collide.
+        const SCAFFOLDING: &[Aabb] = &[
+            b(0.0, 0.875, 0.0, 1.0, 1.0, 1.0),
+            b(0.0, 0.0, 0.0, 0.125, 1.0, 0.125),
+            b(0.875, 0.0, 0.0, 1.0, 1.0, 0.125),
+            b(0.0, 0.0, 0.875, 0.125, 1.0, 1.0),
+            b(0.875, 0.0, 0.875, 1.0, 1.0, 1.0),
+        ];
         match self {
             Self::Stone | Self::Ice | Self::PackedIce | Self::BlueIce | Self::Slime => FULL,
             Self::Slab => SLAB,
@@ -84,7 +92,8 @@ impl TestBlock {
             Self::SoulSand => SOUL_SAND,
             Self::Honey => HONEY,
             Self::Bed => BED,
-            Self::Web | Self::PowderSnow | Self::BerryBush | Self::Vine | Self::Scaffolding | Self::Liquid(_) => &[],
+            Self::Scaffolding => SCAFFOLDING,
+            Self::Web | Self::PowderSnow | Self::BerryBush | Self::Vine | Self::Liquid(_) => &[],
         }
     }
 
