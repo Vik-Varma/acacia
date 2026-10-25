@@ -2275,15 +2275,28 @@ impl CameraInstruction {
         let f_fade = (|| -> Result<_> {
             Ok(if read_bool(r)? {
                 Some({
-                    let f1_fade_in_duration = read_lf32(r)?;
-                    let f1_wait_duration = read_lf32(r)?;
-                    let f1_fade_out_duration = read_lf32(r)?;
-                    let f1_color_rgb = types::Vec3f::read(r)?;
+                    let f1_time = if read_bool(r)? {
+                        Some({
+                            let f2_fade_in_duration = read_lf32(r)?;
+                            let f2_wait_duration = read_lf32(r)?;
+                            let f2_fade_out_duration = read_lf32(r)?;
+                            CameraInstructionFadeTime {
+                                fade_in_duration: f2_fade_in_duration,
+                                wait_duration: f2_wait_duration,
+                                fade_out_duration: f2_fade_out_duration,
+                            }
+                        })
+                    } else {
+                        None
+                    };
+                    let f1_color = if read_bool(r)? {
+                        Some(types::Vec3f::read(r)?)
+                    } else {
+                        None
+                    };
                     CameraInstructionFade {
-                        fade_in_duration: f1_fade_in_duration,
-                        wait_duration: f1_wait_duration,
-                        fade_out_duration: f1_fade_out_duration,
-                        color_rgb: f1_color_rgb,
+                        time: f1_time,
+                        color: f1_color,
                     }
                 })
             } else {
@@ -2450,10 +2463,25 @@ impl CameraInstruction {
                 write_bool(w, true);
                 {
                     let x1 = x0;
-                    write_lf32(w, x1.fade_in_duration);
-                    write_lf32(w, x1.wait_duration);
-                    write_lf32(w, x1.fade_out_duration);
-                    x1.color_rgb.write(w);
+                    match &x1.time {
+                        Some(x2) => {
+                            write_bool(w, true);
+                            {
+                                let x3 = x2;
+                                write_lf32(w, x3.fade_in_duration);
+                                write_lf32(w, x3.wait_duration);
+                                write_lf32(w, x3.fade_out_duration);
+                            }
+                        }
+                        None => write_bool(w, false),
+                    }
+                    match &x1.color {
+                        Some(x2) => {
+                            write_bool(w, true);
+                            x2.write(w);
+                        }
+                        None => write_bool(w, false),
+                    }
                 }
             }
             None => write_bool(w, false),
@@ -2550,10 +2578,15 @@ pub struct CameraInstructionInstructionSetEaseData {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CameraInstructionFade {
+    pub time: Option<CameraInstructionFadeTime>,
+    pub color: Option<types::Vec3f>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CameraInstructionFadeTime {
     pub fade_in_duration: f32,
     pub wait_duration: f32,
     pub fade_out_duration: f32,
-    pub color_rgb: types::Vec3f,
 }
 
 #[derive(Debug, Clone, PartialEq)]

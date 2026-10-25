@@ -159,3 +159,28 @@ fn text_messages() {
         );
     }
 }
+
+/// The fixtures are BDS 1.26.52.3's own `/camera <player> fade` packets (docs/proto.md): its time
+/// and colour are each optional.
+#[test]
+fn camera_fade_fields() {
+    let fades: Vec<_> = samples::<CameraInstruction>()
+        .into_iter()
+        .map(|(p, j)| (p.fade.expect("a fade"), j))
+        .collect();
+    assert_eq!(fades.len(), 4);
+    for (fade, j) in &fades {
+        let time = fade.time.as_ref().map(|t| [t.fade_in_duration, t.wait_duration, t.fade_out_duration]);
+        let expected = j["fade"].get("time").map(|t| {
+            [f(&t["fade_in_duration"]), f(&t["wait_duration"]), f(&t["fade_out_duration"])]
+        });
+        assert_eq!(time, expected);
+        let color = fade.color.as_ref().map(|c| [c.x, c.y, c.z]);
+        let expected = j["fade"].get("color").map(|c| [f(&c["x"]), f(&c["y"]), f(&c["z"])]);
+        assert_eq!(color, expected);
+    }
+    // `time 1 2 1 color 255 0 0`: seconds, and the colour from 0 to 1.
+    let first = &fades[0].0;
+    assert_eq!(first.time.as_ref().map(|t| t.wait_duration), Some(2.0));
+    assert_eq!(first.color.as_ref().map(|c| c.x), Some(1.0));
+}
