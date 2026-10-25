@@ -2,12 +2,17 @@
 //! 16 blocks × the volume when above 1; Bedrock: the definition's `max_distance`), and the left and
 //! right channels follow where the sound is relative to the listener's facing.
 
+#[cfg(feature = "playback")]
 use std::num::NonZero;
 use std::sync::Arc;
 
+#[cfg(feature = "playback")]
 use rodio::buffer::SamplesBuffer;
-use rodio::mixer::Mixer;
+#[cfg(feature = "playback")]
+pub use rodio::mixer::Mixer;
+#[cfg(feature = "playback")]
 use rodio::source::ChannelVolume;
+#[cfg(feature = "playback")]
 use rodio::{MixerDeviceSink, Source};
 
 use crate::fsb::Pcm;
@@ -30,30 +35,44 @@ pub struct Voice {
     pub range: f32,
 }
 
-/// The audio device; without one (no device, a headless test) playing does nothing.
+/// The audio device; without one (no device, a headless test, or built without `playback`) playing
+/// does nothing.
 pub struct Output {
+    #[cfg(feature = "playback")]
     sink: Option<MixerDeviceSink>,
 }
 
 impl Output {
+    #[cfg(feature = "playback")]
     pub fn open() -> Output {
         let sink = rodio::DeviceSinkBuilder::open_default_sink().inspect_err(|e| tracing::warn!(%e, "no audio device")).ok();
         Output { sink }
     }
 
+    #[cfg(not(feature = "playback"))]
+    pub fn open() -> Output {
+        Output {}
+    }
+
+    #[cfg(feature = "playback")]
     pub fn play(&self, voice: Voice, listener: &Listener) {
         let Some(sink) = &self.sink else { return };
         let (gain, ears) = place(&voice, listener);
         mix(sink.mixer(), &voice.pcm, gain, voice.pitch, ears);
     }
 
+    #[cfg(not(feature = "playback"))]
+    pub fn play(&self, _voice: Voice, _listener: &Listener) {}
+
     /// The device's mixer, for a thread that decodes a long sample and then plays it with [`mix`].
+    #[cfg(feature = "playback")]
     pub fn mixer(&self) -> Option<Mixer> {
         self.sink.as_ref().map(|sink| sink.mixer().clone())
     }
 }
 
 /// Starts `pcm` at `gain`, each ear at its share.
+#[cfg(feature = "playback")]
 pub fn mix(mixer: &Mixer, pcm: &Pcm, gain: f32, pitch: f32, [left, right]: [f32; 2]) {
     if gain <= 0.0 || pcm.samples.is_empty() {
         return;
@@ -64,8 +83,8 @@ pub fn mix(mixer: &Mixer, pcm: &Pcm, gain: f32, pitch: f32, [left, right]: [f32;
     mixer.add(ChannelVolume::new(source, vec![left, right]));
 }
 
-/// Overall gain and the two channels' share.
-fn place(voice: &Voice, listener: &Listener) -> (f32, [f32; 2]) {
+/// How loud `voice` plays for `listener`, and each ear's share.
+pub fn place(voice: &Voice, listener: &Listener) -> (f32, [f32; 2]) {
     let Some(at) = voice.position else { return (voice.volume.min(1.0), [1.0, 1.0]) };
     let d = [at[0] - listener.position[0], at[1] - listener.position[1], at[2] - listener.position[2]];
     let distance = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt() as f32;

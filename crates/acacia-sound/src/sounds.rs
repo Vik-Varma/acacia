@@ -61,6 +61,7 @@ impl Sounds {
 
     /// Plays one of a definition's long samples (music) everywhere: it is read and decoded on a
     /// thread of its own, so the caller does not wait for it, and is not kept afterwards.
+    #[cfg(feature = "playback")]
     pub fn stream(&mut self, sound: &str, volume: f32) {
         let Some((file, _)) = self.pick(sound) else { return };
         let Some(mixer) = self.output.mixer() else { return };
