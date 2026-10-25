@@ -75,12 +75,7 @@ fn sneak_impulse(st: &PlayerState, ticks: i32) -> f32 {
 impl Input {
     /// Mirrors `toInputState` in tools/diffharness/main.go.
     pub(crate) fn frame(&self, st: &PlayerState, env: &Surroundings) -> Frame {
-        let Surroundings {
-            in_water,
-            swim_start_submerged: eyes_in_water,
-            swim_surfacing,
-            stand_fits,
-        } = *env;
+        let Surroundings { in_water, swim_start_submerged: eyes_in_water, swim_surfacing, stand_fits } = *env;
         // BDS `FlyTriggerIntentSystem`: a jump press within the window a first one opened toggles the flight.
         let fly_tap = self.jump && !st.pressing_jump && (st.flight.flying || st.flight.may_fly);
         let flies = st.flight.flying != (fly_tap && st.flight.trigger_ticks > 0);
@@ -89,17 +84,11 @@ impl Input {
         // BDS `IntentSprintTriggerSystem` tests the move input after normalising and the sneak slowdown
         // (also on the sneak's release tick, see `apply_input`; not in water, where sneak means sink).
         let slowed = (sneak || st.sneaking) && !in_water;
-        let scale = if slowed {
-            sneak_impulse(st, st.ticks_since_can_slowdown + 1)
-        } else {
-            1.0
-        };
+        let scale = if slowed { sneak_impulse(st, st.ticks_since_can_slowdown + 1) } else { 1.0 };
         let len = self.move_vector[0].hypot(self.move_vector[1]);
         let [strafe, forward] = self.move_vector.map(|c| c / len.max(1.0) * scale);
         let enough = if st.sprinting {
-            forward > 0.0
-                && strafe.abs() <= SPRINT_MIN_IMPULSE
-                && strafe.hypot(forward) >= SPRINT_MIN_IMPULSE
+            forward > 0.0 && strafe.abs() <= SPRINT_MIN_IMPULSE && strafe.hypot(forward) >= SPRINT_MIN_IMPULSE
         } else {
             forward >= SPRINT_MIN_IMPULSE
         };
@@ -115,29 +104,16 @@ impl Input {
         // Releasing the sprint input ends the swim and its sprint together (strict BDS fuzz: the server's
         // drag and gravity turn non-swimming on that tick); a ceiling too low to stand keeps both.
         let keep_swim = !stand_fits || in_water && moving && !swim_surfacing && self.sprint;
-        let swim = self.swim
-            || if st.swimming {
-                keep_swim
-            } else {
-                wanted && eyes_in_water
-            };
+        let swim = self.swim || if st.swimming { keep_swim } else { wanted && eyes_in_water };
         // While swimming, the sprint ends only with the swim's input or out of water (with StopSwimming).
-        let keeps = if st.swimming {
-            in_water && (self.sprint || !stand_fits)
-        } else {
-            sprinting
-        };
+        let keeps = if st.swimming { in_water && (self.sprint || !stand_fits) } else { sprinting };
         let starts = !st.sprinting && wanted;
         Frame {
             move_vector: self.move_vector,
             pitch: self.pitch,
             yaw: self.yaw,
             start_sprinting: starts,
-            stop_sprinting: if st.sprinting {
-                !keeps
-            } else {
-                starts && jump_in_water
-            },
+            stop_sprinting: if st.sprinting { !keeps } else { starts && jump_in_water },
             sprint_down: self.sprint,
             start_sneaking: sneak && !st.sneaking,
             stop_sneaking: !sneak && st.sneaking,
@@ -247,9 +223,7 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
         }
         // BDS keeps the sneak slowdown on the tick sneaking stops (bedsim drops it at once), and skips
         // it in water, where sneak means sink.
-        let in_water = !self
-            .touching_liquid_blocks(st, crate::world::LiquidKind::Water)
-            .is_empty();
+        let in_water = !self.touching_liquid_blocks(st, crate::world::LiquidKind::Water).is_empty();
         let sneak_held = was_sneaking || st.sneaking;
         // A crawl slows from the tick after it starts (vanilla capture). Sneak ticks in water still count
         // towards Swift Sneak (strict BDS fuzz). A glide's slowdown is gone on the tick it stops: landing,
@@ -271,11 +245,7 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
         st.jumping = f.start_jumping;
         st.pressing_jump = f.jumping;
         st.effective_jumping = f.jumping;
-        st.jump_height = if st.jump_strength <= 0.0 {
-            DEFAULT_JUMP_HEIGHT
-        } else {
-            st.jump_strength
-        };
+        st.jump_height = if st.jump_strength <= 0.0 { DEFAULT_JUMP_HEIGHT } else { st.jump_strength };
         if let Some(amp) = st.effects.jump_boost {
             st.jump_height += (amp + 1) as f32 * 0.1;
         }
