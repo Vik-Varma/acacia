@@ -13,8 +13,9 @@ fn ground() -> TestWorld {
 }
 
 /// Feet each tick: forward held throughout, a jump press opening the glide on tick 22, the glide
-/// held until the tick after the landing the server reports.
-fn replay(pitch: f32, landing: usize, ticks: usize) -> Vec<[f32; 3]> {
+/// asked for up to `landing` (the landing the server reports), or for good with `None`, leaving the
+/// landing to end it.
+fn replay(pitch: f32, landing: Option<usize>, ticks: usize) -> Vec<[f32; 3]> {
     let w = ground();
     let mut st = PlayerState::new([60.5, 204.0, -20.5]);
     st.on_ground = true;
@@ -25,7 +26,7 @@ fn replay(pitch: f32, landing: usize, ticks: usize) -> Vec<[f32; 3]> {
                 move_vector: [0.0, 1.0],
                 pitch: if i >= 22 { pitch } else { 0.0 },
                 jump: i == 22,
-                glide: (22..=landing).contains(&i),
+                glide: i >= 22 && landing.is_none_or(|l| i <= l),
                 ..Input::default()
             };
             tick(&mut st, &input, &w);
@@ -105,7 +106,8 @@ fn landing_from_a_level_glide_keeps_its_speed_one_tick_then_walks() {
         [60.5, 200.00002, -5.7486434],
         [60.5, 200.00002, -5.5327826],
     ];
-    check(&trace, &replay(0.0, 38, trace.len()));
+    check(&trace, &replay(0.0, Some(38), trace.len()));
+    check(&trace, &replay(0.0, None, trace.len()));
 }
 
 #[test]
@@ -172,5 +174,6 @@ fn landing_from_a_dive_keeps_its_speed_one_tick_then_walks() {
         [60.5, 200.00002, -6.9408607],
         [60.5, 200.00002, -6.7250023],
     ];
-    check(&trace, &replay(30.0, 33, trace.len()));
+    check(&trace, &replay(30.0, Some(33), trace.len()));
+    check(&trace, &replay(30.0, None, trace.len()));
 }
