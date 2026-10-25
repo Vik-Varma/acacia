@@ -196,7 +196,12 @@ fn camera_ease_fields() {
     assert_eq!(eases.len(), 2);
     for (ease, j) in &eases {
         let e = &j["instruction_set"]["ease_data"];
-        assert!(variant(&ease.r#type, &e["type"]), "{:?} vs {}", ease.r#type, e["type"]);
+        assert!(
+            variant(ease.r#type, &e["type"]),
+            "{:?} vs {}",
+            ease.r#type,
+            e["type"]
+        );
         assert_eq!(ease.duration, f(&e["duration"]));
     }
 }
