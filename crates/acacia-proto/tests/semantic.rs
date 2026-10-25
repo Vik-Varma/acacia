@@ -160,13 +160,13 @@ fn text_messages() {
     }
 }
 
-/// The fixtures are BDS 1.26.52.3's own `/camera <player> fade` packets (docs/proto.md): its time
-/// and colour are each optional.
+/// The fixtures are BDS 1.26.52.3's own `/camera <player> …` packets (docs/proto.md). A fade's
+/// time and colour are each optional.
 #[test]
 fn camera_fade_fields() {
     let fades: Vec<_> = samples::<CameraInstruction>()
         .into_iter()
-        .map(|(p, j)| (p.fade.expect("a fade"), j))
+        .filter_map(|(p, j)| Some((p.fade?, j)))
         .collect();
     assert_eq!(fades.len(), 4);
     for (fade, j) in &fades {
@@ -183,4 +183,38 @@ fn camera_fade_fields() {
     let first = &fades[0].0;
     assert_eq!(first.time.as_ref().map(|t| t.wait_duration), Some(2.0));
     assert_eq!(first.color.as_ref().map(|c| c.x), Some(1.0));
+}
+
+/// `/camera <player> set minecraft:free ease 1.5 <type> pos … rot 30 90`: the ease names its curve
+/// in one byte.
+#[test]
+fn camera_ease_fields() {
+    let eases: Vec<_> = samples::<CameraInstruction>()
+        .into_iter()
+        .filter_map(|(p, j)| Some((p.instruction_set?.ease_data?, j)))
+        .collect();
+    assert_eq!(eases.len(), 2);
+    for (ease, j) in &eases {
+        let e = &j["instruction_set"]["ease_data"];
+        assert!(variant(&ease.r#type, &e["type"]), "{:?} vs {}", ease.r#type, e["type"]);
+        assert_eq!(ease.duration, f(&e["duration"]));
+    }
+}
+
+/// `/camera <player> fov_set <fov> [<time> <type>]` and `fov_clear [<time> <type>]`: the ease type is
+/// a string, `linear` when the command gives none.
+#[test]
+fn camera_fov_fields() {
+    let fovs: Vec<_> = samples::<CameraInstruction>()
+        .into_iter()
+        .filter_map(|(p, j)| Some((p.fov?, j)))
+        .collect();
+    assert_eq!(fovs.len(), 5);
+    for (fov, j) in &fovs {
+        let e = &j["fov"];
+        assert_eq!(fov.field_of_view, f(&e["field_of_view"]));
+        assert_eq!(fov.ease_time, f(&e["ease_time"]));
+        assert_eq!(fov.ease_type, e["ease_type"].as_str().unwrap());
+        assert_eq!(fov.clear, e["clear"].as_bool().unwrap());
+    }
 }

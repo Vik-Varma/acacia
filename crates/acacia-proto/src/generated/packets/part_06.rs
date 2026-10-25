@@ -2336,7 +2336,10 @@ impl CameraInstruction {
                 Some({
                     let f1_field_of_view = read_lf32(r)?;
                     let f1_ease_time = read_lf32(r)?;
-                    let f1_ease_type = types::EaseType::read(r)?;
+                    let f1_ease_type = {
+                        let n = to_len(read_varint(r)?)?;
+                        read_utf8(r, n)?
+                    };
                     let f1_clear = read_bool(r)?;
                     CameraInstructionFov {
                         field_of_view: f1_field_of_view,
@@ -2517,7 +2520,11 @@ impl CameraInstruction {
                     let x1 = x0;
                     write_lf32(w, x1.field_of_view);
                     write_lf32(w, x1.ease_time);
-                    x1.ease_type.write(w);
+                    {
+                        let b = x1.ease_type.as_bytes();
+                        write_varint(w, b.len() as u32);
+                        write_slice(w, b);
+                    }
                     write_bool(w, x1.clear);
                 }
             }
@@ -2599,7 +2606,7 @@ pub struct CameraInstructionTarget {
 pub struct CameraInstructionFov {
     pub field_of_view: f32,
     pub ease_time: f32,
-    pub ease_type: types::EaseType,
+    pub ease_type: String,
     pub clear: bool,
 }
 

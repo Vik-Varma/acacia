@@ -33,5 +33,81 @@
  },
  {
   "fade": {}
+ },
+ {
+  "instruction_set": {
+   "runtime_id": 3,
+   "ease_data": {
+    "type": "linear",
+    "duration": 1.5
+   },
+   "position": {
+    "x": 0.5,
+    "y": -55,
+    "z": 0.5
+   },
+   "rotation": {
+    "x": 30,
+    "z": 90
+   }
+  }
+ },
+ {
+  "instruction_set": {
+   "runtime_id": 3,
+   "ease_data": {
+    "type": "in_out_elastic",
+    "duration": 1.5
+   },
+   "position": {
+    "x": 0.5,
+    "y": -55,
+    "z": 0.5
+   },
+   "rotation": {
+    "x": 30,
+    "z": 90
+   }
+  }
+ },
+ {
+  "fov": {
+   "field_of_view": 50,
+   "ease_time": 0,
+   "ease_type": "linear",
+   "clear": false
+  }
+ },
+ {
+  "fov": {
+   "field_of_view": 30,
+   "ease_time": 1.5,
+   "ease_type": "linear",
+   "clear": false
+  }
+ },
+ {
+  "fov": {
+   "field_of_view": 90,
+   "ease_time": 0.5,
+   "ease_type": "out_bounce",
+   "clear": false
+  }
+ },
+ {
+  "fov": {
+   "field_of_view": 0,
+   "ease_time": 0,
+   "ease_type": "linear",
+   "clear": true
+  }
+ },
+ {
+  "fov": {
+   "field_of_view": 0,
+   "ease_time": 2,
+   "ease_type": "in_quad",
+   "clear": true
+  }
  }
 ]

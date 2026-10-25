@@ -95,6 +95,36 @@
           ]
         ]
       }
+    },
+    {
+      "path": "/types/packet_camera_instruction/1/5",
+      "field": {
+        "name": "fov",
+        "type": [
+          "option",
+          [
+            "container",
+            [
+              {
+                "name": "field_of_view",
+                "type": "lf32"
+              },
+              {
+                "name": "ease_time",
+                "type": "lf32"
+              },
+              {
+                "name": "ease_type",
+                "type": "string"
+              },
+              {
+                "name": "clear",
+                "type": "bool"
+              }
+            ]
+          ]
+        ]
+      }
     }
   ],
   "types": {

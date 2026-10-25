@@ -33,6 +33,11 @@ adds a schema type before generation, and each `patches` entry replaces one cont
   and a bare `fade` has both 0. The `camera_instruction` fixtures are those four packets as BDS sent them
   (`tests/semantic.rs` checks their values), not the generator's: rerunning `gen.mjs` would put back samples of
   the old layout.
+- `camera_instruction.fov.ease_type` is a `string` (the ease's name, `linear` when the command gives none), not
+  the one-byte `EaseType` minecraft-data has; the instruction set's `ease_data` does use the byte. BDS 1.26.52.3's
+  `/camera <player> fov_set 50 2 in_out_sine` is `01 <50.0> <2.0> 0b "in_out_sine" 00` after four empty options,
+  and `fov_clear` sends field of view 0 and `clear` 1. Five such packets, and two eases, are among the
+  `camera_instruction` fixtures, which `tests/semantic.rs` checks.
 - Not an override: `craft_grindstone_request.recipe_network_id` stays `li32` although gophertunnel writes a varint;
   BDS 1.26.52 answers the varint form with PacketViolationWarning (Malformed) and drops the client. Mojang's docs
   type it `ItemStackNetIdVariant`: it carries the input stack's id, not a recipe id.
