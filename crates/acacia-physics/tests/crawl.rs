@@ -27,3 +27,16 @@ fn a_crawl_in_water_moves_at_the_full_pace() {
     }
     assert!(st.crawling, "still crawling");
 }
+
+#[test]
+fn a_crawl_on_dry_ground_does_not_sprint() {
+    // Teleported into a dry tunnel and holding sprint: the server's feet on the first three
+    // inputs, which a sprint's speed left ahead by 0.0088 on each.
+    let (w, mut st) = crawling_in(None);
+    let input = Input { move_vector: [0.0, 1.0], sprint: true, ..Input::default() };
+    for z in [0.5294, 0.57483, 0.62906] {
+        tick(&mut st, &input, &w);
+        assert!((st.pos[2] - z).abs() < 1e-4, "{:?}, the server's z {z}", st.pos);
+        assert!(!st.sprinting, "sprinting");
+    }
+}

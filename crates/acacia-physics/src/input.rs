@@ -92,8 +92,9 @@ impl Input {
         } else {
             forward >= SPRINT_MIN_IMPULSE
         };
-        // The sprint before the jump-in-water rule: it decides a swim start (vanilla capture 6-1).
-        let wanted = self.sprint && enough && !st.sprint_movement_blocked;
+        // The sprint before the jump-in-water rule: it decides a swim start (vanilla capture 6-1). A crawl
+        // on dry ground doesn't sprint, where one in water does (strict BDS 1.26.52.3, tests/crawl.rs).
+        let wanted = self.sprint && enough && !st.sprint_movement_blocked && !(st.crawling && !in_water);
         // A jump held last tick in water then ends that sprint or cancels its start (StartSprinting and
         // StopSprinting on one tick).
         let jump_in_water = in_water && !st.swimming && st.pressing_jump;
