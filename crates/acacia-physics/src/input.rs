@@ -225,14 +225,15 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
         // it in water, where sneak means sink.
         let in_water = !self.touching_liquid_blocks(st, crate::world::LiquidKind::Water).is_empty();
         let sneak_held = was_sneaking || st.sneaking;
-        // A crawl slows from the tick after it starts (vanilla capture). Sneak ticks in water still count
-        // towards Swift Sneak (strict BDS fuzz). A glide's slowdown is gone on the tick it stops, asked to
-        // or on the ground, where travel ends it: landing, the first walking tick takes the whole ground
-        // acceleration (BDS 1.26.52.3 elytra traces).
+        // A crawl slows from the tick after it starts (vanilla capture), but not in water, where strict BDS
+        // 1.26.52.3 moves a crawl through a one-high tunnel at the full pace (tests/crawl.rs). Sneak ticks
+        // in water still count towards Swift Sneak (strict BDS fuzz). A glide's slowdown is gone on the
+        // tick it stops, asked to or on the ground, where travel ends it: landing, the first walking tick
+        // takes the whole ground acceleration (BDS 1.26.52.3 elytra traces).
         let gliding = st.gliding && !f.stop_gliding && !st.on_ground;
         if sneak_held || was_crawling || gliding {
             st.ticks_since_can_slowdown += 1;
-            if !in_water || was_crawling || gliding {
+            if !in_water || gliding {
                 max_impulse *= sneak_impulse(st, st.ticks_since_can_slowdown);
             }
         } else {
