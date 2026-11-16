@@ -22,13 +22,27 @@ impl Backend {
             Backend::Bedrock(b) => {
                 let m = b.movement.as_ref()?;
                 let (yaw, pitch) = (m.controls.yaw, m.controls.pitch);
-                Some(Motion { position: m.position()?, velocity: m.velocity().unwrap_or_default(), yaw, pitch, on_ground: m.on_ground(), gliding: m.gliding() })
+                Some(Motion {
+                    position: m.position()?,
+                    velocity: m.velocity().unwrap_or_default(),
+                    yaw,
+                    pitch,
+                    on_ground: m.on_ground(),
+                    gliding: m.gliding(),
+                })
             }
             #[cfg(feature = "java")]
             Backend::Java(j) => {
                 let p = &j.client.movement.player;
                 let (position, velocity) = (p.pos.map(|c| c as f32), p.delta.map(|c| c as f32));
-                j.started().then_some(Motion { position, velocity, yaw: p.yaw, pitch: p.pitch, on_ground: p.on_ground, gliding: p.fall_flying })
+                j.started().then_some(Motion {
+                    position,
+                    velocity,
+                    yaw: p.yaw,
+                    pitch: p.pitch,
+                    on_ground: p.on_ground,
+                    gliding: p.fall_flying,
+                })
             }
         }
     }
@@ -45,9 +59,17 @@ impl Backend {
     /// Feet and on-ground flag once movement has started.
     pub(crate) fn feet(&self) -> Option<(Vec3, bool)> {
         match self {
-            Backend::Bedrock(b) => b.movement.as_ref().and_then(|m| Some((m.state()?.pos, m.on_ground()))),
+            Backend::Bedrock(b) => b
+                .movement
+                .as_ref()
+                .and_then(|m| Some((m.state()?.pos, m.on_ground()))),
             #[cfg(feature = "java")]
-            Backend::Java(j) => j.started().then(|| (j.client.movement.player.pos.map(|c| c as f32), j.client.movement.player.on_ground)),
+            Backend::Java(j) => j.started().then(|| {
+                (
+                    j.client.movement.player.pos.map(|c| c as f32),
+                    j.client.movement.player.on_ground,
+                )
+            }),
         }
     }
 
@@ -57,7 +79,13 @@ impl Backend {
             #[cfg(feature = "java")]
             Backend::Java(j) => {
                 let p = &j.client.movement.player;
-                j.started().then(|| [p.pos[0] as f32, (p.pos[1] + f64::from(p.pose().eye_height())) as f32, p.pos[2] as f32])
+                j.started().then(|| {
+                    [
+                        p.pos[0] as f32,
+                        (p.pos[1] + f64::from(p.pose().eye_height())) as f32,
+                        p.pos[2] as f32,
+                    ]
+                })
             }
         }
     }

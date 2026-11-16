@@ -56,7 +56,9 @@ impl Scene {
             .palette
             .iter()
             .map(|k| {
-                let (name, props) = k.split_once('[').map_or((k.as_str(), ""), |(n, p)| (n, p.trim_end_matches(']')));
+                let (name, props) = k
+                    .split_once('[')
+                    .map_or((k.as_str(), ""), |(n, p)| (n, p.trim_end_matches(']')));
                 registry.find(name, props).unwrap_or(air)
             })
             .collect();
@@ -67,7 +69,11 @@ impl Scene {
             }
             for s in &c.sections {
                 for i in 0..4096 {
-                    let (x, y, z) = (c.x * 16 + (i as i32 >> 8), self.min_y + s.y * 16 + (i as i32 & 15), c.z * 16 + (i as i32 >> 4 & 15));
+                    let (x, y, z) = (
+                        c.x * 16 + (i as i32 >> 8),
+                        self.min_y + s.y * 16 + (i as i32 & 15),
+                        c.z * 16 + (i as i32 >> 4 & 15),
+                    );
                     if ids[s.blocks[i]] != air {
                         world.set_block(x, y, z, 0, ids[s.blocks[i]]);
                     }
@@ -84,7 +90,13 @@ impl Scene {
 
     /// The inner chunks' light, cell by cell, against the game's (`theirs`, in WorldLightOracle's
     /// light.bin order); returns how many bytes of it the scene took.
-    pub fn compare_cells(&self, ours: &LightData, theirs: &[u8], world: &World, outcome: &mut Outcome) -> usize {
+    pub fn compare_cells(
+        &self,
+        ours: &LightData,
+        theirs: &[u8],
+        world: &World,
+        outcome: &mut Outcome,
+    ) -> usize {
         let mut i = 0;
         for (cx, cz) in self.inner() {
             for y in self.min_y..self.min_y + self.height as i32 {
@@ -95,7 +107,17 @@ impl Scene {
                         outcome.cases += 1;
                         if want != got {
                             let show = |v: u8| format!("block {} sky {}", v >> 4, v & 15);
-                            outcome.diverge(&format!("{}: {} at {:?}", self.scene, block_name(world, [x, y, z]), [x, y, z]), "cell light", show(want), show(got));
+                            outcome.diverge(
+                                &format!(
+                                    "{}: {} at {:?}",
+                                    self.scene,
+                                    block_name(world, [x, y, z]),
+                                    [x, y, z]
+                                ),
+                                "cell light",
+                                show(want),
+                                show(got),
+                            );
                         }
                     }
                 }
@@ -106,6 +128,12 @@ impl Scene {
 }
 
 pub fn block_name(world: &World, [x, y, z]: [i32; 3]) -> String {
-    let block = world.get(x >> 4, z >> 4).map(|c| c.read().block(x, y, z)).unwrap_or(0);
-    world.registry().get(block).map_or_else(|| "?".to_owned(), |s| s.name.to_owned())
+    let block = world
+        .get(x >> 4, z >> 4)
+        .map(|c| c.read().block(x, y, z))
+        .unwrap_or(0);
+    world
+        .registry()
+        .get(block)
+        .map_or_else(|| "?".to_owned(), |s| s.name.to_owned())
 }

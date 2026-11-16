@@ -12,7 +12,14 @@ impl Storage {
     /// palette, and `map_ids` can merge ids) at the smallest width that fits. Entries kept stay in
     /// order, so a storage that was already minimal is borrowed and encodes to the bytes it came from.
     pub(super) fn compacted(&self) -> Cow<'_, Storage> {
-        let Storage::Packed { bits, palette, words } = self else { return Cow::Borrowed(self) };
+        let Storage::Packed {
+            bits,
+            palette,
+            words,
+        } = self
+        else {
+            return Cow::Borrowed(self);
+        };
         // Malformed indices read as entry 0, see `Storage::get`.
         let entry = |i: usize| Some(packed_get(words, *bits, i)).filter(|&p| p < palette.len());
         let mut used = vec![false; palette.len()];
@@ -40,7 +47,10 @@ impl Storage {
         if kept.len() == palette.len() && minimal && !malformed {
             return Cow::Borrowed(self);
         }
-        Cow::Owned(Storage::from_indices(kept, (0..VOLUME).map(|i| remap[entry(i).unwrap_or(0)])))
+        Cow::Owned(Storage::from_indices(
+            kept,
+            (0..VOLUME).map(|i| remap[entry(i).unwrap_or(0)]),
+        ))
     }
 
     /// Writes the storage as it is; callers compact first. `map` translates each palette id.
@@ -50,9 +60,15 @@ impl Storage {
                 out.push(1);
                 var_i32(out, map(*id) as i32);
             }
-            Storage::Packed { bits, palette, words } => {
+            Storage::Packed {
+                bits,
+                palette,
+                words,
+            } => {
                 out.push((bits << 1) | 1);
-                words.iter().for_each(|w| out.extend_from_slice(&w.to_le_bytes()));
+                words
+                    .iter()
+                    .for_each(|w| out.extend_from_slice(&w.to_le_bytes()));
                 var_i32(out, palette.len() as i32);
                 palette.iter().for_each(|&id| var_i32(out, map(id) as i32));
             }
@@ -80,10 +96,20 @@ mod tests {
         for i in 0..VOLUME {
             s.set(i, (i % 3) as u32 + 100);
         }
-        let Storage::Packed { bits: 6, palette, .. } = &s else { panic!("{s:?}") };
+        let Storage::Packed {
+            bits: 6, palette, ..
+        } = &s
+        else {
+            panic!("{s:?}")
+        };
         assert_eq!(palette.len(), 41);
         let compact = s.compacted();
-        let Storage::Packed { bits: 2, palette, .. } = &*compact else { panic!("{compact:?}") };
+        let Storage::Packed {
+            bits: 2, palette, ..
+        } = &*compact
+        else {
+            panic!("{compact:?}")
+        };
         assert_eq!(palette, &[100, 101, 102]);
         assert!((0..VOLUME).all(|i| compact.get(i) == s.get(i)));
 
@@ -104,7 +130,9 @@ mod tests {
     #[test]
     fn minimal_storages_encode_to_the_bytes_they_decoded_from() {
         for distinct in [2u32, 3, 5, 9, 17, 33, 65, 257, 4096] {
-            let s = Storage::from_values(&std::array::from_fn(|i| (i as u32).wrapping_mul(2654435761) % distinct));
+            let s = Storage::from_values(&std::array::from_fn(|i| {
+                (i as u32).wrapping_mul(2654435761) % distinct
+            }));
             assert!(matches!(s.compacted(), Cow::Borrowed(_)));
             let bytes = encoded(&s);
             let decoded = Storage::decode(&mut Reader::new(&bytes)).unwrap();
@@ -115,7 +143,9 @@ mod tests {
 
     #[test]
     fn hashed_ids_round_trip_through_the_zigzag_palette() {
-        let s = Storage::from_values(&std::array::from_fn(|i| if i % 2 == 0 { 0xdead_beef } else { 0x7fff_ffff }));
+        let s = Storage::from_values(&std::array::from_fn(|i| {
+            if i % 2 == 0 { 0xdead_beef } else { 0x7fff_ffff }
+        }));
         assert_eq!(Storage::decode(&mut Reader::new(&encoded(&s))).unwrap(), s);
     }
 }

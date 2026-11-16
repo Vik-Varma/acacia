@@ -64,7 +64,13 @@ pub struct Entity {
 }
 
 impl Entity {
-    fn spawned(runtime_id: u64, unique_id: i64, kind: String, position: Vec3f, velocity: Vec3f) -> Self {
+    fn spawned(
+        runtime_id: u64,
+        unique_id: i64,
+        kind: String,
+        position: Vec3f,
+        velocity: Vec3f,
+    ) -> Self {
         Entity {
             runtime_id,
             unique_id,
@@ -95,12 +101,24 @@ impl Entity {
 
     pub fn feet(&self) -> Vec3f {
         let p = &self.position;
-        let dy = if self.is_player() { PLAYER_EYE_HEIGHT } else { 0.0 };
-        Vec3f { x: p.x, y: p.y - dy, z: p.z }
+        let dy = if self.is_player() {
+            PLAYER_EYE_HEIGHT
+        } else {
+            0.0
+        };
+        Vec3f {
+            x: p.x,
+            y: p.y - dy,
+            z: p.z,
+        }
     }
 
     pub fn distance_sq(&self, to: &Vec3f) -> f32 {
-        let (dx, dy, dz) = (self.position.x - to.x, self.position.y - to.y, self.position.z - to.z);
+        let (dx, dy, dz) = (
+            self.position.x - to.x,
+            self.position.y - to.y,
+            self.position.z - to.z,
+        );
         dx * dx + dy * dy + dz * dz
     }
 
@@ -168,7 +186,9 @@ impl Entities {
     }
 
     pub fn by_unique(&self, unique_id: i64) -> Option<&Entity> {
-        self.runtime_by_unique.get(&unique_id).and_then(|&r| self.get(r))
+        self.runtime_by_unique
+            .get(&unique_id)
+            .and_then(|&r| self.get(r))
     }
 
     pub fn len(&self) -> usize {
@@ -189,7 +209,9 @@ impl Entities {
 
     /// Closest entity to `pos` (by wire position) that passes `filter`.
     pub fn nearest(&self, pos: &Vec3f, filter: impl Fn(&Entity) -> bool) -> Option<&Entity> {
-        self.iter().filter(|e| filter(e)).min_by(|a, b| a.distance_sq(pos).total_cmp(&b.distance_sq(pos)))
+        self.iter()
+            .filter(|e| filter(e))
+            .min_by(|a, b| a.distance_sq(pos).total_cmp(&b.distance_sq(pos)))
     }
 
     /// The value of synced property `name` (`minecraft:climate_variant`) on `e`, as its kind's
@@ -199,7 +221,10 @@ impl Entities {
     }
 
     /// Every synced property of `e` the server has sent, by name.
-    pub fn properties<'a>(&'a self, e: &'a Entity) -> impl Iterator<Item = (&'a str, Property<'a>)> {
+    pub fn properties<'a>(
+        &'a self,
+        e: &'a Entity,
+    ) -> impl Iterator<Item = (&'a str, Property<'a>)> {
         self.property_defs.all(&e.kind, &e.properties)
     }
 }

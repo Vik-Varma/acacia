@@ -2,12 +2,12 @@
 //! the rider's input becomes the horse's, and the horse travels like a player on its own box and
 //! attributes, and leaps by its rider's charged jump ("Horse jump" there).
 
+use crate::Vec3;
 use crate::input::Input;
 use crate::math::{mc_cos, mc_sin};
 use crate::sim::{TickOutput, tick};
 use crate::state::PlayerState;
 use crate::world::WorldView;
-use crate::Vec3;
 
 const HORSE_WIDTH: f32 = 1.4;
 const HORSE_HEIGHT: f32 = 1.6;
@@ -59,7 +59,10 @@ pub struct HorseJump {
 
 impl HorseJump {
     pub fn new(strength: f32) -> Self {
-        HorseJump { strength, ..HorseJump::default() }
+        HorseJump {
+            strength,
+            ..HorseJump::default()
+        }
     }
 
     /// One tick of the rider's jump key: 0.1 of charge per held tick up to full on the 11th, then
@@ -75,7 +78,11 @@ impl HorseJump {
             return;
         }
         if jump {
-            self.scale = if self.ticks < 9 { (self.ticks + 1) as f32 * 0.1 } else { (2.0 / (self.ticks - 8) as f32) * 0.1 + 0.8 };
+            self.scale = if self.ticks < 9 {
+                (self.ticks + 1) as f32 * 0.1
+            } else {
+                (2.0 / (self.ticks - 8) as f32) * 0.1 + 0.8
+            };
             self.ticks += 1;
             return;
         }
@@ -83,7 +90,11 @@ impl HorseJump {
         let amount = (self.scale * 100.0) as i32;
         // A key pressed again while the horse rests charges below zero and jumps nothing.
         if amount >= 0 {
-            self.pending = if amount >= 90 { 1.0 } else { amount as f32 * 0.4 / 90.0 + 0.4 };
+            self.pending = if amount >= 90 {
+                1.0
+            } else {
+                amount as f32 * 0.4 / 90.0 + 0.4
+            };
         }
     }
 }
@@ -92,7 +103,12 @@ impl HorseJump {
 /// (12.6%-35% of the gap per tick, more when the gap is small), strafing is halved and backing quartered.
 /// A released jump leaves the ground with the charged share of the horse's strength, pushed forward
 /// when the horse is ridden forward.
-pub fn horse_tick<W: WorldView + ?Sized>(st: &mut PlayerState, jump: &mut HorseJump, rider: &RiderInput, world: &W) -> TickOutput {
+pub fn horse_tick<W: WorldView + ?Sized>(
+    st: &mut PlayerState,
+    jump: &mut HorseJump,
+    rider: &RiderInput,
+    world: &W,
+) -> TickOutput {
     let gap = wrap_degrees(rider.yaw - st.yaw);
     let rate = 0.7 * (0.18f32).max((45.0 - gap.abs().min(45.0)) / 90.0);
     // Two keys held share the vector's length before strafing is halved (W+D, strict BDS 2026-10-09).
@@ -110,7 +126,14 @@ pub fn horse_tick<W: WorldView + ?Sized>(st: &mut PlayerState, jump: &mut HorseJ
         }
     }
     let input = Input {
-        move_vector: [strafe * 0.5, if forward > 0.0 { forward } else { forward * 0.25 }],
+        move_vector: [
+            strafe * 0.5,
+            if forward > 0.0 {
+                forward
+            } else {
+                forward * 0.25
+            },
+        ],
         yaw,
         pitch: rider.pitch * 0.5,
         jump: leaps,

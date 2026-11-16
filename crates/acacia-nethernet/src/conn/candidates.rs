@@ -4,8 +4,8 @@ use std::time::Instant;
 use str0m::Candidate;
 
 use super::Connection;
-use crate::sdp::{self, CandidateType};
 use crate::Error;
+use crate::sdp::{self, CandidateType};
 
 /// A gathered local candidate to trickle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -15,18 +15,29 @@ pub enum LocalCandidate {
     /// `addr` is how a STUN server saw `base`, the host candidate.
     ServerReflexive { addr: SocketAddr, base: SocketAddr },
     /// A TURN allocation at `addr`; `mapped` is our address as the TURN server saw it.
-    Relayed { addr: SocketAddr, mapped: SocketAddr },
+    Relayed {
+        addr: SocketAddr,
+        mapped: SocketAddr,
+    },
 }
 
 impl Connection {
     /// Adds a local candidate and returns its `candidate:` line for `CANDIDATEADD`.
-    pub fn add_local_candidate(&mut self, candidate: LocalCandidate, now: Instant) -> Result<String, Error> {
+    pub fn add_local_candidate(
+        &mut self,
+        candidate: LocalCandidate,
+        now: Instant,
+    ) -> Result<String, Error> {
         let (addr, typ) = self.register_local(candidate, now)?;
         Ok(sdp::candidate_line(addr, typ, Some(&self.ufrag)))
     }
 
     /// Hands str0m a local candidate; returns what its `candidate:` line names.
-    pub(super) fn register_local(&mut self, candidate: LocalCandidate, now: Instant) -> Result<(SocketAddr, CandidateType), Error> {
+    pub(super) fn register_local(
+        &mut self,
+        candidate: LocalCandidate,
+        now: Instant,
+    ) -> Result<(SocketAddr, CandidateType), Error> {
         fn bad(e: impl std::fmt::Display) -> Error {
             Error::Sdp(e.to_string())
         }
@@ -36,7 +47,11 @@ impl Connection {
                     return Err(Error::Sdp("only one host candidate is supported".into()));
                 }
                 self.host = Some(addr);
-                (Candidate::host(addr, "udp").map_err(bad)?, addr, CandidateType::Host)
+                (
+                    Candidate::host(addr, "udp").map_err(bad)?,
+                    addr,
+                    CandidateType::Host,
+                )
             }
             LocalCandidate::ServerReflexive { addr, base } => (
                 Candidate::server_reflexive(addr, base, "udp").map_err(bad)?,
@@ -45,7 +60,11 @@ impl Connection {
             ),
             LocalCandidate::Relayed { addr, mapped } => {
                 self.relays.push(addr);
-                (Candidate::relayed(addr, mapped, "udp").map_err(bad)?, addr, CandidateType::Relay(mapped))
+                (
+                    Candidate::relayed(addr, mapped, "udp").map_err(bad)?,
+                    addr,
+                    CandidateType::Relay(mapped),
+                )
             }
         };
         // str0m drops candidates it finds redundant (srflx sharing a host base); vanilla still trickles them.

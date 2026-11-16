@@ -4,23 +4,29 @@
 //! `cargo run --release -p acacia-bot --example place_rate -- <server> <name> <observer>`
 mod support;
 
+use acacia_bot::Bot;
 use acacia_bot::interact::Face;
 use acacia_bot::survival::Destination;
-use acacia_bot::Bot;
 use support::{Error, Pad};
 
 const BLOCK: &str = "minecraft:cobblestone";
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Error> {
-    let _ = tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
     let mut args = std::env::args().skip(1);
     let server = args.next().unwrap_or_else(|| "127.0.0.1:19170".into());
     let name = args.next().unwrap_or_else(|| "Prober".into());
     let observer = args.next().unwrap_or_else(|| "ProbeObs".into());
     let (mut a, pad) = support::connect(&server, &name).await?;
     pad.build(&mut a, &[], 5).await?;
-    for c in ["/clear @s", "/give @s cobblestone 64", "/give @s cobblestone 64"] {
+    for c in [
+        "/clear @s",
+        "/give @s cobblestone 64",
+        "/give @s cobblestone 64",
+    ] {
         pad.run(&a, c);
         a.wait_ticks(4).await?;
     }
@@ -46,9 +52,19 @@ async fn main() -> Result<(), Error> {
     for (label, cells, per_tick, look) in &rows {
         let first = pad.block(cells[0]);
         if *look {
-            a.look_at([first[0] as f32 + 0.5, first[1] as f32, first[2] as f32 + 0.5]).await?;
+            a.look_at([
+                first[0] as f32 + 0.5,
+                first[1] as f32,
+                first[2] as f32 + 0.5,
+            ])
+            .await?;
         } else {
-            a.look_at([0.5 + pad.block([0, 0, 0])[0] as f32, pad.block([0, 1, 0])[1] as f32, pad.block([0, 0, 9])[2] as f32]).await?;
+            a.look_at([
+                0.5 + pad.block([0, 0, 0])[0] as f32,
+                pad.block([0, 1, 0])[1] as f32,
+                pad.block([0, 0, 9])[2] as f32,
+            ])
+            .await?;
         }
         for chunk in cells.chunks(*per_tick) {
             for c in chunk {
@@ -64,7 +80,15 @@ async fn main() -> Result<(), Error> {
     a.disconnect().await;
     let (mut o, _) = support::connect(&server, &observer).await?;
     let spot = pad.block([0, 6, 0]);
-    pad.run(&o, &format!("/tp @s {} {} {}", spot[0] as f32 + 0.5, spot[1], spot[2] as f32 + 0.5));
+    pad.run(
+        &o,
+        &format!(
+            "/tp @s {} {} {}",
+            spot[0] as f32 + 0.5,
+            spot[1],
+            spot[2] as f32 + 0.5
+        ),
+    );
     o.wait_ticks(60).await?;
     for (label, cells) in report {
         let kept = cells.iter().filter(|c| placed(&o, &pad, **c)).count();
@@ -75,5 +99,6 @@ async fn main() -> Result<(), Error> {
 }
 
 fn placed(o: &Bot, pad: &Pad, cell: [i32; 3]) -> bool {
-    o.block_state(pad.block(cell)).is_some_and(|s| s.name == BLOCK)
+    o.block_state(pad.block(cell))
+        .is_some_and(|s| s.name == BLOCK)
 }

@@ -10,10 +10,10 @@ use acacia_nethernet::{Event as NetEvent, Identity};
 use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
 
+use crate::ConnectError;
 use crate::friend::FriendJoin;
 use crate::signaling::{self, Dialed, SignalingTarget};
 use crate::socks5::Socks5Proxy;
-use crate::ConnectError;
 
 /// As the driver's: above the WebRTC (1200-byte) packets.
 const RECV_BUFFER: usize = 2048;
@@ -26,13 +26,24 @@ pub struct RawLink {
 
 impl RawLink {
     /// Dials `target` as `identity`, whose key must be the one that signs the Login sent over the link.
-    pub async fn dial(target: &SignalingTarget, identity: &Identity, proxy: Option<&Socks5Proxy>) -> Result<RawLink, ConnectError> {
-        Ok(RawLink::over(signaling::dial(target, identity, proxy).await?, None))
+    pub async fn dial(
+        target: &SignalingTarget,
+        identity: &Identity,
+        proxy: Option<&Socks5Proxy>,
+    ) -> Result<RawLink, ConnectError> {
+        Ok(RawLink::over(
+            signaling::dial(target, identity, proxy).await?,
+            None,
+        ))
     }
 
     /// Dials a friend's world joined with [`crate::join_friend_world`], and stays in its Xbox session
     /// for as long as the link lives. The Login sent over the link needs [`FriendJoin::nonce`].
-    pub async fn dial_friend(join: FriendJoin, identity: &Identity, proxy: Option<&Socks5Proxy>) -> Result<RawLink, ConnectError> {
+    pub async fn dial_friend(
+        join: FriendJoin,
+        identity: &Identity,
+        proxy: Option<&Socks5Proxy>,
+    ) -> Result<RawLink, ConnectError> {
         let dialed = signaling::dial(&join.target, identity, proxy).await?;
         Ok(RawLink::over(dialed, Some(join.session)))
     }
@@ -77,7 +88,10 @@ async fn pump(
             }
         }
         flush(&mut dialed, now).await;
-        let deadline = dialed.wire.poll_timeout().unwrap_or(now + Duration::from_secs(60));
+        let deadline = dialed
+            .wire
+            .poll_timeout()
+            .unwrap_or(now + Duration::from_secs(60));
         tokio::select! {
             received = dialed.transport.recv_from(&mut buf) => match received {
                 Ok((range, source)) => dialed.wire.handle_datagram(Instant::now(), source, &buf[range]),

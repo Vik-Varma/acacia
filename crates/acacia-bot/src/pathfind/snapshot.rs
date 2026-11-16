@@ -19,7 +19,10 @@ pub struct WorldBlocks {
 
 impl WorldBlocks {
     pub fn new(world: Arc<World>) -> Self {
-        Self { world, chunks: RefCell::default() }
+        Self {
+            world,
+            chunks: RefCell::default(),
+        }
     }
 }
 
@@ -27,7 +30,10 @@ impl Blocks for WorldBlocks {
     fn ids(&self, [x, y, z]: BlockPos) -> Option<(u32, u32)> {
         let key = (x >> 4, z >> 4);
         let mut chunks = self.chunks.borrow_mut();
-        let chunk = chunks.entry(key).or_insert_with(|| self.world.get(key.0, key.1)).as_ref()?;
+        let chunk = chunks
+            .entry(key)
+            .or_insert_with(|| self.world.get(key.0, key.1))
+            .as_ref()?;
         let chunk = chunk.read();
         Some((chunk.block(x, y, z), chunk.liquid(x, y, z)))
     }

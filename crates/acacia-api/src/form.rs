@@ -19,13 +19,26 @@ pub struct Form {
 pub enum FormBody {
     /// Pick one button. `elements` are the labels, headers and dividers shown between buttons; `positions[i]` is
     /// how many buttons come before `elements[i]`.
-    Simple { content: String, buttons: Vec<FormButton>, elements: Vec<FormElement>, positions: Vec<u32> },
+    Simple {
+        content: String,
+        buttons: Vec<FormButton>,
+        elements: Vec<FormElement>,
+        positions: Vec<u32>,
+    },
     /// Two buttons: `yes` answers true.
-    Modal { content: String, yes: String, no: String },
+    Modal {
+        content: String,
+        yes: String,
+        no: String,
+    },
     /// Inputs to fill in.
     Custom { elements: Vec<FormElement> },
     /// A Java dialog with inputs, answered with one of its buttons.
-    Dialog { content: String, elements: Vec<FormElement>, buttons: Vec<FormButton> },
+    Dialog {
+        content: String,
+        elements: Vec<FormElement>,
+        buttons: Vec<FormButton>,
+    },
 }
 
 /// A simple form's button.
@@ -42,15 +55,40 @@ pub struct FormButton {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum FormElement {
-    Label { text: String },
-    Header { text: String },
+    Label {
+        text: String,
+    },
+    Header {
+        text: String,
+    },
     Divider,
-    Input { text: String, placeholder: String, default: String },
-    Toggle { text: String, default: bool },
-    Slider { text: String, min: f64, max: f64, step: f64, default: f64 },
+    Input {
+        text: String,
+        placeholder: String,
+        default: String,
+    },
+    Toggle {
+        text: String,
+        default: bool,
+    },
+    Slider {
+        text: String,
+        min: f64,
+        max: f64,
+        step: f64,
+        default: f64,
+    },
     #[serde(rename_all = "camelCase")]
-    StepSlider { text: String, steps: Vec<String>, default: u32 },
-    Dropdown { text: String, options: Vec<String>, default: u32 },
+    StepSlider {
+        text: String,
+        steps: Vec<String>,
+        default: u32,
+    },
+    Dropdown {
+        text: String,
+        options: Vec<String>,
+        default: u32,
+    },
 }
 
 /// An answer to an open form; one that does not fit the form is refused before anything is sent.

@@ -35,7 +35,11 @@ impl Link {
         let (deliver, events) = mpsc::unbounded_channel();
         let writing = tokio::spawn(write_loop(writer, outgoing)).abort_handle();
         let reading = tokio::spawn(read_loop(reader, commands.clone(), deliver)).abort_handle();
-        Link { commands, events, tasks: [writing, reading] }
+        Link {
+            commands,
+            events,
+            tasks: [writing, reading],
+        }
     }
 
     /// Drops the socket at once; [`Link::recv`] then returns `None` once queued packets are read.
@@ -66,9 +70,17 @@ async fn write_loop(mut writer: FrameWriter, mut outgoing: mpsc::UnboundedReceiv
     }
 }
 
-async fn read_loop(mut reader: FrameReader, replies: mpsc::UnboundedSender<Vec<u8>>, deliver: mpsc::UnboundedSender<Result<Packet, Error>>) {
+async fn read_loop(
+    mut reader: FrameReader,
+    replies: mpsc::UnboundedSender<Vec<u8>>,
+    deliver: mpsc::UnboundedSender<Result<Packet, Error>>,
+) {
     loop {
-        let packet = match reader.read().await.and_then(|(id, body)| reply(id, &body, &replies).map(|()| Packet { id, body })) {
+        let packet = match reader
+            .read()
+            .await
+            .and_then(|(id, body)| reply(id, &body, &replies).map(|()| Packet { id, body }))
+        {
             Ok(packet) => packet,
             Err(e) => {
                 deliver.send(Err(e)).ok();
@@ -85,7 +97,12 @@ fn reply(id: i32, body: &[u8], replies: &mpsc::UnboundedSender<Vec<u8>>) -> Resu
     let mut input = body;
     let packet = match id {
         from::KEEP_ALIVE => encode(to::KEEP_ALIVE, &KeepAlive::read(&mut input)?),
-        from::CHUNK_BATCH_FINISHED => encode(to::CHUNK_BATCH_RECEIVED, &ChunkBatchReceived { chunks_per_tick: CHUNKS_PER_TICK }),
+        from::CHUNK_BATCH_FINISHED => encode(
+            to::CHUNK_BATCH_RECEIVED,
+            &ChunkBatchReceived {
+                chunks_per_tick: CHUNKS_PER_TICK,
+            },
+        ),
         _ => return Ok(()),
     };
     replies.send(packet).map_err(|_| Error::Closed)

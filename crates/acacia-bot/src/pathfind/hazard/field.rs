@@ -72,10 +72,18 @@ impl Hazards {
             if t.melee() {
                 h.melee.push(*t);
             }
-            let Some((radius, weight)) = shape(t, profile) else { continue };
-            let speed = t.speed.max((t.motion[0].powi(2) + t.motion[2].powi(2)).sqrt());
+            let Some((radius, weight)) = shape(t, profile) else {
+                continue;
+            };
+            let speed = t
+                .speed
+                .max((t.motion[0].powi(2) + t.motion[2].powi(2)).sqrt());
             let mid = [t.feet[0], t.feet[1] + t.size.1 * 0.5, t.feet[2]];
-            h.spheres.push(Sphere { centre: mid, radius: radius + speed * PREDICT_TICKS, weight });
+            h.spheres.push(Sphere {
+                centre: mid,
+                radius: radius + speed * PREDICT_TICKS,
+                weight,
+            });
         }
         h
     }
@@ -97,13 +105,17 @@ impl Hazards {
         }
         let d = [0, 1, 2].map(|i| to[i] - from[i]);
         let n = d.iter().map(|v| v.abs()).max().unwrap_or(0).max(1);
-        let at = |k: i32| [0, 1, 2].map(|i| from[i] + (d[i] as f32 * k as f32 / n as f32).round() as i32);
+        let at = |k: i32| {
+            [0, 1, 2].map(|i| from[i] + (d[i] as f32 * k as f32 / n as f32).round() as i32)
+        };
         (1..=n).map(|k| self.cost(at(k))).sum()
     }
 
     /// A solid entity's box reaches into cell `p`.
     pub fn closed(&self, p: BlockPos) -> bool {
         let lo = p.map(|v| v as f32);
-        self.solids.iter().any(|(min, max)| (0..3).all(|i| max[i] > lo[i] + 1e-3 && min[i] < lo[i] + 1.0 - 1e-3))
+        self.solids
+            .iter()
+            .any(|(min, max)| (0..3).all(|i| max[i] > lo[i] + 1e-3 && min[i] < lo[i] + 1.0 - 1e-3))
     }
 }

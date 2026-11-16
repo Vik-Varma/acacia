@@ -10,8 +10,16 @@ const BACK_C3: f32 = f32::from_bits(0x402c_e6b0);
 const BACK_C2: f32 = f32::from_bits(0x4026_12ff);
 const BACK_C2_PLUS_1: f32 = f32::from_bits(0x4066_12ff);
 /// `1/2.75`, `2/2.75`, `2.5/2.75`, then the centres `1.5/2.75`, `2.25/2.75`, `2.625/2.75`.
-const BOUNCE_T: [f32; 3] = [f32::from_bits(0x3eba_2e8c), f32::from_bits(0x3f3a_2e8c), f32::from_bits(0x3f68_ba2f)];
-const BOUNCE_C: [f32; 3] = [f32::from_bits(0x3f0b_a2e9), f32::from_bits(0x3f51_745d), f32::from_bits(0x3f74_5d17)];
+const BOUNCE_T: [f32; 3] = [
+    f32::from_bits(0x3eba_2e8c),
+    f32::from_bits(0x3f3a_2e8c),
+    f32::from_bits(0x3f68_ba2f),
+];
+const BOUNCE_C: [f32; 3] = [
+    f32::from_bits(0x3f0b_a2e9),
+    f32::from_bits(0x3f51_745d),
+    f32::from_bits(0x3f74_5d17),
+];
 /// 65536/2π.
 const SIN_INDEX_SCALE: f32 = f32::from_bits(0x4622_f983);
 
@@ -101,7 +109,11 @@ pub(super) fn ease(function: MathFn, b: f32, end: f32, t: f32) -> f32 {
         EaseInOutElastic => {
             let v = u - 1.0;
             let s = table_sin(elastic_angle(v));
-            if 1.0 > u { b + exp2(v * 10.0) * c * s * -0.5 } else { b + (exp2(v * -10.0) * c * s * 0.5 + c) }
+            if 1.0 > u {
+                b + exp2(v * 10.0) * c * s * -0.5
+            } else {
+                b + (exp2(v * -10.0) * c * s * 0.5 + c)
+            }
         }
         _ => unreachable!("{function:?} is not an easing"),
     }
@@ -141,7 +153,11 @@ fn table_entry(index: i32) -> f32 {
 
 /// x86's float-to-int: NaN and anything out of range give `i32::MIN`, not Rust's saturation.
 fn to_int(x: f32) -> i32 {
-    if (-2_147_483_648.0..2_147_483_648.0).contains(&x) { x as i32 } else { i32::MIN }
+    if (-2_147_483_648.0..2_147_483_648.0).contains(&x) {
+        x as i32
+    } else {
+        i32::MIN
+    }
 }
 
 fn table_sin(radians: f32) -> f32 {

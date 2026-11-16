@@ -1,8 +1,12 @@
 use acacia_client::proto::codec::read_varint64;
 use acacia_client::proto::packets::{
-    AddEntity, AddItemEntity, ChangeDimension, EntityEvent, EntityEventEventId, RemoveEntity, SetEntityMotion, TakeItemEntity,
+    AddEntity, AddItemEntity, ChangeDimension, EntityEvent, EntityEventEventId, RemoveEntity,
+    SetEntityMotion, TakeItemEntity,
 };
-use acacia_client::proto::types::{MetadataDictionaryItemKey, MetadataDictionaryItemValue, MetadataDictionaryItemValueDefault, Vec3f};
+use acacia_client::proto::types::{
+    MetadataDictionaryItemKey, MetadataDictionaryItemValue, MetadataDictionaryItemValueDefault,
+    Vec3f,
+};
 use acacia_client::proto::{DecodeError, Packet, RawPacket};
 
 use super::{ItemStack, Me};
@@ -60,12 +64,17 @@ impl Fishing {
                     if self.loot.len() == MAX_LOOT {
                         self.loot.remove(0);
                     }
-                    self.loot.push((p.runtime_entity_id, p.entity_id_self, p.item.into()));
+                    self.loot
+                        .push((p.runtime_entity_id, p.entity_id_self, p.item.into()));
                 }
             }
             TakeItemEntity::ID => {
                 let p: TakeItemEntity = packet.decode()?;
-                if let Some(i) = self.loot.iter().position(|(id, ..)| *id == p.runtime_entity_id) {
+                if let Some(i) = self
+                    .loot
+                    .iter()
+                    .position(|(id, ..)| *id == p.runtime_entity_id)
+                {
                     let (_, _, stack) = self.loot.remove(i);
                     if u64::from(p.target) == me.runtime_entity_id {
                         self.catch = Some(stack);
@@ -77,7 +86,8 @@ impl Fishing {
                 // Geyser fills the owner with the unique id, Dragonfly with the runtime id.
                 let owner = owner(&p);
                 if p.entity_type == FISHING_HOOK_KIND
-                    && (owner == Some(me.unique_entity_id) || owner == Some(me.runtime_entity_id as i64))
+                    && (owner == Some(me.unique_entity_id)
+                        || owner == Some(me.runtime_entity_id as i64))
                 {
                     self.hook = Some(FishingHook {
                         runtime_id: p.runtime_id,
@@ -97,7 +107,9 @@ impl Fishing {
             }
             // Both are frequent for mobs: only the hook's are decoded.
             EntityEvent::ID | SetEntityMotion::ID => {
-                let Some(hook) = &mut self.hook else { return Ok(()) };
+                let Some(hook) = &mut self.hook else {
+                    return Ok(());
+                };
                 if read_varint64(&mut &packet.body[..])? != hook.runtime_id {
                     return Ok(());
                 }
@@ -114,7 +126,11 @@ impl Fishing {
                         hook.bites += 1;
                         tracing::debug!(bites = hook.bites, vy, "hook dip: bite");
                     }
-                    hook.resting_updates = if vy.abs() < RESTING_SPEED { hook.resting_updates + 1 } else { 0 };
+                    hook.resting_updates = if vy.abs() < RESTING_SPEED {
+                        hook.resting_updates + 1
+                    } else {
+                        0
+                    };
                 }
             }
             ChangeDimension::ID => *self = Fishing::default(),
@@ -125,10 +141,15 @@ impl Fishing {
 }
 
 fn owner(p: &AddEntity) -> Option<i64> {
-    p.metadata.iter().find(|m| m.key == MetadataDictionaryItemKey::OwnerEid).and_then(|m| match m.value {
-        MetadataDictionaryItemValue::Default(MetadataDictionaryItemValueDefault::Long(id)) => Some(id),
-        _ => None,
-    })
+    p.metadata
+        .iter()
+        .find(|m| m.key == MetadataDictionaryItemKey::OwnerEid)
+        .and_then(|m| match m.value {
+            MetadataDictionaryItemValue::Default(MetadataDictionaryItemValueDefault::Long(id)) => {
+                Some(id)
+            }
+            _ => None,
+        })
 }
 
 #[cfg(test)]

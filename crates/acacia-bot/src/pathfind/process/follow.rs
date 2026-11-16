@@ -1,8 +1,8 @@
 use acacia_physics::{BlockPos, Vec3};
 
 use super::{Ctx, Process, Want};
-use crate::pathfind::{Goal, GotoOpts};
 use crate::ActionError;
+use crate::pathfind::{Goal, GotoOpts};
 
 /// The target moved this far (blocks) from the goal's centre: re-plan to where it is now.
 const RETARGET: f32 = 2.0;
@@ -38,7 +38,15 @@ impl Follow {
     }
 
     pub fn new(target: Target, range: f32) -> Self {
-        Self { target, range, opts: GotoOpts::default(), centre: None, holding: false, tick: 0, retry_at: 0 }
+        Self {
+            target,
+            range,
+            opts: GotoOpts::default(),
+            centre: None,
+            holding: false,
+            tick: 0,
+            retry_at: 0,
+        }
     }
 
     pub fn with_opts(mut self, opts: GotoOpts) -> Self {
@@ -70,7 +78,11 @@ impl Process for Follow {
         if cx.tick < self.retry_at {
             return Want::Yield;
         }
-        let cell = [feet[0].floor() as i32, (feet[1] + 0.01).floor() as i32, feet[2].floor() as i32];
+        let cell = [
+            feet[0].floor() as i32,
+            (feet[1] + 0.01).floor() as i32,
+            feet[2].floor() as i32,
+        ];
         let centre = match self.centre {
             Some(c) if dist(c.map(|v| v as f32), cell.map(|v| v as f32)) <= RETARGET => c,
             _ => *self.centre.insert(cell),

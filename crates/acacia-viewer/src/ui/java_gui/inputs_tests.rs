@@ -39,7 +39,16 @@ fn me() -> Me {
 }
 
 fn view<'a>(me: &'a Me, lang: &'a Lang, effects: &'a [Active]) -> HudView<'a> {
-    HudView { me, effects, screen: None, chat_open: false, debug: false, sidebar: None, players: None, lang }
+    HudView {
+        me,
+        effects,
+        screen: None,
+        chat_open: false,
+        debug: false,
+        sidebar: None,
+        players: None,
+        lang,
+    }
 }
 
 #[test]
@@ -50,20 +59,43 @@ fn player_state_maps_to_java_fields() {
     assert_eq!(i.game_mode, GameType::Survival);
     assert_eq!(i.hotbar.selected, 2);
     assert_eq!(i.hotbar.slots.iter().filter(|s| s.is_some()).count(), 1);
-    assert_eq!((i.health.armor, i.health.food, i.health.saturation), (7, 18, 2.5));
+    assert_eq!(
+        (i.health.armor, i.health.food, i.health.saturation),
+        (7, 18, 2.5)
+    );
     assert_eq!(i.health.kind, HeartKind::Poisoned);
     assert_eq!((i.health.air, i.health.under_water), (300, false));
-    assert_eq!(i.bosses[0].color, 5, "BOSS_COLOURS and Java's BossBarColor share their order");
+    assert_eq!(
+        i.bosses[0].color, 5,
+        "BOSS_COLOURS and Java's BossBarColor share their order"
+    );
     assert!(i.camera.equipment.is_empty());
 }
 
 #[test]
 fn screens_as_the_hud_sees_them() {
     assert_eq!(screen_info(None, false, false, 320), None);
-    assert_eq!(screen_info(Some(Layout::Player), true, true, 320), Some(ScreenInfo::default()), "a menu over it");
-    assert!(screen_info(Some(Layout::Player), false, false, 320).unwrap().shows_effects);
-    assert!(!screen_info(Some(Layout::Player), false, false, 200).unwrap().shows_effects, "no room beside it");
-    assert!(!screen_info(Some(Layout::Rows(3)), false, false, 320).unwrap().shows_effects);
+    assert_eq!(
+        screen_info(Some(Layout::Player), true, true, 320),
+        Some(ScreenInfo::default()),
+        "a menu over it"
+    );
+    assert!(
+        screen_info(Some(Layout::Player), false, false, 320)
+            .unwrap()
+            .shows_effects
+    );
+    assert!(
+        !screen_info(Some(Layout::Player), false, false, 200)
+            .unwrap()
+            .shows_effects,
+        "no room beside it"
+    );
+    assert!(
+        !screen_info(Some(Layout::Rows(3)), false, false, 320)
+            .unwrap()
+            .shows_effects
+    );
     assert!(screen_info(None, true, false, 320).unwrap().in_game_ui);
 }
 
@@ -76,10 +108,40 @@ fn game_modes() {
 
 #[test]
 fn bedrock_effects_become_java_icons() {
-    let poison = effect_icon(&Active { id: 25, ticks: 40, ambient: true }).unwrap();
-    assert_eq!((poison.id.as_str(), poison.beneficial, poison.duration, poison.ambient), ("poison", false, 40, true));
-    assert_eq!(effect_icon(&Active { id: 1, ticks: -1, ambient: false }).unwrap().id, "speed");
-    assert!(effect_icon(&Active { id: 6, ticks: 1, ambient: false }).is_none(), "instant health has no icon");
+    let poison = effect_icon(&Active {
+        id: 25,
+        ticks: 40,
+        ambient: true,
+    })
+    .unwrap();
+    assert_eq!(
+        (
+            poison.id.as_str(),
+            poison.beneficial,
+            poison.duration,
+            poison.ambient
+        ),
+        ("poison", false, 40, true)
+    );
+    assert_eq!(
+        effect_icon(&Active {
+            id: 1,
+            ticks: -1,
+            ambient: false
+        })
+        .unwrap()
+        .id,
+        "speed"
+    );
+    assert!(
+        effect_icon(&Active {
+            id: 6,
+            ticks: 1,
+            ambient: false
+        })
+        .is_none(),
+        "instant health has no icon"
+    );
 }
 
 #[test]
@@ -87,12 +149,18 @@ fn held_name_takes_the_anvil_name_and_enchanted_rarity() {
     let mut me = me();
     let lang = Lang::default();
     let held = held_name(&me, &lang).unwrap();
-    assert_eq!((held.hover_name.plain(), held.rarity_color, held.custom_name), ("Stone".to_owned(), COMMON, false));
+    assert_eq!(
+        (held.hover_name.plain(), held.rarity_color, held.custom_name),
+        ("Stone".to_owned(), COMMON, false)
+    );
     let s = me.items[2].as_mut().unwrap();
     s.title = Some("Rock".into());
     s.enchanted = true;
     let held = held_name(&me, &lang).unwrap();
-    assert_eq!((held.hover_name.plain(), held.rarity_color, held.custom_name), ("Rock".to_owned(), RARE, true));
+    assert_eq!(
+        (held.hover_name.plain(), held.rarity_color, held.custom_name),
+        ("Rock".to_owned(), RARE, true)
+    );
     me.hotbar = 0;
     assert!(held_name(&me, &lang).is_none());
 }
@@ -102,15 +170,42 @@ fn screens_chat_debug_sidebar_players_and_pumpkin() {
     let mut me = me();
     me.head = Some("minecraft:carved_pumpkin".into());
     let lang = Lang::default();
-    let sidebar = Sidebar { title: "Kills".into(), lines: vec![("bob".into(), 3)] };
+    let sidebar = Sidebar {
+        title: "Kills".into(),
+        lines: vec![("bob".into(), 3)],
+    };
     let names = ["Alex".to_owned(), "Steve".to_owned()];
-    let screen = Some(ScreenInfo { in_game_ui: true, ..ScreenInfo::default() });
-    let v = HudView { screen, chat_open: true, debug: true, sidebar: Some(&sidebar), players: Some(&names), ..view(&me, &lang, &[]) };
+    let screen = Some(ScreenInfo {
+        in_game_ui: true,
+        ..ScreenInfo::default()
+    });
+    let v = HudView {
+        screen,
+        chat_open: true,
+        debug: true,
+        sidebar: Some(&sidebar),
+        players: Some(&names),
+        ..view(&me, &lang, &[])
+    };
     let i = inputs(&v, [320, 240], 0, 0.0);
     assert_eq!(i.screen, screen);
     assert!(i.chat_focused && i.crosshair_3d && i.tab.key_down);
-    assert_eq!(i.tab.players.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Alex", "Steve"]);
+    assert_eq!(
+        i.tab
+            .players
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Alex", "Steve"]
+    );
     let objective = i.sidebar.unwrap();
-    assert_eq!((objective.title.plain(), objective.scores[0].owner.as_str(), objective.scores[0].value), ("Kills".to_owned(), "bob", 3));
+    assert_eq!(
+        (
+            objective.title.plain(),
+            objective.scores[0].owner.as_str(),
+            objective.scores[0].value
+        ),
+        ("Kills".to_owned(), "bob", 3)
+    );
     assert_eq!(i.camera.equipment, ["misc/pumpkinblur"]);
 }

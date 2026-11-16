@@ -44,29 +44,55 @@ pub struct Senses {
 
 impl Senses {
     pub fn new(seed: u64) -> Self {
-        Senses { rng: seed, ..Senses::default() }
+        Senses {
+            rng: seed,
+            ..Senses::default()
+        }
     }
 
     /// The part of `threats` the bot reacts to now.
-    pub fn filter(&mut self, mut threats: Threats, view: &View, profile: MovementProfile) -> Threats {
-        let hurt = self.health.replace(view.health).is_some_and(|h| view.health < h);
+    pub fn filter(
+        &mut self,
+        mut threats: Threats,
+        view: &View,
+        profile: MovementProfile,
+    ) -> Threats {
+        let hurt = self
+            .health
+            .replace(view.health)
+            .is_some_and(|h| view.health < h);
         if profile == MovementProfile::Optimal {
             return threats;
         }
         let now = threats.at;
         for t in &threats.list {
             let mid = [t.feet[0], t.feet[1] + t.size.1 * 0.5, t.feet[2]];
-            let earshot = if t.lit { human::FUSE_EARSHOT } else { human::EARSHOT };
-            let Some(sense) = perceives(view, hurt, mid, earshot) else { continue };
+            let earshot = if t.lit {
+                human::FUSE_EARSHOT
+            } else {
+                human::EARSHOT
+            };
+            let Some(sense) = perceives(view, hurt, mid, earshot) else {
+                continue;
+            };
             let (lo, hi) = match sense {
                 Sense::Heard => human::THREAT_NOTICE_HEARD,
                 Sense::Seen => human::THREAT_NOTICE_SEEN,
             };
             let delay = lo + splitmix(&mut self.rng) % (hi - lo + 1);
-            self.known.entry(t.runtime_id).or_insert(Known { from: now + delay, seen: now }).seen = now;
+            self.known
+                .entry(t.runtime_id)
+                .or_insert(Known {
+                    from: now + delay,
+                    seen: now,
+                })
+                .seen = now;
         }
-        self.known.retain(|_, k| now.saturating_sub(k.seen) <= human::THREAT_MEMORY);
-        threats.list.retain(|t| self.known.get(&t.runtime_id).is_some_and(|k| now >= k.from));
+        self.known
+            .retain(|_, k| now.saturating_sub(k.seen) <= human::THREAT_MEMORY);
+        threats
+            .list
+            .retain(|t| self.known.get(&t.runtime_id).is_some_and(|k| now >= k.from));
         threats
     }
 }
@@ -95,5 +121,6 @@ fn perceives(v: &View, hurt: bool, mid: Vec3, earshot: f32) -> Option<Sense> {
     let yaw = v.yaw.to_radians();
     let flat = d[0].hypot(d[2]).max(1e-4);
     let cos = (-yaw.sin() * d[0] + yaw.cos() * d[2]) / flat;
-    (dist <= VIEW_RANGE && cos >= human::VIEW_HALF_DEG.to_radians().cos() && (v.sees)(v.eye, mid)).then_some(Sense::Seen)
+    (dist <= VIEW_RANGE && cos >= human::VIEW_HALF_DEG.to_radians().cos() && (v.sees)(v.eye, mid))
+        .then_some(Sense::Seen)
 }

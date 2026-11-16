@@ -10,7 +10,13 @@ const UNDYED: [u8; 3] = [0xA0, 0x65, 0x40];
 
 /// Whether `item`'s icon is dyed (`minecraft:leather` itself is not).
 pub fn dyeable(item: &str) -> bool {
-    item.strip_prefix("minecraft:leather_").is_some_and(|piece| matches!(piece, "helmet" | "chestplate" | "leggings" | "boots" | "horse_armor"))
+    item.strip_prefix("minecraft:leather_")
+        .is_some_and(|piece| {
+            matches!(
+                piece,
+                "helmet" | "chestplate" | "leggings" | "boots" | "horse_armor"
+            )
+        })
 }
 
 /// Dyes the leather texels with the stack's `dye`, undyed leather's without one, and makes the
@@ -31,7 +37,10 @@ pub fn dye(image: &mut RgbaImage, dye: Option<[u8; 3]>) {
 /// undyed, `None` for any other item).
 pub fn icon(root: &Path, path: &str, leather: Option<Option<[u8; 3]>>) -> Option<RgbaImage> {
     let file = crate::assets::image_file(root, path)?;
-    let mut image = image::open(&file).inspect_err(|e| tracing::warn!(?file, %e, "item icon")).ok()?.to_rgba8();
+    let mut image = image::open(&file)
+        .inspect_err(|e| tracing::warn!(?file, %e, "item icon"))
+        .ok()?
+        .to_rgba8();
     if let Some(colour) = leather {
         dye(&mut image, colour);
     }
@@ -50,7 +59,10 @@ mod tests {
             dye(&mut image, colour);
             image.into_raw()
         };
-        assert_eq!(dyed(Some([255, 0, 127])), [200, 0, 99, 255, 90, 60, 30, 255, 7, 7, 7, 0]);
+        assert_eq!(
+            dyed(Some([255, 0, 127])),
+            [200, 0, 99, 255, 90, 60, 30, 255, 7, 7, 7, 0]
+        );
         assert_eq!(dyed(None)[..4], [125, 79, 50, 255]);
     }
 

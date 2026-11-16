@@ -59,7 +59,12 @@ impl Engine {
                 p.rgba[1] *= 0.96;
                 p.rgba[2] *= 0.9;
             }
-            Behaviour::Drip { fluid, stage, next, sound } => self.drip_tick(p, blocks, fluid, stage, next, sound),
+            Behaviour::Drip {
+                fluid,
+                stage,
+                next,
+                sound,
+            } => self.drip_tick(p, blocks, fluid, stage, next, sound),
             Behaviour::WaterDrop => {
                 if !count_down(p) {
                     return;
@@ -75,7 +80,12 @@ impl Engine {
                     p.velocity.z *= f(0.7);
                 }
                 let b = cell(p.position);
-                let top = level::collision_top(blocks, b, p.position.x - f64::from(b.x), p.position.z - f64::from(b.z));
+                let top = level::collision_top(
+                    blocks,
+                    b,
+                    p.position.x - f64::from(b.x),
+                    p.position.z - f64::from(b.z),
+                );
                 let offset = top.max(level::fluid_height(blocks, b).1);
                 if offset > 0.0 && p.position.y < f64::from(b.y) + offset {
                     p.removed = true;
@@ -92,10 +102,18 @@ impl Engine {
                     p.removed = true;
                 }
             }
-            Behaviour::SulfurBubble { y_start, y_end, size_start, y_prev } => {
+            Behaviour::SulfurBubble {
+                y_start,
+                y_end,
+                size_start,
+                y_prev,
+            } => {
                 p.base_tick(blocks);
                 let here = level::fluid(blocks, cell(p.position));
-                let gone = p.removed || !(here.fluid == Fluid::Water && here.is_source()) || p.position.y >= y_end || p.position.y <= y_prev;
+                let gone = p.removed
+                    || !(here.fluid == Fluid::Water && here.is_source())
+                    || p.position.y >= y_end
+                    || p.position.y <= y_prev;
                 p.removed = gone;
                 // randomHorizontalWiggling, then a second, horizontal move.
                 let mut wiggle = || {
@@ -108,7 +126,12 @@ impl Engine {
                 p.move_by(blocks, DVec3::new(p.velocity.x, 0.0, p.velocity.z));
                 let progress = ((p.position.y - y_start) / (y_end - y_start)) as f32;
                 p.size = size_start + progress * (0.15 - size_start);
-                p.behaviour = Behaviour::SulfurBubble { y_start, y_end, size_start, y_prev: p.position.y };
+                p.behaviour = Behaviour::SulfurBubble {
+                    y_start,
+                    y_end,
+                    size_start,
+                    y_prev: p.position.y,
+                };
             }
             Behaviour::BubbleColumnUp => {
                 p.base_tick(blocks);
@@ -128,7 +151,9 @@ impl Engine {
                 if level::fluid(blocks, cell(p.position)).fluid != Fluid::Water || p.on_ground {
                     p.removed = true;
                 }
-                p.behaviour = Behaviour::CurrentDown { angle: angle + 0.08 };
+                p.behaviour = Behaviour::CurrentDown {
+                    angle: angle + 0.08,
+                };
             }
             Behaviour::SuspendedTown => {
                 if count_down(p) {
@@ -154,7 +179,8 @@ impl Engine {
                     let mut drop = 1.0 - along;
                     drop *= drop;
                     drop *= drop;
-                    p.position = start + p.velocity * f(along) - DVec3::new(0.0, f(drop * 1.2), 0.0);
+                    p.position =
+                        start + p.velocity * f(along) - DVec3::new(0.0, f(drop * 1.2), 0.0);
                 }
             }
             Behaviour::HugeExplosion => {
@@ -168,7 +194,11 @@ impl Engine {
                     let mut d = || (r.next_double() - r.next_double()) * 4.0;
                     let at = p.position + DVec3::new(d(), d(), d());
                     let share = f(p.age as f32 / p.lifetime as f32);
-                    self.add(&Options::simple(Type::Explosion), at, DVec3::new(share, 0.0, 0.0));
+                    self.add(
+                        &Options::simple(Type::Explosion),
+                        at,
+                        DVec3::new(share, 0.0, 0.0),
+                    );
                 }
                 p.age += 1;
                 if p.age == p.lifetime {
@@ -222,12 +252,22 @@ impl Engine {
             }
         }
     }
-
 }
 
 /// `FallingLeavesParticle.tick`.
 fn leaves_tick(p: &mut Particle, blocks: &impl Blocks) {
-    let Behaviour::Leaves { mut rot_speed, spin, wind, swirl, flow, flow_scale, swirl_period } = p.behaviour else { return };
+    let Behaviour::Leaves {
+        mut rot_speed,
+        spin,
+        wind,
+        swirl,
+        flow,
+        flow_scale,
+        swirl_period,
+    } = p.behaviour
+    else {
+        return;
+    };
     if count_down(p) {
         let alive = (300 - p.lifetime) as f32;
         let relative = f((alive / 300.0).min(1.0));
@@ -254,5 +294,13 @@ fn leaves_tick(p: &mut Particle, blocks: &impl Blocks) {
             p.velocity *= f(p.friction);
         }
     }
-    p.behaviour = Behaviour::Leaves { rot_speed, spin, wind, swirl, flow, flow_scale, swirl_period };
+    p.behaviour = Behaviour::Leaves {
+        rot_speed,
+        spin,
+        wind,
+        swirl,
+        flow,
+        flow_scale,
+        swirl_period,
+    };
 }

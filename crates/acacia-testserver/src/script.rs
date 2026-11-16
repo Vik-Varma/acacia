@@ -7,10 +7,10 @@ use std::io::{self, Read, Write};
 use std::time::Duration;
 
 use acacia_proto::packets::{
-    ClientCacheMissResponse, ClientToServerHandshake, NetworkSettings, RequestChunkRadius, ResourcePackClientResponse,
-    ServerToClientHandshake, SetLocalPlayerAsInitialized, Subchunk,
+    ClientCacheMissResponse, ClientToServerHandshake, NetworkSettings, RequestChunkRadius,
+    ResourcePackClientResponse, ServerToClientHandshake, SetLocalPlayerAsInitialized, Subchunk,
 };
-use acacia_proto::{codec, Packet};
+use acacia_proto::{Packet, codec};
 use bytes::{Bytes, BytesMut};
 use flate2::read::DeflateDecoder;
 use flate2::write::DeflateEncoder;
@@ -18,9 +18,19 @@ use flate2::write::DeflateEncoder;
 use crate::capture::Session;
 
 /// Client packets BDS waits for before going on with the login.
-const GATES: &[u32] = &[ClientToServerHandshake::ID, ResourcePackClientResponse::ID, RequestChunkRadius::ID, SetLocalPlayerAsInitialized::ID];
+const GATES: &[u32] = &[
+    ClientToServerHandshake::ID,
+    ResourcePackClientResponse::ID,
+    RequestChunkRadius::ID,
+    SetLocalPlayerAsInitialized::ID,
+];
 /// Server packets the fake server makes itself.
-const GENERATED: &[u32] = &[NetworkSettings::ID, ServerToClientHandshake::ID, Subchunk::ID, ClientCacheMissResponse::ID];
+const GENERATED: &[u32] = &[
+    NetworkSettings::ID,
+    ServerToClientHandshake::ID,
+    Subchunk::ID,
+    ClientCacheMissResponse::ID,
+];
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Step {
@@ -40,14 +50,19 @@ pub struct Script {
 impl Script {
     /// BDS 1.26.52 (local test server) from login to ~25 s after spawn, recorded from a bot's join.
     pub fn bds_spawn() -> Self {
-        Self::decode(include_bytes!("../fixtures/bds-1.26.52.script")).expect("bundled script decodes")
+        Self::decode(include_bytes!("../fixtures/bds-1.26.52.script"))
+            .expect("bundled script decodes")
     }
 
     /// The server side of a captured session, up to `until` after its Login.
     pub fn from_session(session: &Session, until: Duration) -> Self {
         let mut script = Self::default();
         let mut mark = 0.0;
-        for p in session.packets.iter().filter(|p| p.t <= until.as_secs_f64() * 1000.0) {
+        for p in session
+            .packets
+            .iter()
+            .filter(|p| p.t <= until.as_secs_f64() * 1000.0)
+        {
             if p.from_client {
                 if GATES.contains(&p.id) {
                     script.steps.push(Step::Wait(p.id));
@@ -55,14 +70,19 @@ impl Script {
                 }
             } else if p.id == ClientCacheMissResponse::ID {
                 if let Ok(miss) = ClientCacheMissResponse::decode(&mut &p.body[..]) {
-                    script.blobs.extend(miss.blobs.into_iter().map(|b| (b.hash, b.payload)));
+                    script
+                        .blobs
+                        .extend(miss.blobs.into_iter().map(|b| (b.hash, b.payload)));
                 }
             } else if !GENERATED.contains(&p.id) {
                 let mut packet = BytesMut::with_capacity(p.body.len() + 3);
                 codec::write_varint(&mut packet, p.id);
                 packet.extend_from_slice(&p.body);
                 let delay = Duration::from_secs_f64((p.t - mark).max(0.0) / 1000.0);
-                script.steps.push(Step::Send { delay, packet: packet.freeze() });
+                script.steps.push(Step::Send {
+                    delay,
+                    packet: packet.freeze(),
+                });
                 mark = p.t;
             }
         }
@@ -118,14 +138,24 @@ impl Script {
                 1 => {
                     let delay = Duration::from_micros(u32_le(take(4)?).into());
                     let len = u32_le(take(4)?) as usize;
-                    script.steps.push(Step::Send { delay, packet: Bytes::copy_from_slice(take(len)?) });
+                    script.steps.push(Step::Send {
+                        delay,
+                        packet: Bytes::copy_from_slice(take(len)?),
+                    });
                 }
                 2 => {
                     let hash = u64::from_le_bytes(take(8)?.try_into().expect("8 bytes"));
                     let len = u32_le(take(4)?) as usize;
-                    script.blobs.insert(hash, Bytes::copy_from_slice(take(len)?));
+                    script
+                        .blobs
+                        .insert(hash, Bytes::copy_from_slice(take(len)?));
                 }
-                _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "unknown script record")),
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "unknown script record",
+                    ));
+                }
             }
         }
         Ok(script)
@@ -139,7 +169,13 @@ mod tests {
     #[test]
     fn encode_roundtrips() {
         let script = Script {
-            steps: vec![Step::Wait(4), Step::Send { delay: Duration::from_millis(31), packet: Bytes::from_static(b"\x02\x00\x00\x00\x00") }],
+            steps: vec![
+                Step::Wait(4),
+                Step::Send {
+                    delay: Duration::from_millis(31),
+                    packet: Bytes::from_static(b"\x02\x00\x00\x00\x00"),
+                },
+            ],
             blobs: HashMap::from([(9, Bytes::from_static(b"blob"))]),
         };
         assert_eq!(Script::decode(&script.encode()).unwrap(), script);
@@ -148,8 +184,18 @@ mod tests {
     #[test]
     fn bundled_script_starts_after_the_handshake() {
         let script = Script::bds_spawn();
-        assert_eq!(script.steps.first(), Some(&Step::Wait(ClientToServerHandshake::ID)));
-        assert!(script.steps.iter().filter(|s| matches!(s, Step::Send { .. })).count() > 100);
+        assert_eq!(
+            script.steps.first(),
+            Some(&Step::Wait(ClientToServerHandshake::ID))
+        );
+        assert!(
+            script
+                .steps
+                .iter()
+                .filter(|s| matches!(s, Step::Send { .. }))
+                .count()
+                > 100
+        );
         assert!(!script.blobs.is_empty());
     }
 
@@ -161,11 +207,16 @@ mod tests {
 
         let mut failures = Vec::new();
         for step in Script::bds_spawn().steps {
-            let Step::Send { packet, .. } = step else { continue };
+            let Step::Send { packet, .. } = step else {
+                continue;
+            };
             let raw = RawPacket::parse(packet).unwrap();
             // As the session does: item decoding branches on the server's shield id.
             if let Ok(registry) = raw.decode::<ItemRegistry>()
-                && let Some(shield) = registry.itemstates.iter().find(|i| i.name == "minecraft:shield")
+                && let Some(shield) = registry
+                    .itemstates
+                    .iter()
+                    .find(|i| i.name == "minecraft:shield")
             {
                 manual::set_shield_item_id(shield.runtime_id.into());
             }
@@ -175,6 +226,11 @@ mod tests {
         }
         failures.sort();
         failures.dedup();
-        assert!(failures.is_empty(), "{} distinct failures:\n{}", failures.len(), failures.join("\n"));
+        assert!(
+            failures.is_empty(),
+            "{} distinct failures:\n{}",
+            failures.len(),
+            failures.join("\n")
+        );
     }
 }

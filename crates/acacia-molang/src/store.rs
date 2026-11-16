@@ -14,7 +14,10 @@ pub(crate) struct Store {
 
 impl Store {
     pub(crate) fn scratch() -> Store {
-        Store { scratch: true, ..Store::default() }
+        Store {
+            scratch: true,
+            ..Store::default()
+        }
     }
 
     /// Empties it, keeping every allocation.
@@ -32,7 +35,9 @@ impl Store {
     }
 
     pub(crate) fn owns(&self, value: Value) -> bool {
-        value.storage().is_some_and(|(r, _)| r.scratch() == self.scratch)
+        value
+            .storage()
+            .is_some_and(|(r, _)| r.scratch() == self.scratch)
     }
 
     pub(crate) fn get(&self, slot: u32, path: &[u32]) -> Option<Value> {
@@ -45,7 +50,10 @@ impl Store {
 
     pub(crate) fn member(&self, of: Value, name: Symbol) -> Option<Value> {
         let Value::Struct(r) = of else { return None };
-        self.structs[r.index()].iter().find(|(n, _)| *n == name).map(|(_, v)| *v)
+        self.structs[r.index()]
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, v)| *v)
     }
 
     pub(crate) fn members(&self, of: StructRef) -> &[(Symbol, Value)] {
@@ -116,7 +124,12 @@ impl Store {
         StructRef::new(index, self.scratch)
     }
 
-    pub(crate) fn set_member(&mut self, of: StructRef, name: Symbol, value: Value) -> Option<Value> {
+    pub(crate) fn set_member(
+        &mut self,
+        of: StructRef,
+        name: Symbol,
+        value: Value,
+    ) -> Option<Value> {
         let members = &mut self.structs[of.index()];
         match members.iter_mut().find(|(n, _)| *n == name) {
             Some((_, slot)) => Some(std::mem::replace(slot, value)),
@@ -129,7 +142,9 @@ impl Store {
 
     /// A copy of `value` owned by this store; `from` is the store a struct lives in, `None` for this one.
     pub(crate) fn import(&mut self, value: Value, from: Option<&Store>) -> Value {
-        let Some((source, kind)) = value.storage() else { return value };
+        let Some((source, kind)) = value.storage() else {
+            return value;
+        };
         let made = self.new_struct();
         let count = from.unwrap_or(self).members(source).len();
         for i in 0..count {
@@ -147,7 +162,9 @@ impl Store {
     }
 
     fn release(&mut self, value: Option<Value>) {
-        let Some((r, _)) = value.and_then(Value::storage) else { return };
+        let Some((r, _)) = value.and_then(Value::storage) else {
+            return;
+        };
         if r.scratch() != self.scratch {
             return;
         }

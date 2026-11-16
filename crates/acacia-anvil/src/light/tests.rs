@@ -193,7 +193,9 @@ fn a_lit_area_matches_lighting_each_column_alone() {
         let mut alone = Lighter::default();
         for cz in 1..d - 1 {
             for cx in 1..w - 1 {
-                let Some(centre) = refs[cz * w + cx] else { continue };
+                let Some(centre) = refs[cz * w + cx] else {
+                    continue;
+                };
                 let mut n = [None; 9];
                 for (k, slot) in n.iter_mut().enumerate() {
                     *slot = refs[(cz + k / 3 - 1) * w + cx + k % 3 - 1];
@@ -201,8 +203,14 @@ fn a_lit_area_matches_lighting_each_column_alone() {
                 let one = alone.light(&Neighbourhood { cols: n }, &props, true);
                 let grouped = area.extract(cx, cz, centre.sections.len());
                 for (s, (a, b)) in one.iter().zip(&grouped).enumerate() {
-                    assert!(a.sky == b.sky, "seed {seed} column {cx} {cz} section {s}: sky");
-                    assert!(a.block == b.block, "seed {seed} column {cx} {cz} section {s}: block");
+                    assert!(
+                        a.sky == b.sky,
+                        "seed {seed} column {cx} {cz} section {s}: sky"
+                    );
+                    assert!(
+                        a.block == b.block,
+                        "seed {seed} column {cx} {cz} section {s}: block"
+                    );
                 }
             }
         }

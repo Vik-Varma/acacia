@@ -35,11 +35,24 @@ impl Dir {
 }
 
 /// `direction` blocks that face the player.
-const TOWARDS: &[&str] = &["loom", "beehive", "bee_nest", "decorated_pot", "chiseled_bookshelf"];
+const TOWARDS: &[&str] = &[
+    "loom",
+    "beehive",
+    "bee_nest",
+    "decorated_pot",
+    "chiseled_bookshelf",
+];
 
 /// Name endings this tier places although `DENIED`'s substrings match them by accident ("door", "fire",
 /// "redstone").
-const CLAIMS: &[&str] = &["trapdoor", "campfire", "redstone_block", "redstone_lamp", "redstone_torch", "redstone_ore"];
+const CLAIMS: &[&str] = &[
+    "trapdoor",
+    "campfire",
+    "redstone_block",
+    "redstone_lamp",
+    "redstone_torch",
+    "redstone_ore",
+];
 
 pub(super) fn claims(n: &str) -> bool {
     CLAIMS.iter().any(|c| n.ends_with(c)) || (n.starts_with("dead_") && n.ends_with("_coral_block"))
@@ -48,7 +61,10 @@ pub(super) fn claims(n: &str) -> bool {
 /// Set by the server from neighbours, power or time: never compared. Leaves: a placed leaf is persistent, a
 /// structure's natural one not; the look is the same.
 pub(super) fn derived(k: &str) -> bool {
-    matches!(k, "in_wall_bit" | "redstone_signal" | "toggle_bit" | "update_bit" | "persistent_bit")
+    matches!(
+        k,
+        "in_wall_bit" | "redstone_signal" | "toggle_bit" | "update_bit" | "persistent_bit"
+    )
 }
 
 /// Values shown alike: a wall bell is `side` or `multiple` by whether the cell across from its wall is filled.
@@ -59,7 +75,15 @@ pub(super) fn alike(k: &str, v: &str, w: &str) -> bool {
 /// The value every placement gives (anything else takes more than a click).
 fn fixed(k: &str) -> Option<&'static str> {
     match k {
-        "open_bit" | "deprecated" | "extinguished" | "honey_level" | "composter_fill_level" | "books_stored" | "explode_bit" | "fill_level" | "lit" => Some("0"),
+        "open_bit"
+        | "deprecated"
+        | "extinguished"
+        | "honey_level"
+        | "composter_fill_level"
+        | "books_stored"
+        | "explode_bit"
+        | "fill_level"
+        | "lit" => Some("0"),
         "cauldron_liquid" => Some("water"),
         _ => None,
     }
@@ -92,12 +116,18 @@ pub(super) fn gravity(n: &str) -> bool {
 
 /// Hangs from the block above (a click on its Down face); see `rules::hangs`.
 pub(super) fn hangs(name: &str, props: &str) -> Option<bool> {
-    let has = |kv: &str| props.split(',').any(|p| p.trim_start_matches("minecraft:") == kv);
-    let down = name.ends_with("end_rod") || name.ends_with("lightning_rod") || name.ends_with("_button");
+    let has = |kv: &str| {
+        props
+            .split(',')
+            .any(|p| p.trim_start_matches("minecraft:") == kv)
+    };
+    let down =
+        name.ends_with("end_rod") || name.ends_with("lightning_rod") || name.ends_with("_button");
     let only = (name.ends_with("lantern") && has("hanging=1"))
         || ((name.ends_with("bell") || name.ends_with("grindstone")) && has("attachment=hanging"))
         || (down && has("facing_direction=0"))
-        || ((name.ends_with("amethyst_cluster") || name.ends_with("amethyst_bud")) && has("block_face=down"));
+        || ((name.ends_with("amethyst_cluster") || name.ends_with("amethyst_bud"))
+            && has("block_face=down"));
     match () {
         _ if only => Some(true),
         _ if name.ends_with("_chain") && has("pillar_axis=y") => Some(false),
@@ -107,12 +137,26 @@ pub(super) fn hangs(name: &str, props: &str) -> Option<bool> {
 
 /// A y chain's ends take a click at their centre (chandeliers: a chain under a chain, a lantern under it).
 pub(super) fn post(name: &str, props: &str) -> bool {
-    name.ends_with("_chain") && props.split(',').any(|p| p.trim_start_matches("minecraft:") == "pillar_axis=y")
+    name.ends_with("_chain")
+        && props
+            .split(',')
+            .any(|p| p.trim_start_matches("minecraft:") == "pillar_axis=y")
 }
 
 /// This tier decides `k` of `name` (else `rules` does).
 pub(super) fn controls(name: &str, k: &str) -> bool {
-    fixed(k).is_some() || decide(name, k, &Click { dir: Dir::Up, look: None, toward: None }, "").is_some()
+    fixed(k).is_some()
+        || decide(
+            name,
+            k,
+            &Click {
+                dir: Dir::Up,
+                look: None,
+                toward: None,
+            },
+            "",
+        )
+        .is_some()
 }
 
 /// The value the click gives `k` of `name` (`v` is the target's, for its encoding): `None` if this tier does not
@@ -125,7 +169,9 @@ pub(super) fn decide(name: &str, k: &str, c: &Click, v: &str) -> Option<Option<&
     Some(match k {
         "direction" if n.ends_with("trapdoor") => c.look.map(|d| d.opposite().weirdo()),
         "cardinal_direction" if n.ends_with("campfire") => c.look.map(Dir::word),
-        "cardinal_direction" if n.ends_with("anvil") => c.look.map(|d| d.opposite().clockwise().word()),
+        "cardinal_direction" if n.ends_with("anvil") => {
+            c.look.map(|d| d.opposite().clockwise().word())
+        }
         "facing_direction" if n == "hopper" => Some(match c.dir {
             Dir::Up | Dir::Down => Dir::Down.int(),
             d => d.opposite().int(),
@@ -137,7 +183,9 @@ pub(super) fn decide(name: &str, k: &str, c: &Click, v: &str) -> Option<Option<&
         }),
         "facing_direction" if n.ends_with("lightning_rod") => Some(c.dir.int()),
         "facing_direction" if n == "barrel" => c.toward.map(Dir::int),
-        "facing_direction" if n.ends_with("glazed_terracotta") => c.look.map(|d| d.opposite().int()),
+        "facing_direction" if n.ends_with("glazed_terracotta") => {
+            c.look.map(|d| d.opposite().int())
+        }
         "attachment" if n == "bell" || n == "grindstone" => Some(match c.dir {
             Dir::Up => "standing",
             Dir::Down => "hanging",
@@ -149,7 +197,9 @@ pub(super) fn decide(name: &str, k: &str, c: &Click, v: &str) -> Option<Option<&
             d => Some(d.quarter()),
         },
         "direction" if TOWARDS.contains(&n) => c.look.map(|d| d.opposite().quarter()),
-        "block_face" if n.starts_with("amethyst_cluster") || n.ends_with("amethyst_bud") => Some(c.dir.word()),
+        "block_face" if n.starts_with("amethyst_cluster") || n.ends_with("amethyst_bud") => {
+            Some(c.dir.word())
+        }
         "hanging" if n.ends_with("lantern") => match c.dir {
             Dir::Down => Some("1"),
             _ => Some("0"),

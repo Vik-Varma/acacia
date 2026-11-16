@@ -72,14 +72,21 @@ impl BlockModels {
     }
 
     /// Instances within `reach` blocks of `camera`, the banners swaying as at `ticks`.
-    pub fn near(&mut self, camera: DVec3, reach: f64, ticks: f64) -> impl Iterator<Item = &EntityInstance> {
+    pub fn near(
+        &mut self,
+        camera: DVec3,
+        reach: f64,
+        ticks: f64,
+    ) -> impl Iterator<Item = &EntityInstance> {
         if std::mem::take(&mut self.stale) {
             self.rebuild();
         }
         for &(index, phase) in &self.swaying {
             self.instances[index].pose.0[0].rotation[0] = sway(phase, ticks);
         }
-        self.instances.iter().filter(move |e| e.position.distance_squared(camera) < reach * reach)
+        self.instances
+            .iter()
+            .filter(move |e| e.position.distance_squared(camera) < reach * reach)
     }
 
     fn rebuild(&mut self) {
@@ -88,7 +95,12 @@ impl BlockModels {
         let mut flag = |banner: Arc<Banner>| {
             let compose = |b: &Arc<Banner>| {
                 let image = banner::compose(&self.models.root, b)?;
-                Some(Arc::new(Skin { width: image.width(), height: image.height(), rgba: image.into_raw(), mesh: None }))
+                Some(Arc::new(Skin {
+                    width: image.width(),
+                    height: image.height(),
+                    rgba: image.into_raw(),
+                    mesh: None,
+                }))
             };
             banners.entry(banner).or_insert_with_key(compose).clone()
         };
@@ -98,21 +110,58 @@ impl BlockModels {
         for (&(cx, sy, cz), models) in &self.sections {
             for (local, model) in models {
                 let pos = IVec3::new(cx, sy, cz) * 16 + IVec3::from(local.map(i32::from));
-                if let Some((text, faces)) = self.text.get(&pos.to_array()).zip(sign_text::transforms(model)) {
-                    self.signs.push(sign_text::Placed { block: pos, faces, text: text.clone() });
+                if let Some((text, faces)) = self
+                    .text
+                    .get(&pos.to_array())
+                    .zip(sign_text::transforms(model))
+                {
+                    self.signs.push(sign_text::Placed {
+                        block: pos,
+                        faces,
+                        text: text.clone(),
+                    });
                 }
-                let Some(placed) = model.place(pos, self.data.get(&pos.to_array())) else { continue };
-                let look = layers.entry((placed.geometry, placed.texture)).or_insert_with_key(|(geometry, texture)| self.models.block_layers(geometry, texture));
+                let Some(placed) = model.place(pos, self.data.get(&pos.to_array())) else {
+                    continue;
+                };
+                let look = layers
+                    .entry((placed.geometry, placed.texture))
+                    .or_insert_with_key(|(geometry, texture)| {
+                        self.models.block_layers(geometry, texture)
+                    });
                 let Some(layers) = look.clone() else { continue };
                 let skin = placed.banner.and_then(&mut flag);
                 let mut pose = Pose::default();
                 if placed.geometry.contains("banner") {
-                    self.swaying.push((self.instances.len(), pos.x * 7 + pos.y * 9 + pos.z * 13));
-                    pose.0.push(BonePose { bone: "flag".into(), rotation: [0.0; 3], position: [0.0; 3], scale: [1.0; 3] });
+                    self.swaying
+                        .push((self.instances.len(), pos.x * 7 + pos.y * 9 + pos.z * 13));
+                    pose.0.push(BonePose {
+                        bone: "flag".into(),
+                        rotation: [0.0; 3],
+                        position: [0.0; 3],
+                        scale: [1.0; 3],
+                    });
                 }
-                let instance = EntityInstance { layers, skin, position: placed.position, yaw: placed.yaw, scale: 1.0, pose, frame: None, hurt: false, white: 0.0, glint: None };
-                let with = placed.with.and_then(|(geometry, texture)| self.models.block_layers(geometry, texture));
-                self.instances.extend(with.map(|layers| EntityInstance { layers, skin: None, ..instance.clone() }));
+                let instance = EntityInstance {
+                    layers,
+                    skin,
+                    position: placed.position,
+                    yaw: placed.yaw,
+                    scale: 1.0,
+                    pose,
+                    frame: None,
+                    hurt: false,
+                    white: 0.0,
+                    glint: None,
+                };
+                let with = placed
+                    .with
+                    .and_then(|(geometry, texture)| self.models.block_layers(geometry, texture));
+                self.instances.extend(with.map(|layers| EntityInstance {
+                    layers,
+                    skin: None,
+                    ..instance.clone()
+                }));
                 self.instances.push(instance);
             }
         }
@@ -133,7 +182,11 @@ mod tests {
 
     #[test]
     fn a_banner_sways_over_a_hundred_ticks_out_of_step_with_its_neighbour() {
-        assert!((sway(0, 0.0) - 1.8).abs() < 1e-5 && (sway(0, 50.0) + 1.8).abs() < 1e-5 && (sway(0, 100.0) - 1.8).abs() < 1e-5);
+        assert!(
+            (sway(0, 0.0) - 1.8).abs() < 1e-5
+                && (sway(0, 50.0) + 1.8).abs() < 1e-5
+                && (sway(0, 100.0) - 1.8).abs() < 1e-5
+        );
         assert!((sway(7, 43.0) + 1.8).abs() < 1e-5 && (sway(-7, 7.0) - 1.8).abs() < 1e-5);
     }
 }

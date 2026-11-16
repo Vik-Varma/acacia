@@ -5,10 +5,14 @@ use bytes::Bytes;
 use crate::Error;
 
 /// Splits `msg` into framed fragments of at most `max_message` bytes each.
-pub(crate) fn fragments(msg: &[u8], max_message: usize) -> Result<impl Iterator<Item = Vec<u8>> + '_, Error> {
+pub(crate) fn fragments(
+    msg: &[u8],
+    max_message: usize,
+) -> Result<impl Iterator<Item = Vec<u8>> + '_, Error> {
     let chunk = max_message.saturating_sub(1).max(1);
     let count = msg.len().div_ceil(chunk).max(1);
-    let last = u8::try_from(count - 1).map_err(|_| Error::Framing("message needs more than 256 fragments"))?;
+    let last = u8::try_from(count - 1)
+        .map_err(|_| Error::Framing("message needs more than 256 fragments"))?;
     let mut chunks = msg.chunks(chunk);
     Ok((0..=last).rev().map(move |remaining| {
         let payload = chunks.next().unwrap_or_default();

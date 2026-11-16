@@ -2,10 +2,13 @@
 //! Bedrock's [`Sim`].
 
 use acacia_physics::constants::{
-    CLIMB_SPEED, DEFAULT_GROUND_DRAG, DEFAULT_MOVEMENT_SPEED, DEFAULT_PLAYER_HEIGHT_OFFSET, JUMP_DELAY_TICKS, NORMAL_GRAVITY,
-    NORMAL_GRAVITY_MULTIPLIER, SNEAKING_PLAYER_HEIGHT, STEP_HEIGHT,
+    CLIMB_SPEED, DEFAULT_GROUND_DRAG, DEFAULT_MOVEMENT_SPEED, DEFAULT_PLAYER_HEIGHT_OFFSET,
+    JUMP_DELAY_TICKS, NORMAL_GRAVITY, NORMAL_GRAVITY_MULTIPLIER, SNEAKING_PLAYER_HEIGHT,
+    STEP_HEIGHT,
 };
-use acacia_physics::{self as physics, Aabb, BlockPos, LiquidKind, PlayerState, TickOutput, Vec3, WorldView};
+use acacia_physics::{
+    self as physics, Aabb, BlockPos, LiquidKind, PlayerState, TickOutput, Vec3, WorldView,
+};
 
 use super::keys::KeyLatch;
 use super::sim::{Body, Envelope, Live, Motion, Sim, SimWorld, StepIn, Traits};
@@ -45,12 +48,18 @@ pub struct Rollout {
 impl Rollout {
     /// A rollout from `st` with no keys held before.
     pub fn new(st: PlayerState) -> Self {
-        Self { st, keys: KeyLatch::default(), using_item: false }
+        Self {
+            st,
+            keys: KeyLatch::default(),
+            using_item: false,
+        }
     }
 
     /// Simulates one tick with `c` held, as [`Movement::tick`] does.
     pub fn step(&mut self, c: &Controls, world: &(impl WorldView + ?Sized)) -> TickOutput {
-        let input = self.keys.advance(c, &self.st, world, self.using_item, c.sneak);
+        let input = self
+            .keys
+            .advance(c, &self.st, world, self.using_item, c.sneak);
         physics::tick(&mut self.st, &input, world)
     }
 }
@@ -122,7 +131,11 @@ impl Sim for Rollout {
 
     fn traits(&self) -> Traits {
         let e = &self.st.effects;
-        Traits { speed: self.st.movement_attribute, jump_boost: e.jump_boost.is_some(), altered_fall: e.levitation.is_some() || e.slow_falling }
+        Traits {
+            speed: self.st.movement_attribute,
+            jump_boost: e.jump_boost.is_some(),
+            altered_fall: e.levitation.is_some() || e.slow_falling,
+        }
     }
 }
 
@@ -155,7 +168,11 @@ impl Movement {
         let mut st = self.physics.clone()?;
         st.equipment = self.equipment;
         st.equipment.elytra = self.elytra;
-        Some(Rollout { st, keys: self.keys.clone(), using_item: self.using_item })
+        Some(Rollout {
+            st,
+            keys: self.keys.clone(),
+            using_item: self.using_item,
+        })
     }
 
     /// The live simulation state (`None` before movement starts).

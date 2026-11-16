@@ -2,16 +2,19 @@
 
 use acacia_client::proto::manual::shield_item_id;
 use acacia_client::proto::packets::{
-    Animate, AnimateActionId, Interact, InteractActionId, InventoryTransaction, MobEquipment, PlayerAction, PlayerAuthInputBlockActionItem,
+    Animate, AnimateActionId, Interact, InteractActionId, InventoryTransaction, MobEquipment,
+    PlayerAction, PlayerAuthInputBlockActionItem,
 };
 use acacia_client::proto::types::{
     Action, BlockCoordinates, ItemExtraDataWithBlockingTick, ItemExtraDataWithBlockingTickHasNbt,
-    ItemExtraDataWithBlockingTickNbt, ItemExtraDataWithoutBlockingTick, ItemExtraDataWithoutBlockingTickHasNbt,
-    ItemExtraDataWithoutBlockingTickNbt, ItemV4, ItemV4Extra, Transaction, TransactionLegacy, TransactionTransactionData,
+    ItemExtraDataWithBlockingTickNbt, ItemExtraDataWithoutBlockingTick,
+    ItemExtraDataWithoutBlockingTickHasNbt, ItemExtraDataWithoutBlockingTickNbt, ItemV4,
+    ItemV4Extra, Transaction, TransactionLegacy, TransactionTransactionData,
     TransactionTransactionDataItemRelease, TransactionTransactionDataItemReleaseActionType,
     TransactionTransactionDataItemUseOnEntity, TransactionTransactionDataItemUseOnEntityActionType,
-    TransactionTransactionType, TransactionUseItem, TransactionUseItemActionType, TransactionUseItemClientCooldownState,
-    TransactionUseItemClientPrediction, TransactionUseItemHand, TransactionUseItemTriggerType, Vec3f, Vec3i, WindowID,
+    TransactionTransactionType, TransactionUseItem, TransactionUseItemActionType,
+    TransactionUseItemClientCooldownState, TransactionUseItemClientPrediction,
+    TransactionUseItemHand, TransactionUseItemTriggerType, Vec3f, Vec3i, WindowID,
 };
 use acacia_physics::{BlockPos, Vec3};
 
@@ -39,16 +42,30 @@ pub fn to_wire(item: &ItemStack) -> ItemV4 {
     // A present item always carries its user-data blob, even when it has no NBT (gophertunnel `itemUserData`).
     let extra = if item.network_id == shield_item_id() {
         ItemV4Extra::ShieldItemID(Some(ItemExtraDataWithBlockingTick {
-            has_nbt: if item.nbt.is_some() { ItemExtraDataWithBlockingTickHasNbt::True } else { ItemExtraDataWithBlockingTickHasNbt::False },
-            nbt: item.nbt.clone().map(|nbt| ItemExtraDataWithBlockingTickNbt { version: 1, nbt }),
+            has_nbt: if item.nbt.is_some() {
+                ItemExtraDataWithBlockingTickHasNbt::True
+            } else {
+                ItemExtraDataWithBlockingTickHasNbt::False
+            },
+            nbt: item
+                .nbt
+                .clone()
+                .map(|nbt| ItemExtraDataWithBlockingTickNbt { version: 1, nbt }),
             can_place_on: Vec::new(),
             can_destroy: Vec::new(),
             blocking_tick: 0,
         }))
     } else {
         ItemV4Extra::Default(Some(ItemExtraDataWithoutBlockingTick {
-            has_nbt: if item.nbt.is_some() { ItemExtraDataWithoutBlockingTickHasNbt::True } else { ItemExtraDataWithoutBlockingTickHasNbt::False },
-            nbt: item.nbt.clone().map(|nbt| ItemExtraDataWithoutBlockingTickNbt { version: 1, nbt }),
+            has_nbt: if item.nbt.is_some() {
+                ItemExtraDataWithoutBlockingTickHasNbt::True
+            } else {
+                ItemExtraDataWithoutBlockingTickHasNbt::False
+            },
+            nbt: item
+                .nbt
+                .clone()
+                .map(|nbt| ItemExtraDataWithoutBlockingTickNbt { version: 1, nbt }),
             can_place_on: Vec::new(),
             can_destroy: Vec::new(),
         }))
@@ -108,14 +125,30 @@ pub(crate) fn swing(runtime_id: u64, source: Option<SwingSource>) -> Animate {
 /// The held item goes out without its stack id: Geyser reads a present id as a tagged variant and
 /// rejects the untagged form (killing the session), BDS rejects the tagged form; both accept none.
 pub(crate) fn mob_equipment(runtime_id: u64, slot: u8, item: &ItemStack) -> MobEquipment {
-    let item = ItemV4 { has_stack_id: false, stack_id: None, ..to_wire(item) };
-    MobEquipment { runtime_entity_id: runtime_id, item, slot, selected_slot: slot, window_id: WindowID::Inventory }
+    let item = ItemV4 {
+        has_stack_id: false,
+        stack_id: None,
+        ..to_wire(item)
+    };
+    MobEquipment {
+        runtime_entity_id: runtime_id,
+        item,
+        slot,
+        selected_slot: slot,
+        window_id: WindowID::Inventory,
+    }
 }
 
-fn transaction(transaction_type: TransactionTransactionType, transaction_data: TransactionTransactionData) -> InventoryTransaction {
+fn transaction(
+    transaction_type: TransactionTransactionType,
+    transaction_data: TransactionTransactionData,
+) -> InventoryTransaction {
     InventoryTransaction {
         transaction: Transaction {
-            legacy: TransactionLegacy { legacy_request_id: 0, legacy_transactions: None },
+            legacy: TransactionLegacy {
+                legacy_request_id: 0,
+                legacy_transactions: None,
+            },
             transaction_type,
             actions: Vec::new(),
             transaction_data,
@@ -133,35 +166,79 @@ pub(crate) struct Hand {
 
 impl Hand {
     pub fn main(slot: u8, item: ItemV4, eye: Vec3) -> Self {
-        Self { slot, item, eye, hand: TransactionUseItemHand::MainHand }
+        Self {
+            slot,
+            item,
+            eye,
+            hand: TransactionUseItemHand::MainHand,
+        }
     }
 
     /// The offhand stack as the held item, the selected hotbar slot unchanged (see `Bot::use_item_in`).
     pub fn offhand(slot: u8, item: ItemV4, eye: Vec3) -> Self {
-        Self { slot, item, eye, hand: TransactionUseItemHand::OffHand }
+        Self {
+            slot,
+            item,
+            eye,
+            hand: TransactionUseItemHand::OffHand,
+        }
     }
 }
 
 /// `UseItem` ClickBlock: `click` is relative to the block, `block` the clicked block's wire id.
-pub(crate) fn click_block(hand: Hand, pos: BlockPos, face: Face, click: Vec3, block: u32) -> InventoryTransaction {
-    use_item(hand, TransactionUseItemActionType::ClickBlock, block_coordinates(pos), face as u8, click, block, TransactionUseItemTriggerType::PlayerInput)
+pub(crate) fn click_block(
+    hand: Hand,
+    pos: BlockPos,
+    face: Face,
+    click: Vec3,
+    block: u32,
+) -> InventoryTransaction {
+    use_item(
+        hand,
+        TransactionUseItemActionType::ClickBlock,
+        block_coordinates(pos),
+        face as u8,
+        click,
+        block,
+        TransactionUseItemTriggerType::PlayerInput,
+    )
 }
 
 /// `UseItem` ClickAir. Boar rejects block positions over 12 blocks away unless they sum to 0.
 /// Every pressed ClickAir in the 2026-10-02 capture (rod, firework, book, empty map, after a sign,
 /// a missed entity) had trigger 0 and prediction Failure.
 pub(crate) fn click_air(hand: Hand) -> InventoryTransaction {
-    air(hand, TransactionUseItemTriggerType::UnknownValue, TransactionUseItemClientPrediction::Failure)
+    air(
+        hand,
+        TransactionUseItemTriggerType::UnknownValue,
+        TransactionUseItemClientPrediction::Failure,
+    )
 }
 
 /// The ClickAir the client sends when a held use runs out (food eaten, potion drunk). Its trigger
 /// is the simulation tick, not the player's press (gophertunnel `TriggerTypeSimulationTick`).
 pub(crate) fn finish_use(hand: Hand) -> InventoryTransaction {
-    air(hand, TransactionUseItemTriggerType::SimulationTick, TransactionUseItemClientPrediction::Success)
+    air(
+        hand,
+        TransactionUseItemTriggerType::SimulationTick,
+        TransactionUseItemClientPrediction::Success,
+    )
 }
 
-fn air(hand: Hand, trigger: TransactionUseItemTriggerType, prediction: TransactionUseItemClientPrediction) -> InventoryTransaction {
-    let mut packet = use_item(hand, TransactionUseItemActionType::ClickAir, block_coordinates([0, 0, 0]), NO_FACE, [0.0; 3], 0, trigger);
+fn air(
+    hand: Hand,
+    trigger: TransactionUseItemTriggerType,
+    prediction: TransactionUseItemClientPrediction,
+) -> InventoryTransaction {
+    let mut packet = use_item(
+        hand,
+        TransactionUseItemActionType::ClickAir,
+        block_coordinates([0, 0, 0]),
+        NO_FACE,
+        [0.0; 3],
+        0,
+        trigger,
+    );
     if let TransactionTransactionData::ItemUse(u) = &mut packet.transaction.transaction_data {
         u.client_prediction = prediction;
     }
@@ -169,18 +246,40 @@ fn air(hand: Hand, trigger: TransactionUseItemTriggerType, prediction: Transacti
 }
 
 /// `PlayerAction` StartItemUseOn / StopItemUseOn around a block click.
-pub(crate) fn item_use_on(runtime_id: u64, action: Action, pos: BlockPos, result: BlockPos, face: i32) -> PlayerAction {
-    PlayerAction { runtime_entity_id: runtime_id, action, position: block_coordinates(pos), result_position: block_coordinates(result), face }
+pub(crate) fn item_use_on(
+    runtime_id: u64,
+    action: Action,
+    pos: BlockPos,
+    result: BlockPos,
+    face: i32,
+) -> PlayerAction {
+    PlayerAction {
+        runtime_entity_id: runtime_id,
+        action,
+        position: block_coordinates(pos),
+        result_position: block_coordinates(result),
+        face,
+    }
 }
 
 /// `Interact` MouseOverEntity with no target: the cursor over nothing.
 pub(crate) fn mouse_over_nothing() -> Interact {
-    Interact { action_id: InteractActionId::MouseOverEntity, target_entity_id: 0, has_position: false, position: None }
+    Interact {
+        action_id: InteractActionId::MouseOverEntity,
+        target_entity_id: 0,
+        has_position: false,
+        position: None,
+    }
 }
 
 /// `Interact` MouseOverEntity: the crosshair on entity `runtime_id` at world point `hit`.
 pub(crate) fn mouse_over(runtime_id: u64, hit: Vec3) -> Interact {
-    Interact { action_id: InteractActionId::MouseOverEntity, target_entity_id: runtime_id, has_position: true, position: Some(vec3f(hit)) }
+    Interact {
+        action_id: InteractActionId::MouseOverEntity,
+        target_entity_id: runtime_id,
+        has_position: true,
+        position: Some(vec3f(hit)),
+    }
 }
 
 fn use_item(
@@ -212,7 +311,12 @@ fn use_item(
 }
 
 /// `UseItemOnEntity`; `click` is the world position hit (Geyser subtracts the entity position).
-pub(crate) fn use_on_entity(hand: Hand, runtime_id: u64, attack: bool, click: Vec3) -> InventoryTransaction {
+pub(crate) fn use_on_entity(
+    hand: Hand,
+    runtime_id: u64,
+    attack: bool,
+    click: Vec3,
+) -> InventoryTransaction {
     let action_type = if attack {
         TransactionTransactionDataItemUseOnEntityActionType::Attack
     } else {
@@ -244,8 +348,16 @@ pub(crate) fn release(hand: Hand) -> InventoryTransaction {
     )
 }
 
-pub(crate) fn block_action(action: Action, [x, y, z]: BlockPos, face: Face) -> PlayerAuthInputBlockActionItem {
-    PlayerAuthInputBlockActionItem { action, position: Vec3i { x, y, z }, face: i32::from(face as u8) }
+pub(crate) fn block_action(
+    action: Action,
+    [x, y, z]: BlockPos,
+    face: Face,
+) -> PlayerAuthInputBlockActionItem {
+    PlayerAuthInputBlockActionItem {
+        action,
+        position: Vec3i { x, y, z },
+        face: i32::from(face as u8),
+    }
 }
 
 /// Tick `tick` of mining `pos` for `ticks` ticks: `StartBreak`, then `ContinueBreak`; the last tick adds
@@ -253,8 +365,22 @@ pub(crate) fn block_action(action: Action, [x, y, z]: BlockPos, face: Face) -> P
 /// `AbortBreak`. Without the Abort, BDS 1.26.52 stays destroying the cell and mines out whatever is placed there
 /// next (live 2026-10-18: planks gone every 3.3 s, their break time without an axe); `StopBreak` does not end it
 /// (junk scene: Stop left the cell mined out, Abort kept it).
-pub(crate) fn break_step(first: bool, last: bool, pos: BlockPos, face: Face, creative: bool) -> Vec<PlayerAuthInputBlockActionItem> {
-    let mut out = vec![block_action(if first { Action::StartBreak } else { Action::ContinueBreak }, pos, face)];
+pub(crate) fn break_step(
+    first: bool,
+    last: bool,
+    pos: BlockPos,
+    face: Face,
+    creative: bool,
+) -> Vec<PlayerAuthInputBlockActionItem> {
+    let mut out = vec![block_action(
+        if first {
+            Action::StartBreak
+        } else {
+            Action::ContinueBreak
+        },
+        pos,
+        face,
+    )];
     if last {
         if !creative {
             out.push(block_action(Action::PredictBreak, pos, face));

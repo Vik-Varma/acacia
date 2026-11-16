@@ -103,7 +103,16 @@ mod tests {
     use super::*;
 
     fn packet(event_id: MobEffectEventId, effect_id: i32, amplifier: i32) -> MobEffect {
-        MobEffect { runtime_entity_id: 1, event_id, effect_id, amplifier, particles: true, duration: 200, tick: 7, ambient: false }
+        MobEffect {
+            runtime_entity_id: 1,
+            event_id,
+            effect_id,
+            amplifier,
+            particles: true,
+            duration: 200,
+            tick: 7,
+            ambient: false,
+        }
     }
 
     #[test]
@@ -111,7 +120,10 @@ mod tests {
         let mut e = Effects::default();
         e.apply(&packet(MobEffectEventId::Add, effect::SPEED, 0));
         e.apply(&packet(MobEffectEventId::Add, effect::JUMP_BOOST, 1));
-        assert_eq!((e.level(effect::SPEED), e.level(effect::JUMP_BOOST)), (1, 2));
+        assert_eq!(
+            (e.level(effect::SPEED), e.level(effect::JUMP_BOOST)),
+            (1, 2)
+        );
         e.apply(&packet(MobEffectEventId::Update, effect::SPEED, 2));
         assert_eq!(e.level(effect::SPEED), 3);
         assert_eq!(e.iter().count(), 2, "an update replaces, never duplicates");

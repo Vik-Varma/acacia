@@ -12,7 +12,9 @@ use crate::entity::bake::Mesh;
 /// Java leaves a quad untinted when its index is past the layer's tints.
 fn multiplier(layer: &Layer, tint: i32, color: i32, dye: Option<[u8; 3]>) -> u32 {
     let tint = match usize::try_from(tint) {
-        Ok(0) if dye.is_some() => dye.map(|[r, g, b]| 0xFF00_0000 | u32::from_be_bytes([0, r, g, b])),
+        Ok(0) if dye.is_some() => {
+            dye.map(|[r, g, b]| 0xFF00_0000 | u32::from_be_bytes([0, r, g, b]))
+        }
         Ok(index) => layer.tints.get(index).map(|&t| t as u32),
         Err(_) => None,
     };
@@ -46,14 +48,32 @@ pub(super) fn build(items: &JavaItems, layers: &[Layer], dye: Option<[u8; 3]>) -
     for layer in layers {
         for quad in items.quads(layer) {
             let argb = multiplier(layer, quad.tint, quad.color, dye);
-            let index = match regions.iter().position(|(r, _)| r.image == quad.image && r.argb == argb) {
+            let index = match regions
+                .iter()
+                .position(|(r, _)| r.image == quad.image && r.argb == argb)
+            {
                 Some(index) => index,
                 None => {
-                    let image = images.entry(quad.image.clone()).or_insert_with(|| image::open(items.image_path(&quad.image)).ok().map(|i| i.into_rgba8()));
-                    let Some(image) = image.as_ref() else { continue };
+                    let image = images.entry(quad.image.clone()).or_insert_with(|| {
+                        image::open(items.image_path(&quad.image))
+                            .ok()
+                            .map(|i| i.into_rgba8())
+                    });
+                    let Some(image) = image.as_ref() else {
+                        continue;
+                    };
                     let pixels = tinted(image, argb);
                     let y = regions.last().map_or(0, |(r, _)| r.y + r.height);
-                    regions.push((Region { image: quad.image.clone(), argb, y, width: pixels.width(), height: pixels.height() }, pixels));
+                    regions.push((
+                        Region {
+                            image: quad.image.clone(),
+                            argb,
+                            y,
+                            width: pixels.width(),
+                            height: pixels.height(),
+                        },
+                        pixels,
+                    ));
                     regions.len() - 1
                 }
             };
@@ -75,7 +95,10 @@ pub(super) fn build(items: &JavaItems, layers: &[Layer], dye: Option<[u8; 3]>) -
         let region = &regions[index].0;
         let uv = |corner: usize| {
             let [u, v] = [quad.uv[corner * 2], quad.uv[corner * 2 + 1]];
-            [u * region.width as f32 / width as f32, (region.y as f32 + v * region.height as f32) / height as f32]
+            [
+                u * region.width as f32 / width as f32,
+                (region.y as f32 + v * region.height as f32) / height as f32,
+            ]
         };
         vertices.extend([0, 1, 2, 0, 2, 3].map(|corner| vertex(quad, corner, uv(corner))));
         for corner in 0..4 {
@@ -83,7 +106,12 @@ pub(super) fn build(items: &JavaItems, layers: &[Layer], dye: Option<[u8; 3]>) -
             hi = hi.max(quad.pos[corner * 3 + 2]);
         }
     }
-    let skin = Skin { width, height, rgba: strip.into_raw(), mesh: Some(Mesh::one_bone(vertices)) };
+    let skin = Skin {
+        width,
+        height,
+        rgba: strip.into_raw(),
+        mesh: Some(Mesh::one_bone(vertices)),
+    };
     Some(ItemMesh {
         skin,
         quad_regions: quads.iter().map(|&(_, index)| index).collect(),

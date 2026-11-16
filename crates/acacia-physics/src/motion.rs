@@ -43,7 +43,11 @@ pub(crate) fn attempt_knockback(st: &mut PlayerState) {
 }
 
 pub(crate) fn effective_gravity(st: &PlayerState, v: Vec3) -> f32 {
-    if st.slow_falling && v[1] < 0.0 { SLOW_FALLING_GRAVITY } else { st.gravity }
+    if st.slow_falling && v[1] < 0.0 {
+        SLOW_FALLING_GRAVITY
+    } else {
+        st.gravity
+    }
 }
 
 pub(crate) fn update_fall_distance(st: &mut PlayerState, old_y: f32) {
@@ -61,9 +65,16 @@ pub(crate) fn update_fall_distance(st: &mut PlayerState, old_y: f32) {
 /// Whether the box lies over the supporting block's collision shape (`boxes`, block-local) in x and z (BDS;
 /// honey's shape is inset 1/16); the look-back lookup can return a block the player has already walked off.
 pub(crate) fn over_supporting_block(st: &PlayerState, boxes: &[Aabb]) -> bool {
-    let (Some(p), bb) = (st.supporting_block, st.bounding_box()) else { return false };
+    let (Some(p), bb) = (st.supporting_block, st.bounding_box()) else {
+        return false;
+    };
     let (x, z) = (p[0] as f32, p[2] as f32);
-    boxes.iter().any(|b| bb.max[0] > x + b.min[0] && bb.min[0] < x + b.max[0] && bb.max[2] > z + b.min[2] && bb.min[2] < z + b.max[2])
+    boxes.iter().any(|b| {
+        bb.max[0] > x + b.min[0]
+            && bb.min[0] < x + b.max[0]
+            && bb.max[2] > z + b.min[2]
+            && bb.min[2] < z + b.max[2]
+    })
 }
 
 /// Slime and honey slow the walk by the vertical speed at the end of the tick (BDS step-on: landing ticks too,
@@ -103,7 +114,13 @@ fn land_on_block(st: &mut PlayerState, old: Vec3, under: &BlockPhysics, gravity:
     st.set_vel(v);
 }
 
-pub(crate) fn set_post_collision_motion(st: &mut PlayerState, old: Vec3, old_on_ground: bool, under: &BlockPhysics, gravity: f32) {
+pub(crate) fn set_post_collision_motion(
+    st: &mut PlayerState,
+    old: Vec3,
+    old_on_ground: bool,
+    under: &BlockPhysics,
+    gravity: f32,
+) {
     if !old_on_ground && st.collide_y {
         land_on_block(st, old, under, gravity);
     } else if st.collide_y {
@@ -137,17 +154,27 @@ pub fn steady_glide_look(yaw: f32, pitch: f32) -> (f32, f32) {
     };
     let pitch_indices = |p: f32| {
         let b = p * radians;
-        [-b * 10430.378, -b * 10430.378 + 16384.0, b * 10430.378, b * 10430.378 + 16384.0]
+        [
+            -b * 10430.378,
+            -b * 10430.378 + 16384.0,
+            b * 10430.378,
+            b * 10430.378 + 16384.0,
+        ]
     };
-    (steady_angle(yaw, yaw_indices), steady_angle(pitch, pitch_indices))
+    (
+        steady_angle(yaw, yaw_indices),
+        steady_angle(pitch, pitch_indices),
+    )
 }
 
 fn steady_angle<const N: usize>(angle: f32, indices: impl Fn(f32) -> [f32; N]) -> f32 {
     let step = 1.0 / (10430.378 * (PI32 / 180.0));
-    let clear = |a: f32| indices(a).iter().all(|i| {
-        let f = i - i.floor();
-        f.min(1.0 - f) >= GLIDE_INDEX_MARGIN
-    });
+    let clear = |a: f32| {
+        indices(a).iter().all(|i| {
+            let f = i - i.floor();
+            f.min(1.0 - f) >= GLIDE_INDEX_MARGIN
+        })
+    };
     (0..=25)
         .flat_map(|k| [k as f32 * 0.02 * step, -(k as f32) * 0.02 * step])
         .map(|d| angle + d)
@@ -167,7 +194,11 @@ pub(crate) fn simulate_glide(st: &mut PlayerState) {
     let yaw_sin = mc_sin(-yaw - PI32);
     // The table index of cos(-p) can differ from cos(p)'s by one step.
     let look_pitch_cos = mc_cos(-pitch);
-    let look = [yaw_sin * -look_pitch_cos, mc_sin(-pitch), yaw_cos * -look_pitch_cos];
+    let look = [
+        yaw_sin * -look_pitch_cos,
+        mc_sin(-pitch),
+        yaw_cos * -look_pitch_cos,
+    ];
     let pitch_cos = mc_cos(pitch);
 
     let mut v = st.vel;
@@ -175,7 +206,11 @@ pub(crate) fn simulate_glide(st: &mut PlayerState) {
     let look_hz_sq = look[0] * look[0] + look[2] * look[2];
     let look_hz = look_hz_sq.sqrt();
     let sqr_pitch_cos = pitch_cos * pitch_cos;
-    let gravity = if st.slow_falling { SLOW_FALLING_GRAVITY } else { st.gravity };
+    let gravity = if st.slow_falling {
+        SLOW_FALLING_GRAVITY
+    } else {
+        st.gravity
+    };
     v[1] -= (0.75 * sqr_pitch_cos + -1.0) * -gravity;
     if v[1] < 0.0 && look_hz_sq > 0.0 {
         let y_accel = v[1] * -0.1 * sqr_pitch_cos;

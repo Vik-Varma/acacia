@@ -33,7 +33,10 @@ pub(super) const ENR: u8 = 24;
 /// `UBiDiProps.getClass` (`UCharacterDirection` numbering, which `BidiClass` shares).
 pub fn class(c: u32) -> u8 {
     let class = CodePointMapData::<BidiClass>::new().get32(c);
-    CLASSES.iter().position(|&k| k == class).map_or(ON, |i| i as u8)
+    CLASSES
+        .iter()
+        .position(|&k| k == class)
+        .map_or(ON, |i| i as u8)
 }
 
 /// `BidiClass` values in `UCharacterDirection` order.
@@ -65,12 +68,18 @@ const CLASSES: [BidiClass; 23] = [
 
 /// `UCharacter.getMirror`: the mirroring glyph, or `c` itself.
 pub fn mirror(c: u32) -> u32 {
-    CodePointMapData::<BidiMirroringGlyph>::new().get32(c).mirroring_glyph.map_or(c, u32::from)
+    CodePointMapData::<BidiMirroringGlyph>::new()
+        .get32(c)
+        .mirroring_glyph
+        .map_or(c, u32::from)
 }
 
 /// `Bidi_Paired_Bracket_Type` as ICU numbers it (0 none, 1 open, 2 close).
 pub fn bracket_type(c: u32) -> u8 {
-    match CodePointMapData::<BidiMirroringGlyph>::new().get32(c).paired_bracket_type {
+    match CodePointMapData::<BidiMirroringGlyph>::new()
+        .get32(c)
+        .paired_bracket_type
+    {
         BidiPairedBracketType::Open => 1,
         BidiPairedBracketType::Close => 2,
         _ => 0,
@@ -83,14 +92,17 @@ pub(super) fn closing_bracket(c: u16) -> Option<u16> {
     if g.paired_bracket_type != BidiPairedBracketType::Open {
         return None;
     }
-    g.mirroring_glyph.map(|m| m as u32 as u16).filter(|&m| m != c)
+    g.mirroring_glyph
+        .map(|m| m as u32 as u16)
+        .filter(|&m| m != c)
 }
 
 pub(super) const fn flag(d: u8) -> u32 {
     1 << d
 }
 
-pub(super) const MASK_LTR: u32 = flag(L) | flag(EN) | flag(ENL) | flag(ENR) | flag(AN) | flag(LRE) | flag(LRO) | flag(LRI);
+pub(super) const MASK_LTR: u32 =
+    flag(L) | flag(EN) | flag(ENL) | flag(ENR) | flag(AN) | flag(LRE) | flag(LRO) | flag(LRI);
 pub(super) const MASK_RTL: u32 = flag(R) | flag(AL) | flag(RLE) | flag(RLO) | flag(RLI);
 pub(super) const MASK_EXPLICIT: u32 = flag(LRE) | flag(LRO) | flag(RLE) | flag(RLO) | flag(PDF);
 pub(super) const MASK_BN_EXPLICIT: u32 = flag(BN) | MASK_EXPLICIT;

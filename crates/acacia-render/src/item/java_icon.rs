@@ -19,7 +19,11 @@ fn lights(block_light: bool) -> [Vec3; 2] {
     let flat = yxz(-std::f32::consts::PI / 8.0, std::f32::consts::PI * 0.75);
     let flip = Mat3::from_diagonal(Vec3::new(1.0, -1.0, 1.0));
     // ITEMS_3D's own y flip cancels the GUI's.
-    let pose = if block_light { yxz(1.082_104_1, 3.237_585_8) * flat } else { flip * flat };
+    let pose = if block_light {
+        yxz(1.082_104_1, 3.237_585_8) * flat
+    } else {
+        flip * flat
+    };
     [pose * d0, pose * d1]
 }
 
@@ -29,19 +33,34 @@ fn brightness(lights: &[Vec3; 2], normal: Vec3) -> f32 {
 }
 
 /// The Bedrock item's icon; `trim` as [`JavaItems::stack_name`], `dye` as [`JavaItems::mesh`] take them.
-pub fn icon(items: &JavaItems, bedrock: &str, aux: u32, trim: Option<&str>, dye: Option<[u8; 3]>) -> Option<RgbaImage> {
+pub fn icon(
+    items: &JavaItems,
+    bedrock: &str,
+    aux: u32,
+    trim: Option<&str>,
+    dye: Option<[u8; 3]>,
+) -> Option<RgbaImage> {
     let name = &items.stack_name(bedrock, aux, trim);
     let block_light = items.block_light(name, context::GUI)?;
     let mesh = items.mesh(name, context::GUI, dye)?;
     let frame = items.display(name, context::GUI)?.mesh_frame();
-    let size = if mesh.solid { SOLID_SIZE } else { mesh.regions.iter().map(|r| r.width).max()?.max(16) };
+    let size = if mesh.solid {
+        SOLID_SIZE
+    } else {
+        mesh.regions.iter().map(|r| r.width).max()?.max(16)
+    };
     let lights = lights(block_light);
     let skin = &mesh.skin;
     let texel = |uv: Vec2| {
         let x = ((uv.x * skin.width as f32) as u32).min(skin.width - 1);
         let y = ((uv.y * skin.height as f32) as u32).min(skin.height - 1);
         let i = ((y * skin.width + x) * 4) as usize;
-        [skin.rgba[i], skin.rgba[i + 1], skin.rgba[i + 2], skin.rgba[i + 3]]
+        [
+            skin.rgba[i],
+            skin.rgba[i + 1],
+            skin.rgba[i + 2],
+            skin.rgba[i + 3],
+        ]
     };
     let mut out = RgbaImage::new(size, size);
     let mut depth = vec![f32::MIN; (size * size) as usize];
@@ -49,9 +68,15 @@ pub fn icon(items: &JavaItems, bedrock: &str, aux: u32, trim: Option<&str>, dye:
     for triangle in skin.mesh.as_ref()?.vertices.as_chunks::<3>().0 {
         let points = [&triangle[0], &triangle[1], &triangle[2]].map(|v| {
             let p = frame.transform_point3(Vec3::from(v.position));
-            (Vec2::new(half + p.x * size as f32, half - p.y * size as f32), p.z, Vec2::from(v.uv))
+            (
+                Vec2::new(half + p.x * size as f32, half - p.y * size as f32),
+                p.z,
+                Vec2::from(v.uv),
+            )
         });
-        let normal = frame.transform_vector3(Vec3::from(triangle[0].normal)).normalize_or_zero();
+        let normal = frame
+            .transform_vector3(Vec3::from(triangle[0].normal))
+            .normalize_or_zero();
         let shade = brightness(&lights, normal);
         fill(&points, size, |x, y, z, uv| {
             let at = (y * size + x) as usize;
@@ -66,7 +91,9 @@ pub fn icon(items: &JavaItems, bedrock: &str, aux: u32, trim: Option<&str>, dye:
             for (dst, src) in over.0.iter_mut().zip([lit(r), lit(g), lit(b)]) {
                 *dst = (f32::from(src) * alpha + f32::from(*dst) * (1.0 - alpha)).round() as u8;
             }
-            over.0[3] = (f32::from(a) + f32::from(over.0[3]) * (1.0 - alpha)).round().min(255.0) as u8;
+            over.0[3] = (f32::from(a) + f32::from(over.0[3]) * (1.0 - alpha))
+                .round()
+                .min(255.0) as u8;
         });
     }
     Some(out)
@@ -84,12 +111,20 @@ fn fill(points: &[(Vec2, f32, Vec2); 3], size: u32, mut pixel: impl FnMut(u32, u
     for y in lo.y.floor() as u32..hi.y.ceil() as u32 {
         for x in lo.x.floor() as u32..hi.x.ceil() as u32 {
             let p = Vec2::new(x as f32 + 0.5, y as f32 + 0.5);
-            let (wa, wb) = ((b - p).perp_dot(c - p) / area, (c - p).perp_dot(a - p) / area);
+            let (wa, wb) = (
+                (b - p).perp_dot(c - p) / area,
+                (c - p).perp_dot(a - p) / area,
+            );
             let wc = 1.0 - wa - wb;
             if wa < -1e-6 || wb < -1e-6 || wc < -1e-6 {
                 continue;
             }
-            pixel(x, y, wa * za + wb * zb + wc * zc, ua * wa + ub * wb + uc * wc);
+            pixel(
+                x,
+                y,
+                wa * za + wb * zb + wc * zc,
+                ua * wa + ub * wb + uc * wc,
+            );
         }
     }
 }
@@ -101,7 +136,11 @@ mod tests {
     #[test]
     fn a_flat_item_faces_its_lights() {
         // A generated item's front, after the GUI's identity display, is lit fully.
-        assert!(brightness(&lights(false), Vec3::Z) > 0.999, "{}", brightness(&lights(false), Vec3::Z));
+        assert!(
+            brightness(&lights(false), Vec3::Z) > 0.999,
+            "{}",
+            brightness(&lights(false), Vec3::Z)
+        );
     }
 
     #[test]
@@ -110,15 +149,22 @@ mod tests {
         let turn = Mat3::from_euler(EulerRot::XYZ, 30f32.to_radians(), 225f32.to_radians(), 0.0);
         let lights = lights(true);
         // The faces it shows: up, east (left on screen) and north (right). Values from JOML's matrices.
-        let [top, left, right] = [Vec3::Y, Vec3::X, Vec3::NEG_Z].map(|n| brightness(&lights, turn * n));
-        assert!((top - 1.0).abs() < 1e-3 && (left - 0.651).abs() < 2e-3 && (right - 0.4).abs() < 2e-3, "{top} {left} {right}");
+        let [top, left, right] =
+            [Vec3::Y, Vec3::X, Vec3::NEG_Z].map(|n| brightness(&lights, turn * n));
+        assert!(
+            (top - 1.0).abs() < 1e-3 && (left - 0.651).abs() < 2e-3 && (right - 0.4).abs() < 2e-3,
+            "{top} {left} {right}"
+        );
     }
 
     #[test]
     fn fill_covers_a_square_exactly() {
         let uv = Vec2::ZERO;
         let mut count = 0;
-        for tri in [[Vec2::ZERO, Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0)], [Vec2::ZERO, Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)]] {
+        for tri in [
+            [Vec2::ZERO, Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0)],
+            [Vec2::ZERO, Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)],
+        ] {
             fill(&tri.map(|p| (p, 0.0, uv)), 8, |_, _, _, _| count += 1);
         }
         // Pixel centres on the shared diagonal fall in both triangles.

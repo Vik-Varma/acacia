@@ -46,7 +46,17 @@ pub struct BoatState {
 
 impl BoatState {
     pub fn new(pos: Vec3, yaw: f32) -> Self {
-        BoatState { pos, vel: [0.0; 3], yaw, yaw_vel: 0.0, on_ground: false, age: 0, strokes: [None; 2], wave: 0.0, faces: None }
+        BoatState {
+            pos,
+            vel: [0.0; 3],
+            yaw,
+            yaw_vel: 0.0,
+            on_ground: false,
+            age: 0,
+            strokes: [None; 2],
+            wave: 0.0,
+            faces: None,
+        }
     }
 
     /// BDS moves the box and never rebuilds it, and x and z are its centre, which drifts an ulp from a box built
@@ -57,7 +67,12 @@ impl BoatState {
         let bottom = y - HEIGHT_OFFSET;
         let [x0, x1, z0, z1] = match self.faces {
             Some((faces, at)) if at == [x, z] => faces,
-            _ => [x - HALF_WIDTH, x + HALF_WIDTH, z - HALF_WIDTH, z + HALF_WIDTH],
+            _ => [
+                x - HALF_WIDTH,
+                x + HALF_WIDTH,
+                z - HALF_WIDTH,
+                z + HALF_WIDTH,
+            ],
         };
         Aabb::new(x0, bottom, z0, x1, bottom + HEIGHT, z1)
     }
@@ -68,11 +83,18 @@ pub fn boat_tick<W: WorldView + ?Sized>(st: &mut BoatState, keys: [f32; 2], worl
     let [left, right] = paddles(keys);
     let age = st.age;
     st.age = age.wrapping_add(1);
-    let forces = [stroke(left, &mut st.strokes[0], age) * THRUST, stroke(right, &mut st.strokes[1], age) * THRUST];
+    let forces = [
+        stroke(left, &mut st.strokes[0], age) * THRUST,
+        stroke(right, &mut st.strokes[1], age) * THRUST,
+    ];
     let friction = friction(st, world);
     let [mut vx, vy, mut vz] = st.vel;
     let (fr, mut forward, mut torque) = match friction {
-        Some(fr) => (fr, forces[0] + forces[1], forces[0] * 3.0 + forces[1] * -3.0),
+        Some(fr) => (
+            fr,
+            forces[0] + forces[1],
+            forces[0] * 3.0 + forces[1] * -3.0,
+        ),
         // In the air nothing slows the boat and the paddles find no hold.
         None => (1.0, 0.0, 0.0),
     };
@@ -94,12 +116,21 @@ pub fn boat_tick<W: WorldView + ?Sized>(st: &mut BoatState, keys: [f32; 2], worl
 fn paddles([strafe, forward]: [f32; 2]) -> [f32; 2] {
     // The move vector is normalised, but a held forward key counts in full (W+A, live 2026-10-09).
     let length = (strafe * strafe + forward * forward).sqrt().max(1.0);
-    let (mut x, y) = (strafe / length, if forward > 0.0 { 1.0 } else { forward / length });
+    let (mut x, y) = (
+        strafe / length,
+        if forward > 0.0 { 1.0 } else { forward / length },
+    );
     let mut pull = (y * y + x * x).sqrt();
     if y < 0.0 {
         (x, pull) = (-x, pull * -0.15);
     }
-    let left = if x > 1.0 { 0.0 } else if x > 0.0 { 1.0 - x } else { 1.0 };
+    let left = if x > 1.0 {
+        0.0
+    } else if x > 0.0 {
+        1.0 - x
+    } else {
+        1.0
+    };
     let right = if x <= 0.0 { x.max(-1.0) + 1.0 } else { 1.0 };
     [left * pull, right * pull]
 }
@@ -113,7 +144,9 @@ fn stroke(pull: f32, start: &mut Option<u32>, age: u32) -> f32 {
         return 0.0;
     }
     match start {
-        Some(s) if age.wrapping_sub(*s) < u32::from(STROKE_TICKS) => pull.signum() * ((3.0 * pull).abs() - 0.1).max(0.0),
+        Some(s) if age.wrapping_sub(*s) < u32::from(STROKE_TICKS) => {
+            pull.signum() * ((3.0 * pull).abs() - 0.1).max(0.0)
+        }
         _ => {
             *start = Some(age);
             3.0 * pull
@@ -133,9 +166,15 @@ fn cell(pos: Vec3) -> [i32; 3] {
 fn at_surface<W: WorldView + ?Sized>(pos: Vec3, world: &W) -> bool {
     let [x, y, z] = cell(pos);
     let here = world.block([x, y, z]);
-    let Some(liquid) = here.liquid.filter(|_| water(&here)) else { return false };
+    let Some(liquid) = here.liquid.filter(|_| water(&here)) else {
+        return false;
+    };
     // Bedrock's `liquid_depth`: 0 a source, 8 and up falling.
-    let depth = if liquid.falling { 8 } else { 8 - i32::from(liquid.depth) };
+    let depth = if liquid.falling {
+        8
+    } else {
+        8 - i32::from(liquid.depth)
+    };
     let top = (y + 1) as f32 - (if depth < 8 { (depth + 1) as f32 } else { 1.0 } / 9.0 - 0.1111111);
     pos[1] < top && !water(&world.block([x, y + 1, z]))
 }
@@ -155,7 +194,11 @@ fn friction<W: WorldView + ?Sized>(st: &BoatState, world: &W) -> Option<f32> {
     if water(&here) || (here.air && !st.on_ground && water(&below)) {
         return Some(WATER_FRICTION);
     }
-    st.on_ground.then_some(if here.air { below.friction } else { here.friction })
+    st.on_ground.then_some(if here.air {
+        below.friction
+    } else {
+        here.friction
+    })
 }
 
 /// Moves by `vel` against the blocks, Y then X then Z, and returns the motion that was left: what was moved,
@@ -173,8 +216,15 @@ fn slide<W: WorldView + ?Sized>(st: &mut BoatState, vel: Vec3, world: &W) -> Vec
         moved[axis] = step[axis];
     }
     st.on_ground = vel[1] < 0.0 && moved[1] != vel[1];
-    st.pos = [(bb.min[0] + bb.max[0]) * 0.5, st.pos[1] + moved[1], (bb.min[2] + bb.max[2]) * 0.5];
-    st.faces = Some(([bb.min[0], bb.max[0], bb.min[2], bb.max[2]], [st.pos[0], st.pos[2]]));
+    st.pos = [
+        (bb.min[0] + bb.max[0]) * 0.5,
+        st.pos[1] + moved[1],
+        (bb.min[2] + bb.max[2]) * 0.5,
+    ];
+    st.faces = Some((
+        [bb.min[0], bb.max[0], bb.min[2], bb.max[2]],
+        [st.pos[0], st.pos[2]],
+    ));
     for axis in [0, 2] {
         if moved[axis] != vel[axis] {
             moved[axis] = 0.0;

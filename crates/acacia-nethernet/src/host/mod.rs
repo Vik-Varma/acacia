@@ -44,7 +44,11 @@ pub struct HostConfig {
 
 impl Default for HostConfig {
     fn default() -> Self {
-        Self { max_peers: 1024, handshake_timeout: Duration::from_secs(15), ice: IceConfig::default() }
+        Self {
+            max_peers: 1024,
+            handshake_timeout: Duration::from_secs(15),
+            ice: IceConfig::default(),
+        }
     }
 }
 
@@ -135,9 +139,19 @@ impl Host {
             }
             Some(Claim::Relayed { relay, peer, data }) => {
                 self.drain_gather();
-                (self.route(now, Some(relay), peer, &data), Some(relay), peer, std::borrow::Cow::Owned(data))
+                (
+                    self.route(now, Some(relay), peer, &data),
+                    Some(relay),
+                    peer,
+                    std::borrow::Cow::Owned(data),
+                )
             }
-            None => (self.route(now, None, source, data), None, source, std::borrow::Cow::Borrowed(data)),
+            None => (
+                self.route(now, None, source, data),
+                None,
+                source,
+                std::borrow::Cow::Borrowed(data),
+            ),
         };
         let Some(id) = id else { return via.is_some() };
         if let Some(peer) = self.peers.get_mut(&id) {
@@ -158,11 +172,19 @@ impl Host {
         let due: Vec<PeerId> = self
             .peers
             .iter()
-            .filter(|(_, p)| p.conn.poll_timeout().into_iter().chain(p.open_by).any(|t| t <= now))
+            .filter(|(_, p)| {
+                p.conn
+                    .poll_timeout()
+                    .into_iter()
+                    .chain(p.open_by)
+                    .any(|t| t <= now)
+            })
             .map(|(&id, _)| id)
             .collect();
         for id in due {
-            let Some(peer) = self.peers.get_mut(&id) else { continue };
+            let Some(peer) = self.peers.get_mut(&id) else {
+                continue;
+            };
             if peer.open_by.is_some_and(|t| t <= now) {
                 tracing::debug!(?id, "nethernet handshake timed out");
                 peer.conn.close(now);
@@ -174,7 +196,10 @@ impl Host {
     }
 
     pub fn poll_timeout(&self) -> Option<Instant> {
-        let peers = self.peers.values().flat_map(|p| p.conn.poll_timeout().into_iter().chain(p.open_by));
+        let peers = self
+            .peers
+            .values()
+            .flat_map(|p| p.conn.poll_timeout().into_iter().chain(p.open_by));
         peers.chain(self.gather.poll_timeout()).min()
     }
 
@@ -201,7 +226,11 @@ impl Host {
 
     /// The first address the peer's datagrams came from, directly or through a relay.
     pub fn remote_addr(&self, peer: PeerId) -> Option<SocketAddr> {
-        self.peers.get(&peer)?.addrs.first().map(|(_, source)| *source)
+        self.peers
+            .get(&peer)?
+            .addrs
+            .first()
+            .map(|(_, source)| *source)
     }
 
     /// Flushes what is queued and closes; [`HostEvent::Closed`] follows.
@@ -213,19 +242,23 @@ impl Host {
     }
 
     fn drain_gather(&mut self) {
-        self.transmits.extend(std::iter::from_fn(|| self.gather.poll_transmit()));
+        self.transmits
+            .extend(std::iter::from_fn(|| self.gather.poll_transmit()));
     }
 
     /// Moves a connection's output into the host's queues (relayed sends wrapped for their TURN
     /// server), and forgets it once it has closed.
     fn pump(&mut self, id: PeerId, now: Instant) {
-        let Some(peer) = self.peers.get_mut(&id) else { return };
+        let Some(peer) = self.peers.get_mut(&id) else {
+            return;
+        };
         while let Some(t) = peer.conn.poll_transmit() {
             if !self.gather.send(t.source, t.destination, &t.contents, now) {
                 self.transmits.push_back((t.destination, t.contents));
             }
         }
-        self.transmits.extend(std::iter::from_fn(|| self.gather.poll_transmit()));
+        self.transmits
+            .extend(std::iter::from_fn(|| self.gather.poll_transmit()));
         let mut closed = None;
         while let Some(event) = peer.conn.poll_event() {
             match event {
@@ -246,7 +279,11 @@ impl Host {
                 self.by_addr.remove(&path);
             }
             // Players behind one NAT share the address their signaling came from.
-            for addr in peer.permits.into_iter().filter(|addr| !self.peers.values().any(|p| p.permits.contains(addr))) {
+            for addr in peer
+                .permits
+                .into_iter()
+                .filter(|addr| !self.peers.values().any(|p| p.permits.contains(addr)))
+            {
                 self.gather.forget(addr, now);
             }
             self.events.push_back(HostEvent::Closed(id, reason));

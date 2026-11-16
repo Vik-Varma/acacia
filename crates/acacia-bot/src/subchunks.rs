@@ -37,13 +37,23 @@ impl SubChunkRequester {
     pub const PACKETS: &[u32] = &[LevelChunk::ID, Subchunk::ID];
 
     pub fn new(seed: u64) -> Self {
-        Self { limits: HashMap::new(), requested: HashSet::new(), dimension: 0, in_flight: 0, pause: 0, startup: true, rng: seed }
+        Self {
+            limits: HashMap::new(),
+            requested: HashSet::new(),
+            dimension: 0,
+            in_flight: 0,
+            pause: 0,
+            startup: true,
+            rng: seed,
+        }
     }
 
     pub fn apply(&mut self, packet: &RawPacket) {
         if let Ok(c) = packet.decode::<LevelChunk>() {
             // Request mode: a sub-chunk limit (negative = the whole height) instead of inline sub-chunks.
-            let Some(limit) = c.highest_subchunk_count else { return };
+            let Some(limit) = c.highest_subchunk_count else {
+                return;
+            };
             if c.dimension != self.dimension {
                 (self.dimension, self.startup) = (c.dimension, true);
                 self.limits.clear();
@@ -75,7 +85,10 @@ impl SubChunkRequester {
         }
         due.sort_unstable();
         for i in (1..due.len()).rev() {
-            due.swap(i, (crate::cadence::splitmix(&mut self.rng) % (i as u64 + 1)) as usize);
+            due.swap(
+                i,
+                (crate::cadence::splitmix(&mut self.rng) % (i as u64 + 1)) as usize,
+            );
         }
         let mut out = Vec::new();
         if self.startup {
@@ -101,10 +114,18 @@ impl SubChunkRequester {
         for &(x, z) in columns {
             let count = self.limits.remove(&(x, z)).unwrap_or(0) as i32;
             self.requested.insert((x, z));
-            requests.extend((floor..floor + count).map(|y| Vec3i8 { x: (x - cx) as i8, y: y as i8, z: (z - cz) as i8 }));
+            requests.extend((floor..floor + count).map(|y| Vec3i8 {
+                x: (x - cx) as i8,
+                y: y as i8,
+                z: (z - cz) as i8,
+            }));
         }
         self.in_flight += 1;
-        SubchunkRequest { dimension: self.dimension, requests, origin: Vec3li { x: cx, y: 0, z: cz } }
+        SubchunkRequest {
+            dimension: self.dimension,
+            requests,
+            origin: Vec3li { x: cx, y: 0, z: cz },
+        }
     }
 }
 
@@ -121,11 +142,25 @@ mod tests {
     }
 
     fn chunk(x: i32, z: i32, limit: i32) -> RawPacket {
-        raw(&LevelChunk { x, z, dimension: 0, sub_chunk_count: 0, highest_subchunk_count: Some(limit), cache_enabled: false, blobs: Vec::new(), payload: Default::default() })
+        raw(&LevelChunk {
+            x,
+            z,
+            dimension: 0,
+            sub_chunk_count: 0,
+            highest_subchunk_count: Some(limit),
+            cache_enabled: false,
+            blobs: Vec::new(),
+            payload: Default::default(),
+        })
     }
 
     fn response() -> RawPacket {
-        raw(&Subchunk { cache_enabled: false, dimension: 0, origin: Vec3li { x: 0, y: 0, z: 0 }, entries: Vec::new() })
+        raw(&Subchunk {
+            cache_enabled: false,
+            dimension: 0,
+            origin: Vec3li { x: 0, y: 0, z: 0 },
+            entries: Vec::new(),
+        })
     }
 
     #[test]
@@ -142,16 +177,29 @@ mod tests {
         for req in &first {
             assert_eq!((req.origin.x, req.origin.y, req.origin.z), (1, 0, 0));
             assert!(req.requests.len() <= 3 * 10 && req.requests.len() % 10 == 0);
-            assert!(req.requests.iter().all(|o| (-4..6).contains(&o.y) && i32::from(o.x).pow(2) + i32::from(o.z).pow(2) <= RADIUS_SQ));
+            assert!(req.requests.iter().all(|o| (-4..6).contains(&o.y)
+                && i32::from(o.x).pow(2) + i32::from(o.z).pow(2) <= RADIUS_SQ));
         }
-        assert!(r.tick(20.0, 3.0).is_empty(), "waits for responses at the in-flight cap");
-        let mut columns: HashSet<(i8, i8)> = first.iter().flat_map(|q| q.requests.iter().map(|o| (o.x, o.z))).collect();
-        let circle = (-5..=5).flat_map(|x| (-5..=5).map(move |z| (x, z))).filter(|(x, z): &(i32, i32)| x * x + z * z <= RADIUS_SQ).count();
+        assert!(
+            r.tick(20.0, 3.0).is_empty(),
+            "waits for responses at the in-flight cap"
+        );
+        let mut columns: HashSet<(i8, i8)> = first
+            .iter()
+            .flat_map(|q| q.requests.iter().map(|o| (o.x, o.z)))
+            .collect();
+        let circle = (-5..=5)
+            .flat_map(|x| (-5..=5).map(move |z| (x, z)))
+            .filter(|(x, z): &(i32, i32)| x * x + z * z <= RADIUS_SQ)
+            .count();
         for _ in 0..200 {
             r.apply(&response());
             let sent = r.tick(20.0, 3.0);
             assert!(sent.len() <= STARTUP_IN_FLIGHT as usize);
-            columns.extend(sent.iter().flat_map(|q| q.requests.iter().map(|o| (o.x, o.z))));
+            columns.extend(
+                sent.iter()
+                    .flat_map(|q| q.requests.iter().map(|o| (o.x, o.z))),
+            );
         }
         assert_eq!(columns.len(), circle, "every column in the circle, once");
         assert!(r.tick(20.0, 3.0).is_empty());
@@ -162,11 +210,19 @@ mod tests {
             later.extend(r.tick(36.0, 3.0));
             r.apply(&response());
         }
-        assert!(!later.is_empty() && later.iter().all(|q| q.requests.len() == 10 && q.origin.x == 2));
+        assert!(
+            !later.is_empty()
+                && later
+                    .iter()
+                    .all(|q| q.requests.len() == 10 && q.origin.x == 2)
+        );
         let newly_covered = |q: &SubchunkRequest| {
             let (x, z) = (i32::from(q.requests[0].x) + 2, i32::from(q.requests[0].z));
             (x - 1).pow(2) + z * z > RADIUS_SQ
         };
-        assert!(later.iter().all(newly_covered), "old columns are never re-requested");
+        assert!(
+            later.iter().all(newly_covered),
+            "old columns are never re-requested"
+        );
     }
 }

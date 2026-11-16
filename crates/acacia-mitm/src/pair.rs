@@ -32,7 +32,14 @@ impl Pair {
     pub fn new(server: SocketAddr, now: Instant, relay: Relay) -> Self {
         // go-raknet servers reject positive client GUIDs (DESIGN.md).
         let guid = rand_core::RngCore::next_u64(&mut rand_core::OsRng) | 1 << 63;
-        Self::over(Upstream::RakNet(Box::new(raknet::Client::new(raknet::Config::new(guid), server, now))), relay)
+        Self::over(
+            Upstream::RakNet(Box::new(raknet::Client::new(
+                raknet::Config::new(guid),
+                server,
+                now,
+            ))),
+            relay,
+        )
     }
 
     /// Over a link that is already open: what goes into `link` reaches the server as one batch.
@@ -41,7 +48,14 @@ impl Pair {
     }
 
     fn over(upstream: Upstream, relay: Relay) -> Self {
-        Self { upstream, relay, pending: Vec::new(), to_game: Vec::new(), transfer: None, closed: false }
+        Self {
+            upstream,
+            relay,
+            pending: Vec::new(),
+            to_game: Vec::new(),
+            transfer: None,
+            closed: false,
+        }
     }
 
     /// Where the server just transferred the game, once.
@@ -157,7 +171,9 @@ impl Pair {
         for batch in out.to_server {
             match &mut self.upstream {
                 Upstream::RakNet(client) => {
-                    if !self.pending.is_empty() || !client.send(batch.clone(), Reliability::ReliableOrdered) {
+                    if !self.pending.is_empty()
+                        || !client.send(batch.clone(), Reliability::ReliableOrdered)
+                    {
                         self.pending.push(batch);
                     }
                 }
@@ -170,7 +186,9 @@ impl Pair {
     }
 
     fn pump(&mut self) {
-        let Upstream::RakNet(client) = &mut self.upstream else { return };
+        let Upstream::RakNet(client) = &mut self.upstream else {
+            return;
+        };
         let mut messages = Vec::new();
         while let Some(event) = client.poll_event() {
             match event {

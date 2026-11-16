@@ -10,7 +10,12 @@ const GLIDE_SETTLE: Duration = Duration::from_millis(250);
 
 impl Bot {
     pub(super) async fn java_start_gliding(&mut self) -> Result<(), ActionError> {
-        let player = &self.java().ok_or(ActionError::Disconnected)?.client().movement.player;
+        let player = &self
+            .java()
+            .ok_or(ActionError::Disconnected)?
+            .client()
+            .movement
+            .player;
         if player.on_ground {
             return Err(ActionError::NotPossible("on the ground".into()));
         }
@@ -19,12 +24,24 @@ impl Bot {
         }
         self.press_jump().await?;
         self.pause(GLIDE_SETTLE).await?;
-        if self.is_gliding() { Ok(()) } else { Err(ActionError::Rejected("the server did not start the glide".into())) }
+        if self.is_gliding() {
+            Ok(())
+        } else {
+            Err(ActionError::Rejected(
+                "the server did not start the glide".into(),
+            ))
+        }
     }
 
     pub(super) async fn java_stop_gliding(&mut self) -> Result<(), ActionError> {
-        if self.is_gliding() && !self.java().is_some_and(|j| j.client().movement.player.on_ground) {
-            return Err(ActionError::NotPossible("Java elytras close only on landing or in water".into()));
+        if self.is_gliding()
+            && !self
+                .java()
+                .is_some_and(|j| j.client().movement.player.on_ground)
+        {
+            return Err(ActionError::NotPossible(
+                "Java elytras close only on landing or in water".into(),
+            ));
         }
         self.next_tick(|_, _| false).await.map(drop)
     }

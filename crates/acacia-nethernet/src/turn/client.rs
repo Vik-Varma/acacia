@@ -2,9 +2,9 @@ use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
+use super::Step;
 use super::requests::{Pending, Request};
 use super::stun::{self, Attr, Class, Message, Method, TransactionId};
-use super::Step;
 
 /// libwebrtc refreshes permissions and channel binds 1 min before the 5 min permission expiry.
 pub(super) const PEER_REFRESH: Duration = Duration::from_secs(4 * 60);
@@ -16,14 +16,20 @@ const CHANNEL_REUSE: Duration = Duration::from_secs(15 * 60);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TurnEvent {
     /// `relayed` becomes a relay candidate, `mapped` (when the server sent it) a srflx candidate.
-    Allocated { relayed: SocketAddr, mapped: Option<SocketAddr> },
+    Allocated {
+        relayed: SocketAddr,
+        mapped: Option<SocketAddr>,
+    },
     Failed(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum State {
     Allocating,
-    Allocated { relayed: SocketAddr, refresh_at: Option<Instant> },
+    Allocated {
+        relayed: SocketAddr,
+        refresh_at: Option<Instant>,
+    },
     Closing,
     Done,
 }
@@ -67,7 +73,12 @@ pub struct TurnClient {
 
 impl TurnClient {
     /// Starts allocating; the first Allocate is unauthenticated and expects a 401 challenge.
-    pub fn new(server: SocketAddr, username: impl Into<String>, password: impl Into<String>, now: Instant) -> Self {
+    pub fn new(
+        server: SocketAddr,
+        username: impl Into<String>,
+        password: impl Into<String>,
+        now: Instant,
+    ) -> Self {
         let mut client = Self {
             server,
             redirects: 0,
@@ -123,7 +134,9 @@ impl TurnClient {
         if self.relayed().is_none() {
             return tracing::trace!(%peer, "TURN send before allocation; dropped");
         }
-        let Some((channel, bind)) = self.entry(peer, now) else { return };
+        let Some((channel, bind)) = self.entry(peer, now) else {
+            return;
+        };
         if bind == Bind::Bound {
             return self.transmits.push_back(stun::channel_data(channel, data));
         }
@@ -132,7 +145,10 @@ impl TurnClient {
             .with(Attr::Data(data.to_vec()));
         self.transmits.push_back(indication.encode(None, false));
         if bind == Bind::Unbound {
-            self.entries.get_mut(&peer).expect("entry just created").bind = Bind::Binding;
+            self.entries
+                .get_mut(&peer)
+                .expect("entry just created")
+                .bind = Bind::Binding;
             self.start(Request::ChannelBind(peer), now, 0);
         }
     }
@@ -144,9 +160,14 @@ impl TurnClient {
         }
         if !stun::is_stun(data) {
             let (channel, payload) = stun::parse_channel_data(data)?;
-            return self.channels.get(&channel).map(|peer| (*peer, payload.to_vec()));
+            return self
+                .channels
+                .get(&channel)
+                .map(|peer| (*peer, payload.to_vec()));
         }
-        let msg = Message::decode(data).map_err(|e| tracing::trace!("TURN: dropping datagram: {e}")).ok()?;
+        let msg = Message::decode(data)
+            .map_err(|e| tracing::trace!("TURN: dropping datagram: {e}"))
+            .ok()?;
         match msg.class {
             Class::Indication if msg.method == Method::Data => {
                 let peer = msg.xor_peer()?;
@@ -173,7 +194,11 @@ impl TurnClient {
             State::Allocated { refresh_at, .. } => refresh_at,
             _ => None,
         };
-        let peers = self.entries.values().flat_map(|e| [e.permission_at, e.bind_at]).flatten();
+        let peers = self
+            .entries
+            .values()
+            .flat_map(|e| [e.permission_at, e.bind_at])
+            .flatten();
         let retransmits = self.pending.values().map(|p| p.timer.deadline());
         refresh.into_iter().chain(peers).chain(retransmits).min()
     }
@@ -188,13 +213,22 @@ impl TurnClient {
             }
         }
         for tid in expired {
-            let p = self.pending.remove(&tid).expect("expired transaction is pending");
+            let p = self
+                .pending
+                .remove(&tid)
+                .expect("expired transaction is pending");
             self.on_failure(p.request, "timed out");
         }
-        if let State::Allocated { refresh_at: Some(at), relayed } = self.state
+        if let State::Allocated {
+            refresh_at: Some(at),
+            relayed,
+        } = self.state
             && at <= now
         {
-            self.state = State::Allocated { relayed, refresh_at: None };
+            self.state = State::Allocated {
+                relayed,
+                refresh_at: None,
+            };
             self.start(Request::Refresh { lifetime: None }, now, 0);
         }
         let mut due = Vec::new();
@@ -238,7 +272,15 @@ impl TurnClient {
             tracing::debug!(%peer, "TURN channel numbers exhausted");
             return None;
         };
-        self.entries.insert(peer, Entry { channel, bind: Bind::Unbound, permission_at: None, bind_at: None });
+        self.entries.insert(
+            peer,
+            Entry {
+                channel,
+                bind: Bind::Unbound,
+                permission_at: None,
+                bind_at: None,
+            },
+        );
         self.channels.insert(channel, peer);
         if self.relayed().is_some() {
             self.start(Request::Permission(peer), now, 0);

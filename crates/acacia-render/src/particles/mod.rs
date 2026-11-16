@@ -71,7 +71,9 @@ impl Particles {
         }
         match kind {
             Kind::CritBurst | Kind::EnchantedHitBurst => self.burst(kind, at),
-            _ => self.sprites.extend(bedrock::sprite(kind, at, velocity, &mut self.rng)),
+            _ => self
+                .sprites
+                .extend(bedrock::sprite(kind, at, velocity, &mut self.rng)),
         }
         if self.sprites.len() > MAX_SPRITES {
             self.sprites.drain(..self.sprites.len() - MAX_SPRITES);
@@ -81,15 +83,24 @@ impl Particles {
     /// `count` of `kind` at random within `spread` blocks of `at` along each axis.
     pub fn scatter(&mut self, kind: Kind, at: DVec3, velocity: Vec3, count: u32, spread: f32) {
         for _ in 0..count {
-            let offset = (Vec3::new(self.rng.f32(), self.rng.f32(), self.rng.f32()) * 2.0 - 1.0) * spread;
+            let offset =
+                (Vec3::new(self.rng.f32(), self.rng.f32(), self.rng.f32()) * 2.0 - 1.0) * spread;
             self.spawn(kind, at + offset.as_dvec3(), velocity);
         }
     }
 
     /// A hit's crits as Bedrock's emitters fire them: 48 (enchanted 16) at 10 to 20 blocks a second.
     fn burst(&mut self, kind: Kind, at: DVec3) {
-        let single = if kind == Kind::CritBurst { Kind::Crit } else { Kind::EnchantedHit };
-        let count = if kind == Kind::EnchantedHitBurst { 16 } else { 48 };
+        let single = if kind == Kind::CritBurst {
+            Kind::Crit
+        } else {
+            Kind::EnchantedHit
+        };
+        let count = if kind == Kind::EnchantedHitBurst {
+            16
+        } else {
+            48
+        };
         for _ in 0..count {
             let d = loop {
                 let d = Vec3::new(self.rng.f32(), self.rng.f32(), self.rng.f32()) * 2.0 - 1.0;
@@ -119,8 +130,15 @@ impl Particles {
         let (rng, pending) = (&mut self.rng, &mut self.pending);
         self.sprites.retain_mut(|s| s.tick(blocks, rng, pending));
         if let Some(centre) = player {
-            ambient::animate(blocks, centre, &mut self.rng, &mut self.campfires, &mut self.pending);
-            self.campfires.tick(blocks, centre, &mut self.rng, &mut self.pending);
+            ambient::animate(
+                blocks,
+                centre,
+                &mut self.rng,
+                &mut self.campfires,
+                &mut self.pending,
+            );
+            self.campfires
+                .tick(blocks, centre, &mut self.rng, &mut self.pending);
         }
         for (kind, at, velocity) in std::mem::take(&mut self.pending) {
             self.spawn(kind, at, velocity);
@@ -133,12 +151,28 @@ impl Particles {
 fn java_spawn(engine: &mut java::Engine, kind: Kind, at: DVec3, v: DVec3) {
     let ty = match kind {
         Kind::CritBurst | Kind::EnchantedHitBurst => {
-            let ty = if kind == Kind::CritBurst { Type::Crit } else { Type::EnchantedHit };
-            engine.tracking_emitter(Options::simple(ty), at - DVec3::new(0.0, 0.9, 0.0), 0.6, 1.8, 3);
+            let ty = if kind == Kind::CritBurst {
+                Type::Crit
+            } else {
+                Type::EnchantedHit
+            };
+            engine.tracking_emitter(
+                Options::simple(ty),
+                at - DVec3::new(0.0, 0.9, 0.0),
+                0.6,
+                1.8,
+                3,
+            );
             return;
         }
         Kind::Dust(c) => return engine.add(&Options::dust(c, 1.0), at, v),
-        Kind::Note(pitch) => return engine.add(&Options::simple(Type::Note), at, DVec3::new(f64::from(pitch), 0.0, 0.0)),
+        Kind::Note(pitch) => {
+            return engine.add(
+                &Options::simple(Type::Note),
+                at,
+                DVec3::new(f64::from(pitch), 0.0, 0.0),
+            );
+        }
         Kind::Flame => Type::Flame,
         Kind::SmallFlame => Type::SmallFlame,
         Kind::SoulFlame => Type::SoulFireFlame,

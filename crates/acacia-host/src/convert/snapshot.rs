@@ -1,9 +1,16 @@
-use acacia_api::{ColdSnapshot, Effect, Entity, EntityId, EntityList, EntityRow, HotSnapshot, PlayerInfo, Snapshot, Stack, UniqueId};
+use acacia_api::{
+    ColdSnapshot, Effect, Entity, EntityId, EntityList, EntityRow, HotSnapshot, PlayerInfo,
+    Snapshot, Stack, UniqueId,
+};
 use acacia_bot::snapshot::{self as bot, BotSnapshot, EntityInfo};
 use acacia_bot::state::{ItemStack, PlayerListEntry};
 
 pub(crate) fn snapshot(s: &BotSnapshot) -> Snapshot {
-    Snapshot { hot: hot(&s.hot), cold: cold(&s.cold), entities: s.entities.entities.iter().map(entity).collect() }
+    Snapshot {
+        hot: hot(&s.hot),
+        cold: cold(&s.cold),
+        entities: s.entities.entities.iter().map(entity).collect(),
+    }
 }
 
 pub(crate) fn entity(e: &EntityInfo) -> Entity {
@@ -22,11 +29,25 @@ pub(crate) fn entity(e: &EntityInfo) -> Entity {
 
 pub(crate) fn entity_row(e: &EntityInfo) -> EntityRow {
     let ([x, y, z], [vx, vy, vz]) = (e.position, e.velocity);
-    EntityRow(EntityId(e.runtime_id), x, y, z, vx, vy, vz, e.yaw, e.pitch, e.health)
+    EntityRow(
+        EntityId(e.runtime_id),
+        x,
+        y,
+        z,
+        vx,
+        vy,
+        vz,
+        e.yaw,
+        e.pitch,
+        e.health,
+    )
 }
 
 pub(crate) fn entities(list: &bot::EntityList) -> EntityList {
-    EntityList { version: list.version, entities: list.entities.iter().map(entity).collect() }
+    EntityList {
+        version: list.version,
+        entities: list.entities.iter().map(entity).collect(),
+    }
 }
 
 pub(crate) fn hot(h: &bot::Hot) -> HotSnapshot {
@@ -67,7 +88,15 @@ pub(crate) fn cold(c: &bot::Cold) -> ColdSnapshot {
         version: c.version,
         inventory: c.inventory.iter().map(stack).collect(),
         cursor: c.cursor.as_ref().map(stack),
-        effects: c.effects.iter().map(|e| Effect { id: e.id, amplifier: e.amplifier, duration: e.duration }).collect(),
+        effects: c
+            .effects
+            .iter()
+            .map(|e| Effect {
+                id: e.id,
+                amplifier: e.amplifier,
+                duration: e.duration,
+            })
+            .collect(),
         players: c.players.iter().map(player).collect(),
     }
 }
@@ -95,9 +124,19 @@ pub(crate) fn slots(window: i32, items: &[ItemStack]) -> Vec<Stack> {
         stack_id: s.stack_network_id,
         custom_name: s.custom_name.clone(),
     };
-    items.iter().enumerate().filter(|(_, s)| !s.is_empty()).map(summary).collect()
+    items
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| !s.is_empty())
+        .map(summary)
+        .collect()
 }
 
 pub(crate) fn player(p: &PlayerListEntry) -> PlayerInfo {
-    PlayerInfo { uuid: p.uuid.to_string(), username: p.username.to_string(), xuid: p.xuid.to_string(), unique_id: UniqueId(p.entity_unique_id) }
+    PlayerInfo {
+        uuid: p.uuid.to_string(),
+        username: p.username.to_string(),
+        xuid: p.xuid.to_string(),
+        unique_id: UniqueId(p.entity_unique_id),
+    }
 }

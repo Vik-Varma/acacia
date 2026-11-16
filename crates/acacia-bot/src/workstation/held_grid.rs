@@ -6,7 +6,7 @@ use acacia_client::proto::types::WindowType;
 
 use super::craft::{result_ops, results};
 use crate::items::craft::{Craft, CraftAction};
-use crate::items::{onto_cursor, ui, Op, SlotRef};
+use crate::items::{Op, SlotRef, onto_cursor, ui};
 use crate::state::{GameState, Ingredient, Recipe, RecipeKind};
 use crate::{ActionError, Bot};
 
@@ -33,15 +33,39 @@ impl Bot {
     }
 }
 
-pub(crate) fn held_grid_plan(state: &GameState, times: u8, to_cursor: bool) -> Result<(Craft, Vec<Op>), ActionError> {
-    let held = held(state).ok_or_else(|| ActionError::NotPossible("the grid holds no recipe".into()))?;
-    let most = held.cells.iter().map(|(slot, per)| slot.stack(state).map_or(0, |s| s.count) / per).min().unwrap_or(0);
+pub(crate) fn held_grid_plan(
+    state: &GameState,
+    times: u8,
+    to_cursor: bool,
+) -> Result<(Craft, Vec<Op>), ActionError> {
+    let held =
+        held(state).ok_or_else(|| ActionError::NotPossible("the grid holds no recipe".into()))?;
+    let most = held
+        .cells
+        .iter()
+        .map(|(slot, per)| slot.stack(state).map_or(0, |s| s.count) / per)
+        .min()
+        .unwrap_or(0);
     let times = times.min(u8::try_from(most).unwrap_or(u8::MAX));
     if times == 0 {
         return Err(ActionError::NotPossible("nothing to craft".into()));
     }
-    let mut ops: Vec<Op> = held.cells.iter().map(|&(from, per)| Op::Consume { from, count: (per * u16::from(times)) as u8 }).collect();
-    let craft = Craft::new(CraftAction::Recipe { network_id: held.recipe.network_id, times }, results(state, held.recipe)?).with_results_action();
+    let mut ops: Vec<Op> = held
+        .cells
+        .iter()
+        .map(|&(from, per)| Op::Consume {
+            from,
+            count: (per * u16::from(times)) as u8,
+        })
+        .collect();
+    let craft = Craft::new(
+        CraftAction::Recipe {
+            network_id: held.recipe.network_id,
+            times,
+        },
+        results(state, held.recipe)?,
+    )
+    .with_results_action();
     ops.extend(result_ops(state, &craft, &ops)?);
     if to_cursor {
         ops = onto_cursor(state, &craft.created(), ops);
@@ -51,13 +75,26 @@ pub(crate) fn held_grid_plan(state: &GameState, times: u8, to_cursor: bool) -> R
 
 /// The grid recipe the cells match; the lowest priority wins when several do.
 pub(crate) fn held(state: &GameState) -> Option<Held<'_>> {
-    let table = state.containers.open.as_ref().is_some_and(|c| c.window_type == WindowType::Workbench);
-    let (first, side) = if table { (ui::CRAFTING_3X3, 3) } else { (ui::CRAFTING_2X2, 2) };
+    let table = state
+        .containers
+        .open
+        .as_ref()
+        .is_some_and(|c| c.window_type == WindowType::Workbench);
+    let (first, side) = if table {
+        (ui::CRAFTING_3X3, 3)
+    } else {
+        (ui::CRAFTING_2X2, 2)
+    };
     let mut cells = Vec::new();
     for i in 0..side * side {
         let slot = SlotRef::Ui(first + i);
         cells.push(match slot.stack(state).filter(|s| !s.is_empty()) {
-            Some(stack) => Some(Cell { slot, name: state.items.name(stack.network_id)?, metadata: stack.metadata, count: stack.count }),
+            Some(stack) => Some(Cell {
+                slot,
+                name: state.items.name(stack.network_id)?,
+                metadata: stack.metadata,
+                count: stack.count,
+            }),
             None => None,
         });
     }
@@ -70,7 +107,12 @@ pub(crate) fn held(state: &GameState) -> Option<Held<'_>> {
         .book()
         .iter()
         .filter(|r| r.block == "crafting_table")
-        .filter_map(|recipe| Some(Held { recipe, cells: grid.matches(recipe)? }))
+        .filter_map(|recipe| {
+            Some(Held {
+                recipe,
+                cells: grid.matches(recipe)?,
+            })
+        })
         .min_by_key(|h| h.recipe.priority)
 }
 
@@ -104,22 +146,38 @@ impl Grid<'_> {
     fn shaped(&self, recipe: &Recipe, width: u8, height: u8) -> Option<Vec<(SlotRef, u16)>> {
         let filled = |i: usize| self.cells[i].is_some();
         let side = usize::from(self.side);
-        let rows: Vec<usize> = (0..side).filter(|r| (0..side).any(|c| filled(r * side + c))).collect();
-        let cols: Vec<usize> = (0..side).filter(|c| (0..side).any(|r| filled(r * side + c))).collect();
+        let rows: Vec<usize> = (0..side)
+            .filter(|r| (0..side).any(|c| filled(r * side + c)))
+            .collect();
+        let cols: Vec<usize> = (0..side)
+            .filter(|c| (0..side).any(|r| filled(r * side + c)))
+            .collect();
         let (top, left) = (*rows.first()?, *cols.first()?);
         let (w, h) = (usize::from(width), usize::from(height));
         // the filled box must be the recipe's: no stray cells outside it
-        if rows.last()? - top + 1 > h || cols.last()? - left + 1 > w || top + h > side || left + w > side {
+        if rows.last()? - top + 1 > h
+            || cols.last()? - left + 1 > w
+            || top + h > side
+            || left + w > side
+        {
             return None;
         }
         [false, true].into_iter().find_map(|mirrored| {
             let mut used = Vec::new();
             for r in 0..h {
                 for c in 0..w {
-                    let ingredient = recipe.inputs.get(r * w + if mirrored { w - 1 - c } else { c }).unwrap_or(&Ingredient::Empty);
-                    match (&self.cells[(top + r) * side + left + c], ingredient.is_empty()) {
+                    let ingredient = recipe
+                        .inputs
+                        .get(r * w + if mirrored { w - 1 - c } else { c })
+                        .unwrap_or(&Ingredient::Empty);
+                    match (
+                        &self.cells[(top + r) * side + left + c],
+                        ingredient.is_empty(),
+                    ) {
                         (None, true) => {}
-                        (Some(cell), false) if cell.fills(ingredient) => used.push((cell.slot, ingredient.count())),
+                        (Some(cell), false) if cell.fills(ingredient) => {
+                            used.push((cell.slot, ingredient.count()))
+                        }
                         _ => return None,
                     }
                 }
@@ -129,7 +187,8 @@ impl Grid<'_> {
     }
 
     fn shapeless(&self, recipe: &Recipe) -> Option<Vec<(SlotRef, u16)>> {
-        let ingredients: Vec<&Ingredient> = recipe.inputs.iter().filter(|i| !i.is_empty()).collect();
+        let ingredients: Vec<&Ingredient> =
+            recipe.inputs.iter().filter(|i| !i.is_empty()).collect();
         let cells: Vec<&Cell> = self.cells.iter().flatten().collect();
         if ingredients.len() != cells.len() {
             return None;
@@ -141,8 +200,15 @@ impl Grid<'_> {
 }
 
 /// Gives every ingredient its own cell, backtracking: a tag ingredient may take a cell an exact one needs.
-fn assign(ingredients: &[&Ingredient], cells: &[&Cell], taken: &mut [bool], used: &mut Vec<(SlotRef, u16)>) -> bool {
-    let Some((ingredient, rest)) = ingredients.split_first() else { return true };
+fn assign(
+    ingredients: &[&Ingredient],
+    cells: &[&Cell],
+    taken: &mut [bool],
+    used: &mut Vec<(SlotRef, u16)>,
+) -> bool {
+    let Some((ingredient, rest)) = ingredients.split_first() else {
+        return true;
+    };
     for (i, cell) in cells.iter().enumerate() {
         if taken[i] || !cell.fills(ingredient) {
             continue;

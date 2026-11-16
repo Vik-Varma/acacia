@@ -15,9 +15,21 @@ impl App {
     /// `event` to the Java screen; false in the Bedrock look.
     fn java_event(&mut self, event: JavaEvent) -> bool {
         let (size, scale) = self.gui();
-        let screen = JavaScreen { entries: &self.shown.items, creative: self.shown.creative.map(|c| c.0), name: &self.shown.name };
+        let screen = JavaScreen {
+            entries: &self.shown.items,
+            creative: self.shown.creative.map(|c| c.0),
+            name: &self.shown.name,
+        };
         let at = (&self.inventory, screen, self.play.me.as_ref());
-        let Some(out) = self.ui.java_screen_event(self.settings.look, at, (size, scale, self.mouse), &mut self.shown.java, event) else { return false };
+        let Some(out) = self.ui.java_screen_event(
+            self.settings.look,
+            at,
+            (size, scale, self.mouse),
+            &mut self.shown.java,
+            event,
+        ) else {
+            return false;
+        };
         for command in out.commands {
             let _ = self.net.commands.send(command);
         }
@@ -40,9 +52,16 @@ impl App {
         };
         let event = if pressed {
             let double = self.shown.java.press(button, Instant::now());
-            JavaEvent::Press { button, shift: self.shift, double }
+            JavaEvent::Press {
+                button,
+                shift: self.shift,
+                double,
+            }
         } else {
-            JavaEvent::Release { button, shift: self.shift }
+            JavaEvent::Release {
+                button,
+                shift: self.shift,
+            }
         };
         self.java_event(event)
     }
@@ -83,9 +102,13 @@ impl App {
             return false;
         }
         let key = match code {
-            _ if DIGITS.contains(&code) => Key::Hotbar(DIGITS.iter().position(|&d| d == code).unwrap_or(0) as i32),
+            _ if DIGITS.contains(&code) => {
+                Key::Hotbar(DIGITS.iter().position(|&d| d == code).unwrap_or(0) as i32)
+            }
             KeyCode::KeyF => Key::SwapOffhand,
-            KeyCode::KeyQ => Key::Drop { all: self.java.ctrl },
+            KeyCode::KeyQ => Key::Drop {
+                all: self.java.ctrl,
+            },
             _ => return false,
         };
         self.java_event(JavaEvent::Key(key))
@@ -99,5 +122,14 @@ impl App {
     }
 }
 
-const DIGITS: [KeyCode; 9] =
-    [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3, KeyCode::Digit4, KeyCode::Digit5, KeyCode::Digit6, KeyCode::Digit7, KeyCode::Digit8, KeyCode::Digit9];
+const DIGITS: [KeyCode; 9] = [
+    KeyCode::Digit1,
+    KeyCode::Digit2,
+    KeyCode::Digit3,
+    KeyCode::Digit4,
+    KeyCode::Digit5,
+    KeyCode::Digit6,
+    KeyCode::Digit7,
+    KeyCode::Digit8,
+    KeyCode::Digit9,
+];

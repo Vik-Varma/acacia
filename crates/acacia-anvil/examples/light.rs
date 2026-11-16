@@ -60,14 +60,23 @@ fn hash_light(h: &mut Option<&mut DefaultHasher>, light: &[SectionLight]) {
 }
 
 /// Aligned 8×8 groups over one volume padded by a column, as `store/write.rs` lights them.
-fn run_area(w: &World, l: &mut Lighter, p: &PropsTable, mut h: Option<&mut DefaultHasher>) -> [Duration; 2] {
+fn run_area(
+    w: &World,
+    l: &mut Lighter,
+    p: &PropsTable,
+    mut h: Option<&mut DefaultHasher>,
+) -> [Duration; 2] {
     let (mut light, mut extract) = (Duration::ZERO, Duration::ZERO);
     let (mut area, mut out) = (Vec::new(), Vec::new());
     for gz in (0..w.side).step_by(GROUP as usize) {
         for gx in (0..w.side).step_by(GROUP as usize) {
             let (x1, z1) = ((gx + GROUP).min(w.side), (gz + GROUP).min(w.side));
             area.clear();
-            area.extend((gz - 1..=z1).flat_map(|z| (gx - 1..=x1).map(move |x| (x, z))).map(|(x, z)| w.get(x, z)));
+            area.extend(
+                (gz - 1..=z1)
+                    .flat_map(|z| (gx - 1..=x1).map(move |x| (x, z)))
+                    .map(|(x, z)| w.get(x, z)),
+            );
             let t = Instant::now();
             l.light_area(&area, (x1 - gx + 2) as usize, p, true);
             let t2 = Instant::now();
@@ -75,7 +84,12 @@ fn run_area(w: &World, l: &mut Lighter, p: &PropsTable, mut h: Option<&mut Defau
             for z in gz..z1 {
                 for x in gx..x1 {
                     let col = w.get(x, z).unwrap();
-                    l.extract_into((x - gx + 1) as usize, (z - gz + 1) as usize, col.sections.len(), &mut out);
+                    l.extract_into(
+                        (x - gx + 1) as usize,
+                        (z - gz + 1) as usize,
+                        col.sections.len(),
+                        &mut out,
+                    );
                     hash_light(&mut h, &out);
                 }
             }
@@ -85,7 +99,12 @@ fn run_area(w: &World, l: &mut Lighter, p: &PropsTable, mut h: Option<&mut Defau
     [light, extract]
 }
 
-fn run_column(w: &World, l: &mut Lighter, p: &PropsTable, mut h: Option<&mut DefaultHasher>) -> [Duration; 2] {
+fn run_column(
+    w: &World,
+    l: &mut Lighter,
+    p: &PropsTable,
+    mut h: Option<&mut DefaultHasher>,
+) -> [Duration; 2] {
     let t = Instant::now();
     for z in 0..w.side {
         for x in 0..w.side {
@@ -119,12 +138,19 @@ fn run_par(w: &World, p: &PropsTable, threads: usize, group: i32, iters: u32) ->
                     let (gx, gz) = (g % per_row * group, g / per_row * group);
                     let (x1, z1) = ((gx + group).min(w.side), (gz + group).min(w.side));
                     area.clear();
-                    area.extend((gz - 1..=z1).flat_map(|z| (gx - 1..=x1).map(move |x| w.get(x, z))));
+                    area.extend(
+                        (gz - 1..=z1).flat_map(|z| (gx - 1..=x1).map(move |x| w.get(x, z))),
+                    );
                     l.light_area(&area, (x1 - gx + 2) as usize, p, true);
                     for z in gz..z1 {
                         for x in gx..x1 {
                             let n = w.get(x, z).unwrap().sections.len();
-                            l.extract_into((x - gx + 1) as usize, (z - gz + 1) as usize, n, &mut out);
+                            l.extract_into(
+                                (x - gx + 1) as usize,
+                                (z - gz + 1) as usize,
+                                n,
+                                &mut out,
+                            );
                         }
                     }
                 }
@@ -154,13 +180,22 @@ fn main() {
     let conv = Converter::new(&reg);
     let mut scratch = Scratch::default();
     let cols = (0..side * side)
-        .map(|i| conv.convert(&terrain.chunk(i % side, i / side, (i % 3) as u32), &mut scratch))
+        .map(|i| {
+            conv.convert(
+                &terrain.chunk(i % side, i / side, (i % 3) as u32),
+                &mut scratch,
+            )
+        })
         .collect();
     let world = World { side, cols };
     let props = PropsTable::new();
     let n = (side * side) as f64 * iters as f64;
     if mode == "par" {
-        let t = if threads == 0 { std::thread::available_parallelism().map_or(1, |n| n.get()) } else { threads };
+        let t = if threads == 0 {
+            std::thread::available_parallelism().map_or(1, |n| n.get())
+        } else {
+            threads
+        };
         let rate = run_par(&world, &props, t, group, iters);
         println!("par: {t} threads, {group}x{group} groups: {rate:.0} columns/s light + extract");
         return;

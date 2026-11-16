@@ -12,8 +12,6 @@ mod body;
 mod clip;
 mod collide;
 pub mod constants;
-#[cfg(feature = "acacia-world")]
-pub mod registry_world;
 mod correction;
 mod entities;
 mod flight;
@@ -25,11 +23,13 @@ mod motion;
 mod movement;
 mod pose;
 mod push_out;
+#[cfg(feature = "acacia-world")]
+pub mod registry_world;
 mod sim;
 mod sinf;
 mod state;
-mod tick_cache;
 pub mod test_world;
+mod tick_cache;
 mod vehicle;
 mod world;
 
@@ -45,4 +45,6 @@ pub use motion::{jump_impulse, steady_glide_look};
 pub use sim::{Outcome, TickOutput, apply_current, tick, touching_water};
 pub use state::{Effects, Equipment, PlayerState};
 pub use vehicle::{HorseJump, RiderInput, horse, horse_tick};
-pub use world::{BlockPhysics, Bounce, BubbleColumn, InsideMovement, Liquid, LiquidKind, Traversal, WorldView};
+pub use world::{
+    BlockPhysics, Bounce, BubbleColumn, InsideMovement, Liquid, LiquidKind, Traversal, WorldView,
+};

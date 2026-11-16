@@ -10,7 +10,12 @@ fn flat() -> TestWorld {
 }
 
 fn mount(vehicle: Vec3) -> Mount {
-    Mount { vehicle, yaw: 0.0, motion: [0.0; 2], seat_offset: [0.0, 0.63, 0.0] }
+    Mount {
+        vehicle,
+        yaw: 0.0,
+        motion: [0.0; 2],
+        seat_offset: [0.0, 0.63, 0.0],
+    }
 }
 
 fn close(a: Vec3, b: Vec3) -> bool {
@@ -25,11 +30,30 @@ fn standing_vehicle_tries_minus_z_first() {
 
 #[test]
 fn search_order_follows_the_vehicle_s_motion() {
-    assert_eq!(horizontal_offsets([0.0, 0.0])[..2], [[0.0, -1.0], [0.0, 1.0]]);
+    assert_eq!(
+        horizontal_offsets([0.0, 0.0])[..2],
+        [[0.0, -1.0], [0.0, 1.0]]
+    );
     // Moving +Z: forward (0,1), side (-1,0); then s-f, -s-f, s+f, f-s, -f, f.
     let order = horizontal_offsets([0.02, 0.3]);
-    assert_eq!(order, [[-1.0, 0.0], [1.0, 0.0], [-1.0, -1.0], [1.0, -1.0], [-1.0, 1.0], [1.0, 1.0], [0.0, -1.0], [0.0, 1.0]]);
-    assert_eq!(horizontal_offsets([-0.5, 0.1])[0], [0.0, -1.0], "moving -X: side (0, -1)");
+    assert_eq!(
+        order,
+        [
+            [-1.0, 0.0],
+            [1.0, 0.0],
+            [-1.0, -1.0],
+            [1.0, -1.0],
+            [-1.0, 1.0],
+            [1.0, 1.0],
+            [0.0, -1.0],
+            [0.0, 1.0]
+        ]
+    );
+    assert_eq!(
+        horizontal_offsets([-0.5, 0.1])[0],
+        [0.0, -1.0],
+        "moving -X: side (0, -1)"
+    );
 }
 
 #[test]
@@ -56,7 +80,12 @@ fn no_floor_or_no_headroom_is_not_a_spot() {
 
 #[test]
 fn seat_offset_turns_with_the_vehicle_and_x_z_start_from_the_seat() {
-    let m = Mount { vehicle: [0.5, 64.0, 0.5], yaw: 90.0, motion: [0.0; 2], seat_offset: [0.0, 0.2, 0.6] };
+    let m = Mount {
+        vehicle: [0.5, 64.0, 0.5],
+        yaw: 90.0,
+        motion: [0.0; 2],
+        seat_offset: [0.0, 0.2, 0.6],
+    };
     let seat = m.seat();
     // Yaw 90 faces -X: the offset's +Z (forward) becomes -X.
     assert!(close(seat, [-0.1, 64.2, 0.5]), "{seat:?}");

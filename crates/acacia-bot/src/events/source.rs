@@ -1,6 +1,6 @@
+use acacia_client::PacketFilter;
 use acacia_client::proto::packets::{ModalFormRequest, OpenSign, SetTitle, Text};
 use acacia_client::proto::{Packet, RawPacket};
-use acacia_client::PacketFilter;
 
 use super::{BotEvent, ChatMatch, ChatMessage, ChatPattern, EventOut, Events, Title};
 use crate::snapshot::EntityInfo;
@@ -25,7 +25,17 @@ impl EventSource {
     pub(crate) fn new(events: Events, patterns: Vec<ChatPattern>) -> Self {
         let base = PacketFilter::none();
         let (vitals, window, moves_seen) = ((20.0, 20.0, 5.0), None, 0);
-        Self { events, patterns, base, vitals, alive: true, window, contents: 0, sleeping: false, moves_seen }
+        Self {
+            events,
+            patterns,
+            base,
+            vitals,
+            alive: true,
+            window,
+            contents: 0,
+            sleeping: false,
+            moves_seen,
+        }
     }
 
     /// `base`: the packets the connection takes whatever the events.
@@ -43,7 +53,9 @@ impl EventSource {
 
     /// The connection's packet filter for the enabled events.
     pub(crate) fn filter(&self) -> PacketFilter {
-        self.packet_ids().into_iter().fold(self.base.clone(), PacketFilter::with)
+        self.packet_ids()
+            .into_iter()
+            .fold(self.base.clone(), PacketFilter::with)
     }
 
     /// Packets the enabled events need beyond the always-on trackers.
@@ -63,7 +75,12 @@ impl EventSource {
     }
 
     /// Queues the events `packet` caused; `state` already reflects it.
-    pub(crate) fn on_packet(&mut self, packet: &RawPacket, state: &mut GameState, out: &mut EventOut) {
+    pub(crate) fn on_packet(
+        &mut self,
+        packet: &RawPacket,
+        state: &mut GameState,
+        out: &mut EventOut,
+    ) {
         let changes = std::mem::take(&mut state.player_list.changes);
         if self.wants(Events::PLAYERS) {
             out.extend(changes.into_iter().map(|c| match c {
@@ -74,10 +91,15 @@ impl EventSource {
         self.on_entity_changes(state, out);
         match packet.id {
             // Text also arrives for bed refusals (sleep.rs) when chat is off.
-            Text::ID if self.wants(Events::CHAT) || !self.patterns.is_empty() => self.on_text(packet, out),
+            Text::ID if self.wants(Events::CHAT) || !self.patterns.is_empty() => {
+                self.on_text(packet, out)
+            }
             OpenSign::ID if self.wants(Events::WINDOWS) => {
                 if let Some(e) = state.signs.editor {
-                    out.push(BotEvent::SignEditor { position: e.position, front: e.front });
+                    out.push(BotEvent::SignEditor {
+                        position: e.position,
+                        front: e.front,
+                    });
                 }
             }
             ModalFormRequest::ID if self.wants(Events::FORMS) => {
@@ -101,7 +123,11 @@ impl EventSource {
         }
         if self.wants(Events::SLEEP) && state.player.is_sleeping() != self.sleeping {
             self.sleeping = !self.sleeping;
-            out.push(if self.sleeping { BotEvent::Slept } else { BotEvent::Woke });
+            out.push(if self.sleeping {
+                BotEvent::Slept
+            } else {
+                BotEvent::Woke
+            });
         }
     }
 
@@ -113,7 +139,12 @@ impl EventSource {
             return;
         }
         let seen = std::mem::replace(&mut self.moves_seen, now);
-        let moved: Vec<_> = state.entities.iter().filter(|e| e.moved_at >= seen).map(EntityInfo::copy).collect();
+        let moved: Vec<_> = state
+            .entities
+            .iter()
+            .filter(|e| e.moved_at >= seen)
+            .map(EntityInfo::copy)
+            .collect();
         if !moved.is_empty() {
             out.push(BotEvent::EntitiesMoved(moved));
         }
@@ -140,12 +171,22 @@ impl EventSource {
     }
 
     fn on_text(&self, packet: &RawPacket, out: &mut EventOut) {
-        let Some(message) = packet.decode::<Text>().ok().and_then(ChatMessage::from_packet) else { return };
+        let Some(message) = packet
+            .decode::<Text>()
+            .ok()
+            .and_then(ChatMessage::from_packet)
+        else {
+            return;
+        };
         if !self.patterns.is_empty() {
             let plain = message.plain();
             for pattern in &self.patterns {
                 if let Some(groups) = pattern.captures(&plain) {
-                    out.push(BotEvent::ChatMatch(ChatMatch { pattern: pattern.name.clone(), groups, message: message.clone() }));
+                    out.push(BotEvent::ChatMatch(ChatMatch {
+                        pattern: pattern.name.clone(),
+                        groups,
+                        message: message.clone(),
+                    }));
                 }
             }
         }
@@ -159,11 +200,19 @@ impl EventSource {
         let vitals = (p.health, p.hunger, p.saturation);
         if vitals != self.vitals {
             self.vitals = vitals;
-            out.push(BotEvent::Health { health: p.health, food: p.hunger, saturation: p.saturation });
+            out.push(BotEvent::Health {
+                health: p.health,
+                food: p.hunger,
+                saturation: p.saturation,
+            });
         }
         if p.alive != self.alive {
             self.alive = p.alive;
-            out.push(if p.alive { BotEvent::Respawned } else { BotEvent::Died });
+            out.push(if p.alive {
+                BotEvent::Respawned
+            } else {
+                BotEvent::Died
+            });
         }
     }
 

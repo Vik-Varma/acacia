@@ -20,7 +20,9 @@ pub struct Favour {
 
 impl Favour {
     pub fn new(cells: impl IntoIterator<Item = BlockPos>) -> Self {
-        Self { cells: cells.into_iter().collect() }
+        Self {
+            cells: cells.into_iter().collect(),
+        }
     }
 
     pub fn contains(&self, p: BlockPos) -> bool {

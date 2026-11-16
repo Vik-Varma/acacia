@@ -42,15 +42,31 @@ impl<S> Registry<S> {
 
     /// Lists a new bot on the first of `shards` running fewer than `fill` bots, or the least-loaded
     /// once all are that full (docs/swarm.md, "Shards"); `None` if the id is taken.
-    pub fn insert(&self, id: &BotId, target: &Target, shards: usize, fill: usize) -> Option<(usize, watch::Receiver<bool>)> {
+    pub fn insert(
+        &self,
+        id: &BotId,
+        target: &Target,
+        shards: usize,
+        fill: usize,
+    ) -> Option<(usize, watch::Receiver<bool>)> {
         let mut bots = self.lock();
         if bots.contains_key(id) {
             return None;
         }
         let load = load(&bots, shards);
-        let shard = (0..shards).find(|&s| load[s] < fill).or_else(|| (0..shards).min_by_key(|&s| load[s])).unwrap_or(0);
+        let shard = (0..shards)
+            .find(|&s| load[s] < fill)
+            .or_else(|| (0..shards).min_by_key(|&s| load[s]))
+            .unwrap_or(0);
         let (cancel, cancelled) = watch::channel(false);
-        let entry = Entry { target: target.clone(), shard, status: BotStatus::Waiting, cancel, stopped: None, waiter: None };
+        let entry = Entry {
+            target: target.clone(),
+            shard,
+            status: BotStatus::Waiting,
+            cancel,
+            stopped: None,
+            waiter: None,
+        };
         bots.insert(id.clone(), entry);
         Some((shard, cancelled))
     }
@@ -72,7 +88,9 @@ impl<S> Registry<S> {
     /// Marks the bot failed and keeps its spec; true if a pending `remove` took it instead.
     pub fn failed(&self, id: &BotId, error: String, spec: Option<BotSpec<S>>) -> bool {
         let mut bots = self.lock();
-        let Some(e) = bots.get_mut(id) else { return false };
+        let Some(e) = bots.get_mut(id) else {
+            return false;
+        };
         if e.waiter.is_some() {
             drop(bots);
             self.removed(id, spec);
@@ -87,7 +105,9 @@ impl<S> Registry<S> {
         let mut bots = self.lock();
         match bots.get_mut(id) {
             None => Take::Unknown,
-            Some(e) if matches!(e.status, BotStatus::Failed { .. }) => Take::Stopped(bots.remove(id).and_then(|e| e.stopped)),
+            Some(e) if matches!(e.status, BotStatus::Failed { .. }) => {
+                Take::Stopped(bots.remove(id).and_then(|e| e.stopped))
+            }
             Some(e) => {
                 let (tx, rx) = oneshot::channel();
                 e.waiter = Some(tx);
@@ -107,7 +127,12 @@ impl<S> Registry<S> {
         let bots = self.lock();
         let info = bots
             .iter()
-            .map(|(id, e)| BotInfo { id: id.clone(), target: e.target.clone(), shard: e.shard, status: e.status.clone() })
+            .map(|(id, e)| BotInfo {
+                id: id.clone(),
+                target: e.target.clone(),
+                shard: e.shard,
+                status: e.status.clone(),
+            })
             .collect();
         (info, load(&bots, shards))
     }
@@ -116,7 +141,10 @@ impl<S> Registry<S> {
 /// Running bots per shard (failed ones cost nothing).
 fn load<S>(bots: &HashMap<BotId, Entry<S>>, shards: usize) -> Vec<usize> {
     let mut load = vec![0; shards];
-    for e in bots.values().filter(|e| !matches!(e.status, BotStatus::Failed { .. })) {
+    for e in bots
+        .values()
+        .filter(|e| !matches!(e.status, BotStatus::Failed { .. }))
+    {
         load[e.shard] += 1;
     }
     load

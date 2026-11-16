@@ -50,15 +50,26 @@ struct Theirs(HashMap<[i32; 3], Vec<([i32; 3], Corners)>>);
 
 impl Theirs {
     fn add(&mut self, pos: [i32; 3], corners: Corners) {
-        self.0.entry(bucket(&corners.map(|c| c.0))).or_default().push((pos, corners));
+        self.0
+            .entry(bucket(&corners.map(|c| c.0)))
+            .or_default()
+            .push((pos, corners));
     }
 
     /// Takes the first quad at `corners` that `pick` accepts.
-    fn take(&mut self, corners: &[[i32; 3]; 4], pick: impl Fn(&Corners) -> bool) -> Option<([i32; 3], Corners)> {
+    fn take(
+        &mut self,
+        corners: &[[i32; 3]; 4],
+        pick: impl Fn(&Corners) -> bool,
+    ) -> Option<([i32; 3], Corners)> {
         let [x, y, z] = bucket(corners);
         let at = |t: &Corners| t.iter().all(|(p, _)| corners.iter().any(|q| close(*p, *q)));
-        for b in (-1..=1).flat_map(|dx| (-1..=1).flat_map(move |dy| (-1..=1).map(move |dz| [x + dx, y + dy, z + dz]))) {
-            let Some(group) = self.0.get_mut(&b) else { continue };
+        for b in (-1..=1).flat_map(|dx| {
+            (-1..=1).flat_map(move |dy| (-1..=1).map(move |dz| [x + dx, y + dy, z + dz]))
+        }) {
+            let Some(group) = self.0.get_mut(&b) else {
+                continue;
+            };
             if let Some(i) = group.iter().position(|(_, t)| at(t) && pick(t)) {
                 return Some(group.swap_remove(i));
             }
@@ -70,10 +81,20 @@ impl Theirs {
 /// The block a face belongs to: the cell just behind its centre (faces point out of their block).
 fn owner(corners: &[[i32; 3]; 4]) -> [i32; 3] {
     let [p0, p1, p2] = [0, 1, 2].map(|i| corners[i].map(|v| v as f32));
-    let (a, b) = ([0, 1, 2].map(|i| p1[i] - p0[i]), [0, 1, 2].map(|i| p2[i] - p0[i]));
-    let n = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    let (a, b) = (
+        [0, 1, 2].map(|i| p1[i] - p0[i]),
+        [0, 1, 2].map(|i| p2[i] - p0[i]),
+    );
+    let n = [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ];
     let len = n.iter().map(|v| v * v).sum::<f32>().sqrt().max(1e-6);
-    [0, 1, 2].map(|i| ((corners.iter().map(|c| c[i] as f32).sum::<f32>() / 4.0 - n[i] / len) / 256.0).floor() as i32)
+    [0, 1, 2].map(|i| {
+        ((corners.iter().map(|c| c[i] as f32).sum::<f32>() / 4.0 - n[i] / len) / 256.0).floor()
+            as i32
+    })
 }
 
 fn corners_of(face: &DrawnFace) -> Corners {
@@ -84,7 +105,9 @@ fn corners_of(face: &DrawnFace) -> Corners {
 }
 
 fn same(ours: &Corners, theirs: &Corners) -> bool {
-    theirs.iter().all(|(p, values)| ours.iter().any(|(q, v)| close(*p, *q) && v == values))
+    theirs
+        .iter()
+        .all(|(p, values)| ours.iter().any(|(q, v)| close(*p, *q) && v == values))
 }
 
 #[derive(Default)]
@@ -98,14 +121,22 @@ pub fn print(look: &LookPack, scenes: &Path, quads: &Path) -> Result<Outcome, Er
     let mut theirs: HashMap<usize, Theirs> = HashMap::new();
     for line in BufReader::new(std::fs::File::open(quads)?).lines() {
         let q: OracleQuad = serde_json::from_str(&line?)?;
-        let corners = std::array::from_fn(|k| ([0, 1, 2].map(|a| q.corners[k * 3 + a]), [0, 1, 2].map(|a| q.light[k * 3 + a])));
+        let corners = std::array::from_fn(|k| {
+            (
+                [0, 1, 2].map(|a| q.corners[k * 3 + a]),
+                [0, 1, 2].map(|a| q.light[k * 3 + a]),
+            )
+        });
         theirs.entry(q.scene).or_default().add(q.pos, corners);
     }
     let their_light = std::fs::read(quads.with_file_name("light.bin"))?;
     let registry = BlockRegistry::vanilla_arc();
     let table = look.block_table(&registry);
     let (mut outcome, mut tally, mut cursor) = (Outcome::default(), Tally::default(), 0);
-    for (index, line) in BufReader::new(std::fs::File::open(scenes)?).lines().enumerate() {
+    for (index, line) in BufReader::new(std::fs::File::open(scenes)?)
+        .lines()
+        .enumerate()
+    {
         let scene: Scene = serde_json::from_str(&line?)?;
         let (world, _held) = scene.build(&registry);
         let light = light_now(&world, &table);
@@ -113,8 +144,15 @@ pub fn print(look: &LookPack, scenes: &Path, quads: &Path) -> Result<Outcome, Er
         let mut faces = Vec::new();
         for (cx, cz) in scene.inner() {
             for sy in scene.min_y >> 4..(scene.min_y + scene.height as i32) >> 4 {
-                let Some(v) = Volume::gather_lit(&world, cx, sy, cz, table.lighting) else { continue };
-                let mesh = mesh_section_lit(&v, &table, &BiomeColors::default(), Some(&light.gather_cells((cx, sy, cz))));
+                let Some(v) = Volume::gather_lit(&world, cx, sy, cz, table.lighting) else {
+                    continue;
+                };
+                let mesh = mesh_section_lit(
+                    &v,
+                    &table,
+                    &BiomeColors::default(),
+                    Some(&light.gather_cells((cx, sy, cz))),
+                );
                 faces.extend(drawn_faces(&mesh, [cx * 16, sy * 16, cz * 16]));
             }
         }
@@ -134,20 +172,44 @@ pub fn print(look: &LookPack, scenes: &Path, quads: &Path) -> Result<Outcome, Er
                 let pos = owner(&face.corners);
                 let name = block_name(&world, pos);
                 *tally.ours_only.entry(name.clone()).or_default() += 1;
-                outcome.diverge(&format!("{}: {name} at {pos:?}", scene.scene), "drawn only by acacia", "no face", format!("{:?}", face.corners));
+                outcome.diverge(
+                    &format!("{}: {name} at {pos:?}", scene.scene),
+                    "drawn only by acacia",
+                    "no face",
+                    format!("{:?}", face.corners),
+                );
                 continue;
             };
             outcome.cases += 1;
             let name = block_name(&world, pos);
             *tally.differing.entry(name.clone()).or_default() += 1;
-            let show = |c: &Corners| c.iter().map(|(p, v)| format!("{p:?}={v:?}")).collect::<Vec<_>>().join(" ");
-            let got = if face.light[0] & LIT == 0 { "lit from the light volume".to_owned() } else { show(&corners_of(&face)) };
-            outcome.diverge(&format!("{}: {name} at {pos:?}", scene.scene), "vertex light", show(&expected), got);
+            let show = |c: &Corners| {
+                c.iter()
+                    .map(|(p, v)| format!("{p:?}={v:?}"))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
+            let got = if face.light[0] & LIT == 0 {
+                "lit from the light volume".to_owned()
+            } else {
+                show(&corners_of(&face))
+            };
+            outcome.diverge(
+                &format!("{}: {name} at {pos:?}", scene.scene),
+                "vertex light",
+                show(&expected),
+                got,
+            );
         }
         for (pos, corners) in theirs.0.values().flatten() {
             let name = block_name(&world, *pos);
             *tally.theirs_only.entry(name.clone()).or_default() += 1;
-            outcome.diverge(&format!("{}: {name} at {pos:?}", scene.scene), "drawn only by the game", format!("{:?}", corners.map(|c| c.0)), "no face");
+            outcome.diverge(
+                &format!("{}: {name} at {pos:?}", scene.scene),
+                "drawn only by the game",
+                format!("{:?}", corners.map(|c| c.0)),
+                "no face",
+            );
         }
     }
     println!("{} cells and faces compared", outcome.cases);
@@ -161,6 +223,10 @@ fn list(what: &str, counts: BTreeMap<String, usize>) {
     let mut counts: Vec<_> = counts.into_iter().collect();
     counts.sort_by_key(|(_, n)| std::cmp::Reverse(*n));
     let total: usize = counts.iter().map(|(_, n)| n).sum();
-    let top: Vec<String> = counts.iter().take(12).map(|(k, n)| format!("{k} {n}")).collect();
+    let top: Vec<String> = counts
+        .iter()
+        .take(12)
+        .map(|(k, n)| format!("{k} {n}"))
+        .collect();
     println!("  {what}: {total} ({})", top.join(", "));
 }

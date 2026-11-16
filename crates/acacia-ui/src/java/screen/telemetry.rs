@@ -14,21 +14,86 @@ use crate::java::widget::text_area::{INNER_PADDING, TextArea};
 use crate::java::widget::{Base, Ctx, Widget, render};
 
 const GLOBAL: &[&str] = &[
-    "user_id", "client_id", "minecraft_session_id", "game_version", "operating_system", "platform", "client_modded", "launcher_name",
-    "event_timestamp_utc", "opt_in",
+    "user_id",
+    "client_id",
+    "minecraft_session_id",
+    "game_version",
+    "operating_system",
+    "platform",
+    "client_modded",
+    "launcher_name",
+    "event_timestamp_utc",
+    "opt_in",
 ];
-const WORLD: &[&str] = &["world_session_id", "server_modded", "server_type", "server_session_id"];
+const WORLD: &[&str] = &[
+    "world_session_id",
+    "server_modded",
+    "server_type",
+    "server_session_id",
+];
 
 /// `TelemetryEventType`s in registration order: id, opt-in, whether the world session's
 /// properties follow the global ones, and the event's own properties.
 const EVENTS: &[(&str, bool, bool, &[&str])] = &[
-    ("graphics_capabilities", false, false, &["backend_name", "backend_failure_message", "backend_failure_reason", "backend_failure_missing_capabilities"]),
-    ("world_loaded", false, true, &["game_mode", "realms_map_content"]),
-    ("performance_metrics", true, true, &["frame_rate_samples", "render_time_samples", "used_memory_samples", "number_of_samples", "render_distance", "dedicated_memory_kb"]),
-    ("world_load_times", true, true, &["world_load_time_ms", "new_world"]),
-    ("world_unloaded", false, true, &["seconds_since_load", "ticks_since_load"]),
-    ("advancement_made", true, true, &["advancement_id", "advancement_game_time"]),
-    ("game_load_times", true, false, &["load_time_total_time_ms", "load_time_pre_window_ms", "load_time_bootstrap_ms", "load_time_loading_overlay_ms"]),
+    (
+        "graphics_capabilities",
+        false,
+        false,
+        &[
+            "backend_name",
+            "backend_failure_message",
+            "backend_failure_reason",
+            "backend_failure_missing_capabilities",
+        ],
+    ),
+    (
+        "world_loaded",
+        false,
+        true,
+        &["game_mode", "realms_map_content"],
+    ),
+    (
+        "performance_metrics",
+        true,
+        true,
+        &[
+            "frame_rate_samples",
+            "render_time_samples",
+            "used_memory_samples",
+            "number_of_samples",
+            "render_distance",
+            "dedicated_memory_kb",
+        ],
+    ),
+    (
+        "world_load_times",
+        true,
+        true,
+        &["world_load_time_ms", "new_world"],
+    ),
+    (
+        "world_unloaded",
+        false,
+        true,
+        &["seconds_since_load", "ticks_since_load"],
+    ),
+    (
+        "advancement_made",
+        true,
+        true,
+        &["advancement_id", "advancement_game_time"],
+    ),
+    (
+        "game_load_times",
+        true,
+        false,
+        &[
+            "load_time_total_time_ms",
+            "load_time_pre_window_ms",
+            "load_time_bootstrap_ms",
+            "load_time_loading_overlay_ms",
+        ],
+    ),
 ];
 
 const GRAY: u32 = 0xAA_AAAA;
@@ -66,7 +131,12 @@ impl EventWidget {
         let width = w - INNER_PADDING * 2;
         let mut widgets: Arena = Vec::new();
         let mut column = Linear::new(true, 0);
-        column.add_default(Elem::Spacer { x: 0, y: 0, w: width, h: 0 });
+        column.add_default(Elem::Spacer {
+            x: 0,
+            y: 0,
+            w: width,
+            h: 0,
+        });
         let mut events: Vec<_> = EVENTS.to_vec();
         events.sort_by_key(|e| e.1);
         let mut add = |column: &mut Linear, text: Text, header: bool, pad_bottom: i32| {
@@ -75,7 +145,11 @@ impl EventWidget {
             t.centered = header;
             widgets.push(Box::new(MultiLineTextWidget::new(ctx.font, t)));
             let d = column.grid.defaults;
-            let s = if header { d.align_x(0.5).padding(32, 0, 32, 0) } else { d.pad_bottom(pad_bottom) };
+            let s = if header {
+                d.align_x(0.5).padding(32, 0, 32, 0)
+            } else {
+                d.pad_bottom(pad_bottom)
+            };
             column.add(Elem::Widget(widgets.len() - 1), s);
         };
         for (i, &(id, opt_in, world, own)) in events.iter().enumerate() {
@@ -86,17 +160,46 @@ impl EventWidget {
                 (true, true) => "telemetry.event.optional.disabled",
             };
             let title = ctx.tr(&format!("telemetry.event.{id}.title"));
-            add(&mut column, gray_if(ctx.tr_args(pattern, &[title]), disabled), true, 0);
-            add(&mut column, ctx.tr(&format!("telemetry.event.{id}.description")).with_color(GRAY), true, 0);
-            column.add_default(Elem::Spacer { x: 0, y: 0, w: 0, h: 9 / 2 });
-            let property_title = ctx.tr("telemetry_info.property_title").with_style(&Style { underlined: Some(true), ..Style::default() });
+            add(
+                &mut column,
+                gray_if(ctx.tr_args(pattern, &[title]), disabled),
+                true,
+                0,
+            );
+            add(
+                &mut column,
+                ctx.tr(&format!("telemetry.event.{id}.description"))
+                    .with_color(GRAY),
+                true,
+                0,
+            );
+            column.add_default(Elem::Spacer {
+                x: 0,
+                y: 0,
+                w: 0,
+                h: 9 / 2,
+            });
+            let property_title = ctx.tr("telemetry_info.property_title").with_style(&Style {
+                underlined: Some(true),
+                ..Style::default()
+            });
             add(&mut column, gray_if(property_title, disabled), false, 2);
             let world_props = if world { WORLD } else { &[] };
             for p in GLOBAL.iter().chain(world_props).chain(own.iter()) {
-                add(&mut column, gray_if(ctx.tr(&format!("telemetry.property.{p}.title")), disabled), false, 0);
+                add(
+                    &mut column,
+                    gray_if(ctx.tr(&format!("telemetry.property.{p}.title")), disabled),
+                    false,
+                    0,
+                );
             }
             if i + 1 < events.len() {
-                column.add_default(Elem::Spacer { x: 0, y: 0, w: 0, h: 9 });
+                column.add_default(Elem::Spacer {
+                    x: 0,
+                    y: 0,
+                    w: 0,
+                    h: 9,
+                });
             }
         }
         let mut root = column.into_elem();
@@ -109,7 +212,11 @@ impl EventWidget {
         };
         let mut area = TextArea::new(0, 0, w, h, 9.0);
         area.base.message = Text::default();
-        EventWidget { area, widgets, inner_height }
+        EventWidget {
+            area,
+            widgets,
+            inner_height,
+        }
     }
 
     pub fn set_scroll(&mut self, v: f64) {
@@ -127,11 +234,16 @@ impl Widget for EventWidget {
     fn extract(&mut self, ctx: &mut Ctx, _hovered: bool) {
         let (area, widgets) = (&self.area, &mut self.widgets);
         let (left, top) = (area.inner_left(), area.inner_top());
-        area.extract(ctx, self.inner_height, |ctx| {
-            ctx.push(vec![PoseOp::Translate(left as f32, top as f32)]);
-            render_all(widgets, ctx);
-            ctx.pop();
-        }, |_| {});
+        area.extract(
+            ctx,
+            self.inner_height,
+            |ctx| {
+                ctx.push(vec![PoseOp::Translate(left as f32, top as f32)]);
+                render_all(widgets, ctx);
+                ctx.pop();
+            },
+            |_| {},
+        );
     }
 }
 
@@ -163,7 +275,10 @@ impl TelemetryInfoScreen {
     /// `init()` and `repositionElements` with the event list scrolled to `scroll`.
     pub fn new(ctx: &Ctx, env: Env, t: Telemetry, scroll: f64) -> TelemetryInfoScreen {
         let m: &dyn Metrics = ctx.font;
-        let mut layout = HeaderFooter::new(16 + 9 * 5 + 20, if t.extra_available { 33 + 9 + 8 } else { 33 });
+        let mut layout = HeaderFooter::new(
+            16 + 9 * 5 + 20,
+            if t.extra_available { 33 + 9 + 8 } else { 33 },
+        );
         let mut widgets: Arena = Vec::new();
         let push = |widgets: &mut Arena, w: Box<dyn Widget>| {
             widgets.push(w);
@@ -171,21 +286,46 @@ impl TelemetryInfoScreen {
         };
         let mut header = Linear::new(true, 4);
         header.grid.defaults = header.grid.defaults.align_x(0.5);
-        header.add_default(push(&mut widgets, Box::new(StringWidget::fit(m, ctx.tr("telemetry_info.screen.title")))));
-        let mut description = MultiLineText::new(ctx.tr("telemetry_info.screen.description").with_color(0xBA_BABA));
+        header.add_default(push(
+            &mut widgets,
+            Box::new(StringWidget::fit(m, ctx.tr("telemetry_info.screen.title"))),
+        ));
+        let mut description = MultiLineText::new(
+            ctx.tr("telemetry_info.screen.description")
+                .with_color(0xBA_BABA),
+        );
         description.centered = true;
         description.max_width = Some(env.width - 16);
-        header.add_default(push(&mut widgets, Box::new(MultiLineTextWidget::new(m, description))));
+        header.add_default(push(
+            &mut widgets,
+            Box::new(MultiLineTextWidget::new(m, description)),
+        ));
         let mut links = Linear::new(false, 8);
-        links.add_default(push(&mut widgets, Box::new(Button::named(ctx, 150, PRIVACY))));
-        links.add_default(push(&mut widgets, Box::new(Button::named(ctx, 150, FEEDBACK))));
+        links.add_default(push(
+            &mut widgets,
+            Box::new(Button::named(ctx, 150, PRIVACY)),
+        ));
+        links.add_default(push(
+            &mut widgets,
+            Box::new(Button::named(ctx, 150, FEEDBACK)),
+        ));
         header.add_default(links.into_elem());
         layout.add_header(header.into_elem());
         let mut contents = Linear::new(true, 8);
-        let mut events = EventWidget::new(ctx, env.width - 40, layout.content_height(env.height), t.opted_in());
+        let mut events = EventWidget::new(
+            ctx,
+            env.width - 40,
+            layout.content_height(env.height),
+            t.opted_in(),
+        );
         events.set_scroll(scroll);
         let split = widgets.len();
-        contents.add_default(Elem::Spacer { x: 0, y: 0, w: events.area.base.w, h: events.area.base.h });
+        contents.add_default(Elem::Spacer {
+            x: 0,
+            y: 0,
+            w: events.area.base.w,
+            h: events.area.base.h,
+        });
         layout.add_contents(contents.into_elem());
         let mut footer = Linear::new(true, 4);
         footer.grid.defaults = footer.grid.defaults.align_x(0.5);
@@ -196,15 +336,28 @@ impl TelemetryInfoScreen {
             footer.add_default(push(&mut widgets, Box::new(checkbox)));
         }
         let mut buttons = Linear::new(false, 8);
-        buttons.add_default(push(&mut widgets, Box::new(Button::named(ctx, 150, SHOW_DATA))));
+        buttons.add_default(push(
+            &mut widgets,
+            Box::new(Button::named(ctx, 150, SHOW_DATA)),
+        ));
         buttons.add_default(push(&mut widgets, Box::new(Button::named(ctx, 150, DONE))));
         footer.add_default(buttons.into_elem());
         layout.add_footer(footer.into_elem());
         layout.arrange(&mut widgets, env.width, env.height);
-        if let Some((x, y)) = layout.contents.cells.iter().find_map(|c| spacer_at(&c.elem)) {
+        if let Some((x, y)) = layout
+            .contents
+            .cells
+            .iter()
+            .find_map(|c| spacer_at(&c.elem))
+        {
             (events.area.base.x, events.area.base.y) = (x, y);
         }
-        TelemetryInfoScreen { env, widgets, split, events }
+        TelemetryInfoScreen {
+            env,
+            widgets,
+            split,
+            events,
+        }
     }
 
     /// The child `setInitialFocus` focuses: the event list.
@@ -228,7 +381,10 @@ impl Screen for TelemetryInfoScreen {
     fn children(&mut self) -> Vec<Child<'_>> {
         let (header, footer) = self.widgets.split_at_mut(self.split);
         let mut out = arena_children(header);
-        out.push(Child { widget: &mut self.events, clip: None });
+        out.push(Child {
+            widget: &mut self.events,
+            clip: None,
+        });
         out.extend(arena_children(footer));
         out
     }

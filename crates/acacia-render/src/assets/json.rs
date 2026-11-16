@@ -6,8 +6,14 @@ use crate::Error;
 
 /// Reads a resource pack JSON file; vanilla files carry `//` and `/* */` comments.
 pub fn read(path: &Path) -> Result<Value, Error> {
-    let text = std::fs::read_to_string(path).map_err(|source| Error::Io { path: path.display().to_string(), source })?;
-    serde_json::from_str(&strip_comments(&text)).map_err(|source| Error::Json { path: path.display().to_string(), source })
+    let text = std::fs::read_to_string(path).map_err(|source| Error::Io {
+        path: path.display().to_string(),
+        source,
+    })?;
+    serde_json::from_str(&strip_comments(&text)).map_err(|source| Error::Json {
+        path: path.display().to_string(),
+        source,
+    })
 }
 
 pub fn strip_comments(text: &str) -> String {
@@ -29,9 +35,7 @@ pub fn strip_comments(text: &str) -> String {
                 in_string = true;
                 out.push(c);
             }
-            ('/', Some('/')) => {
-                while chars.next_if(|&n| n != '\n').is_some() {}
-            }
+            ('/', Some('/')) => while chars.next_if(|&n| n != '\n').is_some() {},
             ('/', Some('*')) => {
                 chars.next();
                 let mut prev = ' ';

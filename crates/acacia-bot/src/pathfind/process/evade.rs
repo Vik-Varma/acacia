@@ -38,12 +38,20 @@ impl Process for Evade {
 
     fn want(&mut self, cx: &Ctx) -> Want {
         let blasts = cx.hazards.map_or(&[][..], |h| &h.blasts[..]);
-        let Some(&near) = blasts.iter().filter(|&&b| dist(cx.pos, b) < CLEAR).min_by(|a, b| dist(cx.pos, **a).total_cmp(&dist(cx.pos, **b))) else {
+        let Some(&near) = blasts
+            .iter()
+            .filter(|&&b| dist(cx.pos, b) < CLEAR)
+            .min_by(|a, b| dist(cx.pos, **a).total_cmp(&dist(cx.pos, **b)))
+        else {
             self.from = None;
             return Want::Yield;
         };
         let from = *self.from.get_or_insert(near);
-        let from = if dist(from, near) > RESTART { *self.from.insert(near) } else { from };
+        let from = if dist(from, near) > RESTART {
+            *self.from.insert(near)
+        } else {
+            from
+        };
         Want::Go(Goal::Away(cell(from), CLEAR))
     }
 

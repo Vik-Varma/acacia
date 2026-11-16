@@ -29,7 +29,10 @@ impl Bot {
             self.respawn_in = None;
             return;
         }
-        let searching = packet.id == Respawn::ID && packet.decode::<Respawn>().is_ok_and(|r| r.state == SEARCHING_FOR_SPAWN);
+        let searching = packet.id == Respawn::ID
+            && packet
+                .decode::<Respawn>()
+                .is_ok_and(|r| r.state == SEARCHING_FOR_SPAWN);
         if self.auto_respawn && self.respawn_in.is_none() && (searching || was_alive) {
             self.respawn_in = Some(DEATH_SCREEN_TICKS);
         }

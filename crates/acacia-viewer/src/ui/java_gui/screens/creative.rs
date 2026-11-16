@@ -51,7 +51,9 @@ fn tabs(kit: &Kit) -> Vec<Tab> {
 /// Whether the entry's name or id holds the search's words.
 fn found(kit: &Kit, entry: &CreativeEntry, sought: &str) -> bool {
     let stack = item_stack(&entry.stack, kit.items, kit.lang, 0);
-    let name = acacia_ui::java::tooltip::item::hover_name(&stack, kit.env.lang, kit.env.game).plain().to_lowercase();
+    let name = acacia_ui::java::tooltip::item::hover_name(&stack, kit.env.lang, kit.env.game)
+        .plain()
+        .to_lowercase();
     name.contains(sought) || java_id(&entry.stack, kit.items).contains(sought)
 }
 
@@ -59,7 +61,16 @@ fn found(kit: &Kit, entry: &CreativeEntry, sought: &str) -> bool {
 pub(super) fn listed<'a>(kit: &Kit<'a>, tab: usize) -> Vec<&'a CreativeEntry> {
     let entries = kit.view.entries;
     let sought = kit.view.name.0.trim().to_lowercase();
-    entries.iter().filter(|e| if tab == SEARCH_TAB { sought.is_empty() || found(kit, e, &sought) } else { e.tab == tab }).collect()
+    entries
+        .iter()
+        .filter(|e| {
+            if tab == SEARCH_TAB {
+                sought.is_empty() || found(kit, e, &sought)
+            } else {
+                e.tab == tab
+            }
+        })
+        .collect()
 }
 
 /// `inventory_slot`'s targets on the survival inventory tab.
@@ -91,8 +102,13 @@ pub(super) fn creative(kit: &mut Kit) -> (Open, Vec<Target>) {
         s.set_items(listed.len(), |_| None, kit.state.scroll);
         let rows = (listed.len() as i32 + 8) / 9 - 5;
         let row = (((s.scroll * rows as f32) as f64 + 0.5) as i32).max(0) as usize;
-        let grid = (0..GRID).map(|i| listed.get(i + row * 9).map_or(Target::None, |e| Target::Creative(e.id)));
-        grid.chain((0..9).map(|i| Target::Slot(SlotRef::Main(i)))).collect()
+        let grid = (0..GRID).map(|i| {
+            listed
+                .get(i + row * 9)
+                .map_or(Target::None, |e| Target::Creative(e.id))
+        });
+        grid.chain((0..9).map(|i| Target::Slot(SlotRef::Main(i))))
+            .collect()
     };
     fill(kit, &mut s.base, &targets);
     if selected == SEARCH_TAB {

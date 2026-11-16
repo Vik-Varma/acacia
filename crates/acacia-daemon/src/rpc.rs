@@ -2,7 +2,7 @@
 
 use acacia_api::{ApiError, ErrorCode};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// One request (or client notification, without `id`).
 #[derive(Debug)]
@@ -33,21 +33,41 @@ pub(crate) struct Malformed {
 
 impl Request {
     pub(crate) fn parse(text: &str) -> Result<Self, Malformed> {
-        let value: Value = serde_json::from_str(text)
-            .map_err(|e| Malformed { id: Value::Null, rpc: -32700, message: format!("parse error: {e}") })?;
+        let value: Value = serde_json::from_str(text).map_err(|e| Malformed {
+            id: Value::Null,
+            rpc: -32700,
+            message: format!("parse error: {e}"),
+        })?;
         if value.is_array() {
-            return Err(Malformed { id: Value::Null, rpc: -32600, message: "batches are not supported".into() });
+            return Err(Malformed {
+                id: Value::Null,
+                rpc: -32600,
+                message: "batches are not supported".into(),
+            });
         }
         let id = value.get("id").cloned().unwrap_or(Value::Null);
-        let invalid = |message: String| Malformed { id: id.clone(), rpc: -32600, message };
-        let envelope: Envelope = serde_json::from_value(value.clone()).map_err(|e| invalid(format!("invalid request: {e}")))?;
+        let invalid = |message: String| Malformed {
+            id: id.clone(),
+            rpc: -32600,
+            message,
+        };
+        let envelope: Envelope = serde_json::from_value(value.clone())
+            .map_err(|e| invalid(format!("invalid request: {e}")))?;
         if envelope.jsonrpc != "2.0" {
             return Err(invalid("jsonrpc must be \"2.0\"".into()));
         }
-        if envelope.id.as_ref().is_some_and(|id| !(id.is_string() || id.is_number() || id.is_null())) {
+        if envelope
+            .id
+            .as_ref()
+            .is_some_and(|id| !(id.is_string() || id.is_number() || id.is_null()))
+        {
             return Err(invalid("id must be a string, a number or null".into()));
         }
-        Ok(Self { id: envelope.id, method: envelope.method, params: envelope.params })
+        Ok(Self {
+            id: envelope.id,
+            method: envelope.method,
+            params: envelope.params,
+        })
     }
 }
 
@@ -90,7 +110,11 @@ pub(crate) fn error_with(id: &Value, rpc: i64, error: &ApiError) -> String {
 }
 
 pub(crate) fn malformed(m: &Malformed) -> String {
-    error_with(&m.id, m.rpc, &ApiError::new(ErrorCode::BadParams, m.message.clone()))
+    error_with(
+        &m.id,
+        m.rpc,
+        &ApiError::new(ErrorCode::BadParams, m.message.clone()),
+    )
 }
 
 /// One `out` notification carrying `records` (each already JSON).
@@ -112,17 +136,38 @@ mod tests {
 
     #[test]
     fn frames_are_json_rpc() {
-        let request = Request::parse(r#"{"jsonrpc":"2.0","id":3,"method":"bot.chat","params":{"bot":"bot-1"}}"#).unwrap();
-        assert_eq!((request.id, request.method.as_str()), (Some(json!(3)), "bot.chat"));
-        assert!(Request::parse(r#"{"jsonrpc":"2.0","method":"cancel"}"#).unwrap().id.is_none());
+        let request = Request::parse(
+            r#"{"jsonrpc":"2.0","id":3,"method":"bot.chat","params":{"bot":"bot-1"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            (request.id, request.method.as_str()),
+            (Some(json!(3)), "bot.chat")
+        );
+        assert!(
+            Request::parse(r#"{"jsonrpc":"2.0","method":"cancel"}"#)
+                .unwrap()
+                .id
+                .is_none()
+        );
         assert_eq!(Request::parse("{").err().unwrap().rpc, -32700);
         assert_eq!(Request::parse("[]").err().unwrap().rpc, -32600);
-        let bad = Request::parse(r#"{"jsonrpc":"1.0","id":"a","method":"x"}"#).err().unwrap();
+        let bad = Request::parse(r#"{"jsonrpc":"1.0","id":"a","method":"x"}"#)
+            .err()
+            .unwrap();
         assert_eq!((bad.rpc, bad.id), (-32600, json!("a")));
         let records = [r#"{"type":"lagged","dropped":1}"#.to_owned()];
         let frame: Value = serde_json::from_str(&out(&records)).unwrap();
         assert_eq!(frame["params"]["records"][0]["dropped"], 1);
-        let e: Value = serde_json::from_str(&error(&json!(1), &ApiError::new(ErrorCode::Cancelled, "x"))).unwrap();
-        assert_eq!((e["error"]["code"].as_i64(), e["error"]["data"]["code"].as_str()), (Some(-32010), Some("CANCELLED")));
+        let e: Value =
+            serde_json::from_str(&error(&json!(1), &ApiError::new(ErrorCode::Cancelled, "x")))
+                .unwrap();
+        assert_eq!(
+            (
+                e["error"]["code"].as_i64(),
+                e["error"]["data"]["code"].as_str()
+            ),
+            (Some(-32010), Some("CANCELLED"))
+        );
     }
 }

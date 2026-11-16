@@ -4,8 +4,8 @@
 use acacia_physics::{BlockPos, Vec3};
 use acacia_world::BlockRegistry;
 
-use super::{look, Dir};
-use crate::build::structure::{Block, BED_COLOR};
+use super::{Dir, look};
+use crate::build::structure::{BED_COLOR, Block};
 use crate::interact::Face;
 use crate::pathfind::process::Look;
 
@@ -17,7 +17,16 @@ pub enum Kind {
 }
 
 /// Small dripleaf only stands on clay or moss on dry land (grass refused); it faces the player.
-const PLANTS: &[&str] = &["sunflower", "lilac", "rose_bush", "peony", "tall_grass", "large_fern", "pitcher_plant", "small_dripleaf_block"];
+const PLANTS: &[&str] = &[
+    "sunflower",
+    "lilac",
+    "rose_bush",
+    "peony",
+    "tall_grass",
+    "large_fern",
+    "pitcher_plant",
+    "small_dripleaf_block",
+];
 
 pub fn kind(name: &str) -> Option<Kind> {
     let n = name.trim_start_matches("minecraft:");
@@ -40,7 +49,10 @@ fn legacy(d: Dir) -> &'static str {
 }
 
 fn from_legacy(v: &str) -> Option<Dir> {
-    Some([Dir::South, Dir::West, Dir::North, Dir::East][v.parse::<usize>().ok().filter(|i| *i < 4)?])
+    Some(
+        [Dir::South, Dir::West, Dir::North, Dir::East]
+            [v.parse::<usize>().ok().filter(|i| *i < 4)?],
+    )
 }
 
 fn from_word(v: &str) -> Option<Dir> {
@@ -81,11 +93,17 @@ fn bit(b: &Block, k: &str) -> bool {
 /// The other cell of a two-cell target at `pos`, and whether `pos` is the first (the cell placed from).
 pub fn partner(target: &Block, pos: BlockPos) -> Option<(BlockPos, bool)> {
     match kind(&target.name)? {
-        Kind::Door | Kind::Plant if bit(target, "upper_block_bit") => Some((step(pos, Dir::Down), false)),
+        Kind::Door | Kind::Plant if bit(target, "upper_block_bit") => {
+            Some((step(pos, Dir::Down), false))
+        }
         Kind::Door | Kind::Plant => Some((step(pos, Dir::Up), true)),
         Kind::Bed => {
             let d = from_legacy(target.prop("direction")?)?;
-            if bit(target, "head_piece_bit") { Some((step(pos, d.opposite()), false)) } else { Some((step(pos, d), true)) }
+            if bit(target, "head_piece_bit") {
+                Some((step(pos, d.opposite()), false))
+            } else {
+                Some((step(pos, d), true))
+            }
         }
     }
 }
@@ -100,18 +118,31 @@ pub fn mirror_door(b: Block) -> Block {
         .props
         .split(',')
         .filter_map(|kv| kv.split_once('='))
-        .map(|(k, v)| match (k.trim_start_matches("minecraft:"), from_word(v)) {
-            ("cardinal_direction", Some(d)) => format!("{k}={}", d.opposite().word()),
-            ("door_hinge_bit", _) => format!("{k}={}", if v == "1" { "0" } else { "1" }),
-            _ => format!("{k}={v}"),
-        })
+        .map(
+            |(k, v)| match (k.trim_start_matches("minecraft:"), from_word(v)) {
+                ("cardinal_direction", Some(d)) => format!("{k}={}", d.opposite().word()),
+                ("door_hinge_bit", _) => format!("{k}={}", if v == "1" { "0" } else { "1" }),
+                _ => format!("{k}={v}"),
+            },
+        )
         .collect();
     Block::new(&b.name, &props.join(","))
 }
 
 /// Keys of two-cell blocks the placement (or the pair) decides.
 pub fn controlled(name: &str, k: &str) -> bool {
-    kind(name).is_some() && matches!(k, "upper_block_bit" | "door_hinge_bit" | "open_bit" | "head_piece_bit" | "occupied_bit" | "cardinal_direction" | "direction" | BED_COLOR)
+    kind(name).is_some()
+        && matches!(
+            k,
+            "upper_block_bit"
+                | "door_hinge_bit"
+                | "open_bit"
+                | "head_piece_bit"
+                | "occupied_bit"
+                | "cardinal_direction"
+                | "direction"
+                | BED_COLOR
+        )
 }
 
 /// A state no placement gives: an open door (the interact tier), an occupied bed.
@@ -125,7 +156,11 @@ pub fn ignored(target: &Block, k: &str) -> bool {
     if kind(&target.name) != Some(Kind::Door) {
         return false;
     }
-    if bit(target, "upper_block_bit") { matches!(k, "cardinal_direction" | "open_bit") } else { k == "door_hinge_bit" }
+    if bit(target, "upper_block_bit") {
+        matches!(k, "cardinal_direction" | "open_bit")
+    } else {
+        k == "door_hinge_bit"
+    }
 }
 
 /// Placing the first cell of a two-cell target by this click gives its states: doors and beds only from the Up
@@ -140,7 +175,9 @@ pub fn gives(target: &Block, face: Face, eye: Vec3, point: Vec3) -> Option<bool>
         _ => {}
     }
     let looks = look(eye, point);
-    let facing = target.prop("minecraft:cardinal_direction").or(target.prop("cardinal_direction"));
+    let facing = target
+        .prop("minecraft:cardinal_direction")
+        .or(target.prop("cardinal_direction"));
     Some(match k {
         Kind::Door => looks.map(clockwise).map(Dir::word) == facing,
         Kind::Bed => looks.map(legacy) == target.prop("direction"),
@@ -152,25 +189,55 @@ pub fn gives(target: &Block, face: Face, eye: Vec3, point: Vec3) -> Option<bool>
 /// and right as seen from where it is placed): 1 with a door left and none right, or more opaque full blocks in
 /// the two cells right than left (glass, slabs, fences and doors don't count); `None`: not a door.
 pub fn hinge_now(upper: &Block, pos: BlockPos, look: &dyn Look) -> Option<&'static str> {
-    hinge_with(upper, pos, &|p| look.block(p).map(|v| (v.name.to_string(), v.props.to_string())))
+    hinge_with(upper, pos, &|p| {
+        look.block(p)
+            .map(|v| (v.name.to_string(), v.props.to_string()))
+    })
 }
 
 /// [`hinge_now`] with the neighbours `block` gives (name, props; `None`: air or unloaded).
-pub fn hinge_with(upper: &Block, pos: BlockPos, block: &dyn Fn(BlockPos) -> Option<(String, String)>) -> Option<&'static str> {
+pub fn hinge_with(
+    upper: &Block,
+    pos: BlockPos,
+    block: &dyn Fn(BlockPos) -> Option<(String, String)>,
+) -> Option<&'static str> {
     if kind(&upper.name) != Some(Kind::Door) {
         return None;
     }
     let (left, right) = sides(upper, pos)?;
-    let door = |p: BlockPos| block(p).is_some_and(|(n, s)| kind(&n) == Some(Kind::Door) && s.contains("upper_block_bit=0"));
+    let door = |p: BlockPos| {
+        block(p)
+            .is_some_and(|(n, s)| kind(&n) == Some(Kind::Door) && s.contains("upper_block_bit=0"))
+    };
     let r = BlockRegistry::vanilla();
-    let opaque = |p: BlockPos| block(p).and_then(|(n, s)| r.find(&n, &s)).and_then(|id| r.get(id)).is_some_and(|s| s.is_full_cube() && s.light_filter >= 15);
-    let count = |p: BlockPos| [p, step(p, Dir::Up)].into_iter().filter(|c| opaque(*c)).count();
-    Some(if (door(left) && !door(right)) || count(right) > count(left) { "1" } else { "0" })
+    let opaque = |p: BlockPos| {
+        block(p)
+            .and_then(|(n, s)| r.find(&n, &s))
+            .and_then(|id| r.get(id))
+            .is_some_and(|s| s.is_full_cube() && s.light_filter >= 15)
+    };
+    let count = |p: BlockPos| {
+        [p, step(p, Dir::Up)]
+            .into_iter()
+            .filter(|c| opaque(*c))
+            .count()
+    };
+    Some(
+        if (door(left) && !door(right)) || count(right) > count(left) {
+            "1"
+        } else {
+            "0"
+        },
+    )
 }
 
 /// The lower cells left and right of the door whose upper half is at `pos`, as seen from the placing side.
 pub fn sides(upper: &Block, pos: BlockPos) -> Option<(BlockPos, BlockPos)> {
-    let right = from_word(upper.prop("minecraft:cardinal_direction").or(upper.prop("cardinal_direction"))?)?;
+    let right = from_word(
+        upper
+            .prop("minecraft:cardinal_direction")
+            .or(upper.prop("cardinal_direction"))?,
+    )?;
     let lower = step(pos, Dir::Down);
     Some((step(lower, right.opposite()), step(lower, right)))
 }
@@ -182,5 +249,8 @@ pub fn color(target: &Block) -> Option<u8> {
 
 /// A coloured bed's item key: `bed` with the colour as aux.
 pub fn item(target: &Block) -> Option<String> {
-    Some(crate::pathfind::process::item_key::join(&target.name, Some(u32::from(color(target)?))))
+    Some(crate::pathfind::process::item_key::join(
+        &target.name,
+        Some(u32::from(color(target)?)),
+    ))
 }

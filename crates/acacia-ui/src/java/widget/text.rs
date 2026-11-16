@@ -4,7 +4,7 @@
 use super::measure::{self, ELLIPSIS};
 use super::{Base, Ctx, Widget};
 use crate::java::gui::{Gui, Metrics};
-use crate::java::mth::{as8, with_alpha, white};
+use crate::java::mth::{as8, white, with_alpha};
 use crate::java::text::{Style, Text};
 
 /// `StringWidget.TextOverflow`.
@@ -29,7 +29,12 @@ impl StringWidget {
         let mut base = Base::new(x, y, w, h, message);
         base.active = false;
         let text_width = m.width(&base.message);
-        StringWidget { base, max_width: 0, overflow: Overflow::Clamped, text_width }
+        StringWidget {
+            base,
+            max_width: 0,
+            overflow: Overflow::Clamped,
+            text_width,
+        }
     }
 
     /// `new StringWidget(message, font)`: as wide as the text, 9 high.
@@ -53,11 +58,19 @@ impl Widget for StringWidget {
         &mut self.base
     }
     fn width(&self) -> i32 {
-        if self.max_width > 0 { self.max_width.min(self.text_width) } else { self.base.w }
+        if self.max_width > 0 {
+            self.max_width.min(self.text_width)
+        } else {
+            self.base.w
+        }
     }
     fn extract(&mut self, ctx: &mut Ctx, _hovered: bool) {
         let b = self.base.clone();
-        let max = if self.max_width > 0 { self.max_width } else { self.width() };
+        let max = if self.max_width > 0 {
+            self.max_width
+        } else {
+            self.width()
+        };
         let y = b.y + (b.h - 9) / 2;
         if self.text_width <= max {
             ctx.label(b.message, b.x, y, b.alpha);
@@ -65,14 +78,28 @@ impl Widget for StringWidget {
             let clipped = measure::clip(ctx.font, &b.message, max);
             ctx.label(clipped, b.x, y, b.alpha);
         } else {
-            ctx.scrolling_over(&Base { w: self.width(), ..b.clone() }, b.message, 2, b.alpha);
+            ctx.scrolling_over(
+                &Base {
+                    w: self.width(),
+                    ..b.clone()
+                },
+                b.message,
+                2,
+                b.alpha,
+            );
         }
     }
 }
 
 /// `MultiLineLabel.create(font, maxWidth, maxRows, message)`: the lines and their widths; when rows
 /// were cut the last kept line ends in "..." in `ellipsis` (the message's own style).
-pub fn label_lines(m: &dyn Metrics, message: &Text, max_width: i32, max_rows: usize, ellipsis: &Style) -> Vec<(Text, i32)> {
+pub fn label_lines(
+    m: &dyn Metrics,
+    message: &Text,
+    max_width: i32,
+    max_rows: usize,
+    ellipsis: &Style,
+) -> Vec<(Text, i32)> {
     let split = measure::split(m, message, max_width);
     let total = split.len();
     let n = total.min(max_rows);
@@ -82,7 +109,8 @@ pub fn label_lines(m: &dyn Metrics, message: &Text, max_width: i32, max_rows: us
         .enumerate()
         .map(|(i, line)| {
             if i + 1 == n && n == max_rows && n != total {
-                let clipped = measure::head(m, &line, m.width(&line) - measure::width_str(m, ELLIPSIS));
+                let clipped =
+                    measure::head(m, &line, m.width(&line) - measure::width_str(m, ELLIPSIS));
                 let with = clipped.append(Text::styled(ELLIPSIS, ellipsis));
                 let w = m.width(&with);
                 (with, w)
@@ -110,16 +138,35 @@ pub struct MultiLineText {
 
 impl MultiLineText {
     pub fn new(message: Text) -> MultiLineText {
-        MultiLineText { message, max_width: None, max_rows: None, centered: false, x: 0, y: 0, ellipsis: Style::default() }
+        MultiLineText {
+            message,
+            max_width: None,
+            max_rows: None,
+            centered: false,
+            x: 0,
+            y: 0,
+            ellipsis: Style::default(),
+        }
     }
 
     pub fn lines(&self, m: &dyn Metrics) -> Vec<(Text, i32)> {
-        label_lines(m, &self.message, self.max_width.unwrap_or(i32::MAX), self.max_rows.unwrap_or(usize::MAX), &self.ellipsis)
+        label_lines(
+            m,
+            &self.message,
+            self.max_width.unwrap_or(i32::MAX),
+            self.max_rows.unwrap_or(usize::MAX),
+            &self.ellipsis,
+        )
     }
 
     /// `getWidth`: the widest line, at most `max_width`.
     pub fn width(&self, m: &dyn Metrics) -> i32 {
-        self.lines(m).iter().map(|l| l.1).max().unwrap_or(0).min(self.max_width.unwrap_or(i32::MAX))
+        self.lines(m)
+            .iter()
+            .map(|l| l.1)
+            .max()
+            .unwrap_or(0)
+            .min(self.max_width.unwrap_or(i32::MAX))
     }
 
     pub fn height(&self, m: &dyn Metrics) -> i32 {
@@ -127,7 +174,15 @@ impl MultiLineText {
     }
 
     /// `visitLines`: from (`x`, `y`), or centred on `widget_x + width / 2` (the widget's own box).
-    pub fn visit_lines_at(&self, ctx: &mut Ctx, x: i32, widget_x: i32, y: i32, width: i32, opacity: f32) {
+    pub fn visit_lines_at(
+        &self,
+        ctx: &mut Ctx,
+        x: i32,
+        widget_x: i32,
+        y: i32,
+        width: i32,
+        opacity: f32,
+    ) {
         let mid = widget_x + width / 2;
         for (i, (line, w)) in self.lines(ctx.font).into_iter().enumerate() {
             let left = if self.centered { mid - w / 2 } else { x };
@@ -172,7 +227,14 @@ impl Widget for MultiLineTextWidget {
         self.size[1]
     }
     fn extract(&mut self, ctx: &mut Ctx, _hovered: bool) {
-        self.text.visit_lines_at(ctx, self.base.x, self.base.x, self.base.y, self.size[0], self.base.alpha);
+        self.text.visit_lines_at(
+            ctx,
+            self.base.x,
+            self.base.x,
+            self.base.y,
+            self.size[0],
+            self.base.alpha,
+        );
     }
 }
 
@@ -196,7 +258,14 @@ pub struct FocusableTextWidget {
 
 impl FocusableTextWidget {
     /// `FocusableTextWidget.builder(message, font, padding).maxWidth(max)...build()`; `max` -1 for none.
-    pub fn new(m: &dyn Metrics, message: Text, padding: i32, max: i32, always_border: bool, fill: Fill) -> FocusableTextWidget {
+    pub fn new(
+        m: &dyn Metrics,
+        message: Text,
+        padding: i32,
+        max: i32,
+        always_border: bool,
+        fill: Fill,
+    ) -> FocusableTextWidget {
         let mut text = MultiLineText::new(message.clone());
         text.centered = true;
         let w = if max != -1 {
@@ -206,7 +275,13 @@ impl FocusableTextWidget {
             m.width(&message) + padding * 2
         };
         let h = 9 * measure::split(m, &message, text.width(m)).len() as i32 + padding * 2;
-        FocusableTextWidget { base: Base::new(0, 0, w, h, message), text, padding, always_border, fill }
+        FocusableTextWidget {
+            base: Base::new(0, 0, w, h, message),
+            text,
+            padding,
+            always_border,
+            fill,
+        }
     }
 }
 
@@ -219,14 +294,31 @@ impl Widget for FocusableTextWidget {
     }
     fn extract(&mut self, ctx: &mut Ctx, _hovered: bool) {
         let b = &self.base;
-        let border = if self.always_border && !b.focused { with_alpha(as8(b.alpha), 0xA0A0A0) } else { white(b.alpha) };
+        let border = if self.always_border && !b.focused {
+            with_alpha(as8(b.alpha), 0xA0A0A0)
+        } else {
+            white(b.alpha)
+        };
         if self.fill == Fill::Always || (self.fill == Fill::OnFocus && b.focused) {
-            ctx.gui.fill(b.x + 1, b.y, b.x + b.w, b.y + b.h, with_alpha(as8(b.alpha), 0));
+            ctx.gui.fill(
+                b.x + 1,
+                b.y,
+                b.x + b.w,
+                b.y + b.h,
+                with_alpha(as8(b.alpha), 0),
+            );
         }
         if b.focused || self.always_border {
             outline(ctx.gui, b.x, b.y, b.w, b.h, border);
         }
-        self.text.visit_lines_at(ctx, b.x + self.padding, b.x, b.y + self.padding, b.w, b.alpha);
+        self.text.visit_lines_at(
+            ctx,
+            b.x + self.padding,
+            b.x,
+            b.y + self.padding,
+            b.w,
+            b.alpha,
+        );
     }
 }
 

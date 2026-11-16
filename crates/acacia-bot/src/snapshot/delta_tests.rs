@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use crate::snapshot::slots::tests::{add, remove, walk};
 use crate::snapshot::slots::ListBuilder;
+use crate::snapshot::slots::tests::{add, remove, walk};
 use crate::state::Entities;
 
 #[derive(Default)]
@@ -15,7 +15,9 @@ struct Publisher {
 
 impl Publisher {
     fn publish(&mut self) {
-        let (list, changes) = self.builder.build(&self.es, self.list.version + 1, &self.list);
+        let (list, changes) = self
+            .builder
+            .build(&self.es, self.list.version + 1, &self.list);
         self.log.push(list.version, changes);
         self.list = Arc::new(list);
     }
@@ -35,17 +37,44 @@ impl Reader {
             self.by_slot.clear();
         }
         for (slot, e) in &d.removed {
-            assert_eq!(self.by_slot.remove(slot).map(|(id, _)| id), Some(e.runtime_id), "removed what it held");
+            assert_eq!(
+                self.by_slot.remove(slot).map(|(id, _)| id),
+                Some(e.runtime_id),
+                "removed what it held"
+            );
         }
-        let row = |i: usize| (d.list.slots[i], (d.list.entities[i].runtime_id, d.list.entities[i].position[0]));
+        let row = |i: usize| {
+            (
+                d.list.slots[i],
+                (
+                    d.list.entities[i].runtime_id,
+                    d.list.entities[i].position[0],
+                ),
+            )
+        };
         for (slot, value) in d.added.iter().map(|&i| row(i)) {
-            assert!(self.by_slot.insert(slot, value).is_none(), "added into a free slot");
+            assert!(
+                self.by_slot.insert(slot, value).is_none(),
+                "added into a free slot"
+            );
         }
         for (slot, value) in d.moved.iter().map(|&i| row(i)) {
-            assert_eq!(self.by_slot.insert(slot, value).map(|(id, _)| id), Some(value.0), "moved what it held");
+            assert_eq!(
+                self.by_slot.insert(slot, value).map(|(id, _)| id),
+                Some(value.0),
+                "moved what it held"
+            );
         }
         self.cursor = Some(d.list.version);
-        assert_eq!(self.by_slot, p.list.slots.iter().zip(&p.list.entities).map(|(&s, e)| (s, (e.runtime_id, e.position[0]))).collect());
+        assert_eq!(
+            self.by_slot,
+            p.list
+                .slots
+                .iter()
+                .zip(&p.list.entities)
+                .map(|(&s, e)| (s, (e.runtime_id, e.position[0])))
+                .collect()
+        );
         d
     }
 }
@@ -74,14 +103,30 @@ fn changes_merge_removals_first_and_skip_what_came_and_went() {
     p.publish();
     let d = r.read(&p);
     assert!(!d.full);
-    assert_eq!(d.removed.iter().map(|(_, e)| (e.runtime_id, e.position[0])).collect::<Vec<_>>(), [(3, 5.0)], "as last published");
-    assert_eq!((ids(&d, &d.added), ids(&d, &d.moved)), (vec![5], vec![4]), "6 came and went");
+    assert_eq!(
+        d.removed
+            .iter()
+            .map(|(_, e)| (e.runtime_id, e.position[0]))
+            .collect::<Vec<_>>(),
+        [(3, 5.0)],
+        "as last published"
+    );
+    assert_eq!(
+        (ids(&d, &d.added), ids(&d, &d.moved)),
+        (vec![5], vec![4]),
+        "6 came and went"
+    );
     assert!(r.read(&p).is_empty(), "nothing since");
 }
 
 #[test]
 fn a_reader_behind_the_log_resyncs_and_others_keep_their_cursors() {
-    let (mut p, mut live, mut late, mut stale) = (Publisher::default(), Reader::default(), Reader::default(), Reader::default());
+    let (mut p, mut live, mut late, mut stale) = (
+        Publisher::default(),
+        Reader::default(),
+        Reader::default(),
+        Reader::default(),
+    );
     add(&mut p.es, 3, 0.0);
     p.publish();
     live.read(&p);
@@ -121,5 +166,13 @@ fn the_log_is_bounded_by_changes_too() {
     assert!(!r.read(&p).full, "the newest publish stays, however large");
     walk(&mut p.es, 10, 2.0);
     p.publish();
-    assert!(Reader { cursor: Some(1), ..Reader::default() }.read(&p).full, "the first publish was dropped");
+    assert!(
+        Reader {
+            cursor: Some(1),
+            ..Reader::default()
+        }
+        .read(&p)
+        .full,
+        "the first publish was dropped"
+    );
 }

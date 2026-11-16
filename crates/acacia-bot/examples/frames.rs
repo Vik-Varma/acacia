@@ -11,7 +11,13 @@ use acacia_bot::{Bot, BotConfig};
 
 type Error = Box<dyn std::error::Error>;
 
-const ITEMS: [&str; 5] = ["diamond_sword", "apple", "grass_block", "empty_map", "diamond_sword"];
+const ITEMS: [&str; 5] = [
+    "diamond_sword",
+    "apple",
+    "grass_block",
+    "empty_map",
+    "diamond_sword",
+];
 /// The frame whose item is turned one step by a second click.
 const TURNED: usize = 4;
 const FILLED: &str = "minecraft:filled_map";
@@ -19,12 +25,26 @@ const FILLED: &str = "minecraft:filled_map";
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Error> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let server = args.first().cloned().unwrap_or_else(|| "127.0.0.1:19174".into());
-    let coordinate = |index: usize, default: i32| args.get(index).and_then(|a| a.parse().ok()).unwrap_or(default);
+    let server = args
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "127.0.0.1:19174".into());
+    let coordinate = |index: usize, default: i32| {
+        args.get(index)
+            .and_then(|a| a.parse().ok())
+            .unwrap_or(default)
+    };
     let [x, y, z] = [coordinate(1, 260), coordinate(2, -59), coordinate(3, 104)];
-    let config = BotConfig { physics: true, ..BotConfig::default() };
+    let config = BotConfig {
+        physics: true,
+        ..BotConfig::default()
+    };
     let mut bot = Bot::connect(Client::builder(&server).offline("Framer"), config).await?;
-    while bot.bedrock().and_then(|b| b.movement()).is_none_or(|m| !m.is_started()) {
+    while bot
+        .bedrock()
+        .and_then(|b| b.movement())
+        .is_none_or(|m| !m.is_started())
+    {
         bot.wait_ticks(1).await?;
     }
     // A bot that died here last time respawns at the world spawn first.
@@ -33,14 +53,35 @@ async fn main() -> Result<(), Error> {
     let scene = [
         "/gamemode creative @s".to_owned(),
         format!("/tp @s {} {} {} 0 0", x as f32 + 0.5, y - 1, z as f32 - 1.5),
-        format!("/fill {} {} {} {} {} {} air", x - 2, y - 1, z - 4, last + 2, y + 2, z + 1),
-        format!("/fill {} {} {} {} {} {} stone", x - 1, y - 1, z + 1, last + 1, y + 1, z + 1),
+        format!(
+            "/fill {} {} {} {} {} {} air",
+            x - 2,
+            y - 1,
+            z - 4,
+            last + 2,
+            y + 2,
+            z + 1
+        ),
+        format!(
+            "/fill {} {} {} {} {} {} stone",
+            x - 1,
+            y - 1,
+            z + 1,
+            last + 1,
+            y + 1,
+            z + 1
+        ),
     ];
     run(&mut bot, &scene, 40).await?;
     for (index, item) in ITEMS.iter().enumerate() {
         let column = x + 2 * index as i32;
         let hang = [
-            format!("/tp @s {} {} {} 0 0", column as f32 + 0.5, y - 1, z as f32 - 1.5),
+            format!(
+                "/tp @s {} {} {} 0 0",
+                column as f32 + 0.5,
+                y - 1,
+                z as f32 - 1.5
+            ),
             format!("/setblock {column} {y} {z} frame [\"facing_direction\"=2]"),
             "/clear @s".to_owned(),
             format!("/replaceitem entity @s slot.hotbar 0 {item}"),
@@ -51,7 +92,9 @@ async fn main() -> Result<(), Error> {
         if *item == "empty_map" {
             bot.use_item();
             bot.wait_ticks(30).await?;
-            let filled = bot.find_item_named(FILLED).ok_or_else(|| format!("no filled map: {:?}", bot.state().inventory_summary()))?;
+            let filled = bot
+                .find_item_named(FILLED)
+                .ok_or_else(|| format!("no filled map: {:?}", bot.state().inventory_summary()))?;
             if filled != SlotRef::Main(0) {
                 bot.move_item(filled, SlotRef::Main(0), 1).await?;
             }
@@ -64,11 +107,24 @@ async fn main() -> Result<(), Error> {
     }
     // One on the floor behind the bot and one under a stone over it, each with a sword.
     let lying = [(x, y - 1, 1, Face::Up), (x + 2, y + 1, 0, Face::Down)];
-    run(&mut bot, &[format!("/setblock {} {} {} stone", x + 2, y + 2, z - 3)], 10).await?;
+    run(
+        &mut bot,
+        &[format!("/setblock {} {} {} stone", x + 2, y + 2, z - 3)],
+        10,
+    )
+    .await?;
     for (column, level, facing, face) in lying {
         let hang = [
-            format!("/tp @s {} {} {} 180 0", column as f32 + 0.5, y - 1, z as f32 - 1.5),
-            format!("/setblock {column} {level} {} frame [\"facing_direction\"={facing}]", z - 3),
+            format!(
+                "/tp @s {} {} {} 180 0",
+                column as f32 + 0.5,
+                y - 1,
+                z as f32 - 1.5
+            ),
+            format!(
+                "/setblock {column} {level} {} frame [\"facing_direction\"={facing}]",
+                z - 3
+            ),
             "/clear @s".to_owned(),
             "/replaceitem entity @s slot.hotbar 0 diamond_sword".to_owned(),
         ];

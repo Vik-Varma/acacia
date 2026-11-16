@@ -30,7 +30,10 @@ const DYE_FIREWORK_COLORS: [(&str, i64); 16] = [
 ];
 
 fn shape_name(e: &Value, d: &Details) -> Text {
-    let shape = e.get("shape").and_then(Value::as_str).unwrap_or("small_ball");
+    let shape = e
+        .get("shape")
+        .and_then(Value::as_str)
+        .unwrap_or("small_ball");
     d.tr(&format!("item.minecraft.firework_star.shape.{shape}"), &[])
 }
 
@@ -54,7 +57,12 @@ fn additional(e: &Value, d: &Details, out: &mut Vec<Text>) {
         out.push(gray(colors(Text::default(), c, d)));
     }
     if let Some(c) = list("fade_colors") {
-        out.push(gray(colors(d.tr("item.minecraft.firework_star.fade_to", &[]).append(" "), c, d)));
+        out.push(gray(colors(
+            d.tr("item.minecraft.firework_star.fade_to", &[])
+                .append(" "),
+            c,
+            d,
+        )));
     }
     let flag = |k: &str| e.get(k).and_then(Value::as_bool).unwrap_or(false);
     if flag("has_trail") {
@@ -72,16 +80,32 @@ pub fn explosion(_: &ItemStack, e: &Value, d: &Details, out: &mut Vec<Text>) {
 
 pub fn fireworks(_: &ItemStack, v: &Value, d: &Details, out: &mut Vec<Text>) {
     // An unsigned byte, written signed.
-    let flight = v.get("flight_duration").and_then(Value::as_i64).unwrap_or(0) & 0xFF;
+    let flight = v
+        .get("flight_duration")
+        .and_then(Value::as_i64)
+        .unwrap_or(0)
+        & 0xFF;
     if flight > 0 {
-        out.push(gray(d.tr("item.minecraft.firework_rocket.flight_duration", &[num(flight)])));
+        out.push(gray(d.tr(
+            "item.minecraft.firework_rocket.flight_duration",
+            &[num(flight)],
+        )));
     }
-    let explosions = v.get("explosions").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+    let explosions = v
+        .get("explosions")
+        .and_then(Value::as_array)
+        .map_or(&[][..], Vec::as_slice);
     for run in explosions.chunk_by(|a, b| a == b) {
         let e = &run[0];
         out.push(gray(match run.len() {
-            1 => d.tr("item.minecraft.firework_rocket.single_star", &[shape_name(e, d)]),
-            n => d.tr("item.minecraft.firework_rocket.multiple_stars", &[num(n), shape_name(e, d)]),
+            1 => d.tr(
+                "item.minecraft.firework_rocket.single_star",
+                &[shape_name(e, d)],
+            ),
+            n => d.tr(
+                "item.minecraft.firework_rocket.multiple_stars",
+                &[num(n), shape_name(e, d)],
+            ),
         }));
         let mut lines = Vec::new();
         additional(e, d, &mut lines);

@@ -25,42 +25,95 @@ fn layout(theme: &Theme, title: &str, count: usize, [w, h]: [f32; 2]) -> ([f32; 
     let n = count as f32;
     let width = (WIDTH * w - 10.0).floor();
     let x = (CENTRE * w - width / 2.0).floor();
-    let heading = if title.is_empty() && theme.atlas.get(LOGO).is_some() { (width * 0.2).floor() } else { crate::font::LINE_HEIGHT };
+    let heading = if title.is_empty() && theme.atlas.get(LOGO).is_some() {
+        (width * 0.2).floor()
+    } else {
+        crate::font::LINE_HEIGHT
+    };
     let step = HEIGHT + GAP;
-    let rows = if n * step > h { (count / 2 + 1) as f32 } else { n };
+    let rows = if n * step > h {
+        (count / 2 + 1) as f32
+    } else {
+        n
+    };
     let total = heading + LOGO_GAP + rows * HEIGHT + (rows - 1.0).max(0.0) * GAP;
     let top = ((h - total) / 2.0).floor();
     let first = top + heading + LOGO_GAP;
     let head = [x, top, x + width, top + heading];
     if rows < n {
-        return (head, two_columns(count, [x, x + width + GAP], width, [x, width], first, step));
+        return (
+            head,
+            two_columns(count, [x, x + width + GAP], width, [x, width], first, step),
+        );
     }
-    (head, (0..count).map(|i| [x, first + i as f32 * step, x + width, first + i as f32 * step + HEIGHT]).collect())
+    (
+        head,
+        (0..count)
+            .map(|i| {
+                [
+                    x,
+                    first + i as f32 * step,
+                    x + width,
+                    first + i as f32 * step + HEIGHT,
+                ]
+            })
+            .collect(),
+    )
 }
 
 /// Buttons too many for one column: all but the last in two `columns` (their left edges), row by
 /// row, and the last (Done) alone below at `last` (left edge and width).
-fn two_columns(count: usize, columns: [f32; 2], width: f32, last: [f32; 2], top: f32, step: f32) -> Vec<[f32; 4]> {
+fn two_columns(
+    count: usize,
+    columns: [f32; 2],
+    width: f32,
+    last: [f32; 2],
+    top: f32,
+    step: f32,
+) -> Vec<[f32; 4]> {
     let paired = count.saturating_sub(1);
     let cell = |i: usize| {
         let (x, y) = (columns[i % 2], top + (i / 2) as f32 * step);
         [x, y, x + width, y + HEIGHT]
     };
     let below = top + paired.div_ceil(2) as f32 * step;
-    (0..paired).map(cell).chain((count > 0).then_some([last[0], below, last[0] + last[1], below + HEIGHT])).collect()
+    (0..paired)
+        .map(cell)
+        .chain((count > 0).then_some([last[0], below, last[0] + last[1], below + HEIGHT]))
+        .collect()
 }
 
 /// The button under `mouse`, if any.
-pub fn hit(theme: &Theme, title: &str, count: usize, size: [f32; 2], mouse: [f32; 2]) -> Option<usize> {
-    layout(theme, title, count, size).1.iter().position(|&r| contains(r, mouse))
+pub fn hit(
+    theme: &Theme,
+    title: &str,
+    count: usize,
+    size: [f32; 2],
+    mouse: [f32; 2],
+) -> Option<usize> {
+    layout(theme, title, count, size)
+        .1
+        .iter()
+        .position(|&r| contains(r, mouse))
 }
 
-pub fn draw(list: &mut DrawList, theme: &Theme, title: &str, buttons: &[String], mouse: [f32; 2], size: [f32; 2]) {
+pub fn draw(
+    list: &mut DrawList,
+    theme: &Theme,
+    title: &str,
+    buttons: &[String],
+    mouse: [f32; 2],
+    size: [f32; 2],
+) {
     let white = theme.atlas.white();
     let font = theme.font.as_ref();
     let (heading, rects) = layout(theme, title, buttons.len(), size);
     list.fill(white, [0.0, 0.0, size[0], size[1]], [0, 0, 0, 26]);
-    list.fill(white, [0.0, 0.0, (BAND * size[0]).floor(), size[1]], [0, 0, 0, 128]);
+    list.fill(
+        white,
+        [0.0, 0.0, (BAND * size[0]).floor(), size[1]],
+        [0, 0, 0, 128],
+    );
     match theme.atlas.get(LOGO).filter(|_| title.is_empty()) {
         Some(logo) => list.sprite_stretched(logo, heading, crate::draw::WHITE),
         None => {
@@ -73,7 +126,19 @@ pub fn draw(list: &mut DrawList, theme: &Theme, title: &str, buttons: &[String],
     let skin = theme.widgets.skin();
     for (label, rect) in buttons.iter().zip(rects) {
         let hover = contains(rect, mouse);
-        skin.draw(list, font, &Widget::Button { text: label.clone(), image: None }, rect, State { hover, ..State::default() });
+        skin.draw(
+            list,
+            font,
+            &Widget::Button {
+                text: label.clone(),
+                image: None,
+            },
+            rect,
+            State {
+                hover,
+                ..State::default()
+            },
+        );
     }
 }
 
@@ -87,9 +152,17 @@ mod tests {
         let (theme, size) = (theme(false), [427.0, 240.0]);
         let rects = layout(&theme, "Options", 9, size).1;
         assert_eq!(rects.len(), 9);
-        assert!(rects.iter().all(|r| r[0] >= 0.0 && r[2] <= size[0] && r[3] <= size[1]), "{rects:?}");
+        assert!(
+            rects
+                .iter()
+                .all(|r| r[0] >= 0.0 && r[2] <= size[0] && r[3] <= size[1]),
+            "{rects:?}"
+        );
         // Pairs share a row; Done sits alone under them.
-        assert!(rects[0][1] == rects[1][1] && rects[0][2] <= rects[1][0] && rects[8][1] > rects[7][1], "{rects:?}");
+        assert!(
+            rects[0][1] == rects[1][1] && rects[0][2] <= rects[1][0] && rects[8][1] > rects[7][1],
+            "{rects:?}"
+        );
     }
 
     #[test]
@@ -100,6 +173,9 @@ mod tests {
         assert_eq!(rects[0][0], 45.0);
         assert_eq!(rects[0][2] - rects[0][0], 130.0);
         assert_eq!(rects[1][1] - rects[0][1], 31.0, "28 tall, 3 apart");
-        assert_eq!(hit(&theme, "Options", 3, size, [46.0, rects[2][1] + 1.0]), Some(2));
+        assert_eq!(
+            hit(&theme, "Options", 3, size, [46.0, rects[2][1] + 1.0]),
+            Some(2)
+        );
     }
 }

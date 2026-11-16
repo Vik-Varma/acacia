@@ -5,9 +5,11 @@
 
 use super::creative_search::SearchBox;
 use super::effects::{self, Effect};
-use super::input::Press;
 use super::entity::{Figure, follows_mouse};
-use super::{Base, Env, LABEL, Screen, Slot, carried, contents, hovered_tooltip, transparent_background};
+use super::input::Press;
+use super::{
+    Base, Env, LABEL, Screen, Slot, carried, contents, hovered_tooltip, transparent_background,
+};
 use crate::java::gui::{Blend, Gui, GuiDraw};
 use crate::java::mth::WHITE;
 use crate::java::text::Text;
@@ -67,7 +69,17 @@ pub struct Creative {
 /// `InventoryMenu`'s slot `i` as `(inventory slot, empty icon)`; the crafting slots have none.
 fn inventory_slot(i: usize) -> (Option<usize>, Option<&'static str>) {
     match i {
-        5..=8 => (Some(39 - (i - 5)), Some(["container/slot/helmet", "container/slot/chestplate", "container/slot/leggings", "container/slot/boots"][i - 5])),
+        5..=8 => (
+            Some(39 - (i - 5)),
+            Some(
+                [
+                    "container/slot/helmet",
+                    "container/slot/chestplate",
+                    "container/slot/leggings",
+                    "container/slot/boots",
+                ][i - 5],
+            ),
+        ),
         9..=35 => (Some(i), None),
         36..=44 => (Some(i - 36), None),
         45 => (Some(40), Some("container/slot/shield")),
@@ -83,29 +95,64 @@ fn inventory_position(i: usize) -> (i32, i32) {
         45 => (35, 20),
         _ => {
             let pos = i as i32 - 9;
-            (9 + pos % 9 * 18, if i >= 36 { 112 } else { 54 + pos / 9 * 18 })
+            (
+                9 + pos % 9 * 18,
+                if i >= 36 { 112 } else { 54 + pos / 9 * 18 },
+            )
         }
     }
 }
 
 impl Creative {
     /// The screen on `tabs[selected]`, its slots empty.
-    pub fn new(width: i32, height: i32, tabs: Vec<Tab>, selected: usize, figure: Figure) -> Creative {
+    pub fn new(
+        width: i32,
+        height: i32,
+        tabs: Vec<Tab>,
+        selected: usize,
+        figure: Figure,
+    ) -> Creative {
         let inventory = tabs[selected].kind == TabType::Inventory;
         let slots = if inventory {
-            let mut slots: Vec<Slot> = (0..46).map(|i| {
-                let (x, y) = inventory_position(i);
-                Slot { icon: inventory_slot(i).1, ..Slot::new(i, x, y) }
-            }).collect();
+            let mut slots: Vec<Slot> = (0..46)
+                .map(|i| {
+                    let (x, y) = inventory_position(i);
+                    Slot {
+                        icon: inventory_slot(i).1,
+                        ..Slot::new(i, x, y)
+                    }
+                })
+                .collect();
             slots.push(Slot::new(46, 173, 112));
             slots
         } else {
-            let grid = (0..GRID).map(|i| Slot::new(i, 9 + i as i32 % 9 * 18, 18 + i as i32 / 9 * 18));
-            grid.chain((0..9).map(|i| Slot::new(GRID + i, 9 + i as i32 * 18, 112))).collect()
+            let grid =
+                (0..GRID).map(|i| Slot::new(i, 9 + i as i32 % 9 * 18, 18 + i as i32 / 9 * 18));
+            grid.chain((0..9).map(|i| Slot::new(GRID + i, 9 + i as i32 * 18, 112)))
+                .collect()
         };
-        let base = Base::new(width, height, IMAGE, Text::default(), Text::default(), slots);
+        let base = Base::new(
+            width,
+            height,
+            IMAGE,
+            Text::default(),
+            Text::default(),
+            slots,
+        );
         let search = SearchBox::new(base.left + 82, base.top + 6);
-        Creative { base, tabs, selected, items: 0, scroll: 0.0, search, figure, effects: Vec::new(), member: Vec::new(), visible_tags: Vec::new(), item_tags: Vec::new() }
+        Creative {
+            base,
+            tabs,
+            selected,
+            items: 0,
+            scroll: 0.0,
+            search,
+            figure,
+            effects: Vec::new(),
+            member: Vec::new(),
+            visible_tags: Vec::new(),
+            item_tags: Vec::new(),
+        }
     }
 
     pub fn tab(&self) -> &Tab {
@@ -116,7 +163,11 @@ impl Creative {
     pub fn set_inventory(&mut self, slot: usize, stack: ItemStack) {
         let inventory = self.tab().kind == TabType::Inventory;
         for (i, s) in self.base.slots.iter_mut().enumerate() {
-            let held = if inventory { inventory_slot(i).0 } else { (i >= GRID).then(|| i - GRID) };
+            let held = if inventory {
+                inventory_slot(i).0
+            } else {
+                (i >= GRID).then(|| i - GRID)
+            };
             if held == Some(slot) {
                 s.item = Some(stack.clone());
             }
@@ -132,7 +183,12 @@ impl Creative {
     }
 
     /// `menu.items` (`present(i)` for each entry that is not empty) scrolled to `scroll`.
-    pub fn set_items(&mut self, items: usize, present: impl Fn(usize) -> Option<ItemStack>, scroll: f32) {
+    pub fn set_items(
+        &mut self,
+        items: usize,
+        present: impl Fn(usize) -> Option<ItemStack>,
+        scroll: f32,
+    ) {
         self.items = items;
         self.scroll = if self.can_scroll() { scroll } else { 0.0 };
         if self.tab().kind == TabType::Inventory {
@@ -146,7 +202,11 @@ impl Creative {
     }
 
     fn tab_x(&self, tab: &Tab) -> i32 {
-        if tab.right { self.base.image_width - 27 * (7 - tab.column) + 1 } else { 27 * tab.column }
+        if tab.right {
+            self.base.image_width - 27 * (7 - tab.column) + 1
+        } else {
+            27 * tab.column
+        }
     }
 
     fn tab_y(&self, tab: &Tab) -> i32 {
@@ -156,17 +216,44 @@ impl Creative {
     fn tab_button(&self, gui: &mut Gui, i: usize) {
         let tab = &self.tabs[i];
         let x = self.base.left + self.tab_x(tab);
-        let y = if tab.top { self.base.top - 28 } else { self.base.top + self.base.image_height - 4 };
+        let y = if tab.top {
+            self.base.top - 28
+        } else {
+            self.base.top + self.base.image_height - 4
+        };
         let row = if tab.top { "top" } else { "bottom" };
-        let state = if i == self.selected { "selected" } else { "unselected" };
-        gui.sprite(format!("container/creative_inventory/tab_{row}_{state}_{}", tab.column.clamp(0, 6) + 1), x, y, 26, 32);
-        gui.item(ICONS + i as i32, x + 5, y + 8 + if tab.top { 1 } else { -1 }, 0);
+        let state = if i == self.selected {
+            "selected"
+        } else {
+            "unselected"
+        };
+        gui.sprite(
+            format!(
+                "container/creative_inventory/tab_{row}_{state}_{}",
+                tab.column.clamp(0, 6) + 1
+            ),
+            x,
+            y,
+            26,
+            32,
+        );
+        gui.item(
+            ICONS + i as i32,
+            x + 5,
+            y + 8 + if tab.top { 1 } else { -1 },
+            0,
+        );
     }
 
     /// `checkTabClicked` of each tab: the one at `mouse`.
     pub fn tab_at(&self, mouse: [f64; 2]) -> Option<usize> {
-        let (xm, ym) = (mouse[0] - f64::from(self.base.left), mouse[1] - f64::from(self.base.top));
-        self.tabs.iter().position(|tab| self.tab_clicked(tab, xm, ym))
+        let (xm, ym) = (
+            mouse[0] - f64::from(self.base.left),
+            mouse[1] - f64::from(self.base.top),
+        );
+        self.tabs
+            .iter()
+            .position(|tab| self.tab_clicked(tab, xm, ym))
     }
 
     fn tab_clicked(&self, tab: &Tab, xm: f64, ym: f64) -> bool {
@@ -185,8 +272,15 @@ impl Creative {
         if let Some(tab) = self.tab_at(mouse) {
             return Some(Press::Button(tab));
         }
-        let (x, y) = (f64::from(self.base.left + 175), f64::from(self.base.top + 18));
-        let on_bar = mouse[0] >= x && mouse[1] >= y && mouse[0] < x + 14.0 && mouse[1] < y + 112.0 && self.tab().can_scroll;
+        let (x, y) = (
+            f64::from(self.base.left + 175),
+            f64::from(self.base.top + 18),
+        );
+        let on_bar = mouse[0] >= x
+            && mouse[1] >= y
+            && mouse[0] < x + 14.0
+            && mouse[1] < y + 112.0
+            && self.tab().can_scroll;
         (self.tab().kind != TabType::Inventory && on_bar).then_some(Press::Scroller)
     }
 
@@ -197,7 +291,8 @@ impl Creative {
 
     /// `mouseScrolled` by `dy` (`subtractInputFromScroll`): the new `scrollOffs`, if it scrolls.
     pub fn scrolled(&self, dy: f64) -> Option<f32> {
-        self.scrollable().then(|| (self.scroll - (dy / f64::from(self.row_count())) as f32).clamp(0.0, 1.0))
+        self.scrollable()
+            .then(|| (self.scroll - (dy / f64::from(self.row_count())) as f32).clamp(0.0, 1.0))
     }
 
     fn is_creative_slot(&self) -> bool {
@@ -205,7 +300,14 @@ impl Creative {
     }
 
     fn tooltip(&mut self, text: Text, mouse: [i32; 2]) {
-        let t = Tooltip { lines: vec![Line::Text(text)], x: mouse[0], y: mouse[1], positioner: Positioner::Default, style: None, extra_space: false };
+        let t = Tooltip {
+            lines: vec![Line::Text(text)],
+            x: mouse[0],
+            y: mouse[1],
+            positioner: Positioner::Default,
+            style: None,
+            extra_space: false,
+        };
         self.base.tooltip.set(t, false);
     }
 }
@@ -225,19 +327,52 @@ impl Screen for Creative {
             self.tab_button(gui, i);
         }
         let b = &self.base;
-        let texture = self.tab().background.trim_start_matches("textures/").trim_end_matches(".png").to_owned();
+        let texture = self
+            .tab()
+            .background
+            .trim_start_matches("textures/")
+            .trim_end_matches(".png")
+            .to_owned();
         let (x, y, w, h) = (b.left, b.top, b.image_width, b.image_height);
-        gui.draws.push(GuiDraw::Blit { texture: texture.into(), blend: Blend::Textured, x, y, w, h, uv: [0.0, 0.0], src: [w, h], tex: [256, 256], color: WHITE });
+        gui.draws.push(GuiDraw::Blit {
+            texture: texture.into(),
+            blend: Blend::Textured,
+            x,
+            y,
+            w,
+            h,
+            uv: [0.0, 0.0],
+            src: [w, h],
+            tex: [256, 256],
+            color: WHITE,
+        });
         if self.tab().kind == TabType::Search {
             self.search.extract(gui, env.font);
         }
         if self.tab().can_scroll {
-            let sprite = if self.can_scroll() { "container/creative_inventory/scroller" } else { "container/creative_inventory/scroller_disabled" };
-            gui.sprite(sprite, x + 175, y + 18 + ((112 - 17) as f32 * self.scroll) as i32, 12, 15);
+            let sprite = if self.can_scroll() {
+                "container/creative_inventory/scroller"
+            } else {
+                "container/creative_inventory/scroller_disabled"
+            };
+            gui.sprite(
+                sprite,
+                x + 175,
+                y + 18 + ((112 - 17) as f32 * self.scroll) as i32,
+                12,
+                15,
+            );
         }
         self.tab_button(gui, self.selected);
         if self.tab().kind == TabType::Inventory {
-            follows_mouse(gui, [x + 73, y + 6, x + 105, y + 49], 20, 0.0625, [mouse[0] as f32, mouse[1] as f32], &self.figure);
+            follows_mouse(
+                gui,
+                [x + 73, y + 6, x + 105, y + 49],
+                20,
+                0.0625,
+                [mouse[0] as f32, mouse[1] as f32],
+                &self.figure,
+            );
         }
     }
 
@@ -245,7 +380,10 @@ impl Screen for Creative {
     fn clicked_outside(&self, mouse: [f64; 2]) -> bool {
         let b = &self.base;
         let (x, y) = (mouse[0], mouse[1]);
-        let off = x < f64::from(b.left) || y < f64::from(b.top) || x >= f64::from(b.left + b.image_width) || y >= f64::from(b.top + b.image_height);
+        let off = x < f64::from(b.left)
+            || y < f64::from(b.top)
+            || x >= f64::from(b.left + b.image_width)
+            || y >= f64::from(b.top + b.image_height);
         off && !self.tab_clicked(self.tab(), x, y)
     }
 
@@ -263,7 +401,11 @@ impl Screen for Creative {
             return lines;
         }
         if kind == TabType::Search && creative_slot {
-            for tag in self.visible_tags.iter().filter(|t| self.item_tags.contains(t)) {
+            for tag in self
+                .visible_tags
+                .iter()
+                .filter(|t| self.item_tags.contains(t))
+            {
                 lines.insert(1, Text::literal(format!("#{tag}")).with_color(DARK_PURPLE));
             }
         }
@@ -278,11 +420,22 @@ impl Screen for Creative {
     }
 
     fn render(&mut self, gui: &mut Gui, env: &Env, mouse: [i32; 2], partial: f32) {
-        effects::extract(&mut self.base, gui, env.font, env.lang, &self.effects, mouse, 20.0);
+        effects::extract(
+            &mut self.base,
+            gui,
+            env.font,
+            env.lang,
+            &self.effects,
+            mouse,
+            20.0,
+        );
         contents(self, gui, env, mouse, partial);
         carried(&self.base, gui, mouse);
         hovered_tooltip(self, env, mouse);
-        let hovered = self.tabs.iter().find(|tab| self.hovering(self.tab_x(tab) + 3, self.tab_y(tab) + 3, 21, 27, mouse));
+        let hovered = self
+            .tabs
+            .iter()
+            .find(|tab| self.hovering(self.tab_x(tab) + 3, self.tab_y(tab) + 3, 21, 27, mouse));
         if let Some(title) = hovered.map(|tab| tab.title.clone()) {
             self.tooltip(title, mouse);
         }

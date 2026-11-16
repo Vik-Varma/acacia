@@ -29,7 +29,9 @@ pub fn plain_index_at_width(m: &dyn Metrics, s: &str, max: i32, style: &Style) -
 
 /// `Font.plainSubstrByWidth(s, max)`: the head of `s` that fits.
 pub fn plain_head(m: &dyn Metrics, s: &str, max: i32) -> String {
-    s.chars().take(plain_index_at_width(m, s, max, &Style::default())).collect()
+    s.chars()
+        .take(plain_index_at_width(m, s, max, &Style::default()))
+        .collect()
 }
 
 /// `Font.plainSubstrByWidth(s, max, true)`: the tail of `s` that fits.
@@ -59,14 +61,20 @@ pub fn head(m: &dyn Metrics, t: &Text, max: i32) -> Text {
             left -= m.advance(c, &span.style);
             if left < 0.0 {
                 if !taken.is_empty() {
-                    out.spans.push(Span { text: taken, style: span.style.clone() });
+                    out.spans.push(Span {
+                        text: taken,
+                        style: span.style.clone(),
+                    });
                 }
                 return out;
             }
             taken.push(c);
         }
         if !taken.is_empty() {
-            out.spans.push(Span { text: taken, style: span.style.clone() });
+            out.spans.push(Span {
+                text: taken,
+                style: span.style.clone(),
+            });
         }
     }
     t
@@ -81,14 +89,22 @@ pub fn clip(m: &dyn Metrics, t: &Text, max: i32) -> Text {
 /// a newline, or at the last space (else the character) once the width passes `max`; the space
 /// or newline at a break is dropped and the rest takes the style found there.
 pub fn split(m: &dyn Metrics, t: &Text, max: i32) -> Vec<Text> {
-    split_wrapped(m, t, max).into_iter().map(|(line, _)| line).collect()
+    split_wrapped(m, t, max)
+        .into_iter()
+        .map(|(line, _)| line)
+        .collect()
 }
 
 /// [`split`] with whether each line continues a wrapped one (`ComponentRenderUtils.wrapComponents`).
 pub fn split_wrapped(m: &dyn Metrics, t: &Text, max: i32) -> Vec<(Text, bool)> {
     let max = (max as f32).max(1.0);
-    let mut parts: Vec<(Vec<char>, Style)> =
-        t.resolve_legacy().spans.into_iter().filter(|s| !s.text.is_empty()).map(|s| (s.text.chars().collect(), s.style)).collect();
+    let mut parts: Vec<(Vec<char>, Style)> = t
+        .resolve_legacy()
+        .spans
+        .into_iter()
+        .filter(|s| !s.text.is_empty())
+        .map(|s| (s.text.chars().collect(), s.style))
+        .collect();
     let mut lines = Vec::new();
     let (mut force_new_line, mut wrapped) = (false, false);
     while let Some((at, split_style)) = line_break(m, &parts, max) {
@@ -103,7 +119,16 @@ pub fn split_wrapped(m: &dyn Metrics, t: &Text, max: i32) -> Vec<(Text, bool)> {
         wrapped = !new_line;
     }
     if !parts.is_empty() {
-        let line = Text { spans: parts.into_iter().map(|(c, style)| Span { text: c.into_iter().collect(), style }).collect(), forward: false };
+        let line = Text {
+            spans: parts
+                .into_iter()
+                .map(|(c, style)| Span {
+                    text: c.into_iter().collect(),
+                    style,
+                })
+                .collect(),
+            forward: false,
+        };
         lines.push((line, wrapped));
     } else if force_new_line {
         lines.push((Text::default(), false));
@@ -138,7 +163,12 @@ fn line_break(m: &dyn Metrics, parts: &[(Vec<char>, Style)], max: f32) -> Option
 }
 
 /// `FlatComponents.splitAt`: the line before `at` and the parts after the `skip` characters there.
-fn split_at(parts: Vec<(Vec<char>, Style)>, at: usize, skip: usize, split_style: &Style) -> (Text, Vec<(Vec<char>, Style)>) {
+fn split_at(
+    parts: Vec<(Vec<char>, Style)>,
+    at: usize,
+    skip: usize,
+    split_style: &Style,
+) -> (Text, Vec<(Vec<char>, Style)>) {
     let mut line = Text::default();
     let mut rest = Vec::new();
     let mut position = at;
@@ -151,13 +181,19 @@ fn split_at(parts: Vec<(Vec<char>, Style)>, at: usize, skip: usize, split_style:
         let size = contents.len();
         if !in_skip {
             if position > size {
-                line.spans.push(Span { text: contents.iter().collect(), style });
+                line.spans.push(Span {
+                    text: contents.iter().collect(),
+                    style,
+                });
                 position -= size;
                 continue;
             }
             let before: String = contents[..position].iter().collect();
             if !before.is_empty() {
-                line.spans.push(Span { text: before, style: style.clone() });
+                line.spans.push(Span {
+                    text: before,
+                    style: style.clone(),
+                });
             }
             position += skip;
             in_skip = true;
@@ -182,7 +218,10 @@ mod tests {
     #[test]
     fn wraps_at_spaces_and_newlines() {
         let m = Fixed(6.0);
-        let lines: Vec<String> = split(&m, &Text::literal("ab cd ef\ngh"), 30).iter().map(Text::plain).collect();
+        let lines: Vec<String> = split(&m, &Text::literal("ab cd ef\ngh"), 30)
+            .iter()
+            .map(Text::plain)
+            .collect();
         assert_eq!(lines, ["ab cd", "ef", "gh"]);
         assert_eq!(plain_head(&m, "abcdef", 13), "ab");
         assert_eq!(plain_tail(&m, "abcdef", 13), "ef");

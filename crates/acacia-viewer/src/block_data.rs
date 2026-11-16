@@ -9,7 +9,10 @@ use acacia_render::block_models::BlockDataMap;
 use acacia_render::blocks::model::BlockData;
 
 pub fn snapshot(entities: &BlockEntities) -> BlockDataMap {
-    entities.iter().filter_map(|(pos, nbt)| Some((*pos, data(nbt)?))).collect()
+    entities
+        .iter()
+        .filter_map(|(pos, nbt)| Some((*pos, data(nbt)?)))
+        .collect()
 }
 
 fn int(nbt: &Value, key: &str) -> Option<i32> {
@@ -27,8 +30,15 @@ fn data(nbt: &Nbt) -> Option<BlockData> {
         Some(Value::Float(degrees)) => Some(*degrees),
         _ => None,
     };
-    let pair = int("pairx").zip(int("pairz")).map(|(x, z)| ([x, z], int("pairlead") == Some(1)));
-    let data = BlockData { banner: banner(&nbt.value, None).map(Arc::new), color: int("color").map(|c| c as u8), rotation, pair };
+    let pair = int("pairx")
+        .zip(int("pairz"))
+        .map(|(x, z)| ([x, z], int("pairlead") == Some(1)));
+    let data = BlockData {
+        banner: banner(&nbt.value, None).map(Arc::new),
+        color: int("color").map(|c| c as u8),
+        rotation,
+        pair,
+    };
     (data != BlockData::default()).then_some(data)
 }
 
@@ -56,5 +66,9 @@ fn banner(nbt: &Value, base: Option<i32>) -> Option<Banner> {
             _ => None,
         }
     }
-    Some(Banner::from_bedrock(base.or_else(|| int(nbt, "Base"))?, patterns.iter().filter_map(layer), int(nbt, "Type").unwrap_or(0)))
+    Some(Banner::from_bedrock(
+        base.or_else(|| int(nbt, "Base"))?,
+        patterns.iter().filter_map(layer),
+        int(nbt, "Type").unwrap_or(0),
+    ))
 }

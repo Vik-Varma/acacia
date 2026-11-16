@@ -19,7 +19,7 @@ mod status;
 mod transfer;
 
 pub use acacia_proto as proto;
-pub use intercept::{encode, Direction, Injector, Interceptor, Player, Session, Verdict};
+pub use intercept::{Direction, Injector, Interceptor, Player, Session, Verdict, encode};
 pub use nethernet::host_key;
 pub use proxy::{BoundProxy, Proxy};
 pub use record::Recorder;

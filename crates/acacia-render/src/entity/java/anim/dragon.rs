@@ -15,7 +15,11 @@ struct History {
 
 impl History {
     fn of(s: &RenderState) -> History {
-        let mut out = History { samples: [(0.0, 0.0); 64], head: -1, partial: s.num("partialTicks") };
+        let mut out = History {
+            samples: [(0.0, 0.0); 64],
+            head: -1,
+            partial: s.num("partialTicks"),
+        };
         for pair in s.nums("flightHistory").as_chunks::<2>().0 {
             let sample = (pair[0], pair[1] as f32);
             if out.head < 0 {
@@ -34,7 +38,10 @@ impl History {
     /// `EnderDragonRenderState.getHistoricalPos`.
     fn get(&self, delay: i32) -> (f64, f32) {
         let (now, old) = (self.at(delay), self.at(delay + 1));
-        (old.0 + f64::from(self.partial) * (now.0 - old.0), rot_lerp(self.partial, old.1, now.1))
+        (
+            old.0 + f64::from(self.partial) * (now.0 - old.0),
+            rot_lerp(self.partial, old.1, now.1),
+        )
     }
 }
 

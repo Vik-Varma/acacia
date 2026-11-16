@@ -39,7 +39,14 @@ pub enum Layout {
 }
 
 /// The creative inventory's tabs.
-pub const TABS: [&str; 6] = ["Construction", "Nature", "Equipment", "Items", "Inventory", "Search"];
+pub const TABS: [&str; 6] = [
+    "Construction",
+    "Nature",
+    "Equipment",
+    "Items",
+    "Inventory",
+    "Search",
+];
 /// The tab that shows the player's own screen instead of items to take.
 pub const SURVIVAL_TAB: usize = 4;
 /// The tab that lists every tab's items whose name holds the typed text.
@@ -72,8 +79,20 @@ impl Layout {
     pub fn picks(self) -> Option<Picks> {
         match self {
             Layout::Bench(bench) => bench.picks(),
-            Layout::Trade => Some(Picks { at: [5.0, 18.0], columns: 1, rows: 7, cell: [88.0, 20.0], text: 57.0 }),
-            Layout::Creative => Some(Picks { at: [8.0, 17.0], columns: CREATIVE_GRID[0], rows: CREATIVE_GRID[1], cell: [SLOT, SLOT], text: 0.0 }),
+            Layout::Trade => Some(Picks {
+                at: [5.0, 18.0],
+                columns: 1,
+                rows: 7,
+                cell: [88.0, 20.0],
+                text: 57.0,
+            }),
+            Layout::Creative => Some(Picks {
+                at: [8.0, 17.0],
+                columns: CREATIVE_GRID[0],
+                rows: CREATIVE_GRID[1],
+                cell: [SLOT, SLOT],
+                text: 0.0,
+            }),
             _ => None,
         }
     }
@@ -136,24 +155,48 @@ pub enum Slot {
 /// Every slot of `layout` with the top-left of its 16×16 item area, relative to the panel.
 pub fn slots(layout: Layout) -> Vec<(Slot, [f32; 2])> {
     if layout == Layout::Creative {
-        return (0..9u8).map(|i| (Slot::Main(i), [9.0 + SLOT * f32::from(i), 112.0])).collect();
+        return (0..9u8)
+            .map(|i| (Slot::Main(i), [9.0 + SLOT * f32::from(i), 112.0]))
+            .collect();
     }
     let left = layout.player_x();
-    let at = |col: u8, top: f32, row: u8| [left + SLOT * f32::from(col), top + SLOT * f32::from(row)];
+    let at =
+        |col: u8, top: f32, row: u8| [left + SLOT * f32::from(col), top + SLOT * f32::from(row)];
     let top = layout.player_rows();
-    let mut out: Vec<(Slot, [f32; 2])> = (0..27u8).map(|i| (Slot::Main(9 + i), at(i % 9, top, i / 9))).collect();
+    let mut out: Vec<(Slot, [f32; 2])> = (0..27u8)
+        .map(|i| (Slot::Main(9 + i), at(i % 9, top, i / 9)))
+        .collect();
     out.extend((0..9u8).map(|i| (Slot::Main(i), at(i, top + 58.0, 0))));
     match layout {
         Layout::Player => {
             out.extend((0..4u8).map(|i| (Slot::Armor(i), [8.0, 8.0 + SLOT * f32::from(i)])));
-            out.extend((0..4u8).map(|i| (Slot::Ui(bench::GRID_2X2 + i), [98.0 + SLOT * f32::from(i % 2), 18.0 + SLOT * f32::from(i / 2)])));
+            out.extend((0..4u8).map(|i| {
+                (
+                    Slot::Ui(bench::GRID_2X2 + i),
+                    [
+                        98.0 + SLOT * f32::from(i % 2),
+                        18.0 + SLOT * f32::from(i / 2),
+                    ],
+                )
+            }));
             out.extend([(Slot::Offhand, [77.0, 62.0]), (Slot::Result, [154.0, 28.0])]);
         }
-        Layout::Rows(rows) => out.extend((0..rows * 9).map(|i| (Slot::Container(i), at(i % 9, 18.0, i / 9)))),
-        Layout::Station(station) => out.extend(station.slots().into_iter().enumerate().map(|(i, at)| (Slot::Container(i as u8), at))),
+        Layout::Rows(rows) => {
+            out.extend((0..rows * 9).map(|i| (Slot::Container(i), at(i % 9, 18.0, i / 9))))
+        }
+        Layout::Station(station) => out.extend(
+            station
+                .slots()
+                .into_iter()
+                .enumerate()
+                .map(|(i, at)| (Slot::Container(i as u8), at)),
+        ),
         Layout::Bench(bench) => out.extend(bench.slots()),
         Layout::Creative => {}
-        Layout::Trade => out.extend([(Slot::Ui(TRADE[0]), [136.0, 37.0]), (Slot::Ui(TRADE[1]), [162.0, 37.0])]),
+        Layout::Trade => out.extend([
+            (Slot::Ui(TRADE[0]), [136.0, 37.0]),
+            (Slot::Ui(TRADE[1]), [162.0, 37.0]),
+        ]),
     }
     out
 }
@@ -162,8 +205,15 @@ pub fn slots(layout: Layout) -> Vec<(Slot, [f32; 2])> {
 /// A screen with the recipe book moves right to make room for it, as Java's does when the book
 /// is open and the screen is at least 379 wide.
 pub fn origin(layout: Layout, size: [f32; 2]) -> [f32; 2] {
-    let book = if layout.has_book() && size[0] >= BOOK_ROOM { BOOK_SHIFT } else { 0.0 };
-    [((size[0] - layout.width()) / 2.0).floor() + book, ((size[1] - layout.height()) / 2.0).floor()]
+    let book = if layout.has_book() && size[0] >= BOOK_ROOM {
+        BOOK_SHIFT
+    } else {
+        0.0
+    };
+    [
+        ((size[0] - layout.width()) / 2.0).floor() + book,
+        ((size[1] - layout.height()) / 2.0).floor(),
+    ]
 }
 
 /// UI offsets of a trade's two payment slots.
@@ -174,20 +224,38 @@ const BOOK_SHIFT: f32 = 77.0;
 /// The slot under `mouse` (GUI pixels), if any.
 pub fn hit(layout: Layout, size: [f32; 2], mouse: [f32; 2]) -> Option<Slot> {
     let [ox, oy] = origin(layout, size);
-    let over = |&(_, [x, y]): &(Slot, [f32; 2])| (ox + x..ox + x + 16.0).contains(&mouse[0]) && (oy + y..oy + y + 16.0).contains(&mouse[1]);
+    let over = |&(_, [x, y]): &(Slot, [f32; 2])| {
+        (ox + x..ox + x + 16.0).contains(&mouse[0]) && (oy + y..oy + y + 16.0).contains(&mouse[1])
+    };
     slots(layout).into_iter().find(over).map(|(s, _)| s)
 }
 
 /// Each of a bench's first `count` pick buttons, as far as its list shows them.
 fn pick_rects(layout: Layout, size: [f32; 2], count: usize) -> Vec<[f32; 4]> {
-    let Some(Picks { at, columns, rows, cell, .. }) = layout.picks() else { return Vec::new() };
+    let Some(Picks {
+        at,
+        columns,
+        rows,
+        cell,
+        ..
+    }) = layout.picks()
+    else {
+        return Vec::new();
+    };
     let [ox, oy] = origin(layout, size);
     if layout == Layout::Bench(Bench::Beacon) {
-        return bench::BEACON_BUTTONS.iter().take(count).map(|[x, y]| [ox + x, oy + y, ox + x + cell[0], oy + y + cell[1]]).collect();
+        return bench::BEACON_BUTTONS
+            .iter()
+            .take(count)
+            .map(|[x, y]| [ox + x, oy + y, ox + x + cell[0], oy + y + cell[1]])
+            .collect();
     }
     (0..count.min(columns * rows))
         .map(|i| {
-            let (x, y) = (ox + at[0] + (i % columns) as f32 * cell[0], oy + at[1] + (i / columns) as f32 * cell[1]);
+            let (x, y) = (
+                ox + at[0] + (i % columns) as f32 * cell[0],
+                oy + at[1] + (i / columns) as f32 * cell[1],
+            );
             [x, y, x + cell[0], y + cell[1]]
         })
         .collect()
@@ -195,7 +263,9 @@ fn pick_rects(layout: Layout, size: [f32; 2], count: usize) -> Vec<[f32; 4]> {
 
 /// The pick button under `mouse`, of `count`.
 pub fn hit_pick(layout: Layout, size: [f32; 2], count: usize, mouse: [f32; 2]) -> Option<usize> {
-    pick_rects(layout, size, count).iter().position(|r| (r[0]..r[2]).contains(&mouse[0]) && (r[1]..r[3]).contains(&mouse[1]))
+    pick_rects(layout, size, count)
+        .iter()
+        .position(|r| (r[0]..r[2]).contains(&mouse[0]) && (r[1]..r[3]).contains(&mouse[1]))
 }
 
 /// The creative inventory's tab buttons, above the panel: its own, or the player's screen that
@@ -206,12 +276,23 @@ fn tab_rects(layout: Layout, size: [f32; 2]) -> Vec<[f32; 4]> {
     }
     let [ox, oy] = origin(layout, size);
     let left = ox + ((layout.width() - TAB_STEP * TABS.len() as f32) / 2.0).floor();
-    (0..TABS.len()).map(|i| [left + TAB_STEP * i as f32, oy - 19.0, left + TAB_STEP * i as f32 + TAB_STEP - 1.0, oy - 1.0]).collect()
+    (0..TABS.len())
+        .map(|i| {
+            [
+                left + TAB_STEP * i as f32,
+                oy - 19.0,
+                left + TAB_STEP * i as f32 + TAB_STEP - 1.0,
+                oy - 1.0,
+            ]
+        })
+        .collect()
 }
 
 /// The tab button under `mouse`.
 pub fn hit_tab(layout: Layout, size: [f32; 2], mouse: [f32; 2]) -> Option<usize> {
-    tab_rects(layout, size).into_iter().position(|r| contains(r, mouse))
+    tab_rects(layout, size)
+        .into_iter()
+        .position(|r| contains(r, mouse))
 }
 
 /// Whether `mouse` is over the panel (a click outside it drops the held stack).

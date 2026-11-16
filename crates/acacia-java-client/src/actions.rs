@@ -3,7 +3,10 @@
 //! [`Client::step`], which sends them first, as vanilla's `handleKeybinds` runs after the tick's packets are
 //! handled and before the player moves: Grim's Post check flags an action that reaches it before a pong.
 
-use acacia_java_proto::actions::{Action, Attack, BlockChangedAck, BlockPos, Direction, Hand, Interact, PlayerAction, SetCarriedItem, UseItem, UseItemOn};
+use acacia_java_proto::actions::{
+    Action, Attack, BlockChangedAck, BlockPos, Direction, Hand, Interact, PlayerAction,
+    SetCarriedItem, UseItem, UseItemOn,
+};
 use acacia_java_proto::entity::LpVec3;
 use acacia_java_proto::ids::play::{clientbound as from, serverbound as to};
 use acacia_java_proto::packets::Empty;
@@ -33,7 +36,9 @@ impl Actions {
 
     pub(crate) fn apply(&mut self, id: i32, mut body: &[u8]) -> Result<(), WireError> {
         match id {
-            from::BLOCK_CHANGED_ACK => self.acked = self.acked.max(BlockChangedAck::read(&mut body)?.sequence.0),
+            from::BLOCK_CHANGED_ACK => {
+                self.acked = self.acked.max(BlockChangedAck::read(&mut body)?.sequence.0)
+            }
             from::SET_HELD_SLOT => self.selected = read_varint(&mut body)? as u8,
             _ => {}
         }
@@ -81,20 +86,48 @@ impl Client {
     pub(crate) fn sync_carried(&mut self) -> Result<(), Error> {
         if self.actions.selected != self.actions.carried {
             self.actions.carried = self.actions.selected;
-            self.queue(to::SET_CARRIED_ITEM, &SetCarriedItem { slot: i16::from(self.actions.carried) })?;
+            self.queue(
+                to::SET_CARRIED_ITEM,
+                &SetCarriedItem {
+                    slot: i16::from(self.actions.carried),
+                },
+            )?;
         }
         Ok(())
     }
 
-    fn block_action(&mut self, action: Action, pos: [i32; 3], face: Direction, sequenced: bool) -> Result<i32, Error> {
-        let sequence = if sequenced { self.actions.next_sequence() } else { 0 };
-        self.queue(to::PLAYER_ACTION, &PlayerAction { action, pos: BlockPos(pos), face, sequence })?;
+    fn block_action(
+        &mut self,
+        action: Action,
+        pos: [i32; 3],
+        face: Direction,
+        sequenced: bool,
+    ) -> Result<i32, Error> {
+        let sequence = if sequenced {
+            self.actions.next_sequence()
+        } else {
+            0
+        };
+        self.queue(
+            to::PLAYER_ACTION,
+            &PlayerAction {
+                action,
+                pos: BlockPos(pos),
+                face,
+                sequence,
+            },
+        )?;
         Ok(sequence)
     }
 
     /// Starts digging `pos`, or in creative breaks it. `breaks` predicts air, as vanilla does when the block's progress
     /// per tick reaches 1 or the player is in creative. Returns the action's sequence.
-    pub fn start_destroy(&mut self, pos: [i32; 3], face: Direction, breaks: bool) -> Result<i32, Error> {
+    pub fn start_destroy(
+        &mut self,
+        pos: [i32; 3],
+        face: Direction,
+        breaks: bool,
+    ) -> Result<i32, Error> {
         self.sync_carried()?;
         let sequence = self.block_action(Action::StartDestroy, pos, face, true)?;
         if breaks {
@@ -113,11 +146,17 @@ impl Client {
 
     /// Gives up a dig: vanilla sends `Direction::Down` when the player lets go.
     pub fn abort_destroy(&mut self, pos: [i32; 3], face: Direction) -> Result<(), Error> {
-        self.block_action(Action::AbortDestroy, pos, face, false).map(drop)
+        self.block_action(Action::AbortDestroy, pos, face, false)
+            .map(drop)
     }
 
-    pub fn change_destroy_direction(&mut self, pos: [i32; 3], face: Direction) -> Result<(), Error> {
-        self.block_action(Action::ChangeDestroyDirection, pos, face, false).map(drop)
+    pub fn change_destroy_direction(
+        &mut self,
+        pos: [i32; 3],
+        face: Direction,
+    ) -> Result<(), Error> {
+        self.block_action(Action::ChangeDestroyDirection, pos, face, false)
+            .map(drop)
     }
 
     /// The arm swing: once per attack, and every tick a dig goes on.
@@ -126,10 +165,24 @@ impl Client {
     }
 
     /// Clicks `face` of `pos` at `click` (relative to the block's corner). Returns the action's sequence.
-    pub fn use_item_on(&mut self, hand: Hand, pos: [i32; 3], face: Direction, click: [f32; 3]) -> Result<i32, Error> {
+    pub fn use_item_on(
+        &mut self,
+        hand: Hand,
+        pos: [i32; 3],
+        face: Direction,
+        click: [f32; 3],
+    ) -> Result<i32, Error> {
         self.sync_carried()?;
         let sequence = self.actions.next_sequence();
-        let packet = UseItemOn { hand, pos: BlockPos(pos), face, click, inside: false, world_border: false, sequence };
+        let packet = UseItemOn {
+            hand,
+            pos: BlockPos(pos),
+            face,
+            click,
+            inside: false,
+            world_border: false,
+            sequence,
+        };
         self.queue(to::USE_ITEM_ON, &packet)?;
         Ok(sequence)
     }
@@ -139,7 +192,12 @@ impl Client {
         self.sync_carried()?;
         let sequence = self.actions.next_sequence();
         let player = &self.movement.player;
-        let packet = UseItem { hand, sequence: VarInt(sequence), y_rot: player.yaw, x_rot: player.pitch };
+        let packet = UseItem {
+            hand,
+            sequence: VarInt(sequence),
+            y_rot: player.yaw,
+            x_rot: player.pitch,
+        };
         self.queue(to::USE_ITEM, &packet)?;
         Ok(sequence)
     }
@@ -147,18 +205,38 @@ impl Client {
     /// Lets go of an item being used, such as a drawn bow.
     pub fn release_use_item(&mut self) -> Result<(), Error> {
         self.sync_carried()?;
-        self.block_action(Action::ReleaseUseItem, [0; 3], Direction::Down, false).map(drop)
+        self.block_action(Action::ReleaseUseItem, [0; 3], Direction::Down, false)
+            .map(drop)
     }
 
     /// Hits `entity`; vanilla follows with [`Client::punch`].
     pub fn attack(&mut self, entity: i32) -> Result<(), Error> {
         self.sync_carried()?;
-        self.queue(to::ATTACK, &Attack { entity: VarInt(entity) })
+        self.queue(
+            to::ATTACK,
+            &Attack {
+                entity: VarInt(entity),
+            },
+        )
     }
 
     /// Right-clicks `entity` at `location`, relative to its feet; `secondary` is sneaking.
-    pub fn interact(&mut self, entity: i32, hand: Hand, location: [f64; 3], secondary: bool) -> Result<(), Error> {
+    pub fn interact(
+        &mut self,
+        entity: i32,
+        hand: Hand,
+        location: [f64; 3],
+        secondary: bool,
+    ) -> Result<(), Error> {
         self.sync_carried()?;
-        self.queue(to::INTERACT, &Interact { entity: VarInt(entity), hand, location: LpVec3(location), secondary })
+        self.queue(
+            to::INTERACT,
+            &Interact {
+                entity: VarInt(entity),
+                hand,
+                location: LpVec3(location),
+                secondary,
+            },
+        )
     }
 }

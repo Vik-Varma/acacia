@@ -37,13 +37,22 @@ fn key_message(name: Text, collision: bool, selected: bool) -> Text {
     let white = Style::color(WHITE);
     let mut m = name;
     if collision {
-        m = Text::literal("[ ").append(m.with_style(&white)).append(" ]");
+        m = Text::literal("[ ")
+            .append(m.with_style(&white))
+            .append(" ]");
     }
     if selected {
-        let lit = Style { underlined: Some(true), ..white };
+        let lit = Style {
+            underlined: Some(true),
+            ..white
+        };
         m = Text::literal("> ").append(m.with_style(&lit)).append(" <");
     }
-    if collision || selected { m.with_color(YELLOW) } else { m }
+    if collision || selected {
+        m.with_color(YELLOW)
+    } else {
+        m
+    }
 }
 
 /// `KeyBindsList.KeyEntry`.
@@ -60,10 +69,17 @@ impl Entry for KeyEntry {
         render(&mut self.reset, ctx);
         render(&mut self.change, ctx);
         let [x, y, _, h] = row;
-        ctx.gui.text(self.name.clone(), x + 2, y + 2 + (h - 4) / 2 - 9 / 2, 0xFFFF_FFFF, true);
+        ctx.gui.text(
+            self.name.clone(),
+            x + 2,
+            y + 2 + (h - 4) / 2 - 9 / 2,
+            0xFFFF_FFFF,
+            true,
+        );
         if self.collision {
             let left = self.change.base.x - 6;
-            ctx.gui.fill(left, y + 2 - 1, left + 3, y + 2 + h - 4, 0xFFFF_FF00);
+            ctx.gui
+                .fill(left, y + 2 - 1, left + 3, y + 2 + h - 4, 0xFFFF_FF00);
         }
     }
     fn children(&mut self) -> Vec<&mut dyn Widget> {
@@ -101,19 +117,31 @@ impl Entry for CategoryEntry {
 
 /// `KeyEntry.refreshEntry`'s collision: another mapping on the same key, one of them rebound.
 fn collides(m: &Mapping, all: &[Mapping]) -> bool {
-    !m.is_unbound() && all.iter().any(|o| o.name != m.name && o.key == m.key && (!o.is_default() || !m.is_default()))
+    !m.is_unbound()
+        && all
+            .iter()
+            .any(|o| o.name != m.name && o.key == m.key && (!o.is_default() || !m.is_default()))
 }
 
 fn key_entry(ctx: &Ctx, m: &Mapping, k: &KeyBinds) -> KeyEntry {
     let name = ctx.tr(m.name);
     let collision = collides(m, k.mappings);
-    let message = key_message(m.key.display(ctx.lang, k.os), collision, k.selected == Some(m.name));
+    let message = key_message(
+        m.key.display(ctx.lang, k.os),
+        collision,
+        k.selected == Some(m.name),
+    );
     let mut change = Button::new(0, 0, 75, 20, message);
     change.base.id = format!("key:{}", m.name).into();
     let mut reset = Button::new(0, 0, 50, 20, ctx.tr("controls.reset"));
     reset.base.id = format!("reset:{}", m.name).into();
     reset.base.active = !m.is_default();
-    KeyEntry { change, reset, name, collision }
+    KeyEntry {
+        change,
+        reset,
+        name,
+        collision,
+    }
 }
 
 /// `KeyBindsList`: 340-wide rows of 20.
@@ -124,9 +152,19 @@ fn list(ctx: &Ctx, env: &Env, k: &KeyBinds, h: i32, y: i32) -> SelectionList {
     for m in sorted(k.mappings, ctx.lang) {
         if previous != Some(m.category) {
             previous = Some(m.category);
-            let text = ctx.tr(m.category.key()).with_style(&Style { bold: Some(true), underlined: Some(true), ..Style::default() });
+            let text = ctx.tr(m.category.key()).with_style(&Style {
+                bold: Some(true),
+                underlined: Some(true),
+                ..Style::default()
+            });
             let label = FocusableTextWidget::new(ctx.font, text, 4, -1, false, Fill::OnFocus);
-            list.push(Box::new(CategoryEntry { label, list_width: env.width }), 20);
+            list.push(
+                Box::new(CategoryEntry {
+                    label,
+                    list_width: env.width,
+                }),
+                20,
+            );
         }
         list.push(Box::new(key_entry(ctx, &m, k)), 20);
     }
@@ -136,10 +174,18 @@ fn list(ctx: &Ctx, env: &Env, k: &KeyBinds, h: i32, y: i32) -> SelectionList {
 /// `new KeyBindsScreen(lastScreen, options)` after `init`.
 pub fn build(ctx: &Ctx, env: Env, k: &KeyBinds) -> ListedScreen {
     let mut b = Build::new(33, 33);
-    let title = b.add(StringWidget::fit(ctx.font, ctx.tr("controls.keybinds.title")));
+    let title = b.add(StringWidget::fit(
+        ctx.font,
+        ctx.tr("controls.keybinds.title"),
+    ));
     b.layout.add_header(title);
     let h = b.layout.content_height(env.height);
-    b.layout.add_contents(Elem::Spacer { x: 0, y: 0, w: env.width, h });
+    b.layout.add_contents(Elem::Spacer {
+        x: 0,
+        y: 0,
+        w: env.width,
+        h,
+    });
     let list = list(ctx, &env, k, h, b.layout.header_h);
     let mut reset = Button::named(ctx, 150, RESET_ALL);
     reset.base.active = !k.drawn_before || k.mappings.iter().any(|m| !m.is_default());

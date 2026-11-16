@@ -26,23 +26,39 @@ impl Follower {
 
     /// The nodes ahead whose footing exists already: up to the first one waiting for work.
     pub fn standing_ahead(&self) -> &[PathNode] {
-        let end = (self.index..self.path.len()).find(|&i| self.has_pending(i)).unwrap_or(self.path.len());
+        let end = (self.index..self.path.len())
+            .find(|&i| self.has_pending(i))
+            .unwrap_or(self.path.len());
         &self.path[self.index..end]
     }
 
     /// Work is done from the segment start: walk back there if needed and come to a stop.
-    pub(super) fn approach_work(&mut self, s: &Sense, c: &mut Controls, speed: f32) -> FollowStatus {
+    pub(super) fn approach_work(
+        &mut self,
+        s: &Sense,
+        c: &mut Controls,
+        speed: f32,
+    ) -> FollowStatus {
         let d = hdist(s.pos, self.origin);
         c.stop();
         c.sneak = false;
         if d < WORK_RADIUS && s.on_ground {
-            return if speed < SETTLED { FollowStatus::Work } else { FollowStatus::Moving };
+            return if speed < SETTLED {
+                FollowStatus::Work
+            } else {
+                FollowStatus::Moving
+            };
         }
         self.since_progress += 1;
         if self.since_progress > STUCK_TICKS {
             return FollowStatus::Stuck;
         }
-        c.yaw = self.aim.turn(c.yaw, (s.pos[0] - self.origin[0]).atan2(self.origin[2] - s.pos[2]).to_degrees());
+        c.yaw = self.aim.turn(
+            c.yaw,
+            (s.pos[0] - self.origin[0])
+                .atan2(self.origin[2] - s.pos[2])
+                .to_degrees(),
+        );
         c.forward = 1.0;
         FollowStatus::Moving
     }

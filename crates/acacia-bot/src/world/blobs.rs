@@ -32,7 +32,10 @@ pub(super) struct Blobs {
 impl Blobs {
     /// Remembers the last `cap` delivered blobs itself: a hash-only store reports them held later on.
     pub fn remembering(cap: usize) -> Self {
-        Self { recent_cap: cap, ..Self::default() }
+        Self {
+            recent_cap: cap,
+            ..Self::default()
+        }
     }
 
     pub fn set_store(&mut self, store: Arc<dyn BlobStore>) {
@@ -40,8 +43,17 @@ impl Blobs {
     }
 
     fn held(&self, blob_id: u64) -> Option<Bytes> {
-        let recent = || self.recent.iter().rev().find(|(id, _)| *id == blob_id).map(|(_, b)| b.clone());
-        self.store.as_ref().and_then(|s| s.get(blob_id)).or_else(recent)
+        let recent = || {
+            self.recent
+                .iter()
+                .rev()
+                .find(|(id, _)| *id == blob_id)
+                .map(|(_, b)| b.clone())
+        };
+        self.store
+            .as_ref()
+            .and_then(|s| s.get(blob_id))
+            .or_else(recent)
     }
 
     /// The section at `pos` if its blob is held; otherwise it waits for [`Blobs::delivered`] (forever
@@ -50,7 +62,10 @@ impl Blobs {
         match self.held(blob_id) {
             Some(blob) => Some(join(&blob, &rest)),
             None => {
-                self.waiting.entry(blob_id).or_default().push(Ready::Section(pos, rest));
+                self.waiting
+                    .entry(blob_id)
+                    .or_default()
+                    .push(Ready::Section(pos, rest));
                 None
             }
         }
@@ -60,7 +75,10 @@ impl Blobs {
     pub fn biomes(&mut self, column: (i32, i32), blob_id: u64) -> Option<Bytes> {
         let held = self.held(blob_id);
         if held.is_none() {
-            self.waiting.entry(blob_id).or_default().push(Ready::Biomes(column, Bytes::new()));
+            self.waiting
+                .entry(blob_id)
+                .or_default()
+                .push(Ready::Biomes(column, Bytes::new()));
         }
         held
     }
@@ -71,7 +89,8 @@ impl Blobs {
             if self.recent.len() == self.recent_cap {
                 self.recent.pop_front();
             }
-            self.recent.push_back((blob_id, Bytes::copy_from_slice(blob)));
+            self.recent
+                .push_back((blob_id, Bytes::copy_from_slice(blob)));
         }
         let waiting = self.waiting.remove(&blob_id).unwrap_or_default();
         waiting
@@ -118,17 +137,25 @@ mod tests {
         store.insert(1, &Bytes::from_static(b"held"));
         let mut blobs = Blobs::default();
         blobs.set_store(store);
-        assert_eq!(blobs.section((0, 0, 0), 1, Bytes::from_static(b"+be")).as_deref(), Some(&b"held+be"[..]));
+        assert_eq!(
+            blobs
+                .section((0, 0, 0), 1, Bytes::from_static(b"+be"))
+                .as_deref(),
+            Some(&b"held+be"[..])
+        );
         assert_eq!(blobs.biomes((5, 6), 1).as_deref(), Some(&b"held"[..]));
         assert_eq!(blobs.section((0, 1, 0), 2, Bytes::new()), None);
         assert_eq!(blobs.section((0, 2, 0), 2, Bytes::from_static(b"!")), None);
         assert_eq!(blobs.biomes((7, 8), 2), None);
         let done = blobs.delivered(2, b"sent");
-        assert_eq!(done, vec![
-            Ready::Section((0, 1, 0), Bytes::from_static(b"sent")),
-            Ready::Section((0, 2, 0), Bytes::from_static(b"sent!")),
-            Ready::Biomes((7, 8), Bytes::from_static(b"sent")),
-        ]);
+        assert_eq!(
+            done,
+            vec![
+                Ready::Section((0, 1, 0), Bytes::from_static(b"sent")),
+                Ready::Section((0, 2, 0), Bytes::from_static(b"sent!")),
+                Ready::Biomes((7, 8), Bytes::from_static(b"sent")),
+            ]
+        );
         assert!(blobs.delivered(2, b"sent").is_empty());
     }
 
@@ -138,7 +165,11 @@ mod tests {
         blobs.set_store(Arc::new(MemoryBlobStore::hashes_only()));
         assert_eq!(blobs.section((0, 0, 0), 1, Bytes::new()), None);
         assert_eq!(blobs.delivered(1, b"one").len(), 1);
-        assert_eq!(blobs.section((0, 1, 0), 1, Bytes::new()).as_deref(), Some(&b"one"[..]), "a later section with the same blob");
+        assert_eq!(
+            blobs.section((0, 1, 0), 1, Bytes::new()).as_deref(),
+            Some(&b"one"[..]),
+            "a later section with the same blob"
+        );
         blobs.delivered(2, b"two");
         assert_eq!(blobs.section((0, 2, 0), 1, Bytes::new()), None, "forgotten");
         blobs.retain_waiting(|(_, y, _)| y != 2);

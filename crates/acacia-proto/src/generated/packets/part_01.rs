@@ -20,6 +20,7 @@ pub struct AddEntity {
     pub metadata: types::MetadataDictionary,
     pub properties: types::EntityProperties,
     pub links: types::Links,
+    pub passenger_of_block: Option<types::PassengerOfBlockData>,
 }
 impl AddEntity {
     pub fn read(r: &mut &[u8]) -> Result<Self> {
@@ -162,6 +163,14 @@ impl AddEntity {
             })
         })()
         .map_err(|e| e.at("AddEntity.links"))?;
+        let f_passenger_of_block = (|| -> Result<_> {
+            Ok(if read_bool(r)? {
+                Some(types::PassengerOfBlockData::read(r)?)
+            } else {
+                None
+            })
+        })()
+        .map_err(|e| e.at("AddEntity.passenger_of_block"))?;
         Ok(Self {
             unique_id: f_unique_id,
             runtime_id: f_runtime_id,
@@ -176,6 +185,7 @@ impl AddEntity {
             metadata: f_metadata,
             properties: f_properties,
             links: f_links,
+            passenger_of_block: f_passenger_of_block,
         })
     }
     pub fn write(&self, w: &mut BytesMut) {
@@ -265,6 +275,13 @@ impl AddEntity {
         write_varint(w, self.links.len() as u32);
         for x0 in self.links.iter() {
             x0.write(w);
+        }
+        match &self.passenger_of_block {
+            Some(x0) => {
+                write_bool(w, true);
+                x0.write(w);
+            }
+            None => write_bool(w, false),
         }
     }
 }
@@ -1207,6 +1224,7 @@ pub enum LevelEventEvent {
     AddParticleSporeBlossomAmbient,
     AddParticleWax,
     AddParticleElectricSpark,
+    AddParticleIceBallBreak,
     Unknown(i64),
 }
 impl LevelEventEvent {
@@ -1415,6 +1433,7 @@ impl LevelEventEvent {
             16463 => Self::AddParticleSporeBlossomAmbient,
             16464 => Self::AddParticleWax,
             16465 => Self::AddParticleElectricSpark,
+            16489 => Self::AddParticleIceBallBreak,
             v => Self::Unknown(v),
         }
     }
@@ -1623,6 +1642,7 @@ impl LevelEventEvent {
             Self::AddParticleSporeBlossomAmbient => 16463,
             Self::AddParticleWax => 16464,
             Self::AddParticleElectricSpark => 16465,
+            Self::AddParticleIceBallBreak => 16489,
             Self::Unknown(v) => v,
         }
     }

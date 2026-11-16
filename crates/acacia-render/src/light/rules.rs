@@ -30,12 +30,20 @@ impl Rules<'_> {
     /// neighbour of shape `to` along step `dir` is closed. Shape 0 is `isEmptyShape`.
     #[inline]
     pub fn occludes(self, from: u8, to: u8, dir: usize) -> bool {
-        let Rules::Java(shapes) = self else { return false };
+        let Rules::Java(shapes) = self else {
+            return false;
+        };
         if from == 0 && to == 0 {
             return false;
         }
         let (out, back) = JAVA_DIR[dir];
-        let face = |shape: u8, d: usize| if shape == 0 { [0; 4] } else { shapes[usize::from(shape) - 1][d] };
+        let face = |shape: u8, d: usize| {
+            if shape == 0 {
+                [0; 4]
+            } else {
+                shapes[usize::from(shape) - 1][d]
+            }
+        };
         let (a, b) = (face(from, out), face(to, back));
         (0..4).all(|i| a[i] | b[i] == u64::MAX)
     }
@@ -78,6 +86,13 @@ mod tests {
         // Sky light comes down into a bottom slab (open top), not into a top slab.
         assert!(!rules.edge_occluded(0, 0, 2));
         assert!(rules.edge_occluded(0, 0, 3));
-        assert_eq!((rules.step(15, 0, true), rules.step(15, 1, false), rules.step(9, 3, false)), (14, 14, 6));
+        assert_eq!(
+            (
+                rules.step(15, 0, true),
+                rules.step(15, 1, false),
+                rules.step(9, 3, false)
+            ),
+            (14, 14, 6)
+        );
     }
 }

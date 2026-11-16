@@ -32,19 +32,28 @@ impl OutlinePass {
     pub fn new(device: &wgpu::Device, color: wgpu::TextureFormat, globals: &wgpu::Buffer) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("outline"),
-            source: wgpu::ShaderSource::Wgsl(concat!(include_str!("globals.wgsl"), include_str!("outline.wgsl")).into()),
+            source: wgpu::ShaderSource::Wgsl(
+                concat!(include_str!("globals.wgsl"), include_str!("outline.wgsl")).into(),
+            ),
         });
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("outline"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
                 count: None,
             }],
         });
-        let pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("outline"), bind_group_layouts: &[Some(&layout)], immediate_size: 0 });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("outline"),
+            bind_group_layouts: &[Some(&layout)],
+            immediate_size: 0,
+        });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("outline"),
             layout: Some(&pipeline_layout),
@@ -58,7 +67,10 @@ impl OutlinePass {
                     attributes: &wgpu::vertex_attr_array![0 => Float32x3],
                 })],
             },
-            primitive: wgpu::PrimitiveState { topology: wgpu::PrimitiveTopology::LineList, ..Default::default() },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::LineList,
+                ..Default::default()
+            },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: DEPTH_FORMAT,
                 depth_write_enabled: Some(false),
@@ -90,9 +102,17 @@ impl OutlinePass {
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("outline"),
             layout: &layout,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: globals.as_entire_binding() }],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: globals.as_entire_binding(),
+            }],
         });
-        OutlinePass { pipeline, bind_group, vertices, count: 0 }
+        OutlinePass {
+            pipeline,
+            bind_group,
+            vertices,
+            count: 0,
+        }
     }
 
     pub fn prepare(&mut self, queue: &wgpu::Queue, outline: Option<&Outline>, camera: DVec3) {
@@ -101,7 +121,12 @@ impl OutlinePass {
             return;
         };
         let origin = (outline.block.as_dvec3() - camera).as_vec3();
-        let lines: Vec<[f32; 3]> = outline.boxes.iter().take(MAX_BOXES).flat_map(|b| box_edges(origin, b)).collect();
+        let lines: Vec<[f32; 3]> = outline
+            .boxes
+            .iter()
+            .take(MAX_BOXES)
+            .flat_map(|b| box_edges(origin, b))
+            .collect();
         queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&lines));
         self.count = lines.len() as u32;
     }
@@ -121,9 +146,29 @@ impl OutlinePass {
 fn box_edges(origin: Vec3, b: &[f32; 6]) -> [[f32; 3]; VERTICES_PER_BOX] {
     let min = origin + Vec3::new(b[0], b[1], b[2]) - INFLATE;
     let max = origin + Vec3::new(b[3], b[4], b[5]) + INFLATE;
-    let corner = |i: usize| Vec3::new(if i & 1 == 0 { min.x } else { max.x }, if i & 2 == 0 { min.y } else { max.y }, if i & 4 == 0 { min.z } else { max.z }).to_array();
+    let corner = |i: usize| {
+        Vec3::new(
+            if i & 1 == 0 { min.x } else { max.x },
+            if i & 2 == 0 { min.y } else { max.y },
+            if i & 4 == 0 { min.z } else { max.z },
+        )
+        .to_array()
+    };
     // Corner pairs differing in one bit.
-    const EDGES: [(usize, usize); 12] = [(0, 1), (2, 3), (4, 5), (6, 7), (0, 2), (1, 3), (4, 6), (5, 7), (0, 4), (1, 5), (2, 6), (3, 7)];
+    const EDGES: [(usize, usize); 12] = [
+        (0, 1),
+        (2, 3),
+        (4, 5),
+        (6, 7),
+        (0, 2),
+        (1, 3),
+        (4, 6),
+        (5, 7),
+        (0, 4),
+        (1, 5),
+        (2, 6),
+        (3, 7),
+    ];
     let mut out = [[0.0; 3]; VERTICES_PER_BOX];
     for (i, (a, b)) in EDGES.iter().enumerate() {
         out[i * 2] = corner(*a);
@@ -140,9 +185,14 @@ mod tests {
     fn edges_follow_the_box() {
         let lines = box_edges(Vec3::ZERO, &[0.0, 0.0, 0.0, 1.0, 0.5, 1.0]);
         for pair in lines.chunks(2) {
-            let differ = (0..3).filter(|&i| (pair[0][i] - pair[1][i]).abs() > 0.1).count();
+            let differ = (0..3)
+                .filter(|&i| (pair[0][i] - pair[1][i]).abs() > 0.1)
+                .count();
             assert_eq!(differ, 1, "an edge runs along one axis: {pair:?}");
         }
-        assert!(lines.iter().all(|p| p[1] <= 0.5 + INFLATE + 1e-6), "slab height");
+        assert!(
+            lines.iter().all(|p| p[1] <= 0.5 + INFLATE + 1e-6),
+            "slab height"
+        );
     }
 }

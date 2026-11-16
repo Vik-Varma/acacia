@@ -18,7 +18,14 @@ pub struct Blur {
 impl Blur {
     /// The post chain's passes in order: each the direction it samples along, in texels.
     pub fn passes() -> [[f32; 2]; 6] {
-        [[1.0, 0.0], [0.0, 1.0], [1.0, 0.0], [0.0, 1.0], [1.0, 0.0], [0.0, 1.0]]
+        [
+            [1.0, 0.0],
+            [0.0, 1.0],
+            [1.0, 0.0],
+            [0.0, 1.0],
+            [1.0, 0.0],
+            [0.0, 1.0],
+        ]
     }
 }
 
@@ -45,7 +52,10 @@ mod tests {
     #[test]
     fn the_default_radius_takes_six_samples_weighing_one() {
         let t = taps(DEFAULT_RADIUS);
-        assert_eq!(t.iter().map(|&(a, _)| a).collect::<Vec<_>>(), [-4.5, -2.5, -0.5, 1.5, 3.5, 5.0]);
+        assert_eq!(
+            t.iter().map(|&(a, _)| a).collect::<Vec<_>>(),
+            [-4.5, -2.5, -0.5, 1.5, 3.5, 5.0]
+        );
         assert!((t.iter().map(|&(_, w)| w).sum::<f32>() - 1.0).abs() < 1e-6);
     }
 }

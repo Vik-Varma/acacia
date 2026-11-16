@@ -41,15 +41,29 @@ static SHOWN: Mutex<Vec<Framed>> = Mutex::new(Vec::new());
 
 /// Reads the wall frames holding something for [`instances`].
 pub fn publish(bot: &Bot) {
-    let frames = bot.state().block_entities.iter().filter_map(|(block, nbt)| framed_item(bot, *block, nbt)).collect();
-    *SHOWN.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = frames;
+    let frames = bot
+        .state()
+        .block_entities
+        .iter()
+        .filter_map(|(block, nbt)| framed_item(bot, *block, nbt))
+        .collect();
+    *SHOWN
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = frames;
 }
 
 fn framed_item(bot: &Bot, block: [i32; 3], nbt: &Nbt) -> Option<Framed> {
     let item = nbt.value.get("Item")?;
-    let Value::String(name) = item.get("Name")? else { return None };
+    let Value::String(name) = item.get("Name")? else {
+        return None;
+    };
     let view = bot.bedrock().and_then(|b| b.world())?.view()?;
-    let state = view.world().registry().get(acacia_world::BlockAccess::block(view, block[0], block[1], block[2]))?;
+    let state = view
+        .world()
+        .registry()
+        .get(acacia_world::BlockAccess::block(
+            view, block[0], block[1], block[2],
+        ))?;
     // As `acacia_render::blocks::model` turns the frame's block model.
     let (yaw, tilt) = match state.property("facing_direction")? {
         "0" => (0.0, -90.0),
@@ -76,11 +90,36 @@ fn framed_item(bot: &Bot, block: [i32; 3], nbt: &Nbt) -> Option<Framed> {
     if let Some(id) = map_id.filter(|_| map.is_none())
         && ASKED.with_borrow_mut(|asked| asked.insert(id))
     {
-        bot.bedrock().expect("Bedrock bot").client().send(&MapInfoRequest { map_id: id, client_pixels: Vec::new() });
+        bot.bedrock()
+            .expect("Bedrock bot")
+            .client()
+            .send(&MapInfoRequest {
+                map_id: id,
+                client_pixels: Vec::new(),
+            });
     }
-    let block_id = view.world().registry().states_of(name).next().map_or(0, |(id, _)| id);
-    let key = ItemKey { name: name.to_string(), aux, block: block_id, dye: None, banner: None, trim: None };
-    Some(Framed { block, hung: framed::Hung { yaw, tilt }, turn, key, enchanted: tag.is_some_and(|tag| tag.get("ench").is_some()), map })
+    let block_id = view
+        .world()
+        .registry()
+        .states_of(name)
+        .next()
+        .map_or(0, |(id, _)| id);
+    let key = ItemKey {
+        name: name.to_string(),
+        aux,
+        block: block_id,
+        dye: None,
+        banner: None,
+        trim: None,
+    };
+    Some(Framed {
+        block,
+        hung: framed::Hung { yaw, tilt },
+        turn,
+        key,
+        enchanted: tag.is_some_and(|tag| tag.get("ench").is_some()),
+        map,
+    })
 }
 
 fn picture(image: &Arc<MapImage>) -> Option<Arc<Skin>> {
@@ -97,14 +136,24 @@ fn picture(image: &Arc<MapImage>) -> Option<Arc<Skin>> {
 
 /// The frames' contents within `reach` blocks of the camera.
 pub fn instances(items: &mut Smoother, camera: DVec3, reach: f64) -> Vec<EntityInstance> {
-    let frames = SHOWN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    let near = frames.iter().filter(|f| (IVec3::from(f.block).as_dvec3() + 0.5).distance_squared(camera) < reach * reach);
+    let frames = SHOWN
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let near = frames.iter().filter(|f| {
+        (IVec3::from(f.block).as_dvec3() + 0.5).distance_squared(camera) < reach * reach
+    });
     near.filter_map(|f| {
         let block = IVec3::from(f.block);
         if let Some(picture) = f.map.as_ref().and_then(picture) {
             return Some(framed::map_picture(&picture, block, f.hung, f.turn, camera));
         }
-        Some(framed::item(&items.item(&f.key, f.enchanted)?, block, f.hung, f.turn, camera))
+        Some(framed::item(
+            &items.item(&f.key, f.enchanted)?,
+            block,
+            f.hung,
+            f.turn,
+            camera,
+        ))
     })
     .collect()
 }

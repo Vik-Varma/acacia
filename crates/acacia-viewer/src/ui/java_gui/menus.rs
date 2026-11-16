@@ -30,20 +30,41 @@ pub enum View {
     Pause,
     /// An options page (`pages::build`'s names, or `input::link`'s screens beside them) over these
     /// settings.
-    Options { page: &'static str, settings: Settings },
+    Options {
+        page: &'static str,
+        settings: Settings,
+    },
     /// The credits roll (`WinScreen`), `ticks` after it opened.
-    Win { ticks: f32 },
+    Win {
+        ticks: f32,
+    },
     /// `LevelLoadingScreen`: the player has not arrived yet.
     Loading,
     /// `SignEditScreen` (or the hanging sign's) on the lines typed so far; `cursor` is in bytes.
-    Sign { lines: [String; 4], line: usize, cursor: usize, hanging: bool },
+    Sign {
+        lines: [String; 4],
+        line: usize,
+        cursor: usize,
+        hanging: bool,
+    },
     /// `BookViewScreen`, or `BookEditScreen` while `writing` with the caret `caret` bytes in.
-    Book { pages: Vec<String>, page: usize, writing: bool, caret: usize },
+    Book {
+        pages: Vec<String>,
+        page: usize,
+        writing: bool,
+        caret: usize,
+    },
     /// `ticks` since the player died.
-    Death { ticks: u32 },
+    Death {
+        ticks: u32,
+    },
     /// `DeathScreen.TitleConfirmScreen`, `ticks` after it opened.
-    TitleConfirm { ticks: u32 },
-    Disconnected { reason: String },
+    TitleConfirm {
+        ticks: u32,
+    },
+    Disconnected {
+        reason: String,
+    },
 }
 
 /// Input to a menu, in GUI coordinates.
@@ -77,7 +98,14 @@ impl JavaGui {
     }
 
     /// The menu's calls at `size` with the mouse at `mouse`.
-    pub fn menu(&self, view: &View, s: &Interaction, size: [i32; 2], mouse: (i32, i32), now: Instant) -> Gui {
+    pub fn menu(
+        &self,
+        view: &View,
+        s: &Interaction,
+        size: [i32; 2],
+        mouse: (i32, i32),
+        now: Instant,
+    ) -> Gui {
         let mut gui = Gui::new(size[0], size[1]);
         let lang = self.lang();
         let mut ctx = Ctx::new(&mut gui, &self.fonts, &lang, mouse);
@@ -89,14 +117,22 @@ impl JavaGui {
     }
 
     /// `input` given to the menu; `s` keeps its focus and scroll.
-    pub fn menu_input(&self, view: &View, s: &mut Interaction, size: [i32; 2], input: Input) -> Option<Reply> {
+    pub fn menu_input(
+        &self,
+        view: &View,
+        s: &mut Interaction,
+        size: [i32; 2],
+        input: Input,
+    ) -> Option<Reply> {
         let mut gui = Gui::new(size[0], size[1]);
         let lang = self.lang();
         let ctx = Ctx::new(&mut gui, &self.fonts, &lang, (0, 0));
         let mut screen = build(self, &ctx, view, size);
         screen.restore(s);
         let fired = match input {
-            Input::Key { key: Key::Escape, .. } => {
+            Input::Key {
+                key: Key::Escape, ..
+            } => {
                 return match screen.escape() {
                     Escape::Close => Some(Reply::Close),
                     Escape::Fire(f) => Some(Reply::Fired(f)),
@@ -125,16 +161,43 @@ impl JavaGui {
         let mut gui = Gui::new(chat.width, chat.height);
         let lang = self.lang();
         let game = Game::default();
-        let details = Details { lang: &lang, advanced: false, creative: false, game: &game, player: None, key: None };
-        let lines = ChatLines { chat: &self.hud.chat, ticks: self.hud.tick_count, details: &details };
+        let details = Details {
+            lang: &lang,
+            advanced: false,
+            creative: false,
+            game: &game,
+            player: None,
+            key: None,
+        };
+        let lines = ChatLines {
+            chat: &self.hud.chat,
+            ticks: self.hud.tick_count,
+            details: &details,
+        };
         // Options.getBackgroundColor(Integer.MIN_VALUE): backgroundForChatOnly is on by default.
-        chat.extract(&mut gui, &self.fonts, mouse, blink_ms, 0x8000_0000, Some(lines));
+        chat.extract(
+            &mut gui,
+            &self.fonts,
+            mouse,
+            blink_ms,
+            0x8000_0000,
+            Some(lines),
+        );
         gui
     }
 
     /// The chat input then the menu, painted into `list`.
     #[allow(clippy::too_many_arguments)]
-    pub fn screens(&mut self, skin: &mut Skin, shown: Shown, size: [i32; 2], mouse: (i32, i32), now: Instant, list: &mut DrawList, pictures: &mut Vec<PictureRequest>) {
+    pub fn screens(
+        &mut self,
+        skin: &mut Skin,
+        shown: Shown,
+        size: [i32; 2],
+        mouse: (i32, i32),
+        now: Instant,
+        list: &mut DrawList,
+        pictures: &mut Vec<PictureRequest>,
+    ) {
         if let Some((chat, blink_ms)) = shown.chat {
             let gui = self.chat(chat, mouse, blink_ms);
             self.paint(skin, &|_| None, &gui, list, pictures);
@@ -148,18 +211,50 @@ impl JavaGui {
 
 /// The open menu, over everything else: the Bedrock look's (`menu`) or Java's screens.
 #[allow(clippy::too_many_arguments)]
-pub(in crate::ui) fn draw(java_gui: &mut JavaGui, skin: &mut Skin, menu: Option<(&str, &[String])>, java: Option<Shown>, mouse: [f32; 2], size: [u32; 2], scale: u32, now: Instant, list: &mut DrawList, pictures: &mut Vec<PictureRequest>) {
+pub(in crate::ui) fn draw(
+    java_gui: &mut JavaGui,
+    skin: &mut Skin,
+    menu: Option<(&str, &[String])>,
+    java: Option<Shown>,
+    mouse: [f32; 2],
+    size: [u32; 2],
+    scale: u32,
+    now: Instant,
+    list: &mut DrawList,
+    pictures: &mut Vec<PictureRequest>,
+) {
     if let Some((title, buttons)) = menu {
-        acacia_ui::menu::draw(list, &skin.theme, title, buttons, mouse, [(size[0] / scale) as f32, (size[1] / scale) as f32]);
+        acacia_ui::menu::draw(
+            list,
+            &skin.theme,
+            title,
+            buttons,
+            mouse,
+            [(size[0] / scale) as f32, (size[1] / scale) as f32],
+        );
     }
     if let Some(shown) = java {
-        java_gui.screens(skin, shown, gui_size(size, scale), (mouse[0] as i32, mouse[1] as i32), now, list, pictures);
+        java_gui.screens(
+            skin,
+            shown,
+            gui_size(size, scale),
+            (mouse[0] as i32, mouse[1] as i32),
+            now,
+            list,
+            pictures,
+        );
     }
 }
 
 impl Ui {
     /// [`JavaGui::menu_input`].
-    pub fn java_menu_input(&self, view: &View, s: &mut Interaction, size: [i32; 2], input: Input) -> Option<Reply> {
+    pub fn java_menu_input(
+        &self,
+        view: &View,
+        s: &mut Interaction,
+        size: [i32; 2],
+        input: Input,
+    ) -> Option<Reply> {
         self.java_gui.menu_input(view, s, size, input)
     }
 

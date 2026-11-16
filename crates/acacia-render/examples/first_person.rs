@@ -13,19 +13,31 @@ use serde_json::Value;
 fn using(v: &Value) -> Option<Using> {
     let held = v["held"].as_f64()? as f32;
     Some(match v["kind"].as_str()? {
-        "eat" => Using::Eat { held, duration: v["duration"].as_f64()? as f32 },
+        "eat" => Using::Eat {
+            held,
+            duration: v["duration"].as_f64()? as f32,
+        },
         "block" => Using::Block,
         "bow" => Using::Bow { held },
         "trident" => Using::Trident { held },
-        "crossbow" => Using::Crossbow { held, charge: v["charge"].as_f64()? as f32 },
+        "crossbow" => Using::Crossbow {
+            held,
+            charge: v["charge"].as_f64()? as f32,
+        },
         _ => return None,
     })
 }
 
 fn main() {
-    let path = std::env::args().nth(1).expect("usage: first_person <hands.jsonl>");
+    let path = std::env::args()
+        .nth(1)
+        .expect("usage: first_person <hands.jsonl>");
     let mut out = compare::Report::default();
-    for line in std::fs::read_to_string(path).expect("oracle records").lines().filter(|l| !l.trim().is_empty()) {
+    for line in std::fs::read_to_string(path)
+        .expect("oracle records")
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+    {
         let r: Value = serde_json::from_str(line).expect("oracle record");
         let mut case = out.case(r["case"].as_str().unwrap_or_default());
         if let Some(error) = r.get("error") {
@@ -44,7 +56,12 @@ fn main() {
             crossbow: r["crossbow"].as_bool(),
             spinning: flag("spinning"),
         };
-        case.numbers("matrix", &compare::floats(&r["matrix"]), &frame(&hold).to_cols_array(), 1e-5);
+        case.numbers(
+            "matrix",
+            &compare::floats(&r["matrix"]),
+            &frame(&hold).to_cols_array(),
+            1e-5,
+        );
     }
     out.print();
 }

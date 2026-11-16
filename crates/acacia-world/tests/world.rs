@@ -2,7 +2,9 @@ mod common;
 
 use std::sync::Arc;
 
-use acacia_world::{BlockAccess, BlockIds, BlockRegistry, ChunkChange, ChunkView, Inserted, SECTION_VOLUME, World};
+use acacia_world::{
+    BlockAccess, BlockIds, BlockRegistry, ChunkChange, ChunkView, Inserted, SECTION_VOLUME, World,
+};
 use common::*;
 
 fn world() -> Arc<World> {
@@ -17,13 +19,15 @@ fn hashed_ids_are_translated() {
     let hash = |id| r.get(id).unwrap().network_hash;
     let w = World::new(BlockRegistry::vanilla_arc(), 0, BlockIds::Hashed);
     let mut v = ChunkView::new(w);
-    v.insert_level_chunk(0, 0, 1, &section_v9(0, &[&filled(hash(stone))])).unwrap();
+    v.insert_level_chunk(0, 0, 1, &section_v9(0, &[&filled(hash(stone))]))
+        .unwrap();
     assert_eq!(v.block(1, 1, 1), stone);
     v.set_block(1, 1, 1, 0, hash(dirt));
     assert_eq!(v.block(1, 1, 1), dirt);
     v.set_block(1, 2, 1, 0, 12345);
     assert_eq!(v.block(1, 2, 1), r.air_id(), "unknown hash");
-    v.insert_sub_chunk(0, 1, 0, &section_v9(1, &[&filled(hash(dirt))])).unwrap();
+    v.insert_sub_chunk(0, 1, 0, &section_v9(1, &[&filled(hash(dirt))]))
+        .unwrap();
     assert_eq!(v.block(0, 16, 0), dirt);
     assert_eq!(v.world().wire_id(dirt), hash(dirt));
     assert_eq!(world().wire_id(dirt), dirt);
@@ -38,7 +42,10 @@ fn identical_payload_is_shared_not_decoded() {
     let w = world();
     let (mut a, mut b) = (ChunkView::new(w.clone()), ChunkView::new(w.clone()));
     let p = chunk_payload(1);
-    assert_eq!(a.insert_level_chunk(2, 3, 1, &p).unwrap(), Inserted::Decoded);
+    assert_eq!(
+        a.insert_level_chunk(2, 3, 1, &p).unwrap(),
+        Inserted::Decoded
+    );
     assert_eq!(b.insert_level_chunk(2, 3, 1, &p).unwrap(), Inserted::Shared);
     assert!(Arc::ptr_eq(a.chunk(2, 3).unwrap(), b.chunk(2, 3).unwrap()));
     assert_eq!(w.live_chunks(), 1);
@@ -57,7 +64,10 @@ fn the_owners_new_payload_replaces_in_place_for_every_view() {
     let (mut a, mut b) = (ChunkView::new(w.clone()), ChunkView::new(w.clone()));
     a.insert_level_chunk(0, 0, 1, &chunk_payload(1)).unwrap();
     b.insert_level_chunk(0, 0, 1, &chunk_payload(1)).unwrap();
-    assert_eq!(a.insert_level_chunk(0, 0, 1, &chunk_payload(2)).unwrap(), Inserted::Decoded);
+    assert_eq!(
+        a.insert_level_chunk(0, 0, 1, &chunk_payload(2)).unwrap(),
+        Inserted::Decoded
+    );
     assert_eq!(b.block(0, 64, 0), 2);
 }
 
@@ -72,7 +82,10 @@ fn block_updates_are_shared_and_invalidate_the_hash() {
     assert!(a.set_block(-3, 70, -5, 1, 8));
     assert_eq!((b.block(-3, 70, -5), b.liquid(-3, 70, -5)), (9, 8));
     assert!(!a.set_block(100, 70, 100, 0, 9), "unloaded chunk");
-    assert_eq!(a.insert_level_chunk(-1, -1, 1, &p).unwrap(), Inserted::Decoded);
+    assert_eq!(
+        a.insert_level_chunk(-1, -1, 1, &p).unwrap(),
+        Inserted::Decoded
+    );
     assert_eq!(b.block(-3, 70, -5), 1);
 }
 
@@ -87,7 +100,11 @@ fn a_lagging_view_does_not_revert_newer_updates() {
     a.set_block(1, 70, 1, 0, 5);
     a.set_block(1, 70, 1, 0, 6);
     b.set_block(1, 70, 1, 0, 5);
-    assert_eq!(b.block(1, 70, 1), 6, "a late copy of an older update must not win");
+    assert_eq!(
+        b.block(1, 70, 1),
+        6,
+        "a late copy of an older update must not win"
+    );
     b.insert_level_chunk(0, 0, 1, &chunk_payload(2)).unwrap();
     assert_eq!(a.block(0, 64, 0), 1, "nor a late copy of an older chunk");
 }
@@ -105,7 +122,11 @@ fn updates_pass_to_another_view_when_the_owner_drops_the_chunk() {
     drop(b);
     let mut c = ChunkView::new(w.clone());
     c.insert_level_chunk(0, 0, 1, &p).unwrap();
-    assert_eq!(c.block(1, 70, 1), 1, "every view gone: the chunk was freed and decoded afresh");
+    assert_eq!(
+        c.block(1, 70, 1),
+        1,
+        "every view gone: the chunk was freed and decoded afresh"
+    );
 }
 
 #[test]
@@ -133,7 +154,11 @@ fn concurrent_inserts_end_up_with_one_chunk() {
         hs.into_iter().map(|h| h.join().unwrap()).collect()
     });
     let first = views[0].chunk(7, 7).unwrap();
-    assert!(views.iter().all(|v| Arc::ptr_eq(first, v.chunk(7, 7).unwrap())));
+    assert!(
+        views
+            .iter()
+            .all(|v| Arc::ptr_eq(first, v.chunk(7, 7).unwrap()))
+    );
     assert_eq!(w.live_chunks(), 1);
 }
 
@@ -146,13 +171,25 @@ fn subscribers_see_applied_changes_only() {
     b.insert_level_chunk(1, 2, 1, &chunk_payload(1)).unwrap();
     b.set_block(17, 64, 33, 0, 2);
     a.set_block(17, 64, 33, 0, 2);
-    a.insert_sub_chunk(1, 5, 2, &section_v9(5, &[&filled(3)])).unwrap();
+    a.insert_sub_chunk(1, 5, 2, &section_v9(5, &[&filled(3)]))
+        .unwrap();
     let got: Vec<_> = changes.try_iter().collect();
-    assert_eq!(got, [
-        ChunkChange::Column { x: 1, z: 2 },
-        ChunkChange::Block { x: 17, y: 64, z: 33 },
-        ChunkChange::Section { x: 1, section_y: 5, z: 2 },
-    ]);
+    assert_eq!(
+        got,
+        [
+            ChunkChange::Column { x: 1, z: 2 },
+            ChunkChange::Block {
+                x: 17,
+                y: 64,
+                z: 33
+            },
+            ChunkChange::Section {
+                x: 1,
+                section_y: 5,
+                z: 2
+            },
+        ]
+    );
     assert_eq!(w.chunk_positions(), [(1, 2)]);
 }
 
@@ -170,13 +207,20 @@ fn biomes_only_payload_fills_sections_and_copies_below() {
     v.insert_biomes(2, 3, &payload);
     let chunk = v.chunk(2, 3).unwrap().read();
     assert_eq!(chunk.biome(32, -64, 48), Some(4));
-    assert_eq!(chunk.biome(33, -46, 51), Some(9), "section 1, local (1, 2, 3)");
+    assert_eq!(
+        chunk.biome(33, -46, 51),
+        Some(9),
+        "section 1, local (1, 2, 3)"
+    );
     assert_eq!(chunk.biome(33, -30, 51), Some(9), "0xff repeats section 1");
     assert_eq!(chunk.biome(0, 0, 0), None, "sections past the payload");
     let mut out = [0; VOLUME];
     assert!(chunk.copy_biomes(1, &mut out));
     assert_eq!(out, mixed);
-    assert_eq!(changes.try_iter().collect::<Vec<_>>(), [ChunkChange::Column { x: 2, z: 3 }]);
+    assert_eq!(
+        changes.try_iter().collect::<Vec<_>>(),
+        [ChunkChange::Column { x: 2, z: 3 }]
+    );
 }
 
 #[test]
@@ -186,26 +230,55 @@ fn sections_are_known_from_full_chunks_sub_chunks_and_all_air_results() {
     let mut v = ChunkView::new(w.clone());
     v.insert_level_chunk(0, 0, 1, &chunk_payload(1)).unwrap();
     let full = v.chunk(0, 0).unwrap().read();
-    assert!((0..full.section_count()).all(|i| full.section_known(i)), "a full chunk's implicit air is known");
+    assert!(
+        (0..full.section_count()).all(|i| full.section_known(i)),
+        "a full chunk's implicit air is known"
+    );
     drop(full);
 
     v.insert_biomes(1, 0, &[0xff]);
-    v.insert_sub_chunk(1, 5, 0, &section_v9(5, &[&filled(3)])).unwrap();
+    v.insert_sub_chunk(1, 5, 0, &section_v9(5, &[&filled(3)]))
+        .unwrap();
     v.insert_sub_chunk_air(1, 6, 0);
     let requested = v.chunk(1, 0).unwrap().read();
-    let known: Vec<usize> = (0..requested.section_count()).filter(|&i| requested.section_known(i)).collect();
-    assert_eq!(known, [9, 10], "section y 5 and 6 above the overworld floor at -4");
+    let known: Vec<usize> = (0..requested.section_count())
+        .filter(|&i| requested.section_known(i))
+        .collect();
+    assert_eq!(
+        known,
+        [9, 10],
+        "section y 5 and 6 above the overworld floor at -4"
+    );
     let (mut blocks, mut liquid) = ([0; SECTION_VOLUME], [0; SECTION_VOLUME]);
-    assert!(!requested.copy_section(10, &mut blocks, &mut liquid), "known air holds no data");
+    assert!(
+        !requested.copy_section(10, &mut blocks, &mut liquid),
+        "known air holds no data"
+    );
     assert!(!requested.section_known(99));
     drop(requested);
-    assert_eq!(changes.try_iter().last(), Some(ChunkChange::Section { x: 1, section_y: 6, z: 0 }));
+    assert_eq!(
+        changes.try_iter().last(),
+        Some(ChunkChange::Section {
+            x: 1,
+            section_y: 6,
+            z: 0
+        })
+    );
 
     v.insert_sub_chunk_limit(1, 0, 12);
     let limited = v.chunk(1, 0).unwrap().read();
-    let known: Vec<usize> = (0..limited.section_count()).filter(|&i| limited.section_known(i)).collect();
-    assert_eq!(known, [9, 10].into_iter().chain(12..24).collect::<Vec<_>>(), "sections from the limit up are air");
-    assert_eq!(changes.try_iter().last(), Some(ChunkChange::Column { x: 1, z: 0 }));
+    let known: Vec<usize> = (0..limited.section_count())
+        .filter(|&i| limited.section_known(i))
+        .collect();
+    assert_eq!(
+        known,
+        [9, 10].into_iter().chain(12..24).collect::<Vec<_>>(),
+        "sections from the limit up are air"
+    );
+    assert_eq!(
+        changes.try_iter().last(),
+        Some(ChunkChange::Column { x: 1, z: 0 })
+    );
 }
 
 #[test]
@@ -216,11 +289,17 @@ fn copy_section_unpacks_xzy() {
     v.set_block(3, 66, 5, 0, 9);
     let chunk = v.chunk(0, 0).unwrap().read();
     let (mut blocks, mut liquid) = ([0; SECTION_VOLUME], [0; SECTION_VOLUME]);
-    assert!(!chunk.copy_section(0, &mut blocks, &mut liquid), "section 0 never sent");
+    assert!(
+        !chunk.copy_section(0, &mut blocks, &mut liquid),
+        "section 0 never sent"
+    );
     assert_eq!(chunk.section_uniform(0), Some(w.dimension().air));
     assert!(chunk.copy_section(8, &mut blocks, &mut liquid));
     assert_eq!(blocks[(3 << 8) | (5 << 4) | 2], 9);
-    assert_eq!(blocks.iter().filter(|&&b| b == 1).count(), SECTION_VOLUME - 1);
+    assert_eq!(
+        blocks.iter().filter(|&&b| b == 1).count(),
+        SECTION_VOLUME - 1
+    );
     assert!(liquid.iter().all(|&l| l == w.dimension().air));
     assert_eq!(chunk.section_uniform(8), None);
 }

@@ -31,7 +31,10 @@ impl Storage {
         }
         let mut bytes = [0; INLINE];
         bytes[..doc.len()].copy_from_slice(doc);
-        Storage::Inline { len: doc.len() as u8, bytes }
+        Storage::Inline {
+            len: doc.len() as u8,
+            bytes,
+        }
     }
 
     fn as_slice(&self) -> &[u8] {
@@ -54,7 +57,13 @@ impl<F: Flavor> Raw<F> {
         let start = *r;
         let lossy = skip_checking_utf8::<F>(r)?;
         let doc = &start[..start.len() - r.len()];
-        Ok((Raw { bytes: Storage::new(doc), flavor: PhantomData }, lossy))
+        Ok((
+            Raw {
+                bytes: Storage::new(doc),
+                flavor: PhantomData,
+            },
+            lossy,
+        ))
     }
 
     pub fn write(&self, w: &mut BytesMut) {
@@ -90,7 +99,10 @@ impl<F> Eq for Raw<F> {}
 
 impl<F> Default for Raw<F> {
     fn default() -> Self {
-        Raw { bytes: Storage::new(END), flavor: PhantomData }
+        Raw {
+            bytes: Storage::new(END),
+            flavor: PhantomData,
+        }
     }
 }
 
@@ -98,7 +110,10 @@ impl<F: Flavor> From<&Nbt> for Raw<F> {
     fn from(nbt: &Nbt) -> Self {
         let mut w = BytesMut::new();
         write::<F>(&mut w, nbt);
-        Raw { bytes: Storage::new(&w), flavor: PhantomData }
+        Raw {
+            bytes: Storage::new(&w),
+            flavor: PhantomData,
+        }
     }
 }
 

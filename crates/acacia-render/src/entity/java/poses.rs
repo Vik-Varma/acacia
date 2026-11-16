@@ -29,7 +29,12 @@ impl Poses {
         let mut by_name = HashMap::new();
         // The top part answers to its name only when no part below shares it: models built on
         // `root.getChild("root")` mean that child by `root`.
-        for (index, (_, part)) in parts.iter().enumerate().skip(1).chain(parts.iter().enumerate().take(1)) {
+        for (index, (_, part)) in parts
+            .iter()
+            .enumerate()
+            .skip(1)
+            .chain(parts.iter().enumerate().take(1))
+        {
             by_name.entry(part.name.clone()).or_insert(index);
         }
         Poses {
@@ -56,7 +61,9 @@ impl Poses {
 
     /// A copy of `name`'s pose, or the default for a part the model lacks.
     pub fn read(&self, name: &str) -> PartPose {
-        self.by_name.get(name).map_or_else(PartPose::default, |&i| self.poses[i])
+        self.by_name
+            .get(name)
+            .map_or_else(PartPose::default, |&i| self.poses[i])
     }
 
     pub fn x_rot(&mut self, name: &str, v: f32) {
@@ -86,7 +93,11 @@ impl Poses {
     /// Laid out for `model`'s parts (same names in [`Part::walk`] order).
     pub fn fits(&self, model: &Part) -> bool {
         let parts = model.walk();
-        parts.len() == self.names.len() && parts.iter().zip(&self.names).all(|((_, p), name)| p.name == *name)
+        parts.len() == self.names.len()
+            && parts
+                .iter()
+                .zip(&self.names)
+                .all(|((_, p), name)| p.name == *name)
     }
 
     /// These poses on `model`'s parts by name; parts these lack keep `model`'s initial pose. As
@@ -106,7 +117,11 @@ impl Poses {
 
     /// By index in [`Part::walk`] order.
     pub fn at(&self, index: usize) -> (PartPose, bool, bool) {
-        (self.poses[index], self.visible[index], self.skip_draw[index])
+        (
+            self.poses[index],
+            self.visible[index],
+            self.skip_draw[index],
+        )
     }
 }
 
@@ -117,12 +132,18 @@ mod tests {
 
     #[test]
     fn writes_land_on_the_named_part_and_unknown_parts_are_ignored() {
-        let model = parse_layers(SAMPLE).unwrap().remove("minecraft:test#main").unwrap();
+        let model = parse_layers(SAMPLE)
+            .unwrap()
+            .remove("minecraft:test#main")
+            .unwrap();
         let mut poses = Poses::new(&model);
         assert_eq!(poses.read("head").x_rot, 0.5);
         poses.x_rot("head", 1.0);
         poses.x_rot("tail", 3.0);
         poses.set_visible("body", false);
-        assert_eq!((poses.at(2).0.x_rot, poses.at(1).1, poses.has("tail")), (1.0, false, false));
+        assert_eq!(
+            (poses.at(2).0.x_rot, poses.at(1).1, poses.has("tail")),
+            (1.0, false, false)
+        );
     }
 }

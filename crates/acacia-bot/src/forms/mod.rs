@@ -26,13 +26,26 @@ pub enum FormKind {
     /// Pick one button (`ActionFormData`). `elements` holds the labels, headers and dividers shown
     /// between buttons on newer servers; `buttons` is what a reply indexes.
     /// `positions[i]` is how many buttons come before `elements[i]`.
-    Simple { content: String, buttons: Vec<Button>, elements: Vec<Element>, positions: Vec<usize> },
+    Simple {
+        content: String,
+        buttons: Vec<Button>,
+        elements: Vec<Element>,
+        positions: Vec<usize>,
+    },
     /// Two buttons (`MessageFormData`): `yes` answers true, `no` false.
-    Modal { content: String, yes: String, no: String },
+    Modal {
+        content: String,
+        yes: String,
+        no: String,
+    },
     /// Inputs to fill in (`ModalFormData`).
     Custom { elements: Vec<Element> },
     /// A Java dialog with inputs and buttons: any button submits the inputs ([`FormReply::Dialog`]).
-    Dialog { content: String, elements: Vec<Element>, buttons: Vec<Button> },
+    Dialog {
+        content: String,
+        elements: Vec<Element>,
+        buttons: Vec<Button>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,20 +57,48 @@ pub struct Button {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Element {
-    Label { text: String },
-    Header { text: String },
+    Label {
+        text: String,
+    },
+    Header {
+        text: String,
+    },
     Divider,
-    Input { text: String, placeholder: String, default: String },
-    Toggle { text: String, default: bool },
-    Slider { text: String, min: f64, max: f64, step: f64, default: f64 },
-    StepSlider { text: String, steps: Vec<String>, default: usize },
-    Dropdown { text: String, options: Vec<String>, default: usize },
+    Input {
+        text: String,
+        placeholder: String,
+        default: String,
+    },
+    Toggle {
+        text: String,
+        default: bool,
+    },
+    Slider {
+        text: String,
+        min: f64,
+        max: f64,
+        step: f64,
+        default: f64,
+    },
+    StepSlider {
+        text: String,
+        steps: Vec<String>,
+        default: usize,
+    },
+    Dropdown {
+        text: String,
+        options: Vec<String>,
+        default: usize,
+    },
 }
 
 impl Element {
     /// Whether the element takes a value in a custom form reply.
     pub fn is_input(&self) -> bool {
-        !matches!(self, Element::Label { .. } | Element::Header { .. } | Element::Divider)
+        !matches!(
+            self,
+            Element::Label { .. } | Element::Header { .. } | Element::Divider
+        )
     }
 }
 
@@ -70,7 +111,9 @@ impl Form {
     /// How many fields a custom form asks for (sizes the reading delay).
     pub(crate) fn inputs(&self) -> usize {
         match &self.kind {
-            FormKind::Custom { elements } | FormKind::Dialog { elements, .. } => elements.iter().filter(|e| e.is_input()).count(),
+            FormKind::Custom { elements } | FormKind::Dialog { elements, .. } => {
+                elements.iter().filter(|e| e.is_input()).count()
+            }
             _ => 0,
         }
     }
@@ -92,13 +135,26 @@ impl Form {
         };
         self.title.len()
             + match &self.kind {
-                FormKind::Simple { content, buttons, elements: e, .. } => {
-                    content.len() + buttons.iter().map(|b| b.text.len()).sum::<usize>() + elements(e)
+                FormKind::Simple {
+                    content,
+                    buttons,
+                    elements: e,
+                    ..
+                } => {
+                    content.len()
+                        + buttons.iter().map(|b| b.text.len()).sum::<usize>()
+                        + elements(e)
                 }
                 FormKind::Modal { content, yes, no } => content.len() + yes.len() + no.len(),
                 FormKind::Custom { elements: e } => elements(e),
-                FormKind::Dialog { content, elements: e, buttons } => {
-                    content.len() + buttons.iter().map(|b| b.text.len()).sum::<usize>() + elements(e)
+                FormKind::Dialog {
+                    content,
+                    elements: e,
+                    buttons,
+                } => {
+                    content.len()
+                        + buttons.iter().map(|b| b.text.len()).sum::<usize>()
+                        + elements(e)
                 }
             }
     }

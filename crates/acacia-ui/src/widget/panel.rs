@@ -58,8 +58,24 @@ pub struct Panel {
 impl Panel {
     /// `items` placed by the caller; the scrolling ones end `pad` above the content's bottom.
     pub fn new(items: Vec<Placed>, viewport: [f32; 4], pad: f32) -> Panel {
-        let content_bottom = items.iter().filter(|p| p.scrolls).map(|p| p.rect[3]).fold(viewport[1], f32::max) + pad;
-        Panel { items, viewport, content_bottom, scroll: 0.0, mouse: [-1.0; 2], focus: None, focused_at: Instant::now(), held: None, drag: None, open: None }
+        let content_bottom = items
+            .iter()
+            .filter(|p| p.scrolls)
+            .map(|p| p.rect[3])
+            .fold(viewport[1], f32::max)
+            + pad;
+        Panel {
+            items,
+            viewport,
+            content_bottom,
+            scroll: 0.0,
+            mouse: [-1.0; 2],
+            focus: None,
+            focused_at: Instant::now(),
+            held: None,
+            drag: None,
+            open: None,
+        }
     }
 
     pub fn max_scroll(&self) -> f32 {
@@ -76,7 +92,9 @@ impl Panel {
     fn item_at(&self, skin: &dyn Skin, font: Option<&Font>, at: [f32; 2]) -> Option<usize> {
         (0..self.items.len()).find(|&i| {
             let p = &self.items[i];
-            p.widget.is_interactive() && (!p.scrolls || contains(self.viewport, at)) && contains(skin.hit(font, &p.widget, self.rect(i)), at)
+            p.widget.is_interactive()
+                && (!p.scrolls || contains(self.viewport, at))
+                && contains(skin.hit(font, &p.widget, self.rect(i)), at)
         })
     }
 
@@ -99,13 +117,19 @@ impl Panel {
                 self.drag = None;
                 let held = self.held.take();
                 match held {
-                    Some(i) if self.item_at(skin, font, *at) == Some(i) && matches!(self.items[i].widget, Widget::Button { .. }) => Response::Pressed(i),
+                    Some(i)
+                        if self.item_at(skin, font, *at) == Some(i)
+                            && matches!(self.items[i].widget, Widget::Button { .. }) =>
+                    {
+                        Response::Pressed(i)
+                    }
                     Some(_) => Response::Consumed,
                     None => Response::Ignored,
                 }
             }
             Input::Wheel(notches) => {
-                self.scroll = (self.scroll - notches * skin.scroll_step()).clamp(0.0, self.max_scroll());
+                self.scroll =
+                    (self.scroll - notches * skin.scroll_step()).clamp(0.0, self.max_scroll());
                 Response::Consumed
             }
             Input::Key(key, mods) => self.key(*key, *mods, skin),
@@ -123,7 +147,11 @@ impl Panel {
         self.mouse = at;
         let (track, thumb) = self.scrollbar(skin);
         if self.max_scroll() > 0.0 && contains(track, at) {
-            let grab = if contains(thumb, at) { at[1] - thumb[1] } else { (thumb[3] - thumb[1]) / 2.0 };
+            let grab = if contains(thumb, at) {
+                at[1] - thumb[1]
+            } else {
+                (thumb[3] - thumb[1]) / 2.0
+            };
             self.drag = Some(Drag::Thumb(grab));
             self.drag_thumb(at[1] - grab, skin);
             return Response::Consumed;
@@ -137,8 +165,17 @@ impl Panel {
         match &mut self.items[i].widget {
             Widget::Button { .. } => self.held = Some(i),
             Widget::Toggle { on, .. } => *on = !*on,
-            Widget::Steps { options, index, .. } | Widget::Dropdown { options, index, .. } if cycle => *index = (*index + 1) % options.len().max(1),
-            Widget::Dropdown { .. } => self.open = Some(Open { item: i, scroll: 0.0 }),
+            Widget::Steps { options, index, .. } | Widget::Dropdown { options, index, .. }
+                if cycle =>
+            {
+                *index = (*index + 1) % options.len().max(1)
+            }
+            Widget::Dropdown { .. } => {
+                self.open = Some(Open {
+                    item: i,
+                    scroll: 0.0,
+                })
+            }
             Widget::Slider { .. } | Widget::Steps { .. } => {
                 self.drag = Some(Drag::Slider(i));
                 self.slide(i, at[0], skin, font);
@@ -160,17 +197,28 @@ impl Panel {
             Key::Down => self.move_focus(true),
             Key::Up => self.move_focus(false),
             Key::Left | Key::Right => {
-                let Some(i) = self.focus else { return Response::Ignored };
+                let Some(i) = self.focus else {
+                    return Response::Ignored;
+                };
                 self.step(i, if key == Key::Right { 1 } else { -1 });
             }
             Key::Enter | Key::Space => {
-                let Some(i) = self.focus else { return Response::Ignored };
+                let Some(i) = self.focus else {
+                    return Response::Ignored;
+                };
                 let cycle = skin.choices_cycle();
                 match &mut self.items[i].widget {
                     Widget::Button { .. } => return Response::Pressed(i),
                     Widget::Toggle { on, .. } => *on = !*on,
-                    Widget::Dropdown { .. } if !cycle => self.open = Some(Open { item: i, scroll: 0.0 }),
-                    Widget::Steps { .. } | Widget::Dropdown { .. } if cycle => self.step(i, if mods.shift { -1 } else { 1 }),
+                    Widget::Dropdown { .. } if !cycle => {
+                        self.open = Some(Open {
+                            item: i,
+                            scroll: 0.0,
+                        })
+                    }
+                    Widget::Steps { .. } | Widget::Dropdown { .. } if cycle => {
+                        self.step(i, if mods.shift { -1 } else { 1 })
+                    }
                     _ => {}
                 }
             }
@@ -182,7 +230,13 @@ impl Panel {
     /// Moves a slider, step slider or dropdown `by` steps.
     fn step(&mut self, i: usize, by: i32) {
         match &mut self.items[i].widget {
-            Widget::Slider { min, max, step, value, .. } => *value = (*value + f64::from(by) * *step).clamp(*min, *max),
+            Widget::Slider {
+                min,
+                max,
+                step,
+                value,
+                ..
+            } => *value = (*value + f64::from(by) * *step).clamp(*min, *max),
             Widget::Steps { options, index, .. } | Widget::Dropdown { options, index, .. } => {
                 let n = options.len().max(1) as i32;
                 *index = (*index as i32 + by).rem_euclid(n) as usize;
@@ -192,7 +246,9 @@ impl Panel {
     }
 
     fn move_focus(&mut self, forward: bool) {
-        let order: Vec<usize> = (0..self.items.len()).filter(|&i| self.items[i].widget.is_interactive()).collect();
+        let order: Vec<usize> = (0..self.items.len())
+            .filter(|&i| self.items[i].widget.is_interactive())
+            .collect();
         if order.is_empty() {
             return;
         }
@@ -234,19 +290,36 @@ impl Panel {
         let [a, b] = skin.slider_span(font, self.rect(i));
         let t = f64::from(((x - a) / (b - a).max(1.0)).clamp(0.0, 1.0));
         match &mut self.items[i].widget {
-            Widget::Slider { min, max, step, value, .. } => {
+            Widget::Slider {
+                min,
+                max,
+                step,
+                value,
+                ..
+            } => {
                 let raw = *min + t * (*max - *min);
-                let snapped = if *step > 0.0 { *min + ((raw - *min) / *step).round() * *step } else { raw };
+                let snapped = if *step > 0.0 {
+                    *min + ((raw - *min) / *step).round() * *step
+                } else {
+                    raw
+                };
                 *value = snapped.clamp(*min, *max);
             }
-            Widget::Steps { options, index, .. } => *index = (t * (options.len().max(1) - 1) as f64).round() as usize,
+            Widget::Steps { options, index, .. } => {
+                *index = (t * (options.len().max(1) - 1) as f64).round() as usize
+            }
             _ => {}
         }
     }
 
     fn drag_thumb(&mut self, thumb_top: f32, skin: &dyn Skin) {
         let track = skin.scroll_track(self.viewport);
-        let full = skin.thumb(track, self.viewport[3] - self.viewport[1], self.content_bottom - self.viewport[1], 0.0);
+        let full = skin.thumb(
+            track,
+            self.viewport[3] - self.viewport[1],
+            self.content_bottom - self.viewport[1],
+            0.0,
+        );
         let travel = (track[3] - track[1]) - (full[3] - full[1]);
         if travel > 0.0 {
             self.scroll = ((thumb_top - track[1]) / travel).clamp(0.0, 1.0) * self.max_scroll();
@@ -254,7 +327,13 @@ impl Panel {
     }
 
     /// Input while a dropdown's list is open: it takes everything.
-    fn handle_list(&mut self, open: Open, input: &Input, skin: &dyn Skin, font: Option<&Font>) -> Response {
+    fn handle_list(
+        &mut self,
+        open: Open,
+        input: &Input,
+        skin: &dyn Skin,
+        font: Option<&Font>,
+    ) -> Response {
         let Widget::Dropdown { options, .. } = &self.items[open.item].widget else {
             self.open = None;
             return Response::Consumed;
@@ -274,7 +353,10 @@ impl Panel {
             Input::Wheel(n) => {
                 let content = g.first[1] - g.rect[1] + count as f32 * g.row + 2.0;
                 let max = (content - (g.rect[3] - g.rect[1])).max(0.0);
-                self.open = Some(Open { scroll: (open.scroll - n * g.row).clamp(0.0, max), ..open });
+                self.open = Some(Open {
+                    scroll: (open.scroll - n * g.row).clamp(0.0, max),
+                    ..open
+                });
             }
             Input::Key(Key::Up, _) => self.step(open.item, -1),
             Input::Key(Key::Down, _) => self.step(open.item, 1),
@@ -287,8 +369,20 @@ impl Panel {
     /// The scrollbar's track and thumb where they are now.
     fn scrollbar(&self, skin: &dyn Skin) -> ([f32; 4], [f32; 4]) {
         let track = skin.scroll_track(self.viewport);
-        let at = if self.max_scroll() > 0.0 { self.scroll / self.max_scroll() } else { 0.0 };
-        (track, skin.thumb(track, self.viewport[3] - self.viewport[1], self.content_bottom - self.viewport[1], at))
+        let at = if self.max_scroll() > 0.0 {
+            self.scroll / self.max_scroll()
+        } else {
+            0.0
+        };
+        (
+            track,
+            skin.thumb(
+                track,
+                self.viewport[3] - self.viewport[1],
+                self.content_bottom - self.viewport[1],
+                at,
+            ),
+        )
     }
 
     /// The values of the input widgets, in order.

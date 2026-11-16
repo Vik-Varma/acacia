@@ -1,9 +1,9 @@
 //! A section mesh read back as the faces it draws, for tools that compare it with another
 //! renderer (lookbake's `java-world-light`): world corners and each corner's [`VertexLight`] word.
 
+use super::SectionMesh;
 use super::model::{CONTINUED, CORNER2, MODEL};
 use super::quad::{AXES, LIQUID, Quad};
-use super::SectionMesh;
 
 /// One drawn face: corners in 1/256 block, world space, with their light words (all zero for a
 /// face lit from the light volume). A merged run of whole faces comes back as one face per block.
@@ -25,7 +25,12 @@ pub fn drawn_faces(mesh: &SectionMesh, origin: [i32; 3]) -> Vec<DrawnFace> {
         while i < quads.len() {
             let q = &quads[i];
             if q.0[0] & MODEL != 0 {
-                let records = quads[i..].iter().take_while(|r| r.0[0] & MODEL != 0).enumerate().take_while(|(k, r)| *k == 0 || r.0[0] & CONTINUED != 0).count();
+                let records = quads[i..]
+                    .iter()
+                    .take_while(|r| r.0[0] & MODEL != 0)
+                    .enumerate()
+                    .take_while(|(k, r)| *k == 0 || r.0[0] & CONTINUED != 0)
+                    .count();
                 out.push(model_face(&quads[i..i + records], origin));
                 i += records;
                 continue;
@@ -54,7 +59,11 @@ fn model_face(records: &[Quad], origin: [i32; 3]) -> DrawnFace {
     } else {
         [0, 1, 2].map(|a| c1[a] + c3[a] - c0[a])
     };
-    DrawnFace { corners: [c0, c1, c2, c3].map(|c| world(origin, c)), light: records[0].1, kind: (r0[0] & CORNER2 != 0).then_some(u32::from(LIQUID)) }
+    DrawnFace {
+        corners: [c0, c1, c2, c3].map(|c| world(origin, c)),
+        light: records[0].1,
+        kind: (r0[0] & CORNER2 != 0).then_some(u32::from(LIQUID)),
+    }
 }
 
 fn plain_faces(q: &Quad, origin: [i32; 3], out: &mut Vec<DrawnFace>) {
@@ -70,14 +79,29 @@ fn plain_faces(q: &Quad, origin: [i32; 3], out: &mut Vec<DrawnFace>) {
         // Cross planes (gpu/terrain.wgsl): one diagonal of the block, front or back.
         let corners = CORNERS.map(|[u, v]| {
             let t = u * size[0];
-            world(origin, [local[0] + if kind >= 8 { size[0] - t } else { t }, local[1] + v * size[1], local[2] + t])
+            world(
+                origin,
+                [
+                    local[0] + if kind >= 8 { size[0] - t } else { t },
+                    local[1] + v * size[1],
+                    local[2] + t,
+                ],
+            )
         });
-        out.push(DrawnFace { corners, light: q.1, kind: Some(kind) });
+        out.push(DrawnFace {
+            corners,
+            light: q.1,
+            kind: Some(kind),
+        });
         return;
     }
     let (_, ua, va) = AXES[kind as usize];
     // A merged run spans whole blocks; its light is the same at every corner of every block.
-    let (nu, nv) = if size[0] > 16.0 || size[1] > 16.0 { ((size[0] / 16.0) as u32, (size[1] / 16.0) as u32) } else { (1, 1) };
+    let (nu, nv) = if size[0] > 16.0 || size[1] > 16.0 {
+        ((size[0] / 16.0) as u32, (size[1] / 16.0) as u32)
+    } else {
+        (1, 1)
+    };
     let cell = if nu * nv > 1 { [16.0, 16.0] } else { size };
     for i in 0..nu {
         for j in 0..nv {
@@ -87,7 +111,11 @@ fn plain_faces(q: &Quad, origin: [i32; 3], out: &mut Vec<DrawnFace>) {
                 p[va] += (j as f32 + v) * cell[1];
                 world(origin, p)
             });
-            out.push(DrawnFace { corners, light: q.1, kind: Some(kind) });
+            out.push(DrawnFace {
+                corners,
+                light: q.1,
+                kind: Some(kind),
+            });
         }
     }
 }

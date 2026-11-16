@@ -49,10 +49,17 @@ pub fn read(path: &str) -> Result<Vec<Session>, String> {
         match v["event"].as_str() {
             Some("login") => {
                 let zero = r.zero;
-                let packets = r.pending.drain(..).map(|p| Packet { t: p.t - zero, ..p }).collect();
+                let packets = r
+                    .pending
+                    .drain(..)
+                    .map(|p| Packet { t: p.t - zero, ..p })
+                    .collect();
                 r.index = Some(sessions.len());
                 r.open = true;
-                sessions.push(Session { packets, spawned: None });
+                sessions.push(Session {
+                    packets,
+                    spawned: None,
+                });
             }
             Some("spawned") => {
                 if let Some(i) = r.index {
@@ -68,11 +75,21 @@ pub fn read(path: &str) -> Result<Vec<Session>, String> {
                     r.zero = t;
                     continue;
                 }
-                let body = hex::decode(v["raw"].as_str().unwrap_or_default()).map_err(|e| format!("{path}:{}: {e}", n + 1))?;
+                let body = hex::decode(v["raw"].as_str().unwrap_or_default())
+                    .map_err(|e| format!("{path}:{}: {e}", n + 1))?;
                 let id = v["id"].as_u64().unwrap_or(0) as u32;
-                let packet = Packet { t, from_client: v["dir"] == "C>S", id, name, body };
+                let packet = Packet {
+                    t,
+                    from_client: v["dir"] == "C>S",
+                    id,
+                    name,
+                    body,
+                };
                 match r.index {
-                    Some(i) if r.open => sessions[i].packets.push(Packet { t: t - r.zero, ..packet }),
+                    Some(i) if r.open => sessions[i].packets.push(Packet {
+                        t: t - r.zero,
+                        ..packet
+                    }),
                     _ => r.pending.push(packet),
                 }
             }
@@ -101,11 +118,18 @@ mod tests {
     use super::*;
 
     fn sizes(lines: &[&str]) -> Vec<(usize, Option<f64>)> {
-        let path = std::env::temp_dir().join(format!("acacia-capture-{}-{}.jsonl", std::process::id(), lines.len()));
+        let path = std::env::temp_dir().join(format!(
+            "acacia-capture-{}-{}.jsonl",
+            std::process::id(),
+            lines.len()
+        ));
         std::fs::write(&path, lines.join("\n")).unwrap();
         let sessions = read(path.to_str().unwrap()).unwrap();
         std::fs::remove_file(&path).unwrap();
-        sessions.iter().map(|s| (s.packets.len(), s.spawned)).collect()
+        sessions
+            .iter()
+            .map(|s| (s.packets.len(), s.spawned))
+            .collect()
     }
 
     #[test]

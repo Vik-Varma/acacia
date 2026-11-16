@@ -13,12 +13,21 @@ const REACH: f32 = 3.0;
 const SETTLE_TICKS: u32 = 60;
 const MID_COMMAND_TICK: u32 = 40;
 /// (ticks, strafe, forward): strafe > 0 is left.
-const COURSE: [(u32, f32, f32); 6] = [(80, 0.0, 1.0), (30, 1.0, 1.0), (20, 0.0, 1.0), (20, -1.0, 0.0), (15, 0.0, -1.0), (30, 0.0, 0.0)];
+const COURSE: [(u32, f32, f32); 6] = [
+    (80, 0.0, 1.0),
+    (30, 1.0, 1.0),
+    (20, 0.0, 1.0),
+    (20, -1.0, 0.0),
+    (15, 0.0, -1.0),
+    (30, 0.0, 0.0),
+];
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let [host, port] = &args[..2] else { return Err("usage: java_boat <host> <port> [name]".into()) };
+    let [host, port] = &args[..2] else {
+        return Err("usage: java_boat <host> <port> [name]".into());
+    };
     let name = args.get(2).map_or("Boater", String::as_str);
     let mut config = BotConfig::default();
     config.trackers.entities = true;
@@ -34,7 +43,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let boat = boat.ok_or("no boat in reach")?;
     bot.wait_ticks(SETTLE_TICKS).await?;
     println!("mount {:?}", bot.mount(boat).await);
-    println!("boarded: boat {:?} player {:.4?}", bot.java_boat().map(|b| (b.pos, b.yaw, b.status)), player(&bot));
+    println!(
+        "boarded: boat {:?} player {:.4?}",
+        bot.java_boat().map(|b| (b.pos, b.yaw, b.status)),
+        player(&bot)
+    );
     let (mut t, mut status) = (0, None);
     for (ticks, strafe, forward) in COURSE {
         if let Some(c) = bot.controls() {
@@ -57,7 +70,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!("dismount {:?}", bot.dismount().await);
     bot.wait_ticks(40).await?;
-    println!("off: riding {} player {:.4?} corrections {:?}", bot.vehicle().is_some(), player(&bot), bot.boat_corrections());
+    println!(
+        "off: riding {} player {:.4?} corrections {:?}",
+        bot.vehicle().is_some(),
+        player(&bot),
+        bot.boat_corrections()
+    );
     bot.disconnect().await;
     Ok(())
 }
@@ -68,16 +86,28 @@ fn nearest_boat(bot: &Bot) -> Option<u64> {
         let f = e.feet();
         ((f.x - eye[0]).powi(2) + (f.y - eye[1]).powi(2) + (f.z - eye[2]).powi(2)).sqrt()
     };
-    bot.state().entities.iter().filter(|e| e.kind.ends_with("boat") && apart(e) < REACH).map(|e| e.runtime_id).next()
+    bot.state()
+        .entities
+        .iter()
+        .filter(|e| e.kind.ends_with("boat") && apart(e) < REACH)
+        .map(|e| e.runtime_id)
+        .next()
 }
 
 fn print_boat(bot: &Bot, t: u32) {
     match bot.java_boat() {
-        Some(b) => println!("t {t} boat {:.4?} yaw {:.2} {:?} corrections {:?}", b.pos, b.yaw, b.status, bot.boat_corrections()),
+        Some(b) => println!(
+            "t {t} boat {:.4?} yaw {:.2} {:?} corrections {:?}",
+            b.pos,
+            b.yaw,
+            b.status,
+            bot.boat_corrections()
+        ),
         None => println!("t {t} not driving; vehicle {:?}", bot.vehicle()),
     }
 }
 
 fn player(bot: &Bot) -> [f64; 3] {
-    bot.java().map_or([f64::NAN; 3], |j| j.client().movement.player.pos)
+    bot.java()
+        .map_or([f64::NAN; 3], |j| j.client().movement.player.pos)
 }

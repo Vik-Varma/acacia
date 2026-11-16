@@ -43,7 +43,8 @@ impl<S> SearchJob<S> {
         let (tx, rx) = oneshot::channel();
         tokio::task::spawn_blocking(move || {
             // The receiver is gone when the goto was dropped or re-planned meanwhile.
-            let terrain = Terrain::new(WorldBlocks::new(world), &registry).with_hazards(self.opts.hazards.clone());
+            let terrain = Terrain::new(WorldBlocks::new(world), &registry)
+                .with_hazards(self.opts.hazards.clone());
             let _ = tx.send(self.run(&terrain));
         });
         rx

@@ -8,8 +8,8 @@
 use acacia_client::proto::packets::PlayerAuthInput;
 use acacia_physics::{Input, Outcome, TickOutput, Vec3};
 
-use super::auth_input::{self, Edges};
 use super::Controls;
+use super::auth_input::{self, Edges};
 use crate::state::PlayerState;
 
 /// Velocity a player standing on the ground reports: one tick of gravity, cancelled by the floor.
@@ -28,14 +28,24 @@ pub struct Idle {
 
 impl Default for Idle {
     fn default() -> Self {
-        Self { tick: FIRST_TICK - 1, last_feet: None, last_teleports: Some(0), look: None }
+        Self {
+            tick: FIRST_TICK - 1,
+            last_feet: None,
+            last_teleports: Some(0),
+            look: None,
+        }
     }
 }
 
 impl Idle {
     /// Continues the input tick count of a physics bot whose last input carried `tick`.
     pub(crate) fn continuing(tick: u64) -> Self {
-        Self { tick, last_feet: None, last_teleports: None, look: None }
+        Self {
+            tick,
+            last_feet: None,
+            last_teleports: None,
+            look: None,
+        }
     }
 
     /// The tick of the last input built.
@@ -67,11 +77,22 @@ impl Idle {
     }
 
     /// [`Idle::tick`] looking in the given direction instead of its own.
-    pub(crate) fn tick_facing(&mut self, player: &PlayerState, yaw: f32, pitch: f32, loaded: bool) -> Option<PlayerAuthInput> {
+    pub(crate) fn tick_facing(
+        &mut self,
+        player: &PlayerState,
+        yaw: f32,
+        pitch: f32,
+        loaded: bool,
+    ) -> Option<PlayerAuthInput> {
         self.build(player, Some((yaw, pitch)), loaded)
     }
 
-    fn build(&mut self, player: &PlayerState, facing: Option<(f32, f32)>, loaded: bool) -> Option<PlayerAuthInput> {
+    fn build(
+        &mut self,
+        player: &PlayerState,
+        facing: Option<(f32, f32)>,
+        loaded: bool,
+    ) -> Option<PlayerAuthInput> {
         self.tick += 1;
         if !player.alive {
             return None;
@@ -80,15 +101,25 @@ impl Idle {
         // Every own MovePlayer needs the ack even when it does not move us: until then BDS drops all
         // queued inputs and item-use transactions. Corrections are acked too.
         let teleported = self.last_feet.is_some_and(|last| last != feet)
-            || self.last_teleports.is_some_and(|last| last != player.teleports);
+            || self
+                .last_teleports
+                .is_some_and(|last| last != player.teleports);
         self.last_feet = Some(feet);
         self.last_teleports = Some(player.teleports);
         if teleported {
-            tracing::debug!(?feet, teleports = player.teleports, "idle: acknowledging a server move");
+            tracing::debug!(
+                ?feet,
+                teleports = player.teleports,
+                "idle: acknowledging a server move"
+            );
             self.look = None;
         }
         let (yaw, pitch) = facing.unwrap_or_else(|| self.facing(player));
-        let input = Input { yaw, pitch, ..Input::default() };
+        let input = Input {
+            yaw,
+            pitch,
+            ..Input::default()
+        };
         let out = TickOutput {
             position: feet,
             eye_position: [feet[0], feet[1] + super::EYE_HEIGHT, feet[2]],
@@ -99,7 +130,11 @@ impl Idle {
             jumped: false,
             teleported,
             move_vector: [0.0, 0.0],
-            outcome: if teleported { Outcome::Teleport } else { Outcome::Normal },
+            outcome: if teleported {
+                Outcome::Teleport
+            } else {
+                Outcome::Normal
+            },
         };
         let edges = Edges {
             sprint: (false, false),

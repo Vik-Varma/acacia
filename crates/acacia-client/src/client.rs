@@ -3,22 +3,22 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use acacia_auth::LoginCredentials;
+use acacia_nethernet::Identity as NetIdentity;
 use acacia_session::blob_store::BlobStore;
 use acacia_session::pack_store::PackStore;
 use acacia_session::{DisconnectReason, Session, SessionConfig};
-use acacia_nethernet::Identity as NetIdentity;
 use p384::ecdsa::SigningKey;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::blob_cache::BlobCache;
 use crate::driver::{Command, Driver};
-use crate::friend::FriendJoin;
-use crate::pack_cache;
 use crate::filter::PacketFilter;
-use crate::packet_trace::PacketTrace;
-use crate::login::build_login;
-use crate::route;
+use crate::friend::FriendJoin;
 use crate::lan::LanServer;
+use crate::login::build_login;
+use crate::pack_cache;
+use crate::packet_trace::PacketTrace;
+use crate::route;
 use crate::signaling::SignalingTarget;
 use crate::socks5::Socks5Proxy;
 use crate::transport::resolve;
@@ -41,7 +41,10 @@ pub enum Login {
     /// For `online-mode=false` servers.
     Offline { name: String },
     /// `credentials` must have been obtained for `key` (acacia-auth binds tokens to the client key).
-    Online { credentials: Box<LoginCredentials>, key: SigningKey },
+    Online {
+        credentials: Box<LoginCredentials>,
+        key: SigningKey,
+    },
 }
 
 /// How a join reaches the world.
@@ -90,7 +93,9 @@ impl ClientBuilder {
             blob_payloads: false,
             pack_cache_dir: None,
             pack_store: None,
-            login: Login::Offline { name: "Player".into() },
+            login: Login::Offline {
+                name: "Player".into(),
+            },
             proxy: None,
             transport: TransportKind::Auto,
             chunk_radius: 2,
@@ -128,7 +133,10 @@ impl ClientBuilder {
     }
 
     pub fn online(mut self, credentials: LoginCredentials, key: SigningKey) -> Self {
-        self.login = Login::Online { credentials: Box::new(credentials), key };
+        self.login = Login::Online {
+            credentials: Box::new(credentials),
+            key,
+        };
         self
     }
 
@@ -260,9 +268,10 @@ impl ClientBuilder {
         // Made here, not with the Login: a NetherNet offer is signed by the same key.
         let offline_key = SigningKey::random(&mut rand_core::OsRng);
         let net_identity = match &self.login {
-            Login::Online { credentials, key } => {
-                credentials.multiplayer_token.clone().map(|token| NetIdentity::multiplayer(key.clone(), token))
-            }
+            Login::Online { credentials, key } => credentials
+                .multiplayer_token
+                .clone()
+                .map(|token| NetIdentity::multiplayer(key.clone(), token)),
             Login::Offline { .. } => Some(NetIdentity::self_signed(offline_key.clone())),
         };
         let transport = match (&self.login, self.transport) {
@@ -270,11 +279,20 @@ impl ClientBuilder {
             (_, kind) => kind,
         };
         let route = match &self.via {
-            Via::Signaling(target) => route::open_signaling(target, self.proxy.as_ref(), net_identity.as_ref()).await?,
+            Via::Signaling(target) => {
+                route::open_signaling(target, self.proxy.as_ref(), net_identity.as_ref()).await?
+            }
             Via::Lan(server) => route::open_lan(server, net_identity.as_ref()).await?,
             Via::Address => {
                 let addr = resolve(&self.server).await?;
-                route::open(&self.server, addr, self.proxy.as_ref(), transport, net_identity.as_ref()).await?
+                route::open(
+                    &self.server,
+                    addr,
+                    self.proxy.as_ref(),
+                    transport,
+                    net_identity.as_ref(),
+                )
+                .await?
             }
         };
         let addr = route.remote;
@@ -283,7 +301,14 @@ impl ClientBuilder {
             Login::Online { credentials, .. } => format!("xbox:{}", credentials.xuid),
         };
         let blob_store = self.blob_cache.open(&account, self.blob_payloads);
-        let (key, login_request, identity) = build_login(self.login, offline_key, &route.server_address, self.nonce, self.skin, self.mouse_input);
+        let (key, login_request, identity) = build_login(
+            self.login,
+            offline_key,
+            &route.server_address,
+            self.nonce,
+            self.skin,
+            self.mouse_input,
+        );
         let cfg = SessionConfig {
             link: route.link,
             key,
@@ -292,7 +317,9 @@ impl ClientBuilder {
             auto_respawn: self.auto_respawn,
             initialize_on_spawn: self.initialize_on_spawn,
             blob_store: blob_store.clone(),
-            pack_store: self.pack_store.unwrap_or_else(|| pack_cache::open(self.pack_cache_dir.as_deref(), &account)),
+            pack_store: self
+                .pack_store
+                .unwrap_or_else(|| pack_cache::open(self.pack_cache_dir.as_deref(), &account)),
             strict: self.strict,
             max_batch_bytes: self.max_batch_bytes,
         };
@@ -321,7 +348,10 @@ impl ClientBuilder {
         let result = tokio::time::timeout(self.login_timeout, spawn_rx).await;
         match result {
             Ok(Ok(Ok(runtime_entity_id))) => Ok(Client {
-                sender: ClientSender { commands: cmd_tx, identity: Arc::new(identity) },
+                sender: ClientSender {
+                    commands: cmd_tx,
+                    identity: Arc::new(identity),
+                },
                 events: ev_rx,
                 runtime_entity_id,
                 blob_store,

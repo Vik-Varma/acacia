@@ -3,8 +3,12 @@ use acacia_bot::{ActionError, Bot};
 
 use crate::convert;
 
-pub(super) async fn activate_block(bot: &mut Bot, p: ActivateBlockParams) -> Result<(), ActionError> {
-    bot.use_item_on_block([p.x, p.y, p.z], convert::face(p.face.unwrap_or(Face::Up))).await
+pub(super) async fn activate_block(
+    bot: &mut Bot,
+    p: ActivateBlockParams,
+) -> Result<(), ActionError> {
+    bot.use_item_on_block([p.x, p.y, p.z], convert::face(p.face.unwrap_or(Face::Up)))
+        .await
 }
 
 pub(super) fn respawn(bot: &mut Bot) -> Result<(), ActionError> {

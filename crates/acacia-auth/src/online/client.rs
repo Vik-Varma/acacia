@@ -4,12 +4,14 @@ use p256::ecdsa::SigningKey as XboxKey;
 use p384::ecdsa::SigningKey;
 use serde_json::Value;
 
-use super::tokens::{CachedCredentials, CachedTokens};
 use super::config::{AuthConfig, endpoints as ep};
 use super::http::Http;
 use super::live::{self, DeviceCodePrompt, MsaToken};
-use super::minecraft::{self, AuthEnvironment, Discovery, PlayFabSession, QosBeacon, ServiceToken, SignalingEnvironment};
+use super::minecraft::{
+    self, AuthEnvironment, Discovery, PlayFabSession, QosBeacon, ServiceToken, SignalingEnvironment,
+};
 use super::nsal;
+use super::tokens::{CachedCredentials, CachedTokens};
 use super::xbox::{self, SisuTokens, XboxToken};
 use crate::jwt::{self, now_unix, public_key_der_b64};
 use crate::{Error, LoginCredentials, Result};
@@ -87,7 +89,8 @@ impl AuthClient {
         let mp_xsts = self.xsts_with(state, &mp_rp).await?;
 
         let chain =
-            minecraft::mojang_chain(&self.http, &mp_xsts, &client_pub, &self.cfg.game_version).await?;
+            minecraft::mojang_chain(&self.http, &mp_xsts, &client_pub, &self.cfg.game_version)
+                .await?;
         let identity = chain_identity(&chain)?;
 
         let playfab = self.playfab_with(state).await?;
@@ -104,8 +107,10 @@ impl AuthClient {
             identity: identity.identity,
             playfab_id: Some(playfab.playfab_id),
         };
-        state.credentials =
-            Some(CachedCredentials { client_public_key: client_pub, credentials: creds.clone() });
+        state.credentials = Some(CachedCredentials {
+            client_public_key: client_pub,
+            credentials: creds.clone(),
+        });
         Ok(creds)
     }
 
@@ -116,8 +121,14 @@ impl AuthClient {
         }
         let playfab = self.playfab_with(state).await?;
         let env = self.environment().await?;
-        let s = minecraft::session_start(&self.http, &env, &playfab, &state.device_id, &self.cfg.game_version)
-            .await?;
+        let s = minecraft::session_start(
+            &self.http,
+            &env,
+            &playfab,
+            &state.device_id,
+            &self.cfg.game_version,
+        )
+        .await?;
         state.service_token = Some(s.clone());
         Ok(s)
     }
@@ -140,18 +151,38 @@ impl AuthClient {
         let env = self.environment().await?;
         let (_, pf_rp) = self.relying_parties(&key, &sisu.authorization, &env).await;
         let pf_xsts = self.xsts_with(state, &pf_rp).await?;
-        let p = minecraft::playfab_login(&self.http, &env, &pf_xsts, &key, self.cfg.title.user_agent()).await?;
+        let p = minecraft::playfab_login(
+            &self.http,
+            &env,
+            &pf_xsts,
+            &key,
+            self.cfg.title.user_agent(),
+        )
+        .await?;
         state.playfab = Some(p.clone());
         Ok(p)
     }
 
     /// An XSTS token for `relying_party` (e.g. Realms), reusing cached tokens while valid.
-    pub async fn xsts_with(&self, state: &mut CachedTokens, relying_party: &str) -> Result<XboxToken> {
+    pub async fn xsts_with(
+        &self,
+        state: &mut CachedTokens,
+        relying_party: &str,
+    ) -> Result<XboxToken> {
         if let Some(t) = state.xsts.get(relying_party).filter(|t| t.is_valid()) {
             return Ok(t.clone());
         }
         let (key, device, sisu) = self.xbox_session(state).await?;
-        let t = xbox::xsts(&self.http, self.cfg.title, &key, relying_party, &device, &sisu.title, &sisu.user).await?;
+        let t = xbox::xsts(
+            &self.http,
+            self.cfg.title,
+            &key,
+            relying_party,
+            &device,
+            &sisu.title,
+            &sisu.user,
+        )
+        .await?;
         state.xsts.insert(relying_party.to_owned(), t.clone());
         Ok(t)
     }
@@ -170,7 +201,9 @@ impl AuthClient {
             None => {
                 let s = xbox::sisu_authorize(&self.http, title, &key, &msa.access_token, &device)
                     .await?;
-                state.xsts.insert(ep::RP_XBOXLIVE.into(), s.authorization.clone());
+                state
+                    .xsts
+                    .insert(ep::RP_XBOXLIVE.into(), s.authorization.clone());
                 state.sisu = Some(s.clone());
                 s
             }
@@ -178,7 +211,11 @@ impl AuthClient {
         Ok((key, device, sisu))
     }
 
-    pub(super) async fn valid_device(&self, state: &mut CachedTokens, key: &XboxKey) -> Result<XboxToken> {
+    pub(super) async fn valid_device(
+        &self,
+        state: &mut CachedTokens,
+        key: &XboxKey,
+    ) -> Result<XboxToken> {
         if let Some(d) = state.device_token.clone().filter(XboxToken::is_valid) {
             return Ok(d);
         }
@@ -205,7 +242,12 @@ impl AuthClient {
     }
 
     async fn discovery(&self) -> Result<Discovery> {
-        if let Some(d) = self.discovery.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+        if let Some(d) = self
+            .discovery
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+        {
             return Ok(d);
         }
         let d = minecraft::discover(&self.http, &self.cfg.game_version).await?;
@@ -221,16 +263,27 @@ impl AuthClient {
         xboxlive: &XboxToken,
         env: &AuthEnvironment,
     ) -> (String, String) {
-        if let Some(rps) = self.relying_parties.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+        if let Some(rps) = self
+            .relying_parties
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+        {
             return rps;
         }
         let current = nsal::fetch_current(&self.http, key, xboxlive).await;
         let default = nsal::fetch_default(&self.http).await;
         let complete = current.is_ok() && default.is_ok();
-        let titles: Vec<_> = [current, default].into_iter().filter_map(Result::ok).collect();
+        let titles: Vec<_> = [current, default]
+            .into_iter()
+            .filter_map(Result::ok)
+            .collect();
         let rps = nsal::resolve(&titles, &env.playfab_host());
         if complete {
-            *self.relying_parties.lock().unwrap_or_else(|e| e.into_inner()) = Some(rps.clone());
+            *self
+                .relying_parties
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = Some(rps.clone());
         }
         rps
     }
@@ -261,7 +314,13 @@ fn chain_identity(chain: &[String]) -> Result<ChainIdentity> {
         endpoint: ep::MOJANG_CHAIN.into(),
         reason: "chain has no extraData".into(),
     })?;
-    let field = |k: &str| extra.get(k).and_then(Value::as_str).unwrap_or_default().to_owned();
+    let field = |k: &str| {
+        extra
+            .get(k)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned()
+    };
     Ok(ChainIdentity {
         xuid: field("XUID"),
         display_name: field("displayName"),

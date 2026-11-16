@@ -38,7 +38,10 @@ struct Header<'a> {
 /// Signs `claims` with ES384; the header's `x5u` is the key's own public key.
 pub fn sign(key: &SigningKey, claims: &impl Serialize) -> Result<String> {
     let x5u = public_key_der_b64(key);
-    let header = serde_json::to_vec(&Header { alg: "ES384", x5u: &x5u })?;
+    let header = serde_json::to_vec(&Header {
+        alg: "ES384",
+        x5u: &x5u,
+    })?;
     let payload = serde_json::to_vec(claims)?;
     let mut out = URL_SAFE_NO_PAD.encode(header);
     out.push('.');
@@ -95,7 +98,8 @@ impl Unverified<'_> {
 /// Splits and decodes a compact JWT without verifying it.
 pub fn decode(jwt: &str) -> Result<Unverified<'_>> {
     let mut parts = jwt.split('.');
-    let (Some(h), Some(c), Some(s), None) = (parts.next(), parts.next(), parts.next(), parts.next())
+    let (Some(h), Some(c), Some(s), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
     else {
         return Err(Error::Jwt("expected three dot-separated parts".into()));
     };
@@ -116,7 +120,9 @@ pub fn decode(jwt: &str) -> Result<Unverified<'_>> {
 pub fn decode_self_signed(jwt: &str) -> Result<(p384::PublicKey, Value)> {
     let token = decode(jwt)?;
     let key = parse_public_key_der_b64(
-        token.x5u().ok_or_else(|| Error::Jwt("missing x5u header".into()))?,
+        token
+            .x5u()
+            .ok_or_else(|| Error::Jwt("missing x5u header".into()))?,
     )?;
     token.verify(&key)?;
     Ok((key, token.claims))

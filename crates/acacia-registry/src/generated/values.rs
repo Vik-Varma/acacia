@@ -614,4 +614,3 @@ impl VaultState {
         }
     }
 }
-

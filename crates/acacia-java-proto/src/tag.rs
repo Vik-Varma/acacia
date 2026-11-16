@@ -32,7 +32,11 @@ impl Tag {
     }
 
     pub fn as_str(&self) -> Option<&str> {
-        if let Tag::String(s) = self { Some(s) } else { None }
+        if let Tag::String(s) = self {
+            Some(s)
+        } else {
+            None
+        }
     }
 
     /// Any number as `f64`; a byte reads as a boolean's 0 or 1.
@@ -143,7 +147,11 @@ fn read_payload(kind: u8, input: &mut &[u8], depth: u32) -> Result<Tag, Error> {
     let array = |input: &mut &[u8], width: usize| -> Result<usize, Error> {
         let n = read_len(input)?;
         // Every element needs `width` bytes: refuse a length the input cannot hold before allocating.
-        if n.saturating_mul(width) > input.len() { Err(Error::Invalid("NBT array length")) } else { Ok(n) }
+        if n.saturating_mul(width) > input.len() {
+            Err(Error::Invalid("NBT array length"))
+        } else {
+            Ok(n)
+        }
     };
     Ok(match kind {
         1 => Tag::Byte(i8::read(input)?),
@@ -152,7 +160,11 @@ fn read_payload(kind: u8, input: &mut &[u8], depth: u32) -> Result<Tag, Error> {
         4 => Tag::Long(i64::read(input)?),
         5 => Tag::Float(f32::read(input)?),
         6 => Tag::Double(f64::read(input)?),
-        7 => Tag::ByteArray((0..array(input, 1)?).map(|_| i8::read(input)).collect::<Result<_, _>>()?),
+        7 => Tag::ByteArray(
+            (0..array(input, 1)?)
+                .map(|_| i8::read(input))
+                .collect::<Result<_, _>>()?,
+        ),
         TAG_STRING => Tag::String(read_string(input)?),
         9 => {
             let element = u8::read(input)?;
@@ -163,7 +175,11 @@ fn read_payload(kind: u8, input: &mut &[u8], depth: u32) -> Result<Tag, Error> {
             if count > input.len() {
                 return Err(Error::Invalid("NBT list length"));
             }
-            Tag::List((0..count).map(|_| read_payload(element, input, depth + 1)).collect::<Result<_, _>>()?)
+            Tag::List(
+                (0..count)
+                    .map(|_| read_payload(element, input, depth + 1))
+                    .collect::<Result<_, _>>()?,
+            )
         }
         TAG_COMPOUND => {
             let mut entries = Vec::new();
@@ -176,8 +192,16 @@ fn read_payload(kind: u8, input: &mut &[u8], depth: u32) -> Result<Tag, Error> {
                 entries.push((key, read_payload(entry, input, depth + 1)?));
             }
         }
-        11 => Tag::IntArray((0..array(input, 4)?).map(|_| i32::read(input)).collect::<Result<_, _>>()?),
-        12 => Tag::LongArray((0..array(input, 8)?).map(|_| i64::read(input)).collect::<Result<_, _>>()?),
+        11 => Tag::IntArray(
+            (0..array(input, 4)?)
+                .map(|_| i32::read(input))
+                .collect::<Result<_, _>>()?,
+        ),
+        12 => Tag::LongArray(
+            (0..array(input, 8)?)
+                .map(|_| i64::read(input))
+                .collect::<Result<_, _>>()?,
+        ),
         _ => return Err(Error::Invalid("NBT tag type")),
     })
 }
@@ -199,7 +223,10 @@ mod tests {
             ("str".into(), Tag::String("hé".into())),
             ("list".into(), Tag::List(vec![Tag::Int(1), Tag::Int(2)])),
             ("empty".into(), Tag::List(Vec::new())),
-            ("c".into(), Tag::Compound(vec![("x".into(), Tag::String("y".into()))])),
+            (
+                "c".into(),
+                Tag::Compound(vec![("x".into(), Tag::String("y".into()))]),
+            ),
             ("ia".into(), Tag::IntArray(vec![7])),
             ("la".into(), Tag::LongArray(vec![8])),
         ]);
@@ -212,8 +239,14 @@ mod tests {
 
     #[test]
     fn hostile_lengths_fail_before_allocating() {
-        assert_eq!(Tag::read_root(&mut &[11, 0x7f, 0xff, 0xff, 0xff][..]), Err(Error::Invalid("NBT array length")));
-        assert_eq!(Tag::read_root(&mut &[9, 1, 0x7f, 0xff, 0xff, 0xff][..]), Err(Error::Invalid("NBT list length")));
+        assert_eq!(
+            Tag::read_root(&mut &[11, 0x7f, 0xff, 0xff, 0xff][..]),
+            Err(Error::Invalid("NBT array length"))
+        );
+        assert_eq!(
+            Tag::read_root(&mut &[9, 1, 0x7f, 0xff, 0xff, 0xff][..]),
+            Err(Error::Invalid("NBT list length"))
+        );
         assert_eq!(Tag::read_root(&mut &[0][..]), Ok(None));
     }
 }

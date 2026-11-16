@@ -26,7 +26,11 @@ fn run(g: &Grid, start: Vec3, goal: Goal, max_ticks: u32) -> (u32, Vec3) {
     for tick in 0..max_ticks {
         let body = sim.body();
         let feet = body.pos.map(|v| v.floor() as i32);
-        let sense = Sense { pos: body.pos, on_ground: body.on_ground, in_water: terrain.cell(feet).is_water() };
+        let sense = Sense {
+            pos: body.pos,
+            on_ground: body.on_ground,
+            in_water: terrain.cell(feet).is_water(),
+        };
         match follower.tick(&sense, Some(&sim), &world, &mut controls) {
             FollowStatus::Moving => {}
             FollowStatus::Arrived => return (tick, body.pos),
@@ -34,12 +38,18 @@ fn run(g: &Grid, start: Vec3, goal: Goal, max_ticks: u32) -> (u32, Vec3) {
         }
         sim.step_in(&controls, &world);
     }
-    panic!("not arrived after {max_ticks} ticks: at {:?}", sim.body().pos);
+    panic!(
+        "not arrived after {max_ticks} ticks: at {:?}",
+        sim.body().pos
+    );
 }
 
 fn assert_near(end: Vec3, want: Vec3) {
     let d = (end[0] - want[0]).hypot(end[2] - want[2]);
-    assert!(d < 0.3 && (end[1] - want[1]).abs() < 0.1, "ended at {end:?}, wanted {want:?}");
+    assert!(
+        d < 0.3 && (end[1] - want[1]).abs() < 0.1,
+        "ended at {end:?}, wanted {want:?}"
+    );
 }
 
 #[test]

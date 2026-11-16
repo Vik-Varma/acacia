@@ -14,7 +14,8 @@ impl Renderer {
         for update in self.updates.drain(..) {
             match update {
                 Update::Mesh(key, mut mesh) => {
-                    self.block_models.set_section(key, std::mem::take(&mut mesh.models));
+                    self.block_models
+                        .set_section(key, std::mem::take(&mut mesh.models));
                     self.store.upload(&self.device, &self.queue, key, mesh);
                 }
                 Update::Light(key, light) => self.store.upload_light(&self.queue, key, &light),
@@ -25,7 +26,14 @@ impl Renderer {
             }
         }
         if std::mem::take(&mut self.store.replaced) {
-            self.bind_group = pipeline::bind_group(&self.device, &self.pipelines.layout, &self.globals, &self.store, &self.textures.view, &self.sampler);
+            self.bind_group = pipeline::bind_group(
+                &self.device,
+                &self.pipelines.layout,
+                &self.globals,
+                &self.store,
+                &self.textures.view,
+                &self.sampler,
+            );
         }
     }
 }

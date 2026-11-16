@@ -90,7 +90,11 @@ impl<'a> Reader<'a> {
     }
 
     pub fn magic(&mut self) -> Result<()> {
-        if self.array::<16>()? == MAGIC { Ok(()) } else { Err(WireError::Malformed("magic")) }
+        if self.array::<16>()? == MAGIC {
+            Ok(())
+        } else {
+            Err(WireError::Malformed("magic"))
+        }
     }
 
     pub fn addr(&mut self) -> Result<SocketAddr> {

@@ -36,7 +36,9 @@ impl Stack {
 /// `Direction` by its Java name.
 fn direction(s: &RenderState, field: &str) -> Option<&'static str> {
     let name = s.text(field)?.to_ascii_uppercase();
-    ["DOWN", "UP", "NORTH", "SOUTH", "WEST", "EAST"].into_iter().find(|d| *d == name)
+    ["DOWN", "UP", "NORTH", "SOUTH", "WEST", "EAST"]
+        .into_iter()
+        .find(|d| *d == name)
 }
 
 /// `Direction.getRotation`.
@@ -66,7 +68,11 @@ fn opposite(face: &str) -> &'static str {
 
 /// `getFlipDegrees`: arthropods fall on their backs.
 fn flip_degrees(kind: &str) -> f32 {
-    if matches!(kind, "spider" | "cave_spider" | "silverfish" | "endermite") { 180.0 } else { 90.0 }
+    if matches!(kind, "spider" | "cave_spider" | "silverfish" | "endermite") {
+        180.0
+    } else {
+        90.0
+    }
 }
 
 /// The matrix for a Java `kind` (`minecraft:cod`) in render state `s`.
@@ -95,7 +101,14 @@ pub fn transform(kind: &str, s: &RenderState) -> Mat4 {
 }
 
 /// `LivingEntityRenderer.setupRotations` and the renderers' overrides.
-fn setup_rotations(kind: &str, s: &RenderState, m: &mut Stack, body_rot: f32, scale: f32, sleeping: bool) {
+fn setup_rotations(
+    kind: &str,
+    s: &RenderState,
+    m: &mut Stack,
+    body_rot: f32,
+    scale: f32,
+    sleeping: bool,
+) {
     match kind {
         "armor_stand" => {
             m.turn(Vec3::Y, 180.0 - body_rot);
@@ -138,10 +151,18 @@ fn setup_rotations(kind: &str, s: &RenderState, m: &mut Stack, body_rot: f32, sc
             }
         }
         "cod" | "tropical_fish" | "salmon" => {
-            let (amplitude, angle) = if kind == "salmon" && !in_water { (1.3, 1.7) } else { (1.0, 1.0) };
+            let (amplitude, angle) = if kind == "salmon" && !in_water {
+                (1.3, 1.7)
+            } else {
+                (1.0, 1.0)
+            };
             m.turn(Vec3::Y, amplitude * 4.3 * sin(angle * 0.6 * s.age()));
             if !in_water {
-                if kind == "cod" { m.shift(0.1, 0.1, -0.1) } else { m.shift(0.2, 0.1, 0.0) }
+                if kind == "cod" {
+                    m.shift(0.1, 0.1, -0.1)
+                } else {
+                    m.shift(0.2, 0.1, 0.0)
+                }
                 m.turn(Vec3::Z, 90.0);
             }
         }
@@ -150,7 +171,10 @@ fn setup_rotations(kind: &str, s: &RenderState, m: &mut Stack, body_rot: f32, sc
             if swim > 0.0 {
                 let angle = lerp(swim, 0.0, -10.0 - s.x_rot());
                 let pivot = Vec3::new(0.0, s.num("boundingBoxHeight") / 2.0 / scale, 0.0);
-                m.turn_about(Mat4::from_quat(glam::Quat::from_rotation_x(angle.to_radians())), pivot);
+                m.turn_about(
+                    Mat4::from_quat(glam::Quat::from_rotation_x(angle.to_radians())),
+                    pivot,
+                );
             }
         }
         "fox" if s.flag("isPouncing") || s.flag("isFaceplanted") => m.turn(Vec3::X, -s.x_rot()),
@@ -165,8 +189,19 @@ fn setup_rotations(kind: &str, s: &RenderState, m: &mut Stack, body_rot: f32, sc
 }
 
 /// `LivingEntityRenderer.setupRotations` itself.
-fn living_rotations(kind: &str, s: &RenderState, m: &mut Stack, mut body_rot: f32, scale: f32, sleeping: bool) {
-    let shake = Shake { frozen: s.flag("isFullyFrozen"), converting: s.flag("isConverting") || s.flag("isShaking"), suffocating: s.flag("isSuffocating") };
+fn living_rotations(
+    kind: &str,
+    s: &RenderState,
+    m: &mut Stack,
+    mut body_rot: f32,
+    scale: f32,
+    sleeping: bool,
+) {
+    let shake = Shake {
+        frozen: s.flag("isFullyFrozen"),
+        converting: s.flag("isConverting") || s.flag("isShaking"),
+        suffocating: s.flag("isSuffocating"),
+    };
     if overlay::shaking(kind, shake) {
         body_rot += overlay::shake_degrees(s.age());
     }
@@ -198,7 +233,14 @@ fn living_rotations(kind: &str, s: &RenderState, m: &mut Stack, mut body_rot: f3
 }
 
 /// `AvatarRenderer.setupRotations`: gliding and swimming tip the body over.
-fn avatar_rotations(kind: &str, s: &RenderState, m: &mut Stack, body_rot: f32, scale: f32, sleeping: bool) {
+fn avatar_rotations(
+    kind: &str,
+    s: &RenderState,
+    m: &mut Stack,
+    body_rot: f32,
+    scale: f32,
+    sleeping: bool,
+) {
     living_rotations(kind, s, m, body_rot, scale, sleeping);
     let (swim, x_rot) = (s.num("swimAmount"), s.x_rot());
     if s.flag("isFallFlying") {
@@ -211,7 +253,11 @@ fn avatar_rotations(kind: &str, s: &RenderState, m: &mut Stack, body_rot: f32, s
             m.0 *= Mat4::from_quat(glam::Quat::from_rotation_y(s.num("flyingYRot")));
         }
     } else if swim > 0.0 {
-        let target = if s.flag("isInWater") { -90.0 - x_rot } else { -90.0 };
+        let target = if s.flag("isInWater") {
+            -90.0 - x_rot
+        } else {
+            -90.0
+        };
         m.turn(Vec3::X, lerp(swim, 0.0, target));
         if s.flag("isVisuallySwimming") {
             m.shift(0.0, -1.0, 0.3);
@@ -229,7 +275,11 @@ fn renderer_scale(kind: &str, s: &RenderState, m: &mut Stack) {
             g = g.clamp(0.0, 1.0);
             g *= g;
             g *= g;
-            m.scale((1.0 + g * 0.4) * wobble, (1.0 + g * 0.1) / wobble, (1.0 + g * 0.4) * wobble);
+            m.scale(
+                (1.0 + g * 0.4) * wobble,
+                (1.0 + g * 0.1) / wobble,
+                (1.0 + g * 0.4) * wobble,
+            );
         }
         "phantom" => {
             let scale = 1.0 + 0.15 * s.num("size");
@@ -238,7 +288,11 @@ fn renderer_scale(kind: &str, s: &RenderState, m: &mut Stack) {
         }
         "wither" => {
             let ticks = s.num("invulnerableTicks");
-            let scale = if ticks > 0.0 { 2.0 - ticks / 220.0 * 0.5 } else { 2.0 };
+            let scale = if ticks > 0.0 {
+                2.0 - ticks / 220.0 * 0.5
+            } else {
+                2.0
+            };
             m.scale(scale, scale, scale);
         }
         "slime" | "magma_cube" | "sulfur_cube" => {

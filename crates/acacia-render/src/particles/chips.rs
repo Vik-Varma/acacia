@@ -31,7 +31,9 @@ pub struct Chip {
 
 /// The chips of the block at `pos`, textured from `layer`.
 pub fn break_block(pos: IVec3, layer: u16, rng: &mut Rng, out: &mut Vec<Chip>) {
-    for (x, y, z) in (0..GRID).flat_map(|x| (0..GRID).flat_map(move |y| (0..GRID).map(move |z| (x, y, z)))) {
+    for (x, y, z) in
+        (0..GRID).flat_map(|x| (0..GRID).flat_map(move |y| (0..GRID).map(move |z| (x, y, z))))
+    {
         let cell = (Vec3::new(x as f32, y as f32, z as f32) + 0.5) / GRID as f32;
         let mut velocity = (cell - 0.5) * 2.0;
         let spread = Vec3::new(rng.f32(), rng.f32(), rng.f32()) * 2.0 - 1.0;
@@ -42,7 +44,17 @@ pub fn break_block(pos: IVec3, layer: u16, rng: &mut Rng, out: &mut Vec<Chip>) {
         let lifetime = (4.0 / (rng.f32() * 0.9 + 0.1)) as u32;
         let size = 0.05 * (rng.f32() * 0.5 + 0.5) * 2.0;
         let position = pos.as_dvec3() + cell.as_dvec3();
-        out.push(Chip { position, previous: position, velocity, layer, piece, size, age: 0, lifetime, on_ground: false });
+        out.push(Chip {
+            position,
+            previous: position,
+            velocity,
+            layer,
+            piece,
+            size,
+            age: 0,
+            lifetime,
+            on_ground: false,
+        });
     }
 }
 

@@ -35,6 +35,9 @@ impl PackStore for MemoryPackStore {
     }
 
     fn insert(&self, id: &str) {
-        self.ids.lock().expect("pack store lock").insert(id.to_owned());
+        self.ids
+            .lock()
+            .expect("pack store lock")
+            .insert(id.to_owned());
     }
 }

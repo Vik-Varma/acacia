@@ -21,7 +21,10 @@ impl Signs {
         match packet.id {
             OpenSign::ID => {
                 let p: OpenSign = packet.decode()?;
-                self.editor = Some(SignEditor { position: [p.position.x, p.position.y, p.position.z], front: p.is_front });
+                self.editor = Some(SignEditor {
+                    position: [p.position.x, p.position.y, p.position.z],
+                    front: p.is_front,
+                });
             }
             ChangeDimension::ID => self.editor = None,
             _ => {}

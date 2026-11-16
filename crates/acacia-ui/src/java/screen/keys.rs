@@ -21,7 +21,10 @@ pub struct Key {
 }
 
 /// `InputConstants.UNKNOWN`.
-pub const UNKNOWN: Key = Key { kind: KeyType::Keyboard, value: 0 };
+pub const UNKNOWN: Key = Key {
+    kind: KeyType::Keyboard,
+    value: 0,
+};
 
 /// The platform `InputQuirks.keyboardTranslationKey` renames the Windows keys for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,11 +67,17 @@ impl Os {
 
 impl Key {
     pub const fn keyboard(value: i32) -> Key {
-        Key { kind: KeyType::Keyboard, value }
+        Key {
+            kind: KeyType::Keyboard,
+            value,
+        }
     }
 
     pub const fn mouse(value: i32) -> Key {
-        Key { kind: KeyType::Mouse, value }
+        Key {
+            kind: KeyType::Mouse,
+            value,
+        }
     }
 
     /// `getName`: a named key's, else `key.keyboard.<value>` / `key.mouse.<value>` (`getOrCreate`).
@@ -87,13 +96,17 @@ impl Key {
     pub fn display(&self, lang: Lang, os: Os) -> Text {
         let name = self.name();
         match self.kind {
-            KeyType::Keyboard if name == "key.keyboard.unknown" => Text::translate(&name, &[], lang),
+            KeyType::Keyboard if name == "key.keyboard.unknown" => {
+                Text::translate(&name, &[], lang)
+            }
             KeyType::Keyboard => match us_layout_char(self.value) {
                 Some(c) => Text::literal(c.to_string()),
                 None => Text::translate(&os.translation_key(&name), &[], lang),
             },
             KeyType::Mouse if lang(&name).is_some() => Text::translate(&name, &[], lang),
-            KeyType::Mouse => Text::translate("key.mouse", &[Text::literal(self.value.to_string())], lang),
+            KeyType::Mouse => {
+                Text::translate("key.mouse", &[Text::literal(self.value.to_string())], lang)
+            }
         }
     }
 }
@@ -149,41 +162,101 @@ impl Mapping {
 
 use Category::*;
 
-const fn kb(name: &'static str, value: i32, category: Category, order: i32) -> (&'static str, Key, Category, i32) {
+const fn kb(
+    name: &'static str,
+    value: i32,
+    category: Category,
+    order: i32,
+) -> (&'static str, Key, Category, i32) {
     (name, Key::keyboard(value), category, order)
 }
 
-const fn ms(name: &'static str, value: i32, category: Category) -> (&'static str, Key, Category, i32) {
+const fn ms(
+    name: &'static str,
+    value: i32,
+    category: Category,
+) -> (&'static str, Key, Category, i32) {
     (name, Key::mouse(value), category, 0)
 }
 
 /// `Options.keyMappings` in its order, at their defaults.
 const DEFAULTS: &[(&str, Key, Category, i32)] = &[
-    ms("key.attack", 1, Gameplay), ms("key.use", 3, Gameplay), kb("key.forward", 26, Movement, 0), kb("key.left", 4, Movement, 0),
-    kb("key.back", 22, Movement, 0), kb("key.right", 7, Movement, 0), kb("key.jump", 44, Movement, 0), kb("key.sneak", 225, Movement, 0),
-    kb("key.sprint", 224, Movement, 0), kb("key.drop", 20, Inventory, 0), kb("key.inventory", 8, Inventory, 0), kb("key.chat", 23, Multiplayer, 0),
-    kb("key.playerlist", 43, Multiplayer, 0), ms("key.pickItem", 2, Gameplay), kb("key.command", 56, Multiplayer, 0),
-    kb("key.friends", 18, Multiplayer, 0), kb("key.socialInteractions", 19, Multiplayer, 0), kb("key.toggleGui", 58, Misc, 0),
-    kb("key.toggleSpectatorShaderEffects", 61, Misc, 0), kb("key.screenshot", 59, Misc, 0), kb("key.togglePerspective", 62, Misc, 0),
-    kb("key.smoothCamera", 0, Misc, 0), kb("key.fullscreen", 68, Misc, 0), kb("key.spectatorOutlines", 0, Spectator, 0),
-    ms("key.spectatorHotbar", 2, Spectator), kb("key.swapOffhand", 9, Inventory, 0), kb("key.saveToolbarActivator", 6, Creative, 0),
-    kb("key.loadToolbarActivator", 27, Creative, 0), kb("key.advancements", 15, Misc, 0), kb("key.quickActions", 10, Misc, 0),
-    kb("key.debug.overlay", 60, Debug, -2), kb("key.debug.modifier", 60, Debug, -1),
-    kb("key.hotbar.1", 30, Inventory, 0), kb("key.hotbar.2", 31, Inventory, 0), kb("key.hotbar.3", 32, Inventory, 0),
-    kb("key.hotbar.4", 33, Inventory, 0), kb("key.hotbar.5", 34, Inventory, 0), kb("key.hotbar.6", 35, Inventory, 0),
-    kb("key.hotbar.7", 36, Inventory, 0), kb("key.hotbar.8", 37, Inventory, 0), kb("key.hotbar.9", 38, Inventory, 0),
-    kb("key.debug.reloadChunk", 4, Debug, 0), kb("key.debug.showHitboxes", 5, Debug, 0), kb("key.debug.clearChat", 7, Debug, 0),
-    kb("key.debug.crash", 6, Debug, 0), kb("key.debug.showChunkBorders", 10, Debug, 0), kb("key.debug.showAdvancedTooltips", 11, Debug, 0),
-    kb("key.debug.copyRecreateCommand", 12, Debug, 0), kb("key.debug.spectate", 17, Debug, 0), kb("key.debug.switchGameMode", 61, Debug, 0),
-    kb("key.debug.debugOptions", 63, Debug, 0), kb("key.debug.focusPause", 19, Debug, 0), kb("key.debug.dumpDynamicTextures", 22, Debug, 0),
-    kb("key.debug.reloadResourcePacks", 23, Debug, 0), kb("key.debug.profiling", 15, Debug, 0), kb("key.debug.copyLocation", 6, Debug, 0),
-    kb("key.debug.dumpVersion", 25, Debug, 0), kb("key.debug.profilingChart", 30, Debug, 1), kb("key.debug.fpsCharts", 31, Debug, 2),
-    kb("key.debug.networkCharts", 32, Debug, 3), kb("key.debug.lightmapTexture", 33, Debug, 4), kb("key.debug.improvedTransparency", 27, Debug, 0),
+    ms("key.attack", 1, Gameplay),
+    ms("key.use", 3, Gameplay),
+    kb("key.forward", 26, Movement, 0),
+    kb("key.left", 4, Movement, 0),
+    kb("key.back", 22, Movement, 0),
+    kb("key.right", 7, Movement, 0),
+    kb("key.jump", 44, Movement, 0),
+    kb("key.sneak", 225, Movement, 0),
+    kb("key.sprint", 224, Movement, 0),
+    kb("key.drop", 20, Inventory, 0),
+    kb("key.inventory", 8, Inventory, 0),
+    kb("key.chat", 23, Multiplayer, 0),
+    kb("key.playerlist", 43, Multiplayer, 0),
+    ms("key.pickItem", 2, Gameplay),
+    kb("key.command", 56, Multiplayer, 0),
+    kb("key.friends", 18, Multiplayer, 0),
+    kb("key.socialInteractions", 19, Multiplayer, 0),
+    kb("key.toggleGui", 58, Misc, 0),
+    kb("key.toggleSpectatorShaderEffects", 61, Misc, 0),
+    kb("key.screenshot", 59, Misc, 0),
+    kb("key.togglePerspective", 62, Misc, 0),
+    kb("key.smoothCamera", 0, Misc, 0),
+    kb("key.fullscreen", 68, Misc, 0),
+    kb("key.spectatorOutlines", 0, Spectator, 0),
+    ms("key.spectatorHotbar", 2, Spectator),
+    kb("key.swapOffhand", 9, Inventory, 0),
+    kb("key.saveToolbarActivator", 6, Creative, 0),
+    kb("key.loadToolbarActivator", 27, Creative, 0),
+    kb("key.advancements", 15, Misc, 0),
+    kb("key.quickActions", 10, Misc, 0),
+    kb("key.debug.overlay", 60, Debug, -2),
+    kb("key.debug.modifier", 60, Debug, -1),
+    kb("key.hotbar.1", 30, Inventory, 0),
+    kb("key.hotbar.2", 31, Inventory, 0),
+    kb("key.hotbar.3", 32, Inventory, 0),
+    kb("key.hotbar.4", 33, Inventory, 0),
+    kb("key.hotbar.5", 34, Inventory, 0),
+    kb("key.hotbar.6", 35, Inventory, 0),
+    kb("key.hotbar.7", 36, Inventory, 0),
+    kb("key.hotbar.8", 37, Inventory, 0),
+    kb("key.hotbar.9", 38, Inventory, 0),
+    kb("key.debug.reloadChunk", 4, Debug, 0),
+    kb("key.debug.showHitboxes", 5, Debug, 0),
+    kb("key.debug.clearChat", 7, Debug, 0),
+    kb("key.debug.crash", 6, Debug, 0),
+    kb("key.debug.showChunkBorders", 10, Debug, 0),
+    kb("key.debug.showAdvancedTooltips", 11, Debug, 0),
+    kb("key.debug.copyRecreateCommand", 12, Debug, 0),
+    kb("key.debug.spectate", 17, Debug, 0),
+    kb("key.debug.switchGameMode", 61, Debug, 0),
+    kb("key.debug.debugOptions", 63, Debug, 0),
+    kb("key.debug.focusPause", 19, Debug, 0),
+    kb("key.debug.dumpDynamicTextures", 22, Debug, 0),
+    kb("key.debug.reloadResourcePacks", 23, Debug, 0),
+    kb("key.debug.profiling", 15, Debug, 0),
+    kb("key.debug.copyLocation", 6, Debug, 0),
+    kb("key.debug.dumpVersion", 25, Debug, 0),
+    kb("key.debug.profilingChart", 30, Debug, 1),
+    kb("key.debug.fpsCharts", 31, Debug, 2),
+    kb("key.debug.networkCharts", 32, Debug, 3),
+    kb("key.debug.lightmapTexture", 33, Debug, 4),
+    kb("key.debug.improvedTransparency", 27, Debug, 0),
 ];
 
 /// Java's key mappings at their defaults, in `Options.keyMappings` order.
 pub fn defaults() -> Vec<Mapping> {
-    DEFAULTS.iter().map(|&(name, key, category, order)| Mapping { name, category, default: key, key, order }).collect()
+    DEFAULTS
+        .iter()
+        .map(|&(name, key, category, order)| Mapping {
+            name,
+            category,
+            default: key,
+            key,
+            order,
+        })
+        .collect()
 }
 
 /// `String.compareTo`: by UTF-16 unit.

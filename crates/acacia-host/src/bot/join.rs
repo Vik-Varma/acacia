@@ -3,10 +3,10 @@
 
 use std::time::Duration;
 
-use acacia_bot::client::ClientBuilder;
-use acacia_bot::swarm::JoinQueue;
 use acacia_api::{ApiError, Auth, CreateBotParams, ErrorCode};
+use acacia_bot::client::ClientBuilder;
 use acacia_bot::java_client::Error as JavaError;
+use acacia_bot::swarm::JoinQueue;
 use acacia_bot::{Bot, BotConfig, ConnectError, DisconnectReason};
 use acacia_raknet::DisconnectReason as RakNetReason;
 
@@ -40,9 +40,17 @@ pub(crate) async fn connect(
 }
 
 /// Joins a Java server: offline as `username`, or as the Java profile of the Microsoft account it names.
-pub(crate) async fn connect_java(params: &CreateBotParams, port: u16, sign_ins: &SignIns, prompt: Prompt, config: BotConfig) -> Result<Bot, ApiError> {
+pub(crate) async fn connect_java(
+    params: &CreateBotParams,
+    port: u16,
+    sign_ins: &SignIns,
+    prompt: Prompt,
+    config: BotConfig,
+) -> Result<Bot, ApiError> {
     let joined = match params.auth.unwrap_or(Auth::Offline) {
-        Auth::Offline => Bot::connect_java_offline(&params.host, port, &params.username, config).await,
+        Auth::Offline => {
+            Bot::connect_java_offline(&params.host, port, &params.username, config).await
+        }
         Auth::Microsoft => {
             let account = sign_ins.account(&params.username, params.profiles_folder.as_deref());
             let account = sign_ins.java_account(account, prompt).await?;
@@ -61,7 +69,10 @@ pub(crate) async fn connect_java(params: &CreateBotParams, port: u16, sign_ins: 
 
 /// How long to wait before retry `retries + 1` after `e`; `None` to give up.
 fn backoff(e: &ConnectError, retries: u32) -> Option<Duration> {
-    let refused = matches!(e, ConnectError::Disconnected(DisconnectReason::Transport(RakNetReason::RecentlyConnected)));
+    let refused = matches!(
+        e,
+        ConnectError::Disconnected(DisconnectReason::Transport(RakNetReason::RecentlyConnected))
+    );
     (refused && retries < RETRIES).then(|| FIRST_BACKOFF * 2u32.pow(retries))
 }
 
@@ -71,10 +82,15 @@ mod tests {
 
     #[test]
     fn only_recently_connected_is_retried_with_doubling_waits() {
-        let refused = ConnectError::Disconnected(DisconnectReason::Transport(RakNetReason::RecentlyConnected));
-        let waits: Vec<_> = (0..=RETRIES).map(|n| backoff(&refused, n).map(|d| d.as_secs())).collect();
+        let refused = ConnectError::Disconnected(DisconnectReason::Transport(
+            RakNetReason::RecentlyConnected,
+        ));
+        let waits: Vec<_> = (0..=RETRIES)
+            .map(|n| backoff(&refused, n).map(|d| d.as_secs()))
+            .collect();
         assert_eq!(waits, [Some(1), Some(2), Some(4), Some(8), None]);
-        let full = ConnectError::Disconnected(DisconnectReason::Transport(RakNetReason::ServerFull));
+        let full =
+            ConnectError::Disconnected(DisconnectReason::Transport(RakNetReason::ServerFull));
         assert_eq!(backoff(&full, 0), None);
         assert_eq!(backoff(&ConnectError::Timeout, 0), None);
     }

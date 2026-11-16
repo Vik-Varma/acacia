@@ -8,8 +8,8 @@ use acacia_world::BlockState;
 use acacia_world::neutral::value::Direction;
 use acacia_world::neutral::{Block, BlockTag, prop};
 
-use crate::movement::Idle;
 use crate::Bot;
+use crate::movement::Idle;
 
 /// Per-bot state while a physics bot lies in bed.
 #[derive(Default)]
@@ -37,18 +37,29 @@ pub(crate) fn lying_in(state: &BlockState, [x, y, z]: BlockPos) -> Option<(Vec3f
         Direction::North => -180.0,
         _ => -90.0,
     };
-    Some((Vec3f { x: x as f32 + 0.5, y: y as f32 + height, z: z as f32 + 0.5 }, yaw))
+    Some((
+        Vec3f {
+            x: x as f32 + 0.5,
+            y: y as f32 + height,
+            z: z as f32 + 0.5,
+        },
+        yaw,
+    ))
 }
 
 pub(crate) fn is_bed(state: &BlockState) -> bool {
-    state.kind().is_some_and(|b| b.is(BlockTag::Beds) || b == Block::StrawBed)
+    state
+        .kind()
+        .is_some_and(|b| b.is(BlockTag::Beds) || b == Block::StrawBed)
 }
 
 impl Bot {
     /// Physics bots: while the server shows the player sleeping, sends a still input at the bed instead
     /// of simulating and returns true. On waking the simulation resumes at the server's position.
     pub(crate) fn bed_physics_tick(&mut self) -> bool {
-        let Some(movement) = self.backend.movement_mut() else { return false };
+        let Some(movement) = self.backend.movement_mut() else {
+            return false;
+        };
         if !self.state.player.is_sleeping() {
             if let Some(idle) = self.bed.idle.take() {
                 (self.bed.lying, self.bed.clicked_from) = (None, None);
@@ -58,7 +69,10 @@ impl Bot {
             }
             return false;
         }
-        let idle = self.bed.idle.get_or_insert_with(|| Idle::continuing(movement.input_tick()));
+        let idle = self
+            .bed
+            .idle
+            .get_or_insert_with(|| Idle::continuing(movement.input_tick()));
         // BDS moves the player into the bed with a correction on the click tick; that position wins.
         let server = self.state.player.eye_position();
         let moved = self.bed.clicked_from.as_ref() != Some(&self.state.player.position);

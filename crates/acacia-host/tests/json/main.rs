@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use acacia_api::{BlockPos, BotId, ErrorCode};
 use acacia_host::{Host, HostConfig};
 use acacia_testserver::{FakeServer, Script};
-use common::{chat_line, code, sent_chat, Driver};
+use common::{Driver, chat_line, code, sent_chat};
 use serde_json::json;
 use tokio::time::sleep;
 
@@ -30,7 +30,10 @@ async fn a_bot_runs_on_json_alone() {
     assert_eq!(d.done(2).await.1, json!({ "ok": null }));
     let deadline = Instant::now() + Duration::from_secs(5);
     while !sent_chat(&server, "hello") {
-        assert!(Instant::now() < deadline, "the chat line never reached the server");
+        assert!(
+            Instant::now() < deadline,
+            "the chat line never reached the server"
+        );
         sleep(Duration::from_millis(10)).await;
     }
 
@@ -40,24 +43,42 @@ async fn a_bot_runs_on_json_alone() {
     d.call(4, "bot.snapshot", json!({ "bot": bot }));
     let (snapshot_at, snapshot) = d.done(4).await;
     assert_eq!(snapshot["ok"]["hot"]["alive"], true, "{snapshot}");
-    let hot = d.host.hot(&BotId(bot.clone())).expect("a spawned bot publishes its state");
+    let hot = d
+        .host
+        .hot(&BotId(bot.clone()))
+        .expect("a spawned bot publishes its state");
     assert!(hot.alive && hot.tick > 0, "{hot:?}");
     assert!(d.host.hot(&BotId("bot-9".into())).is_none());
-    let feet = BlockPos { x: hot.position.x.floor() as i32, y: hot.position.y.floor() as i32 - 1, z: hot.position.z.floor() as i32 };
+    let feet = BlockPos {
+        x: hot.position.x.floor() as i32,
+        y: hot.position.y.floor() as i32 - 1,
+        z: hot.position.z.floor() as i32,
+    };
     let deadline = Instant::now() + Duration::from_secs(5);
     let block = loop {
         match d.host.block_at(&BotId(bot.clone()), feet) {
             Some(block) => break block,
-            None => assert!(Instant::now() < deadline, "the chunk at {feet:?} never loaded"),
+            None => assert!(
+                Instant::now() < deadline,
+                "the chunk at {feet:?} never loaded"
+            ),
         }
         sleep(Duration::from_millis(50)).await;
     };
     assert!(block.name.starts_with("minecraft:"), "{block:?}");
     let (done_at, waited) = d.done(3).await;
     assert_eq!(waited, json!({ "ok": null }));
-    assert!(snapshot_at < done_at, "an immediate call answers while a queued one runs");
-    let chat = d.event_index(&bot, |e| e["type"] == "chat" && e["plain"] == "mid-action").expect("the chat event");
-    assert!(chat < done_at, "the chat event raised during the wait comes before its done");
+    assert!(
+        snapshot_at < done_at,
+        "an immediate call answers while a queued one runs"
+    );
+    let chat = d
+        .event_index(&bot, |e| e["type"] == "chat" && e["plain"] == "mid-action")
+        .expect("the chat event");
+    assert!(
+        chat < done_at,
+        "the chat event raised during the wait comes before its done"
+    );
 
     d.call(5, "bot.waitForTicks", json!({ "bot": bot, "ticks": 400 }));
     d.call(6, "bot.waitForTicks", json!({ "bot": bot, "ticks": 400 }));
@@ -70,9 +91,17 @@ async fn a_bot_runs_on_json_alone() {
     d.call(9, "cancel", json!({ "bot": bot, "call": 5 }));
     let (running_at, running) = d.done(5).await;
     assert_eq!(code(&running), "CANCELLED");
-    assert!(cancelled.elapsed() < Duration::from_secs(1), "cancel took {:?}", cancelled.elapsed());
+    assert!(
+        cancelled.elapsed() < Duration::from_secs(1),
+        "cancel took {:?}",
+        cancelled.elapsed()
+    );
     assert!(queued_at < running_at);
-    assert_eq!(d.done(7).await.1, json!({ "ok": null }), "the next call runs after a cancel");
+    assert_eq!(
+        d.done(7).await.1,
+        json!({ "ok": null }),
+        "the next call runs after a cancel"
+    );
     assert_eq!(d.done(8).await.1, json!({ "ok": null }));
     assert_eq!(d.done(9).await.1, json!({ "ok": null }));
 
@@ -81,16 +110,36 @@ async fn a_bot_runs_on_json_alone() {
     d.call(12, "bot.close", json!({ "bot": bot }));
     let (closed_at, closed) = d.done(12).await;
     assert_eq!(closed, json!({ "ok": null }));
-    assert_eq!(code(&d.done(10).await.1), "CANCELLED", "close cancels the running call");
-    assert_eq!(code(&d.done(11).await.1), "DISCONNECTED", "and fails the queued ones");
-    let end = d.event_index(&bot, |e| e["type"] == "end").expect("an end event");
+    assert_eq!(
+        code(&d.done(10).await.1),
+        "CANCELLED",
+        "close cancels the running call"
+    );
+    assert_eq!(
+        code(&d.done(11).await.1),
+        "DISCONNECTED",
+        "and fails the queued ones"
+    );
+    let end = d
+        .event_index(&bot, |e| e["type"] == "end")
+        .expect("an end event");
     assert_eq!(d.seen[end]["event"]["reason"], "closed");
     assert!(end < closed_at, "end comes before close resolves");
 
-    let after = json!({ "call": 13, "method": "bot.chat", "params": { "bot": bot, "message": "late" } }).to_string();
+    let after =
+        json!({ "call": 13, "method": "bot.chat", "params": { "bot": bot, "message": "late" } })
+            .to_string();
     assert_eq!(d.host.call(&after).unwrap_err().code, ErrorCode::UnknownBot);
-    let seqs: Vec<u64> = d.seen.iter().filter(|r| r["type"] == "event").map(|r| r["seq"].as_u64().unwrap()).collect();
-    assert!(seqs.windows(2).all(|w| w[1] == w[0] + 1) && seqs[0] == 1, "seq counts every event: {seqs:?}");
+    let seqs: Vec<u64> = d
+        .seen
+        .iter()
+        .filter(|r| r["type"] == "event")
+        .map(|r| r["seq"].as_u64().unwrap())
+        .collect();
+    assert!(
+        seqs.windows(2).all(|w| w[1] == w[0] + 1) && seqs[0] == 1,
+        "seq counts every event: {seqs:?}"
+    );
     d.host.shutdown().await;
 }
 
@@ -106,7 +155,9 @@ async fn a_kick_fails_the_running_and_queued_calls() {
     let (running_at, running) = d.done(2).await;
     assert_eq!(code(&running), "DISCONNECTED");
     assert_eq!(code(&d.done(3).await.1), "DISCONNECTED");
-    let end = d.event_index(&bot, |e| e["type"] == "end").expect("an end event");
+    let end = d
+        .event_index(&bot, |e| e["type"] == "end")
+        .expect("an end event");
     assert_eq!(d.seen[end]["event"]["reason"], "kicked", "{}", d.seen[end]);
     assert!(end < running_at, "end comes before the failed call's done");
     d.host.shutdown().await;
@@ -115,9 +166,18 @@ async fn a_kick_fails_the_running_and_queued_calls() {
 
 #[tokio::test]
 async fn refusals_come_back_at_once() {
-    let (host, _out) = Host::start(HostConfig { shards: 1, ..HostConfig::default() }).unwrap();
+    let (host, _out) = Host::start(HostConfig {
+        shards: 1,
+        ..HostConfig::default()
+    })
+    .unwrap();
     assert_eq!(host.call("{").unwrap_err().code, ErrorCode::BadParams);
-    assert_eq!(host.call(r#"{"call": 1, "method": "bot.jump", "params": {}}"#).unwrap_err().code, ErrorCode::UnknownMethod);
+    assert_eq!(
+        host.call(r#"{"call": 1, "method": "bot.jump", "params": {}}"#)
+            .unwrap_err()
+            .code,
+        ErrorCode::UnknownMethod
+    );
     let chat = r#"{"call": 2, "method": "bot.chat", "params": {"bot": "bot-9", "message": "hi"}}"#;
     assert_eq!(host.call(chat).unwrap_err().code, ErrorCode::UnknownBot);
     host.shutdown().await;

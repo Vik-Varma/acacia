@@ -12,10 +12,20 @@ pub(super) fn form(id: u32, data: &str) -> Option<Form> {
     let kind = match o.get("type")?.as_str()? {
         "form" => {
             // Older servers list `buttons`; newer ones mix buttons into `elements` (forms.md).
-            let is_button = |e: &&Map<String, Value>| e.get("type").and_then(Value::as_str) == Some("button");
-            let mixed = list(o, "elements").iter().filter_map(Value::as_object).filter(is_button);
-            let buttons = list(o, "buttons").iter().filter_map(Value::as_object).chain(mixed).map(button).collect();
-            let (mut positions, mut elements, mut seen) = (Vec::new(), Vec::new(), list(o, "buttons").len());
+            let is_button =
+                |e: &&Map<String, Value>| e.get("type").and_then(Value::as_str) == Some("button");
+            let mixed = list(o, "elements")
+                .iter()
+                .filter_map(Value::as_object)
+                .filter(is_button);
+            let buttons = list(o, "buttons")
+                .iter()
+                .filter_map(Value::as_object)
+                .chain(mixed)
+                .map(button)
+                .collect();
+            let (mut positions, mut elements, mut seen) =
+                (Vec::new(), Vec::new(), list(o, "buttons").len());
             for e in list(o, "elements").iter().filter_map(Value::as_object) {
                 if is_button(&e) {
                     seen += 1;
@@ -24,20 +34,40 @@ pub(super) fn form(id: u32, data: &str) -> Option<Form> {
                     elements.push(e);
                 }
             }
-            FormKind::Simple { content: text(o, "content"), buttons, elements, positions }
+            FormKind::Simple {
+                content: text(o, "content"),
+                buttons,
+                elements,
+                positions,
+            }
         }
-        "modal" => FormKind::Modal { content: text(o, "content"), yes: text(o, "button1"), no: text(o, "button2") },
-        "custom_form" => {
-            FormKind::Custom { elements: list(o, "content").iter().filter_map(Value::as_object).filter_map(element).collect() }
-        }
+        "modal" => FormKind::Modal {
+            content: text(o, "content"),
+            yes: text(o, "button1"),
+            no: text(o, "button2"),
+        },
+        "custom_form" => FormKind::Custom {
+            elements: list(o, "content")
+                .iter()
+                .filter_map(Value::as_object)
+                .filter_map(element)
+                .collect(),
+        },
         _ => return None,
     };
     Some(Form { id, title, kind })
 }
 
 fn button(o: &Map<String, Value>) -> Button {
-    let image = o.get("image").and_then(Value::as_object).map(|i| text(i, "data")).filter(|d| !d.is_empty());
-    Button { text: text(o, "text"), image }
+    let image = o
+        .get("image")
+        .and_then(Value::as_object)
+        .map(|i| text(i, "data"))
+        .filter(|d| !d.is_empty());
+    Button {
+        text: text(o, "text"),
+        image,
+    }
 }
 
 fn element(o: &Map<String, Value>) -> Option<Element> {
@@ -46,8 +76,15 @@ fn element(o: &Map<String, Value>) -> Option<Element> {
         "label" => Element::Label { text: label },
         "header" => Element::Header { text: label },
         "divider" => Element::Divider,
-        "input" => Element::Input { text: label, placeholder: text(o, "placeholder"), default: text(o, "default") },
-        "toggle" => Element::Toggle { text: label, default: o.get("default").and_then(Value::as_bool).unwrap_or(false) },
+        "input" => Element::Input {
+            text: label,
+            placeholder: text(o, "placeholder"),
+            default: text(o, "default"),
+        },
+        "toggle" => Element::Toggle {
+            text: label,
+            default: o.get("default").and_then(Value::as_bool).unwrap_or(false),
+        },
         "slider" => {
             let min = number(o, "min").unwrap_or(0.0);
             Element::Slider {
@@ -58,8 +95,16 @@ fn element(o: &Map<String, Value>) -> Option<Element> {
                 default: number(o, "default").unwrap_or(min),
             }
         }
-        "step_slider" => Element::StepSlider { text: label, steps: strings(o, "steps"), default: index(o) },
-        "dropdown" => Element::Dropdown { text: label, options: strings(o, "options"), default: index(o) },
+        "step_slider" => Element::StepSlider {
+            text: label,
+            steps: strings(o, "steps"),
+            default: index(o),
+        },
+        "dropdown" => Element::Dropdown {
+            text: label,
+            options: strings(o, "options"),
+            default: index(o),
+        },
         _ => return None,
     })
 }
@@ -75,11 +120,16 @@ fn text(o: &Map<String, Value>, key: &str) -> String {
 }
 
 fn list<'a>(o: &'a Map<String, Value>, key: &str) -> &'a [Value] {
-    o.get(key).and_then(Value::as_array).map_or(&[], Vec::as_slice)
+    o.get(key)
+        .and_then(Value::as_array)
+        .map_or(&[], Vec::as_slice)
 }
 
 fn strings(o: &Map<String, Value>, key: &str) -> Vec<String> {
-    list(o, key).iter().map(|v| v.as_str().map_or_else(|| v.to_string(), str::to_owned)).collect()
+    list(o, key)
+        .iter()
+        .map(|v| v.as_str().map_or_else(|| v.to_string(), str::to_owned))
+        .collect()
 }
 
 fn number(o: &Map<String, Value>, key: &str) -> Option<f64> {

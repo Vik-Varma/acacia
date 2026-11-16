@@ -45,7 +45,11 @@ impl Bidi {
             levels: vec![0; n],
             flags: 0,
             para_level,
-            default_para_level: if is_default_level(para_level) { para_level } else { 0 },
+            default_para_level: if is_default_level(para_level) {
+                para_level
+            } else {
+                0
+            },
             paras: Vec::new(),
             direction: (para_level & 1) as u8,
             trailing_ws_start: n,
@@ -94,19 +98,38 @@ impl Bidi {
         let mut limit = 0;
         let level0 = self.para_level_at(0);
         let mut next_level = self.levels[0];
-        let mut eor = if level0 < next_level { lr(next_level) } else { lr(level0) };
+        let mut eor = if level0 < next_level {
+            lr(next_level)
+        } else {
+            lr(level0)
+        };
         loop {
             let start = limit;
             let level = next_level;
-            let sor = if start > 0 && self.dir_props[start - 1] == B { lr(self.para_level_at(start)) } else { eor };
+            let sor = if start > 0 && self.dir_props[start - 1] == B {
+                lr(self.para_level_at(start))
+            } else {
+                eor
+            };
             loop {
                 limit += 1;
-                if !(limit < n && (self.levels[limit] == level || flag(self.dir_props[limit]) & MASK_BN_EXPLICIT != 0)) {
+                if !(limit < n
+                    && (self.levels[limit] == level
+                        || flag(self.dir_props[limit]) & MASK_BN_EXPLICIT != 0))
+                {
                     break;
                 }
             }
-            next_level = if limit < n { self.levels[limit] } else { self.para_level_at(n - 1) };
-            eor = if no_override(level) < no_override(next_level) { lr(next_level) } else { lr(level) };
+            next_level = if limit < n {
+                self.levels[limit]
+            } else {
+                self.para_level_at(n - 1)
+            };
+            eor = if no_override(level) < no_override(next_level) {
+                lr(next_level)
+            } else {
+                lr(level)
+            };
             if level >= 0 {
                 self.resolve_implicit_levels(start, limit, sor, eor);
             } else {
@@ -122,7 +145,9 @@ impl Bidi {
 
     /// `directionFromFlags`.
     pub fn direction_from_flags(&self) -> u8 {
-        if self.flags & MASK_RTL != 0 || (self.flags & flag(AN) != 0 && self.flags & MASK_POSSIBLE_N != 0) {
+        if self.flags & MASK_RTL != 0
+            || (self.flags & flag(AN) != 0 && self.flags & MASK_POSSIBLE_N != 0)
+        {
             if self.flags & MASK_LTR == 0 { 1 } else { MIXED }
         } else {
             0

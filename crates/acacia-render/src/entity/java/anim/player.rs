@@ -46,7 +46,11 @@ pub fn cape(p: &mut Poses, s: &RenderState) {
 /// `ElytraModel.setupAnim`.
 pub fn elytra(p: &mut Poses, s: &RenderState) {
     let y = if s.flag("isCrouching") { 3.0 } else { 0.0 };
-    let (x_rot, y_rot, z_rot) = (s.num("elytraRotX"), s.num("elytraRotY"), s.num("elytraRotZ"));
+    let (x_rot, y_rot, z_rot) = (
+        s.num("elytraRotX"),
+        s.num("elytraRotY"),
+        s.num("elytraRotZ"),
+    );
     let left = p.get("left_wing");
     (left.y, left.x_rot, left.y_rot, left.z_rot) = (y, x_rot, y_rot, z_rot);
     let right = p.get("right_wing");

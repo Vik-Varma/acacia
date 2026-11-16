@@ -40,7 +40,10 @@ pub fn read_update_recipes(input: &mut &[u8]) -> Result<Vec<StonecutterRecipe>, 
     let mut recipes = Vec::with_capacity(count.clamp(0, 1024) as usize);
     for _ in 0..count {
         let input_set = read_holder_set(input)?;
-        recipes.push(StonecutterRecipe { input: input_set, result: read_slot_display(input, 0)? });
+        recipes.push(StonecutterRecipe {
+            input: input_set,
+            result: read_slot_display(input, 0)?,
+        });
     }
     Ok(recipes)
 }
@@ -49,13 +52,19 @@ pub fn read_update_recipes(input: &mut &[u8]) -> Result<Vec<StonecutterRecipe>, 
 pub(crate) fn read_holder_set(input: &mut &[u8]) -> Result<Ingredient, Error> {
     match read_varint(input)? {
         0 => Ok(Ingredient::Tag(String::read(input)?)),
-        n => (1..n).map(|_| read_varint(input)).collect::<Result<_, _>>().map(Ingredient::Items),
+        n => (1..n)
+            .map(|_| read_varint(input))
+            .collect::<Result<_, _>>()
+            .map(Ingredient::Items),
     }
 }
 
 /// `SlotDisplay.STREAM_CODEC`: a type id from `SlotDisplays.bootstrap`'s order, then its fields. Returns the stack an
 /// `item` or `item_stack` display shows.
-pub(crate) fn read_slot_display(input: &mut &[u8], depth: u32) -> Result<Option<(i32, i32)>, Error> {
+pub(crate) fn read_slot_display(
+    input: &mut &[u8],
+    depth: u32,
+) -> Result<Option<(i32, i32)>, Error> {
     if depth >= MAX_DEPTH {
         return Err(Error::TooDeep(MAX_DEPTH));
     }
@@ -103,13 +112,26 @@ mod tests {
         [2, 7, 9].iter().for_each(|&v| write_varint(v, &mut buf));
         write_varint(2, &mut buf);
         // andesite (6) -> 2 andesite slabs (700), no components.
-        [2, 6, SLOT_DISPLAY_ITEM_STACK, 700, 2, 0, 0].iter().for_each(|&v| write_varint(v, &mut buf));
+        [2, 6, SLOT_DISPLAY_ITEM_STACK, 700, 2, 0, 0]
+            .iter()
+            .for_each(|&v| write_varint(v, &mut buf));
         // a tag input with a composite display of one item.
         write_varint(0, &mut buf);
         "minecraft:stones".to_owned().write(&mut buf);
-        [10, 1, SLOT_DISPLAY_ITEM, 5].iter().for_each(|&v| write_varint(v, &mut buf));
+        [10, 1, SLOT_DISPLAY_ITEM, 5]
+            .iter()
+            .for_each(|&v| write_varint(v, &mut buf));
         let recipes = read_update_recipes(&mut &buf[..]).unwrap();
-        assert_eq!(recipes[0], StonecutterRecipe { input: Ingredient::Items(vec![6]), result: Some((700, 2)) });
-        assert_eq!((recipes[1].input.accepts(6), recipes[1].result), (false, None));
+        assert_eq!(
+            recipes[0],
+            StonecutterRecipe {
+                input: Ingredient::Items(vec![6]),
+                result: Some((700, 2))
+            }
+        );
+        assert_eq!(
+            (recipes[1].input.accepts(6), recipes[1].result),
+            (false, None)
+        );
     }
 }

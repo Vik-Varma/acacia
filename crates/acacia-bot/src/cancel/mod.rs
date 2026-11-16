@@ -14,8 +14,8 @@
 //! - Not undone: an item already consumed, a request the server already took, an A* search running on the blocking
 //!   pool (it finishes and is discarded), a container the caller opened.
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::{ActionError, Bot};
 
@@ -54,8 +54,15 @@ pub(crate) struct CancelState {
 
 impl Default for CancelState {
     fn default() -> Self {
-        let shared = Arc::new(Shared { epoch: AtomicU64::new(1), cancelled: AtomicU64::new(0) });
-        Self { shared, acting: false, residue: Default::default() }
+        let shared = Arc::new(Shared {
+            epoch: AtomicU64::new(1),
+            cancelled: AtomicU64::new(0),
+        });
+        Self {
+            shared,
+            acting: false,
+            residue: Default::default(),
+        }
     }
 }
 
@@ -76,7 +83,9 @@ impl CancelState {
     }
 
     fn requested(&self) -> bool {
-        self.acting && self.shared.cancelled.load(Ordering::Acquire) == self.shared.epoch.load(Ordering::Acquire)
+        self.acting
+            && self.shared.cancelled.load(Ordering::Acquire)
+                == self.shared.epoch.load(Ordering::Acquire)
     }
 }
 

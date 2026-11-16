@@ -21,7 +21,9 @@ pub(crate) type Move = ([f64; 3], [f64; 3], [f64; 3]);
 /// Close to `isSuffocating`: full-cube collision, except the see-through blocks vanilla exempts.
 fn suffocating(state: BlockState) -> bool {
     let block = state.block();
-    let full = state.java_collision().is_some_and(|b| b == [[0.0, 0.0, 0.0, 1.0, 1.0, 1.0]]);
+    let full = state
+        .java_collision()
+        .is_some_and(|b| b == [[0.0, 0.0, 0.0, 1.0, 1.0, 1.0]]);
     full && !block.is(BlockTag::Leaves) && !block.is(BlockTag::Impermeable)
 }
 
@@ -29,7 +31,8 @@ pub fn collides_with_suffocating(world: &impl Blocks, area: &Aabb) -> bool {
     let low = area.min.map(floor);
     let high = area.max.map(floor);
     (low[0]..=high[0]).any(|x| {
-        (low[1]..=high[1]).any(|y| (low[2]..=high[2]).any(|z| suffocating(world.block_state([x, y, z]))))
+        (low[1]..=high[1])
+            .any(|y| (low[2]..=high[2]).any(|z| suffocating(world.block_state([x, y, z]))))
     })
 }
 
@@ -49,7 +52,11 @@ pub(crate) fn nothing_above(world: &impl Blocks, pos: [i32; 3]) -> bool {
 
 /// `Entity.handleOnInsideBubbleColumn`.
 pub(crate) fn inside_bubble_column(delta: &mut [f64; 3], state: BlockState) {
-    delta[1] = if state.get(Drag) == Some(true) { (-0.3_f64).max(delta[1] - 0.03) } else { 0.7_f64.min(delta[1] + 0.06) };
+    delta[1] = if state.get(Drag) == Some(true) {
+        (-0.3_f64).max(delta[1] - 0.03)
+    } else {
+        0.7_f64.min(delta[1] + 0.06)
+    };
 }
 
 /// What `applyEffectsFromBlocks` reads and changes on a body.
@@ -95,7 +102,8 @@ pub(crate) trait InsideBody {
     where
         Self: Sized,
     {
-        if self.grounded() && world.block_state(self.effect_pos(world)).block() == Block::SlimeBlock {
+        if self.grounded() && world.block_state(self.effect_pos(world)).block() == Block::SlimeBlock
+        {
             let careful = self.stepping_carefully();
             let delta = self.velocity();
             let abs_y = delta[1].abs();
@@ -113,7 +121,11 @@ pub(crate) trait InsideBody {
                 budget -= visit_step(self, world, from, to, &mut seen, MAX_ITERATIONS);
             } else {
                 let mut at = from;
-                let order = if original[0].abs() < original[2].abs() { [1, 2, 0] } else { [1, 0, 2] };
+                let order = if original[0].abs() < original[2].abs() {
+                    [1, 2, 0]
+                } else {
+                    [1, 0, 2]
+                };
                 for axis in order.into_iter().filter(|&a| travel[a] != 0.0) {
                     let mut next = at;
                     next[axis] = to[axis];
@@ -132,7 +144,14 @@ pub(crate) trait InsideBody {
 const MAX_ITERATIONS: i32 = 16;
 
 /// `checkInsideBlocks(from, to, ..., budget)`: returns the iterations it used.
-fn visit_step(body: &mut impl InsideBody, world: &impl Blocks, from: [f64; 3], to: [f64; 3], seen: &mut HashSet<[i32; 3]>, budget: i32) -> i32 {
+fn visit_step(
+    body: &mut impl InsideBody,
+    world: &impl Blocks,
+    from: [f64; 3],
+    to: [f64; 3],
+    seen: &mut HashSet<[i32; 3]>,
+    budget: i32,
+) -> i32 {
     let (width, height) = body.size();
     let target = Aabb::of_entity(to, width, height).deflated(TARGET_MARGIN);
     let travel = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
@@ -144,7 +163,10 @@ fn visit_step(body: &mut impl InsideBody, world: &impl Blocks, from: [f64; 3], t
         }
         last = iteration as i32;
         if !world.block_state(pos).is_air() && seen.insert(pos) {
-            let cell = Aabb { min: pos.map(f64::from), max: pos.map(|v| f64::from(v) + 1.0) };
+            let cell = Aabb {
+                min: pos.map(f64::from),
+                max: pos.map(|v| f64::from(v) + 1.0),
+            };
             body.entity_inside(world, pos, far || target.intersects(&cell));
         }
         true
@@ -197,7 +219,11 @@ impl InsideBody for Player {
         let state = world.block_state(pos);
         match state.block() {
             Block::Cobweb => {
-                let speed = if self.effects.weaving { [0.5, 0.25, 0.5] } else { [0.25, 0.05_f32 as f64, 0.25] };
+                let speed = if self.effects.weaving {
+                    [0.5, 0.25, 0.5]
+                } else {
+                    [0.25, 0.05_f32 as f64, 0.25]
+                };
                 self.make_stuck(speed);
             }
             Block::SweetBerryBush => self.make_stuck([0.8_f32 as f64, 0.75, 0.8_f32 as f64]),
@@ -215,7 +241,11 @@ impl InsideBody for Player {
             Block::BubbleColumn if precise => {
                 if nothing_above(world, pos) {
                     let y = self.delta[1];
-                    self.delta[1] = if state.get(Drag) == Some(true) { (-0.9_f64).max(y - 0.03) } else { 1.8_f64.min(y + 0.1) };
+                    self.delta[1] = if state.get(Drag) == Some(true) {
+                        (-0.9_f64).max(y - 0.03)
+                    } else {
+                        1.8_f64.min(y + 0.1)
+                    };
                 } else {
                     inside_bubble_column(&mut self.delta, state);
                 }

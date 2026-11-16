@@ -5,11 +5,11 @@
 
 use glam::{DVec3, IVec3};
 
-use super::{Engine, JavaRandom};
 use super::behaviour::Options;
 use super::classify::{Animate, classify};
 use super::level::{self, Fluid};
 use super::types::Type;
+use super::{Engine, JavaRandom};
 use crate::particles::collide::Blocks;
 
 const SAMPLES: u32 = 667;
@@ -38,7 +38,9 @@ impl Engine {
 
     /// `doAnimateTick` at one cell, without the draws that pick it.
     pub fn animate_cell(&mut self, blocks: &impl Blocks, cell: IVec3) {
-        let Some(state) = blocks.block(cell) else { return };
+        let Some(state) = blocks.block(cell) else {
+            return;
+        };
         let kind = classify(state);
         if let Animate::Campfire { .. } = kind {
             self.campfires.insert(cell);
@@ -52,7 +54,11 @@ impl Engine {
         }
         self.fluid_animate(blocks, cell, fluid);
         if self.level.next_int(10) == 0 {
-            let drip = if fluid.fluid == Fluid::Water { Type::DrippingWater } else { Type::DrippingLava };
+            let drip = if fluid.fluid == Fluid::Water {
+                Type::DrippingWater
+            } else {
+                Type::DrippingLava
+            };
             self.try_drip(blocks, cell - IVec3::Y, drip, level::sturdy(blocks, cell));
         }
     }
@@ -91,7 +97,9 @@ impl Engine {
         if level::fluid(blocks, cell).fluid != Fluid::None {
             return;
         }
-        let Some(shape) = level::extent(blocks, cell) else { return };
+        let Some(shape) = level::extent(blocks, cell) else {
+            return;
+        };
         let c = cell.as_dvec3();
         if shape.top < 1.0 {
             if top_solid {
@@ -102,7 +110,10 @@ impl Engine {
         if level::impermeable(blocks, cell) {
             return;
         }
-        let (x, z) = ([c.x + shape.x[0], c.x + shape.x[1]], [c.z + shape.z[0], c.z + shape.z[1]]);
+        let (x, z) = (
+            [c.x + shape.x[0], c.x + shape.x[1]],
+            [c.z + shape.z[0], c.z + shape.z[1]],
+        );
         if shape.bottom > 0.0 {
             self.drip_at(x, z, c.y + shape.bottom - 0.05, drip);
             return;
@@ -118,13 +129,22 @@ impl Engine {
     fn drip_at(&mut self, x: [f64; 2], z: [f64; 2], y: f64, drip: Type) {
         let r = &mut self.level;
         let (a, b) = (r.next_double(), r.next_double());
-        self.simple(drip, DVec3::new(level::lerp(a, x[0], x[1]), y, level::lerp(b, z[0], z[1])), DVec3::ZERO);
+        self.simple(
+            drip,
+            DVec3::new(level::lerp(a, x[0], x[1]), y, level::lerp(b, z[0], z[1])),
+            DVec3::ZERO,
+        );
     }
 
     /// `CampfireBlockEntity.particleTick` for each lit campfire still near, without cooking items.
     pub fn campfires_tick(&mut self, blocks: &impl Blocks, centre: IVec3) {
-        let lit = |cell: IVec3| blocks.block(cell).is_some_and(|s| matches!(classify(s), Animate::Campfire { .. }));
-        self.campfires.retain(|&c| (c - centre).abs().max_element() <= CAMPFIRE_REACH && lit(c));
+        let lit = |cell: IVec3| {
+            blocks
+                .block(cell)
+                .is_some_and(|s| matches!(classify(s), Animate::Campfire { .. }))
+        };
+        self.campfires
+            .retain(|&c| (c - centre).abs().max_element() <= CAMPFIRE_REACH && lit(c));
         let mut cells: Vec<IVec3> = self.campfires.iter().copied().collect();
         cells.sort_unstable_by_key(|c| (c.x, c.y, c.z));
         for cell in cells {
@@ -138,15 +158,25 @@ impl Engine {
         if self.level.next_float() >= 0.11 {
             return;
         }
-        let signal = blocks.block(cell - IVec3::Y).is_some_and(|s| s.name == "minecraft:hay_block");
-        let ty = if signal { Type::CampfireSignalSmoke } else { Type::CampfireCosySmoke };
+        let signal = blocks
+            .block(cell - IVec3::Y)
+            .is_some_and(|s| s.name == "minecraft:hay_block");
+        let ty = if signal {
+            Type::CampfireSignalSmoke
+        } else {
+            Type::CampfireCosySmoke
+        };
         let mut i = 0;
         while i < self.level.next_int(2) + 2 {
             let (r, c) = (&mut self.level, cell.as_dvec3());
             let x = c.x + 0.5 + offset(r);
             let y = c.y + r.next_double() + r.next_double();
             let z = c.z + 0.5 + offset(r);
-            self.add_always(&Options::simple(ty), DVec3::new(x, y, z), DVec3::new(0.0, 0.07, 0.0));
+            self.add_always(
+                &Options::simple(ty),
+                DVec3::new(x, y, z),
+                DVec3::new(0.0, 0.07, 0.0),
+            );
             i += 1;
         }
     }

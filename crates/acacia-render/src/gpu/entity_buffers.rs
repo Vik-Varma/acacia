@@ -26,7 +26,13 @@ pub fn storage_buffer(device: &wgpu::Device, label: &str, size: u64) -> wgpu::Bu
 
 /// Writes `records` to `buffer`, replacing it with a larger one first when they do not fit.
 /// Returns whether it was replaced.
-pub fn upload<T: bytemuck::Pod>(device: &wgpu::Device, queue: &wgpu::Queue, buffer: &mut wgpu::Buffer, label: &str, records: &[T]) -> bool {
+pub fn upload<T: bytemuck::Pod>(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    buffer: &mut wgpu::Buffer,
+    label: &str,
+    records: &[T],
+) -> bool {
     let bytes: &[u8] = bytemuck::cast_slice(records);
     let grown = bytes.len() as u64 > buffer.size();
     if grown {

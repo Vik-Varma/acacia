@@ -2,9 +2,9 @@
 
 use acacia_physics::BlockPos;
 
+use super::FlyOpts;
 use super::pilot::{FlightPilot, Order};
 use super::surface::{ChunkSurface, TopCache};
-use super::FlyOpts;
 use crate::pathfind::terrain::Terrain;
 use crate::pathfind::{Goal, GotoOpts};
 use crate::state::Inventory;
@@ -18,8 +18,16 @@ impl Bot {
     /// Flies to `target` by elytra (worn, or put on from the inventory) and lands within `opts.land_radius` of it,
     /// on the top surface of the column (physics bots only). Rockets are used from the hotbar.
     pub async fn fly_to(&mut self, target: BlockPos, opts: FlyOpts) -> Result<(), ActionError> {
-        if self.backend.require("elytra flight")?.movement.as_ref().is_none_or(|m| !m.is_started()) {
-            return Err(ActionError::NotPossible("flying needs a physics bot (BotConfig.physics)".into()));
+        if self
+            .backend
+            .require("elytra flight")?
+            .movement
+            .as_ref()
+            .is_none_or(|m| !m.is_started())
+        {
+            return Err(ActionError::NotPossible(
+                "flying needs a physics bot (BotConfig.physics)".into(),
+            ));
         }
         self.equip_elytra().await?;
         if self.hotbar_rockets() > 0 {
@@ -30,12 +38,24 @@ impl Bot {
         loop {
             let rockets = self.hotbar_rockets();
             let order = {
-                let Some((world, movement)) = self.backend.physics_mut() else { return Err(ActionError::Disconnected) };
+                let Some((world, movement)) = self.backend.physics_mut() else {
+                    return Err(ActionError::Disconnected);
+                };
                 match (world.view(), world.registry(), movement.fork()) {
                     (Some(view), Some(registry), Some(fork)) => {
                         let terrain = Terrain::new(view, registry.as_ref());
-                        let mut surface = ChunkSurface { view, registry: registry.as_ref(), cache: &mut cache };
-                        pilot.tick(&fork, &terrain, &mut surface, rockets, &mut movement.controls)
+                        let mut surface = ChunkSurface {
+                            view,
+                            registry: registry.as_ref(),
+                            cache: &mut cache,
+                        };
+                        pilot.tick(
+                            &fork,
+                            &terrain,
+                            &mut surface,
+                            rockets,
+                            &mut movement.controls,
+                        )
                     }
                     _ => Order::Fly,
                 }
@@ -57,17 +77,33 @@ impl Bot {
             self.next_tick(|_, _| false).await?;
         }
         self.stop_pathing();
-        let (Some(spot), Some(feet)) = (pilot.spot(), self.backend.movement().and_then(|m| m.position())) else { return Ok(()) };
+        let (Some(spot), Some(feet)) = (
+            pilot.spot(),
+            self.backend.movement().and_then(|m| m.position()),
+        ) else {
+            return Ok(());
+        };
         if (spot[0] - feet[0]).hypot(spot[2] - feet[2]) > WALK_REST {
             let cell = spot.map(|v| v.floor() as i32);
-            self.goto_with(Goal::Block(cell), GotoOpts::default()).await?;
+            self.goto_with(Goal::Block(cell), GotoOpts::default())
+                .await?;
         }
         Ok(())
     }
 
     fn hotbar_rockets(&self) -> u32 {
-        let Some(id) = self.state.items.id(FIREWORK) else { return 0 };
-        let hotbar = self.state.inventory.main.iter().take(usize::from(Inventory::HOTBAR_SLOTS));
-        hotbar.filter(|s| s.network_id == id && !s.is_empty()).map(|s| u32::from(s.count)).sum()
+        let Some(id) = self.state.items.id(FIREWORK) else {
+            return 0;
+        };
+        let hotbar = self
+            .state
+            .inventory
+            .main
+            .iter()
+            .take(usize::from(Inventory::HOTBAR_SLOTS));
+        hotbar
+            .filter(|s| s.network_id == id && !s.is_empty())
+            .map(|s| u32::from(s.count))
+            .sum()
     }
 }

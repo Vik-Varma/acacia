@@ -44,7 +44,10 @@ impl Encryption {
     /// Decrypts `data` in place, verifies its checksum and returns the plaintext length.
     pub fn open(&mut self, data: &mut [u8]) -> Result<usize, Error> {
         self.recv.apply_keystream(data);
-        let len = data.len().checked_sub(CHECKSUM_LEN).ok_or(Error::BadChecksum)?;
+        let len = data
+            .len()
+            .checked_sub(CHECKSUM_LEN)
+            .ok_or(Error::BadChecksum)?;
         let sum = checksum(self.recv_counter, &data[..len], &self.key);
         self.recv_counter += 1;
         if sum != data[len..] {
@@ -59,11 +62,17 @@ fn checksum(counter: u64, payload: &[u8], key: &[u8; 32]) -> [u8; CHECKSUM_LEN] 
     h.update(counter.to_le_bytes());
     h.update(payload);
     h.update(key);
-    h.finalize()[..CHECKSUM_LEN].try_into().expect("sha256 is 32 bytes")
+    h.finalize()[..CHECKSUM_LEN]
+        .try_into()
+        .expect("sha256 is 32 bytes")
 }
 
 /// Session key = SHA-256(salt || ECDH(client secret, server public)).
-pub fn derive_key(client: &p384::ecdsa::SigningKey, server: &p384::PublicKey, salt: &[u8]) -> [u8; 32] {
+pub fn derive_key(
+    client: &p384::ecdsa::SigningKey,
+    server: &p384::PublicKey,
+    salt: &[u8],
+) -> [u8; 32] {
     let shared = p384::ecdh::diffie_hellman(client.as_nonzero_scalar(), server.as_affine());
     let mut h = Sha256::new();
     h.update(salt);
@@ -95,7 +104,10 @@ mod tests {
         let mut buf = BytesMut::from(&b"xhello"[..]);
         client.seal(&mut buf, 1);
         buf[2] ^= 1;
-        assert!(matches!(server.open(&mut buf[1..]), Err(Error::BadChecksum)));
+        assert!(matches!(
+            server.open(&mut buf[1..]),
+            Err(Error::BadChecksum)
+        ));
     }
 
     #[test]
@@ -104,6 +116,9 @@ mod tests {
         let b = p384::ecdsa::SigningKey::from_bytes(&[5u8; 48].into()).unwrap();
         let a_pub = p384::PublicKey::from(a.verifying_key());
         let b_pub = p384::PublicKey::from(b.verifying_key());
-        assert_eq!(derive_key(&a, &b_pub, b"salt"), derive_key(&b, &a_pub, b"salt"));
+        assert_eq!(
+            derive_key(&a, &b_pub, b"salt"),
+            derive_key(&b, &a_pub, b"salt")
+        );
     }
 }

@@ -93,7 +93,13 @@ pub trait Screen {
 
 /// Every widget of `widgets` as a child.
 pub fn arena_children(widgets: &mut [Box<dyn Widget>]) -> Vec<Child<'_>> {
-    widgets.iter_mut().map(|w| Child { widget: w.as_mut(), clip: None }).collect()
+    widgets
+        .iter_mut()
+        .map(|w| Child {
+            widget: w.as_mut(),
+            clip: None,
+        })
+        .collect()
 }
 
 /// `extractRenderStateWithTooltipAndSubtitles` without the deferred tooltips.
@@ -122,12 +128,39 @@ pub fn menu_background(env: &Env, ctx: &mut Ctx) {
 
 /// `extractPanorama`: the overlay over the cube map, which the renderer draws from its own state.
 pub fn panorama(env: &Env, ctx: &mut Ctx) {
-    blit(ctx, "gui/title/background/panorama_overlay", Blend::Textured, [0, 0, env.width, env.height], [0.0, 0.0], [16, 128], [16, 128]);
+    blit(
+        ctx,
+        "gui/title/background/panorama_overlay",
+        Blend::Textured,
+        [0, 0, env.width, env.height],
+        [0.0, 0.0],
+        [16, 128],
+        [16, 128],
+    );
 }
 
 /// `blit(pipeline, texture, x, y, u, v, w, h, srcW, srcH, texW, texH)` in white; `rect` is (x, y, w, h).
-pub fn blit(ctx: &mut Ctx, texture: &'static str, blend: Blend, [x, y, w, h]: [i32; 4], uv: [f32; 2], src: [i32; 2], tex: [i32; 2]) {
-    ctx.gui.draws.push(GuiDraw::Blit { texture: texture.into(), blend, x, y, w, h, uv, src, tex, color: 0xFFFF_FFFF });
+pub fn blit(
+    ctx: &mut Ctx,
+    texture: &'static str,
+    blend: Blend,
+    [x, y, w, h]: [i32; 4],
+    uv: [f32; 2],
+    src: [i32; 2],
+    tex: [i32; 2],
+) {
+    ctx.gui.draws.push(GuiDraw::Blit {
+        texture: texture.into(),
+        blend,
+        x,
+        y,
+        w,
+        h,
+        uv,
+        src,
+        tex,
+        color: 0xFFFF_FFFF,
+    });
 }
 
 /// `extractBlurredBackground`.
@@ -139,11 +172,16 @@ pub fn blurred(env: &Env, ctx: &mut Ctx) {
 
 /// `extractMenuBackground(x, y, w, h)`: the 32x32 menu texture tiled.
 pub fn menu_texture(env: &Env, ctx: &mut Ctx, x: i32, y: i32, w: i32, h: i32) {
-    let texture = if env.in_world { "gui/inworld_menu_background" } else { "gui/menu_background" };
+    let texture = if env.in_world {
+        "gui/inworld_menu_background"
+    } else {
+        "gui/menu_background"
+    };
     ctx.blit(texture, x, y, [0.0, 0.0], w, h, [32, 32]);
 }
 
 /// `extractTransparentBackground`: the in-game dim.
 pub fn transparent_background(env: &Env, ctx: &mut Ctx) {
-    ctx.gui.gradient(0, 0, env.width, env.height, 0xC010_1010, 0xD010_1010);
+    ctx.gui
+        .gradient(0, 0, env.width, env.height, 0xC010_1010, 0xD010_1010);
 }

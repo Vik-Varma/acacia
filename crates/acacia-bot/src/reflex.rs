@@ -3,17 +3,19 @@
 //! held item when it changed. Counted down in client ticks. Timings: `human.rs`; shapes:
 //! docs/research/survival-signs-beds.md §6.
 
-use acacia_client::proto::packets::{Animate, AnimateActionId, ClientCameraAimAssist, ClientCameraAimAssistAction, InventoryContent};
+use acacia_client::proto::packets::{
+    Animate, AnimateActionId, ClientCameraAimAssist, ClientCameraAimAssistAction, InventoryContent,
+};
 use acacia_client::proto::types::Action;
 use acacia_client::proto::{Packet, RawPacket};
 use acacia_physics::BlockPos;
 
-use crate::human::{Range, EQUIP_RESYNC, WAKE_REPLY};
+use crate::Bot;
+use crate::human::{EQUIP_RESYNC, Range, WAKE_REPLY};
+use crate::interact::SwingSource;
 use crate::interact::equipment::same_content;
 use crate::interact::wire;
-use crate::interact::SwingSource;
 use crate::state::{Inventory, ItemStack};
-use crate::Bot;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum Reflex {
@@ -55,16 +57,17 @@ impl Reflexes {
     /// Counts one tick down and returns what is due, in scheduling order.
     pub fn tick(&mut self) -> Vec<Reflex> {
         let mut fired = Vec::new();
-        self.due.retain_mut(|(ticks, reflex)| match ticks.checked_sub(1) {
-            None => {
-                fired.push(*reflex);
-                false
-            }
-            Some(left) => {
-                *ticks = left;
-                true
-            }
-        });
+        self.due
+            .retain_mut(|(ticks, reflex)| match ticks.checked_sub(1) {
+                None => {
+                    fired.push(*reflex);
+                    false
+                }
+                Some(left) => {
+                    *ticks = left;
+                    true
+                }
+            });
         fired
     }
 
@@ -88,7 +91,10 @@ impl Bot {
     pub(crate) fn reflex_packet(&mut self, packet: &RawPacket) {
         match packet.id {
             Animate::ID => {
-                let woken = packet.decode::<Animate>().is_ok_and(|a| a.action_id == AnimateActionId::WakeUp && a.runtime_entity_id == self.runtime_id());
+                let woken = packet.decode::<Animate>().is_ok_and(|a| {
+                    a.action_id == AnimateActionId::WakeUp
+                        && a.runtime_entity_id == self.runtime_id()
+                });
                 if woken {
                     self.leave_bed_later();
                 }
@@ -96,7 +102,9 @@ impl Bot {
             // The first inventory is what the client starts holding; it sends no MobEquipment for it.
             InventoryContent::ID
                 if self.reflexes.equipped.is_none()
-                    && packet.decode::<InventoryContent>().is_ok_and(|p| p.window_id.to_raw() as i32 == Inventory::WINDOW_INVENTORY) =>
+                    && packet.decode::<InventoryContent>().is_ok_and(|p| {
+                        p.window_id.to_raw() as i32 == Inventory::WINDOW_INVENTORY
+                    }) =>
             {
                 let inv = &self.state.inventory;
                 self.reflexes.equipped = Some((inv.selected_hotbar_slot, inv.held().clone()));
@@ -126,14 +134,22 @@ impl Bot {
 
     fn held_changed(&self) -> bool {
         let inv = &self.state.inventory;
-        self.reflexes.equipped.as_ref().is_some_and(|(slot, item)| *slot != inv.selected_hotbar_slot || !same_content(item, inv.held()))
+        self.reflexes.equipped.as_ref().is_some_and(|(slot, item)| {
+            *slot != inv.selected_hotbar_slot || !same_content(item, inv.held())
+        })
     }
 
     fn fire(&mut self, reflex: Reflex) {
         let me = self.runtime_id();
         match reflex {
             Reflex::StopUseOn(pos) => {
-                self.send_bedrock(&wire::item_use_on(me, Action::StopItemUseOn, pos, [0, 0, 0], 0));
+                self.send_bedrock(&wire::item_use_on(
+                    me,
+                    Action::StopItemUseOn,
+                    pos,
+                    [0, 0, 0],
+                    0,
+                ));
             }
             Reflex::Swing(source) => self.swing_from(Some(source)),
             Reflex::StopSleeping => {
@@ -151,7 +167,11 @@ impl Bot {
 
 /// Sent after waking (and at spawn, mounts, teleports: vanilla-actions-2026-10-02.md).
 pub(crate) fn clear_aim_assist() -> ClientCameraAimAssist {
-    ClientCameraAimAssist { preset_id: String::new(), action: ClientCameraAimAssistAction::Clear, allow_aim_assist: false }
+    ClientCameraAimAssist {
+        preset_id: String::new(),
+        action: ClientCameraAimAssistAction::Clear,
+        allow_aim_assist: false,
+    }
 }
 
 #[cfg(test)]

@@ -45,8 +45,12 @@ pub(super) enum Missed {
 
 /// `next` asks to walk to stands the bot just reached (all of them among `next`'s): the click failed from here.
 pub(super) fn missed(b: &mut Builder, cx: &Ctx, next: &Next) -> Missed {
-    let Next::Go(phase, task, goal) = next else { return Missed::No };
-    let reached = b.arrived.as_ref().is_some_and(|a| stands_of(a).next().is_some() && stands_of(a).all(|s| stands_of(goal).any(|g| g == s)));
+    let Next::Go(phase, task, goal) = next else {
+        return Missed::No;
+    };
+    let reached = b.arrived.as_ref().is_some_and(|a| {
+        stands_of(a).next().is_some() && stands_of(a).all(|s| stands_of(goal).any(|g| g == s))
+    });
     if !reached {
         return Missed::No;
     }
@@ -54,7 +58,9 @@ pub(super) fn missed(b: &mut Builder, cx: &Ctx, next: &Next) -> Missed {
     // The reached stand is the nearest, not the feet's cell: the pilot may count an edge or a block up as on it, and
     // a stand never marked tried was rewalked every tick (sim 6000 ticks; live two bots, feet a block up, 3800 walks).
     let away = |s: BlockPos| off_centre(cx.pos, s).hypot(cx.pos[1] - s[1] as f32);
-    let feet = stands_of(goal).min_by(|a, b| away(*a).total_cmp(&away(*b))).unwrap_or(cx.pos.map(|v| v.floor() as i32));
+    let feet = stands_of(goal)
+        .min_by(|a, b| away(*a).total_cmp(&away(*b)))
+        .unwrap_or(cx.pos.map(|v| v.floor() as i32));
     if let Some(s) = stands_of(goal).find(|s| *s == feet) {
         let first = !b.tried.contains(&(*task, s));
         if first {
@@ -66,9 +72,15 @@ pub(super) fn missed(b: &mut Builder, cx: &Ctx, next: &Next) -> Missed {
             return Missed::Go(Next::Go(*phase, *task, Goal::Or(vec![Goal::Block(s)])));
         }
     }
-    let others: Vec<BlockPos> = stands_of(goal).filter(|s| *s != feet && !b.tried.contains(&(*task, *s))).collect();
+    let others: Vec<BlockPos> = stands_of(goal)
+        .filter(|s| *s != feet && !b.tried.contains(&(*task, *s)))
+        .collect();
     if let Some(g) = any_of(others) {
-        let g = if before.as_ref() == Some(&g) { Goal::Or(vec![g]) } else { g };
+        let g = if before.as_ref() == Some(&g) {
+            Goal::Or(vec![g])
+        } else {
+            g
+        };
         return Missed::Go(Next::Go(*phase, *task, g));
     }
     tracing::debug!(?task, ?goal, "build stands reached but no click from any");

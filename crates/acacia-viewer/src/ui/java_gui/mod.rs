@@ -71,13 +71,33 @@ impl JavaGui {
         if lang.is_empty() {
             tracing::warn!(looked = %root.display(), "no lang/en_us.json, so screens show translation keys: bake the Java look again (tools/lookbake)");
         }
-        JavaGui { root: root.to_owned(), images: Images::new(root), fonts, random: JavaRandom::new(0), hud: Hud::default(), ticks: 0, last_frame: 0, started: Instant::now(), lang, game: items::facts(), credits: Default::default(), map: Default::default(), menu_blur: acacia_ui::blur::DEFAULT_RADIUS }
+        JavaGui {
+            root: root.to_owned(),
+            images: Images::new(root),
+            fonts,
+            random: JavaRandom::new(0),
+            hud: Hud::default(),
+            ticks: 0,
+            last_frame: 0,
+            started: Instant::now(),
+            lang,
+            game: items::facts(),
+            credits: Default::default(),
+            map: Default::default(),
+            menu_blur: acacia_ui::blur::DEFAULT_RADIUS,
+        }
     }
 
     /// The screens' environment: the fonts, the translations, the registry facts.
     fn with_env<R>(&self, f: impl FnOnce(&acacia_ui::java::container::Env) -> R) -> R {
         let lang = |key: &str| self.lang.get(key).cloned();
-        f(&acacia_ui::java::container::Env { font: &self.fonts, lang: &lang, advanced: false, game: &self.game, op: false })
+        f(&acacia_ui::java::container::Env {
+            font: &self.fonts,
+            lang: &lang,
+            advanced: false,
+            game: &self.game,
+            op: false,
+        })
     }
 
     /// [`JavaGui::credits`]' lines.
@@ -95,7 +115,9 @@ impl JavaGui {
 
     /// Whether the pack has the GUI's sprites.
     pub fn usable(&mut self, skin: &mut Skin) -> bool {
-        self.images.sprite(&mut skin.theme.atlas, "hud/hotbar").is_some()
+        self.images
+            .sprite(&mut skin.theme.atlas, "hud/hotbar")
+            .is_some()
     }
 
     /// `Util.getMillis()`: milliseconds since the GUI was made.
@@ -105,10 +127,36 @@ impl JavaGui {
 
     /// `gui`'s calls as quads into `list`; `stacks` names the stack behind each item call's key.
     /// Entities to draw as pictures go to `pictures`.
-    pub fn paint(&mut self, skin: &mut Skin, stacks: &dyn Fn(i32) -> Option<Stack>, gui: &Gui, list: &mut DrawList, pictures: &mut Vec<PictureRequest>) {
-        let mut src = Src { skin, root: &self.root, images: &mut self.images, fonts: &self.fonts, random: &mut self.random, stacks, started: self.started, pictures, gui_scale: list.scale, map: &mut self.map };
+    pub fn paint(
+        &mut self,
+        skin: &mut Skin,
+        stacks: &dyn Fn(i32) -> Option<Stack>,
+        gui: &Gui,
+        list: &mut DrawList,
+        pictures: &mut Vec<PictureRequest>,
+    ) {
+        let mut src = Src {
+            skin,
+            root: &self.root,
+            images: &mut self.images,
+            fonts: &self.fonts,
+            random: &mut self.random,
+            stacks,
+            started: self.started,
+            pictures,
+            gui_scale: list.scale,
+            map: &mut self.map,
+        };
         let painted = paint::paint(&gui.draws, [gui.width, gui.height], list.scale, &mut src);
-        debug_assert!(skin.theme.atlas.stray(&painted.quads).next().is_none(), "atlas lookups outside their sprite: {:?}", skin.theme.atlas.stray(&painted.quads).take(3).collect::<Vec<_>>());
+        debug_assert!(
+            skin.theme.atlas.stray(&painted.quads).next().is_none(),
+            "atlas lookups outside their sprite: {:?}",
+            skin.theme
+                .atlas
+                .stray(&painted.quads)
+                .take(3)
+                .collect::<Vec<_>>()
+        );
         let mut quads = painted.quads;
         if let Some(at) = painted.blur_at {
             list.quads.extend(quads.drain(..at));
@@ -120,7 +168,10 @@ impl JavaGui {
 
 /// `Window.getGuiScaledWidth` and height: rounded up.
 pub fn gui_size(size: [u32; 2], scale: u32) -> [i32; 2] {
-    [size[0].div_ceil(scale) as i32, size[1].div_ceil(scale) as i32]
+    [
+        size[0].div_ceil(scale) as i32,
+        size[1].div_ceil(scale) as i32,
+    ]
 }
 
 struct Src<'a> {
@@ -167,7 +218,11 @@ impl Source for Src<'_> {
     }
 
     fn text(&mut self, text: &Text, x: i32, y: i32, color: u32, shadow: bool) -> Glyphs {
-        let prepared = self.fonts.prepare(text, Pen::gui(x as f32, y as f32, color, shadow), self.random);
+        let prepared = self.fonts.prepare(
+            text,
+            Pen::gui(x as f32, y as f32, color, shadow),
+            self.random,
+        );
         let (atlas, fonts) = (&mut self.skin.theme.atlas, self.fonts);
         prepared.glyphs(|t| glyph_sprite(atlas, fonts, t))
     }
@@ -181,18 +236,34 @@ impl Source for Src<'_> {
     }
 
     fn item(&mut self, key: i32, x: i32, y: i32, _: i32) -> Vec<Quad> {
-        let Some(stack) = (self.stacks)(key) else { return Vec::new() };
-        let Some(item) = self.skin.item(&stack) else { return Vec::new() };
+        let Some(stack) = (self.stacks)(key) else {
+            return Vec::new();
+        };
+        let Some(item) = self.skin.item(&stack) else {
+            return Vec::new();
+        };
         let mut list = DrawList::new(1.0);
-        list.icon(item.icon, [x as f32, y as f32, x as f32 + 16.0, y as f32 + 16.0], item.glint);
+        list.icon(
+            item.icon,
+            [x as f32, y as f32, x as f32 + 16.0, y as f32 + 16.0],
+            item.glint,
+        );
         list.quads
     }
 
     /// `itemDecorations`: the count and the damage bar (cooldowns are not tracked).
     fn decorations(&mut self, key: i32, x: i32, y: i32, count: Option<&str>) -> Vec<GuiDraw> {
-        let Some(stack) = (self.stacks)(key) else { return Vec::new() };
+        let Some(stack) = (self.stacks)(key) else {
+            return Vec::new();
+        };
         let mut gui = Gui::new(0, 0);
-        decor::item_decorations(&mut gui, self.fonts, x, y, &items::decorations(&stack, key, count));
+        decor::item_decorations(
+            &mut gui,
+            self.fonts,
+            x,
+            y,
+            &items::decorations(&stack, key, count),
+        );
         gui.draws
     }
 
@@ -201,14 +272,26 @@ impl Source for Src<'_> {
     }
 
     fn picture(&mut self, p: &Picture, window: [f32; 4]) -> Option<Quad> {
-        picture::quad(&mut self.skin.theme.atlas, self.root, self.pictures, self.gui_scale, p, window)
+        picture::quad(
+            &mut self.skin.theme.atlas,
+            self.root,
+            self.pictures,
+            self.gui_scale,
+            p,
+            window,
+        )
     }
 
     // TODO: the bundle tooltip's contents.
     fn picture_draws(&mut self, p: &Picture) -> Vec<GuiDraw> {
-        let Picture::Map { key: Some(key), .. } = p else { return Vec::new() };
-        let Some(picture) = (self.stacks)(*key).and_then(|s| s.map) else { return Vec::new() };
-        self.map.show(&mut self.skin.theme.atlas, self.root, &picture);
+        let Picture::Map { key: Some(key), .. } = p else {
+            return Vec::new();
+        };
+        let Some(picture) = (self.stacks)(*key).and_then(|s| s.map) else {
+            return Vec::new();
+        };
+        self.map
+            .show(&mut self.skin.theme.atlas, self.root, &picture);
         map::draws()
     }
 }

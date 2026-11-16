@@ -20,19 +20,37 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
             return;
         }
         let bb = st.bounding_box();
-        let (inside, around): (Vec<Aabb>, Vec<Aabb>) =
-            self.nearby_bboxes(st,&bb.grow_vec([1.0, 0.0, 1.0])).into_iter().partition(|b| overlaps(b, &bb));
+        let (inside, around): (Vec<Aabb>, Vec<Aabb>) = self
+            .nearby_bboxes(st, &bb.grow_vec([1.0, 0.0, 1.0]))
+            .into_iter()
+            .partition(|b| overlaps(b, &bb));
         if inside.is_empty() {
             return;
         }
-        let mean = |axis: usize| inside.iter().map(|b| (b.min[axis] + b.max[axis]) * 0.5).sum::<f32>() / inside.len() as f32;
+        let mean = |axis: usize| {
+            inside
+                .iter()
+                .map(|b| (b.min[axis] + b.max[axis]) * 0.5)
+                .sum::<f32>()
+                / inside.len() as f32
+        };
         let centre = [mean(0), mean(2)];
         let half = [(bb.max[0] - bb.min[0]) * 0.5, (bb.max[2] - bb.min[2]) * 0.5];
-        let mut d = [(bb.min[0] + bb.max[0]) * 0.5 - centre[0], (bb.min[2] + bb.max[2]) * 0.5 - centre[1]];
+        let mut d = [
+            (bb.min[0] + bb.max[0]) * 0.5 - centre[0],
+            (bb.min[2] + bb.max[2]) * 0.5 - centre[1],
+        ];
         if d[0].abs() < f32::EPSILON && d[1].abs() < f32::EPSILON {
             d = [1.0, 1.0];
         }
-        let probe = Aabb::new(centre[0] - half[0], bb.min[1], centre[1] - half[1], centre[0] + half[0], bb.max[1], centre[1] + half[1]);
+        let probe = Aabb::new(
+            centre[0] - half[0],
+            bb.min[1],
+            centre[1] - half[1],
+            centre[0] + half[0],
+            bb.max[1],
+            centre[1] + half[1],
+        );
         for (i, axis) in [(0, 0), (1, 2)] {
             let taken = |sign: f32| {
                 let mut step = [0.0; 3];

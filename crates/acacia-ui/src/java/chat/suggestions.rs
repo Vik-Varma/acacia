@@ -33,7 +33,12 @@ pub struct Completion {
 impl Completion {
     /// With `autoSuggestions` on, its default.
     pub fn new(names: Vec<String>, commands: Arc<Tree>, lang: Lang) -> Completion {
-        Completion { names, commands, messages: Messages::new(lang), auto_suggest: true }
+        Completion {
+            names,
+            commands,
+            messages: Messages::new(lang),
+            auto_suggest: true,
+        }
     }
 }
 
@@ -46,7 +51,8 @@ pub struct Sources<'a> {
 
 /// `Character.isWhitespace`.
 pub fn java_whitespace(c: char) -> bool {
-    matches!(c, '\t'..='\r' | '\u{1c}'..='\u{1f}') || (c.is_whitespace() && !matches!(c, '\u{85}' | '\u{a0}' | '\u{2007}' | '\u{202f}'))
+    matches!(c, '\t'..='\r' | '\u{1c}'..='\u{1f}')
+        || (c.is_whitespace() && !matches!(c, '\u{85}' | '\u{a0}' | '\u{2007}' | '\u{202f}'))
 }
 
 /// `CommandSuggestions.getLastWordIndex`: after the last run of `\s`.
@@ -89,7 +95,10 @@ impl CommandSuggestions {
         self.usage.clear();
         let cursor = input.cursor;
         if value.first() == Some(&u16::from(b'/')) {
-            let parse = self.parse.get_or_insert_with(|| s.c.commands.parse(&value, 1)).clone();
+            let parse = self
+                .parse
+                .get_or_insert_with(|| s.c.commands.parse(&value, 1))
+                .clone();
             if cursor >= 1 && (self.list.is_none() || !self.keep_suggestions) {
                 let found = s.c.commands.completions(&parse, cursor);
                 self.pending = Some(found.clone());
@@ -97,7 +106,10 @@ impl CommandSuggestions {
             }
         } else if !input.value().chars().all(java_whitespace) {
             let partial = &value[..cursor];
-            self.pending = Some(suggest_values(s.c.names.iter().map(String::as_str), Builder::new(partial, last_word_index(partial))));
+            self.pending = Some(suggest_values(
+                s.c.names.iter().map(String::as_str),
+                Builder::new(partial, last_word_index(partial)),
+            ));
             self.usage_width = 0;
             self.usage_x = 0;
         } else {
@@ -115,32 +127,63 @@ impl CommandSuggestions {
 
     /// `showSuggestions`: the list over the input, at the start of what is being completed.
     pub fn show(&mut self, m: &dyn Metrics, input: &mut EditBox, screen_height: i32) {
-        let Some(found) = self.pending.as_ref().filter(|p| !p.list.is_empty()) else { return };
-        let width = found.list.iter().map(|s| m.width(&Text::legacy(&s.text))).max().unwrap_or(0);
+        let Some(found) = self.pending.as_ref().filter(|p| !p.list.is_empty()) else {
+            return;
+        };
+        let width = found
+            .list
+            .iter()
+            .map(|s| m.width(&Text::legacy(&s.text)))
+            .max()
+            .unwrap_or(0);
         let start = found.range.map_or(0, |r| r.start);
-        let x = clamp(input.screen_x(m, start), 0, input.screen_x(m, 0) + input.inner_width() - width);
+        let x = clamp(
+            input.screen_x(m, start),
+            0,
+            input.screen_x(m, 0) + input.inner_width() - width,
+        );
         let y = screen_height - 12;
         // sortSuggestions: those starting with the word at the caret first.
         let value: Vec<u16> = input.value().encode_utf16().collect();
         let partial = &value[..input.cursor];
         let word = String::from_utf16_lossy(&partial[last_word_index(partial)..]).to_lowercase();
         let (mut first, rest): (Vec<Suggestion>, Vec<Suggestion>) =
-            found.list.iter().cloned().partition(|s| s.text.starts_with(&word) || s.text.starts_with(&format!("minecraft:{word}")));
+            found.list.iter().cloned().partition(|s| {
+                s.text.starts_with(&word) || s.text.starts_with(&format!("minecraft:{word}"))
+            });
         first.extend(rest);
         let n = first.len().min(LINE_LIMIT) as i32;
         let left = x - i32::from(!input.bordered);
-        self.list = Some(SuggestionsList::new([left, y - 3 - n * 12, width + 1, n * 12], value, first, FILL, input));
+        self.list = Some(SuggestionsList::new(
+            [left, y - 3 - n * 12, width + 1, n * 12],
+            value,
+            first,
+            FILL,
+            input,
+        ));
     }
 
     /// `extractRenderState`: the list, or else the usage lines.
-    pub fn extract(&mut self, gui: &mut Gui, input: &mut EditBox, mouse: (i32, i32), screen_height: i32) {
+    pub fn extract(
+        &mut self,
+        gui: &mut Gui,
+        input: &mut EditBox,
+        mouse: (i32, i32),
+        screen_height: i32,
+    ) {
         if let Some(list) = self.list.as_mut() {
             list.extract(gui, input, mouse);
             return;
         }
         for (i, line) in self.usage.iter().enumerate() {
             let y = screen_height - 27 - 12 * i as i32;
-            gui.fill(self.usage_x - 1, y, self.usage_x + self.usage_width + 1, y + 12, FILL);
+            gui.fill(
+                self.usage_x - 1,
+                y,
+                self.usage_x + self.usage_width + 1,
+                y + 12,
+                FILL,
+            );
             gui.text(line.clone(), self.usage_x, y + 2, WHITE, true);
         }
     }
@@ -148,6 +191,8 @@ impl CommandSuggestions {
     /// The input's `TextFormatter` (`formatChat`): `text` from unit `offset` coloured by the
     /// parse, when the input is a command.
     pub fn format(&self, text: &str, offset: usize) -> Option<Text> {
-        self.parse.as_ref().map(|p| super::command_info::format_text(p, text, offset))
+        self.parse
+            .as_ref()
+            .map(|p| super::command_info::format_text(p, text, offset))
     }
 }

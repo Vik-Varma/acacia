@@ -50,7 +50,9 @@ fn parse(s: &str, mut i: usize) -> (Node<'_>, usize) {
             if b[i] != b'}' && b[i] != b']' {
                 loop {
                     if object {
-                        let (Node::Scalar(name), next) = parse(s, i) else { unreachable!() };
+                        let (Node::Scalar(name), next) = parse(s, i) else {
+                            unreachable!()
+                        };
                         let (value, next) = parse(s, next + 1);
                         members.push((name, value));
                         i = next;
@@ -65,7 +67,14 @@ fn parse(s: &str, mut i: usize) -> (Node<'_>, usize) {
                     i += 1;
                 }
             }
-            (if object { Node::Object(members) } else { Node::Array(items) }, i + 1)
+            (
+                if object {
+                    Node::Object(members)
+                } else {
+                    Node::Array(items)
+                },
+                i + 1,
+            )
         }
         b'"' => {
             let mut j = i + 1;
@@ -164,7 +173,10 @@ impl Writer {
     /// Fills `child_values` when every item is a scalar or empty container (JsonCpp's isMultilineArray).
     fn is_multiline(&mut self, items: &[Node]) -> bool {
         self.child_values.clear();
-        let nested = |n: &Node| matches!(n, Node::Array(a) if !a.is_empty()) || matches!(n, Node::Object(m) if !m.is_empty());
+        let nested = |n: &Node| {
+            matches!(n, Node::Array(a) if !a.is_empty())
+                || matches!(n, Node::Object(m) if !m.is_empty())
+        };
         if items.len() * 3 >= RIGHT_MARGIN || items.iter().any(nested) {
             return true;
         }
@@ -173,7 +185,8 @@ impl Writer {
             self.value(child);
         }
         self.collecting = false;
-        let line = 4 + (items.len() - 1) * 2 + self.child_values.iter().map(String::len).sum::<usize>();
+        let line =
+            4 + (items.len() - 1) * 2 + self.child_values.iter().map(String::len).sum::<usize>();
         line >= RIGHT_MARGIN
     }
 }
@@ -186,7 +199,13 @@ mod tests {
     fn matches_the_games_layout() {
         let pretty = "{\n   \"geometry\" : {\n      \"animated_face\" : \"geometry.animated_face_x\",\n      \"default\" : \"geometry.x\"\n   }\n}\n";
         assert_eq!(styled(pretty), pretty);
-        assert_eq!(styled(r#"{"a":[0.0,24.0,0.0],"b":[],"c":{}}"#), "{\n   \"a\" : [ 0.0, 24.0, 0.0 ],\n   \"b\" : [],\n   \"c\" : {}\n}\n");
-        assert_eq!(styled(r#"[{"n":"x"}]"#), "[\n   {\n      \"n\" : \"x\"\n   }\n]\n");
+        assert_eq!(
+            styled(r#"{"a":[0.0,24.0,0.0],"b":[],"c":{}}"#),
+            "{\n   \"a\" : [ 0.0, 24.0, 0.0 ],\n   \"b\" : [],\n   \"c\" : {}\n}\n"
+        );
+        assert_eq!(
+            styled(r#"[{"n":"x"}]"#),
+            "[\n   {\n      \"n\" : \"x\"\n   }\n]\n"
+        );
     }
 }

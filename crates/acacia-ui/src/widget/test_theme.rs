@@ -14,7 +14,11 @@ pub fn theme(java_look: bool) -> Theme {
     let mut image = RgbaImage::new(128, 128);
     for cell in 0..256u32 {
         for x in 0..5 {
-            image.put_pixel((cell % 16) * 8 + x, (cell / 16) * 8 + 3, image::Rgba([255; 4]));
+            image.put_pixel(
+                (cell % 16) * 8 + x,
+                (cell / 16) * 8 + 3,
+                image::Rgba([255; 4]),
+            );
         }
     }
     let page = atlas.add("font", &image);
@@ -23,9 +27,21 @@ pub fn theme(java_look: bool) -> Theme {
     let font = Some(Font::from_grid(&image, page, &rows));
     let none = Path::new("");
     let (widgets, style) = if java_look {
-        (Widgets::Java(Box::new(super::java::Kit::load(none, &mut atlas))), java::STYLE)
+        (
+            Widgets::Java(Box::new(super::java::Kit::load(none, &mut atlas))),
+            java::STYLE,
+        )
     } else {
-        (Widgets::Bedrock(Box::new(super::bedrock::Kit::load(none, &mut atlas))), bedrock::STYLE)
+        (
+            Widgets::Bedrock(Box::new(super::bedrock::Kit::load(none, &mut atlas))),
+            bedrock::STYLE,
+        )
     };
-    Theme { atlas, font, galactic: None, style, widgets }
+    Theme {
+        atlas,
+        font,
+        galactic: None,
+        style,
+        widgets,
+    }
 }

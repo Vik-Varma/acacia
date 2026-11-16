@@ -8,9 +8,9 @@ use acacia_physics::BlockPos;
 use super::alter;
 use super::boat::BoatLegs;
 use super::cell::{CLIMB as CLIMBABLE, Rect};
-use super::mac::Macro;
 use super::costs::{self, DANGER_NEAR, ENTER_WATER, JUMP_PENALTY, LONG_JUMP_PENALTY};
 use super::kit::Kit;
+use super::mac::Macro;
 use super::macros::{self, Macros};
 use super::node::{DIRS, Entry, Momentum};
 use super::rollout::PlanSim;
@@ -91,31 +91,63 @@ pub(crate) fn offset(p: BlockPos, dx: i32, dy: i32, dz: i32) -> BlockPos {
     [p[0] + dx, p[1] + dy, p[2] + dz]
 }
 
-pub(crate) fn successors<B: Blocks, S: PlanSim<B>>(t: &Terrain<B>, p: BlockPos, from: Spot, at: (Entry, &Momentum), ctx: &Ctx<S>, out: &mut Vec<Edge>) {
+pub(crate) fn successors<B: Blocks, S: PlanSim<B>>(
+    t: &Terrain<B>,
+    p: BlockPos,
+    from: Spot,
+    at: (Entry, &Momentum),
+    ctx: &Ctx<S>,
+    out: &mut Vec<Edge>,
+) {
     let first = out.len();
     expand(t, p, from, at, ctx, out);
     if let Some(k) = ctx.no_body {
-        let body_or_floor = |e: &Edge| [-1, 0, 1].iter().any(|&dy| k.contains(&offset(e.pos, 0, dy, 0)));
-        let kept: Vec<Edge> = out.drain(first..).filter(|e| !body_or_floor(e) && !over_kept_out(t, p, e.pos, k)).collect();
+        let body_or_floor = |e: &Edge| {
+            [-1, 0, 1]
+                .iter()
+                .any(|&dy| k.contains(&offset(e.pos, 0, dy, 0)))
+        };
+        let kept: Vec<Edge> = out
+            .drain(first..)
+            .filter(|e| !body_or_floor(e) && !over_kept_out(t, p, e.pos, k))
+            .collect();
         out.extend(kept);
     }
 }
 
 /// A kept-out cell under the edge's line that a miss would fall into: open from the feet down to it, at most 3 deep
 /// (two-bot sim `swarm_wedge`: without it a bot ended in an open ladder cell, wedged for 5000 ticks).
-fn over_kept_out<B: Blocks>(t: &Terrain<B>, from: BlockPos, to: BlockPos, k: &std::collections::HashSet<BlockPos>) -> bool {
+fn over_kept_out<B: Blocks>(
+    t: &Terrain<B>,
+    from: BlockPos,
+    to: BlockPos,
+    k: &std::collections::HashSet<BlockPos>,
+) -> bool {
     let (dx, dz) = ((to[0] - from[0]) as f32, (to[2] - from[2]) as f32);
     let n = (dx.abs().max(dz.abs()) * 4.0).ceil().max(1.0) as i32;
     let top = from[1].max(to[1]);
     (0..=n).any(|i| {
         let f = i as f32 / n as f32;
-        let (x, z) = ((from[0] as f32 + 0.5 + dx * f).floor() as i32, (from[2] as f32 + 0.5 + dz * f).floor() as i32);
+        let (x, z) = (
+            (from[0] as f32 + 0.5 + dx * f).floor() as i32,
+            (from[2] as f32 + 0.5 + dz * f).floor() as i32,
+        );
         let column = |d: i32| [x, top - d, z];
-        [x, z] != [from[0], from[2]] && (0..=3).find(|d| k.contains(&column(*d))).is_some_and(|d| (0..=d).all(|e| t.passable(column(e))))
+        [x, z] != [from[0], from[2]]
+            && (0..=3)
+                .find(|d| k.contains(&column(*d)))
+                .is_some_and(|d| (0..=d).all(|e| t.passable(column(e))))
     })
 }
 
-fn expand<B: Blocks, S: PlanSim<B>>(t: &Terrain<B>, p: BlockPos, from: Spot, at: (Entry, &Momentum), ctx: &Ctx<S>, out: &mut Vec<Edge>) {
+fn expand<B: Blocks, S: PlanSim<B>>(
+    t: &Terrain<B>,
+    p: BlockPos,
+    from: Spot,
+    at: (Entry, &Momentum),
+    ctx: &Ctx<S>,
+    out: &mut Vec<Edge>,
+) {
     let e = S::envelope();
     if let Some(m) = &ctx.macros {
         macros::successors(t, p, from, at, m, out);
@@ -155,13 +187,25 @@ fn carry_run(edges: &mut [Edge], (entry, mom): (Entry, &Momentum), dir: (i32, i3
     if DIRS[usize::from(d)] != dir {
         return;
     }
-    for e in edges.iter_mut().filter(|e| e.kind == MoveKind::Walk && e.work.is_empty()) {
+    for e in edges
+        .iter_mut()
+        .filter(|e| e.kind == MoveKind::Walk && e.work.is_empty())
+    {
         (e.entry, e.mom) = (entry, *mom);
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-fn horizontal<B: Blocks>(t: &Terrain<B>, e: &Envelope, p: BlockPos, from: Spot, to_pos: BlockPos, to: Spot, (dx, dz): (i32, i32), out: &mut Vec<Edge>) {
+fn horizontal<B: Blocks>(
+    t: &Terrain<B>,
+    e: &Envelope,
+    p: BlockPos,
+    from: Spot,
+    to_pos: BlockPos,
+    to: Spot,
+    (dx, dz): (i32, i32),
+    out: &mut Vec<Edge>,
+) {
     let diag = dx != 0 && dz != 0;
     let rise = to.feet - from.feet;
     let jump = rise > e.step_height + EPS;
@@ -172,7 +216,9 @@ fn horizontal<B: Blocks>(t: &Terrain<B>, e: &Envelope, p: BlockPos, from: Spot, 
     if jump && !t.body_clear_from(p, from, Rect::FOOT, to.feet) {
         return;
     }
-    if !t.body_clear_from(p, from, Rect::toward(dx, dz), hi) || !t.body_clear(to_pos, Rect::toward(-dx, -dz), hi) {
+    if !t.body_clear_from(p, from, Rect::toward(dx, dz), hi)
+        || !t.body_clear(to_pos, Rect::toward(-dx, -dz), hi)
+    {
         return;
     }
     if diag
@@ -182,7 +228,12 @@ fn horizontal<B: Blocks>(t: &Terrain<B>, e: &Envelope, p: BlockPos, from: Spot, 
         return;
     }
     let wet = from.wet || to.wet;
-    let mut cost = if diag { SQRT_2 } else { 1.0 } * if wet { costs::swim(e) } else { costs::sprint(e) };
+    let mut cost = if diag { SQRT_2 } else { 1.0 }
+        * if wet {
+            costs::swim(e)
+        } else {
+            costs::sprint(e)
+        };
     if !from.wet && to.wet {
         cost += ENTER_WATER;
     }
@@ -197,8 +248,18 @@ fn horizontal<B: Blocks>(t: &Terrain<B>, e: &Envelope, p: BlockPos, from: Spot, 
     push(t, out, to_pos, to, kind, cost, Work::default());
 }
 
-fn descend<B: Blocks>(t: &Terrain<B>, e: &Envelope, p: BlockPos, from: Spot, side: BlockPos, (dx, dz): (i32, i32), out: &mut Vec<Edge>) {
-    if !t.body_clear_from(p, from, Rect::toward(dx, dz), from.feet) || !t.body_clear(side, Rect::toward(-dx, -dz), from.feet) {
+fn descend<B: Blocks>(
+    t: &Terrain<B>,
+    e: &Envelope,
+    p: BlockPos,
+    from: Spot,
+    side: BlockPos,
+    (dx, dz): (i32, i32),
+    out: &mut Vec<Edge>,
+) {
+    if !t.body_clear_from(p, from, Rect::toward(dx, dz), from.feet)
+        || !t.body_clear(side, Rect::toward(-dx, -dz), from.feet)
+    {
         return;
     }
     for k in 1..=MAX_SCAN {
@@ -208,7 +269,8 @@ fn descend<B: Blocks>(t: &Terrain<B>, e: &Envelope, p: BlockPos, from: Spot, sid
             if fall > MAX_SAFE_FALL + EPS && !to.wet {
                 return;
             }
-            let mut cost = costs::walk_off(e) + costs::fall_ticks(e, fall).max(costs::center_after_fall(e));
+            let mut cost =
+                costs::walk_off(e) + costs::fall_ticks(e, fall).max(costs::center_after_fall(e));
             if to.wet && !from.wet {
                 cost += ENTER_WATER;
             }
@@ -221,7 +283,14 @@ fn descend<B: Blocks>(t: &Terrain<B>, e: &Envelope, p: BlockPos, from: Spot, sid
 }
 
 /// Parkour over one or two gap cells onto a floor at about the same height.
-fn gap_jump<B: Blocks>(t: &Terrain<B>, e: &Envelope, p: BlockPos, from: Spot, (dx, dz): (i32, i32), out: &mut Vec<Edge>) {
+fn gap_jump<B: Blocks>(
+    t: &Terrain<B>,
+    e: &Envelope,
+    p: BlockPos,
+    from: Spot,
+    (dx, dz): (i32, i32),
+    out: &mut Vec<Edge>,
+) {
     let lift = from.feet + 1.0;
     if !t.body_clear_from(p, from, Rect::toward(dx, dz), lift) {
         return;
@@ -240,7 +309,9 @@ fn gap_jump<B: Blocks>(t: &Terrain<B>, e: &Envelope, p: BlockPos, from: Spot, (d
             && (to.feet - from.feet).abs() <= 0.5 + EPS
             && t.body_clear(land, Rect::toward(-dx, -dz), from.feet.max(to.feet))
         {
-            let cost = costs::sprint(e) * (gap + 1) as f32 + JUMP_PENALTY + LONG_JUMP_PENALTY * (gap - 1) as f32;
+            let cost = costs::sprint(e) * (gap + 1) as f32
+                + JUMP_PENALTY
+                + LONG_JUMP_PENALTY * (gap - 1) as f32;
             return push(t, out, land, to, MoveKind::Parkour, cost, Work::default());
         }
     }
@@ -269,9 +340,26 @@ fn vertical<B: Blocks>(t: &Terrain<B>, e: &Envelope, p: BlockPos, from: Spot, ou
     }
 }
 
-pub(crate) fn push<B: Blocks>(t: &Terrain<B>, out: &mut Vec<Edge>, pos: BlockPos, spot: Spot, kind: MoveKind, mut cost: f32, work: Work) {
+pub(crate) fn push<B: Blocks>(
+    t: &Terrain<B>,
+    out: &mut Vec<Edge>,
+    pos: BlockPos,
+    spot: Spot,
+    kind: MoveKind,
+    mut cost: f32,
+    work: Work,
+) {
     if t.danger_near(pos) {
         cost += DANGER_NEAR;
     }
-    out.push(Edge { pos, spot, kind, cost, work, entry: Entry::Rest, mom: Momentum::rest(spot.feet, pos), mac: None });
+    out.push(Edge {
+        pos,
+        spot,
+        kind,
+        cost,
+        work,
+        entry: Entry::Rest,
+        mom: Momentum::rest(spot.feet, pos),
+        mac: None,
+    });
 }

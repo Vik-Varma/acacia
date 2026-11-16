@@ -37,7 +37,9 @@ pub struct Output {
 
 impl Output {
     pub fn open() -> Output {
-        let sink = rodio::DeviceSinkBuilder::open_default_sink().inspect_err(|e| tracing::warn!(%e, "no audio device")).ok();
+        let sink = rodio::DeviceSinkBuilder::open_default_sink()
+            .inspect_err(|e| tracing::warn!(%e, "no audio device"))
+            .ok();
         Output { sink }
     }
 
@@ -58,19 +60,40 @@ pub fn mix(mixer: &Mixer, pcm: &Pcm, gain: f32, pitch: f32, [left, right]: [f32;
     if gain <= 0.0 || pcm.samples.is_empty() {
         return;
     }
-    let (Some(channels), Some(rate)) = (NonZero::new(pcm.channels.max(1)), NonZero::new(pcm.sample_rate.max(1))) else { return };
-    let samples: Vec<f32> = pcm.samples.iter().map(|&s| f32::from(s) / 32768.0).collect();
-    let source = SamplesBuffer::new(channels, rate, samples).speed(pitch.clamp(0.5, 2.0)).amplify(gain);
+    let (Some(channels), Some(rate)) = (
+        NonZero::new(pcm.channels.max(1)),
+        NonZero::new(pcm.sample_rate.max(1)),
+    ) else {
+        return;
+    };
+    let samples: Vec<f32> = pcm
+        .samples
+        .iter()
+        .map(|&s| f32::from(s) / 32768.0)
+        .collect();
+    let source = SamplesBuffer::new(channels, rate, samples)
+        .speed(pitch.clamp(0.5, 2.0))
+        .amplify(gain);
     mixer.add(ChannelVolume::new(source, vec![left, right]));
 }
 
 /// Overall gain and the two channels' share.
 fn place(voice: &Voice, listener: &Listener) -> (f32, [f32; 2]) {
-    let Some(at) = voice.position else { return (voice.volume.min(1.0), [1.0, 1.0]) };
-    let d = [at[0] - listener.position[0], at[1] - listener.position[1], at[2] - listener.position[2]];
+    let Some(at) = voice.position else {
+        return (voice.volume.min(1.0), [1.0, 1.0]);
+    };
+    let d = [
+        at[0] - listener.position[0],
+        at[1] - listener.position[1],
+        at[2] - listener.position[2],
+    ];
     let distance = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt() as f32;
     let falloff = (1.0 - distance / voice.range.max(1.0)).clamp(0.0, 1.0);
-    let side = if distance > 1e-3 { (d[0] as f32 * listener.right[0] + d[2] as f32 * listener.right[2]) / distance } else { 0.0 };
+    let side = if distance > 1e-3 {
+        (d[0] as f32 * listener.right[0] + d[2] as f32 * listener.right[2]) / distance
+    } else {
+        0.0
+    };
     // A sound straight ahead plays at full in both ears; to one side, the far ear keeps 30%.
     let ear = |toward: f32| 1.0 - 0.7 * (-toward).max(0.0);
     (voice.volume.min(1.0) * falloff, [ear(-side), ear(side)])
@@ -81,17 +104,36 @@ mod tests {
     use super::*;
 
     fn voice(at: [f64; 3]) -> Voice {
-        Voice { pcm: Arc::new(Pcm { sample_rate: 44100, channels: 1, samples: vec![0] }), volume: 1.0, pitch: 1.0, position: Some(at), range: 16.0 }
+        Voice {
+            pcm: Arc::new(Pcm {
+                sample_rate: 44100,
+                channels: 1,
+                samples: vec![0],
+            }),
+            volume: 1.0,
+            pitch: 1.0,
+            position: Some(at),
+            range: 16.0,
+        }
     }
 
     #[test]
     fn far_sounds_fade_and_side_sounds_pan() {
-        let listener = Listener { position: [0.0; 3], right: [-1.0, 0.0, 0.0] };
+        let listener = Listener {
+            position: [0.0; 3],
+            right: [-1.0, 0.0, 0.0],
+        };
         let (near, _) = place(&voice([0.0, 0.0, 4.0]), &listener);
         let (far, _) = place(&voice([0.0, 0.0, 12.0]), &listener);
-        assert!((near - 0.75).abs() < 1e-5 && (far - 0.25).abs() < 1e-5, "{near} {far}");
+        assert!(
+            (near - 0.75).abs() < 1e-5 && (far - 0.25).abs() < 1e-5,
+            "{near} {far}"
+        );
         assert_eq!(place(&voice([0.0, 0.0, 20.0]), &listener).0, 0.0);
         let (_, [left, right]) = place(&voice([-4.0, 0.0, 0.0]), &listener);
-        assert!(right > left, "a sound on the right is louder on the right: {left} {right}");
+        assert!(
+            right > left,
+            "a sound on the right is louder on the right: {left} {right}"
+        );
     }
 }

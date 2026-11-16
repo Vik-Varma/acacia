@@ -16,7 +16,9 @@ use acacia_render::entity::java::trims::{Trim, Trims, baked_path};
 use serde_json::Value;
 
 fn fnv(bytes: &[u8]) -> String {
-    let hash = bytes.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3));
+    let hash = bytes.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+        (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3)
+    });
     format!("{hash:x}")
 }
 
@@ -34,11 +36,18 @@ fn expected(layer_type: &str, base: &str, palette: Option<&str>) -> String {
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let (root, records) = (args.next().expect("look dir"), args.next().expect("trims.jsonl"));
+    let (root, records) = (
+        args.next().expect("look dir"),
+        args.next().expect("trims.jsonl"),
+    );
     let root = Path::new(&root);
     let (equipment, trims) = (Equipment::load(root), Trims::load(root));
     let mut out = compare::Report::default();
-    for line in std::fs::read_to_string(records).expect("oracle records").lines().filter(|l| !l.trim().is_empty()) {
+    for line in std::fs::read_to_string(records)
+        .expect("oracle records")
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+    {
         let r: Value = serde_json::from_str(line).expect("oracle record");
         let name = r["case"].as_str().unwrap_or_default();
         let mut case = out.case(name);
@@ -46,9 +55,24 @@ fn main() {
             case.diverge("oracle", "a texture", error);
             continue;
         }
-        let [asset, layer_type, pattern, material] = name.splitn(4, '|').collect::<Vec<_>>()[..] else { continue };
-        let want = expected(layer_type, r["base"].as_str().unwrap_or_default(), r["palette"].as_str());
-        let Some(got) = equipment.trim_texture(asset, layer_type, &trims, &Trim { material: material.into(), pattern: pattern.into() }) else {
+        let [asset, layer_type, pattern, material] = name.splitn(4, '|').collect::<Vec<_>>()[..]
+        else {
+            continue;
+        };
+        let want = expected(
+            layer_type,
+            r["base"].as_str().unwrap_or_default(),
+            r["palette"].as_str(),
+        );
+        let Some(got) = equipment.trim_texture(
+            asset,
+            layer_type,
+            &trims,
+            &Trim {
+                material: material.into(),
+                pattern: pattern.into(),
+            },
+        ) else {
             case.diverge("texture", &want, "none");
             continue;
         };

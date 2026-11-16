@@ -47,7 +47,11 @@ fn root_strings_match_decoding<F: Flavor>(flavour: &str) {
                 Some(Value::String(s)) => Some(s.to_string()),
                 _ => None,
             };
-            assert_eq!(raw.root_string(key).unwrap().map(|s| s.into_owned()), want, "{name}: {key}");
+            assert_eq!(
+                raw.root_string(key).unwrap().map(|s| s.into_owned()),
+                want,
+                "{name}: {key}"
+            );
         }
     }
 }
@@ -58,9 +62,16 @@ fn root_string_matches_decoding() {
     root_strings_match_decoding::<LittleEndian>("le");
     let doubled = Nbt {
         name: "".into(),
-        value: Value::Compound(vec![("id".into(), Value::Int(1)), ("id".into(), Value::String("Sign".into()))]),
+        value: Value::Compound(vec![
+            ("id".into(), Value::Int(1)),
+            ("id".into(), Value::String("Sign".into())),
+        ]),
     };
-    assert_eq!(Raw::<Network>::from(&doubled).root_string("id").unwrap(), None, "the first `id` is not a string");
+    assert_eq!(
+        Raw::<Network>::from(&doubled).root_string("id").unwrap(),
+        None,
+        "the first `id` is not a string"
+    );
 }
 
 struct XorShift(u64);

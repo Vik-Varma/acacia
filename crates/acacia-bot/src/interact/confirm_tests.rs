@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use acacia_world::BlockRegistry;
 
-use super::{give_back, unpredict, Confirm, Expect, Verdict};
+use super::{Confirm, Expect, Verdict, give_back, unpredict};
 use crate::cadence::splitmix;
 use crate::governor::Governor;
 use crate::state::ItemStack;
@@ -37,10 +37,25 @@ struct World {
 impl World {
     fn new() -> Self {
         let registry = BlockRegistry::vanilla_arc();
-        let stone = registry.states_of("minecraft:stone").next().expect("stone").0;
+        let stone = registry
+            .states_of("minecraft:stone")
+            .next()
+            .expect("stone")
+            .0;
         let air = registry.states_of("minecraft:air").next().expect("air").0;
-        let row: HashMap<i32, u32> = (0..20).map(|x| (x, if x % 2 == 0 { stone } else { air })).collect();
-        Self { registry, server: row.clone(), client: row, to_server: VecDeque::new(), to_client: VecDeque::new(), rng: 7, stone, air }
+        let row: HashMap<i32, u32> = (0..20)
+            .map(|x| (x, if x % 2 == 0 { stone } else { air }))
+            .collect();
+        Self {
+            registry,
+            server: row.clone(),
+            client: row,
+            to_server: VecDeque::new(),
+            to_client: VecDeque::new(),
+            rng: 7,
+            stone,
+            air,
+        }
     }
 
     fn chance(&mut self, p: f32) -> bool {
@@ -89,9 +104,17 @@ struct Outcome {
 /// `break_block` / `place_block` do.
 fn flip_row(w: &mut World, net: &Net, g: &mut Governor) -> Outcome {
     let mut now = 0;
-    let mut out = Outcome { verdicts: Vec::new(), max_tries: 0, ticks: 0 };
+    let mut out = Outcome {
+        verdicts: Vec::new(),
+        max_tries: 0,
+        ticks: 0,
+    };
     for x in 0..20 {
-        let (expect, want) = if w.client[&x] == w.air { (Expect::Solid, w.stone) } else { (Expect::Gone, w.air) };
+        let (expect, want) = if w.client[&x] == w.air {
+            (Expect::Solid, w.stone)
+        } else {
+            (Expect::Gone, w.air)
+        };
         // Placements are predicted, as `place_block` does: the bot's world shows the block at once.
         let place = expect == Expect::Solid;
         let mut c = Confirm::new(expect, Some(w.client[&x]), now, g.timeout_ticks(), 3);
@@ -145,34 +168,78 @@ fn ghosts(w: &World) -> Vec<i32> {
 
 #[test]
 fn lagging_echoes_confirm_without_ghosts() {
-    let net = Net { up: 4, down: 4, lost: 0.0, late: 0.0, spike: 0, refuse: false };
+    let net = Net {
+        up: 4,
+        down: 4,
+        lost: 0.0,
+        late: 0.0,
+        spike: 0,
+        refuse: false,
+    };
     let (mut w, mut g) = (World::new(), Governor::default());
     let r = flip_row(&mut w, &net, &mut g);
-    assert!(r.verdicts.iter().all(|v| *v == Verdict::Done), "{:?}", r.verdicts);
-    assert_eq!(r.max_tries, 1, "an 8-tick echo fits the timeout: no retries");
-    assert!(ghosts(&w).is_empty(), "client and server differ at {:?}", ghosts(&w));
+    assert!(
+        r.verdicts.iter().all(|v| *v == Verdict::Done),
+        "{:?}",
+        r.verdicts
+    );
+    assert_eq!(
+        r.max_tries, 1,
+        "an 8-tick echo fits the timeout: no retries"
+    );
+    assert!(
+        ghosts(&w).is_empty(),
+        "client and server differ at {:?}",
+        ghosts(&w)
+    );
     let rtt = g.rtt().expect("measured").as_millis();
     assert!((400..=450).contains(&rtt), "echo round-trip {rtt} ms");
 }
 
 #[test]
 fn lost_actions_and_late_echoes_retry_without_ghosts_or_loops() {
-    let net = Net { up: 3, down: 3, lost: 0.15, late: 0.1, spike: 16, refuse: false };
+    let net = Net {
+        up: 3,
+        down: 3,
+        lost: 0.15,
+        late: 0.1,
+        spike: 16,
+        refuse: false,
+    };
     let (mut w, mut g) = (World::new(), Governor::default());
     let r = flip_row(&mut w, &net, &mut g);
-    assert!(r.verdicts.iter().all(|v| *v == Verdict::Done), "{:?}", r.verdicts);
+    assert!(
+        r.verdicts.iter().all(|v| *v == Verdict::Done),
+        "{:?}",
+        r.verdicts
+    );
     assert!(r.max_tries > 1, "some action was lost and sent again");
     assert!(r.max_tries <= 3, "no more than 3 tries: {}", r.max_tries);
-    assert!(ghosts(&w).is_empty(), "client and server differ at {:?}", ghosts(&w));
+    assert!(
+        ghosts(&w).is_empty(),
+        "client and server differ at {:?}",
+        ghosts(&w)
+    );
     assert!(r.ticks < 20 * 60 + 200, "{} ticks", r.ticks);
 }
 
 #[test]
 fn refused_actions_fail_after_three_tries_and_leave_the_world_as_the_server_has_it() {
-    let net = Net { up: 2, down: 2, lost: 0.0, late: 0.0, spike: 0, refuse: true };
+    let net = Net {
+        up: 2,
+        down: 2,
+        lost: 0.0,
+        late: 0.0,
+        spike: 0,
+        refuse: true,
+    };
     let (mut w, mut g) = (World::new(), Governor::default());
     let r = flip_row(&mut w, &net, &mut g);
-    assert!(r.verdicts.iter().all(|v| matches!(v, Verdict::Failed(_))), "{:?}", r.verdicts);
+    assert!(
+        r.verdicts.iter().all(|v| matches!(v, Verdict::Failed(_))),
+        "{:?}",
+        r.verdicts
+    );
     assert_eq!(r.max_tries, 3);
     assert!(ghosts(&w).is_empty());
     // A refusal is echoed: each try ends at the echo (4 ticks), not at the timeout (12).
@@ -184,37 +251,96 @@ fn a_cell_changed_otherwise_fails_at_once() {
     let w = World::new();
     let mut c = Confirm::new(Expect::Gone, Some(w.stone), 0, 12, 3);
     let dirt = w.registry.states_of("minecraft:dirt").next().expect("dirt");
-    assert_eq!(c.check(1, Some(dirt), false), Verdict::Wait, "before the deadline anything may still come");
+    assert_eq!(
+        c.check(1, Some(dirt), false),
+        Verdict::Wait,
+        "before the deadline anything may still come"
+    );
     assert!(matches!(c.check(12, Some(dirt), false), Verdict::Failed(why) if why.contains("dirt")));
 }
 
 #[test]
 fn a_predicted_block_counts_only_once_the_server_echoes_it() {
     let w = World::new();
-    let stone = w.registry.states_of("minecraft:stone").next().expect("stone");
+    let stone = w
+        .registry
+        .states_of("minecraft:stone")
+        .next()
+        .expect("stone");
     let mut c = Confirm::new(Expect::Solid, Some(w.air), 0, 12, 3).predicted();
-    assert_eq!(c.check(1, Some(stone), false), Verdict::Wait, "our own prediction is no confirmation");
-    assert_eq!(c.check(12, Some(stone), false), Verdict::Retry, "no echo by the deadline: as unchanged");
+    assert_eq!(
+        c.check(1, Some(stone), false),
+        Verdict::Wait,
+        "our own prediction is no confirmation"
+    );
+    assert_eq!(
+        c.check(12, Some(stone), false),
+        Verdict::Retry,
+        "no echo by the deadline: as unchanged"
+    );
     c.retried(12, 12);
     assert_eq!(c.check(15, Some(stone), true), Verdict::Done);
 }
 
 #[test]
 fn a_refused_placement_gives_the_block_back() {
-    let block = ItemStack { network_id: 5, count: 10, block_runtime_id: 3, ..ItemStack::default() };
-    let left = ItemStack { count: 9, ..block.clone() };
-    assert_eq!(unpredict(&left, &left, &block), Some(block.clone()), "slot still as predicted: undo");
-    let server = ItemStack { count: 7, ..block.clone() };
-    assert_eq!(unpredict(&server, &left, &block), None, "the server set the slot since: keep its stack");
+    let block = ItemStack {
+        network_id: 5,
+        count: 10,
+        block_runtime_id: 3,
+        ..ItemStack::default()
+    };
+    let left = ItemStack {
+        count: 9,
+        ..block.clone()
+    };
+    assert_eq!(
+        unpredict(&left, &left, &block),
+        Some(block.clone()),
+        "slot still as predicted: undo"
+    );
+    let server = ItemStack {
+        count: 7,
+        ..block.clone()
+    };
+    assert_eq!(
+        unpredict(&server, &left, &block),
+        None,
+        "the server set the slot since: keep its stack"
+    );
 }
 
 #[test]
 fn a_failed_pipelined_placement_gives_its_item_back_past_later_predictions() {
-    let two = ItemStack { network_id: 5, count: 2, block_runtime_id: 3, stack_network_id: Some(9), ..ItemStack::default() };
-    let one = ItemStack { count: 1, ..two.clone() };
+    let two = ItemStack {
+        network_id: 5,
+        count: 2,
+        block_runtime_id: 3,
+        stack_network_id: Some(9),
+        ..ItemStack::default()
+    };
+    let one = ItemStack {
+        count: 1,
+        ..two.clone()
+    };
     // Both placements predicted (2 -> 1 -> empty); the first then fails: one item back, not "no match".
-    assert_eq!(give_back(&ItemStack::default(), &one, &two), Some(one.clone()));
-    assert_eq!(give_back(&one, &ItemStack::default(), &one), Some(two.clone()), "the last one's back too");
-    let other = ItemStack { network_id: 6, count: 4, ..ItemStack::default() };
-    assert_eq!(give_back(&other, &one, &two), None, "another item there now: the server's update decides");
+    assert_eq!(
+        give_back(&ItemStack::default(), &one, &two),
+        Some(one.clone())
+    );
+    assert_eq!(
+        give_back(&one, &ItemStack::default(), &one),
+        Some(two.clone()),
+        "the last one's back too"
+    );
+    let other = ItemStack {
+        network_id: 6,
+        count: 4,
+        ..ItemStack::default()
+    };
+    assert_eq!(
+        give_back(&other, &one, &two),
+        None,
+        "another item there now: the server's update decides"
+    );
 }

@@ -19,7 +19,11 @@ pub(super) struct Overlay {
 
 impl Overlay {
     pub(super) fn new() -> Overlay {
-        Overlay { since: Instant::now(), frames: 0, reports: 0 }
+        Overlay {
+            since: Instant::now(),
+            frames: 0,
+            reports: 0,
+        }
     }
 }
 
@@ -40,6 +44,10 @@ impl App {
         if self.overlay.reports.is_multiple_of(LOG_EVERY_TITLES) {
             tracing::info!("{line}");
         }
-        self.overlay = Overlay { since: now, frames: 0, reports: self.overlay.reports };
+        self.overlay = Overlay {
+            since: now,
+            frames: 0,
+            reports: self.overlay.reports,
+        };
     }
 }

@@ -11,9 +11,9 @@ use acacia_client::proto::types::{Vec2f, Vec3f};
 use acacia_physics::{self as physics, BoatState, WorldView};
 
 use super::keys::{keys, report_keys, report_paddles};
+use crate::Bot;
 use crate::movement::VehicleCorrection;
 use crate::world::PhysicsWorld;
-use crate::Bot;
 
 const BOATS: &[&str] = &["minecraft:boat", "minecraft:chest_boat"];
 /// Inputs kept for replaying after a correction.
@@ -43,9 +43,11 @@ impl BoatSim {
         let at = self.history.iter().position(|(tick, ..)| *tick == c.tick);
         let mut st = at.map_or(self.st, |i| self.history[i].2);
         let off = |a: f32, b: f32| (a - b).abs() > HORIZONTAL;
-        let yaw_off = ((st.yaw - c.pitch_yaw[1] + 180.0).rem_euclid(360.0) - 180.0).abs() > HORIZONTAL;
+        let yaw_off =
+            ((st.yaw - c.pitch_yaw[1] + 180.0).rem_euclid(360.0) - 180.0).abs() > HORIZONTAL;
         let boarding = self.first.is_none_or(|first| c.tick < first);
-        let horizontal = !boarding && (off(st.pos[0], c.feet[0]) || off(st.pos[2], c.feet[2]) || yaw_off);
+        let horizontal =
+            !boarding && (off(st.pos[0], c.feet[0]) || off(st.pos[2], c.feet[2]) || yaw_off);
         if horizontal {
             tracing::debug!(tick = c.tick, ours = ?st.pos, vel = ?st.vel, yaw = st.yaw, server = ?c.feet, delta = ?c.delta, server_yaw = c.pitch_yaw[1], traced = at.is_some(), "horizontal boat correction");
         }
@@ -71,7 +73,11 @@ impl BoatSim {
             return;
         };
         let ours = st.wave;
-        let apart = |phase: f64| (phase - ours).rem_euclid(TAU).min((ours - phase).rem_euclid(TAU));
+        let apart = |phase: f64| {
+            (phase - ours)
+                .rem_euclid(TAU)
+                .min((ours - phase).rem_euclid(TAU))
+        };
         let step = physics::wave_step(st.vel);
         let error = |phase: f64| match self.fixed {
             Some((before, sine)) if (1..=RECENT).contains(&tick.wrapping_sub(before)) => {
@@ -79,7 +85,11 @@ impl BoatSim {
             }
             _ => apart(phase),
         };
-        st.wave = if error(phases[0]) <= error(phases[1]) { phases[0] } else { phases[1] };
+        st.wave = if error(phases[0]) <= error(phases[1]) {
+            phases[0]
+        } else {
+            phases[1]
+        };
         self.fixed = Some((tick, phases[0].sin()));
     }
 }
@@ -99,26 +109,51 @@ impl Bot {
     /// The simulated boat the bot drives, as of its last input (corrections arriving since not yet applied).
     pub fn boat_state(&self) -> Option<BoatState> {
         let vehicle = self.state.riding.vehicle.as_ref()?;
-        self.ride.boat.as_ref().filter(|b| b.unique_id == vehicle.unique_id).map(|b| b.st)
+        self.ride
+            .boat
+            .as_ref()
+            .filter(|b| b.unique_id == vehicle.unique_id)
+            .map(|b| b.st)
     }
 
     /// Simulates the boat the bot drives for this tick and reports it in `input`: the boat's
     /// position, motion and yaw, the rider's keys and paddles. False when not driving a boat.
     pub(super) fn drive_boat(&mut self, input: &mut PlayerAuthInput) -> bool {
-        let Some(vehicle) = self.state.riding.vehicle.as_ref().filter(|v| v.driver) else { return false };
+        let Some(vehicle) = self.state.riding.vehicle.as_ref().filter(|v| v.driver) else {
+            return false;
+        };
         if !vehicle.kind.as_deref().is_some_and(|k| BOATS.contains(&k)) {
             return false;
         }
-        let Some((world, movement)) = self.backend.physics_mut() else { return false };
-        let (Some(view), Some(registry)) = (world.view(), world.registry()) else { return false };
+        let Some((world, movement)) = self.backend.physics_mut() else {
+            return false;
+        };
+        let (Some(view), Some(registry)) = (world.view(), world.registry()) else {
+            return false;
+        };
         let world = PhysicsWorld { view, registry };
         let (unique_id, runtime_id) = (vehicle.unique_id, vehicle.runtime_id);
-        if self.ride.boat.as_ref().is_none_or(|b| b.unique_id != unique_id) {
-            let Some(e) = runtime_id.and_then(|id| self.state.entities.get(id)) else { return false };
+        if self
+            .ride
+            .boat
+            .as_ref()
+            .is_none_or(|b| b.unique_id != unique_id)
+        {
+            let Some(e) = runtime_id.and_then(|id| self.state.entities.get(id)) else {
+                return false;
+            };
             let st = BoatState::new([e.position.x, e.position.y, e.position.z], e.yaw);
-            self.ride.boat = Some(BoatSim { unique_id, st, history: VecDeque::with_capacity(HISTORY), fixed: None, first: None });
+            self.ride.boat = Some(BoatSim {
+                unique_id,
+                st,
+                history: VecDeque::with_capacity(HISTORY),
+                fixed: None,
+                first: None,
+            });
         }
-        let Some(boat) = self.ride.boat.as_mut() else { return false };
+        let Some(boat) = self.ride.boat.as_mut() else {
+            return false;
+        };
         if let Some(c) = movement.vehicle_correction.take()
             && let Some(horizontal) = boat.correct(&c, &world)
         {
@@ -135,9 +170,17 @@ impl Bot {
         tracing::trace!(tick = input.tick, pos = ?st.pos, delta = ?st.vel, yaw = st.yaw, wave = st.wave, ?held, "boat input");
         let [x, y, z] = st.pos;
         let [ox, oy, oz] = self.ride.report_offset.take().unwrap_or([0.0; 3]);
-        input.position = Vec3f { x: x + ox, y: y + oy, z: z + oz };
+        input.position = Vec3f {
+            x: x + ox,
+            y: y + oy,
+            z: z + oz,
+        };
         let [dx, dy, dz] = st.vel;
-        input.delta = Vec3f { x: dx, y: dy, z: dz };
+        input.delta = Vec3f {
+            x: dx,
+            y: dy,
+            z: dz,
+        };
         input.vehicle_rotation = Some(Vec2f { x: 0.0, z: st.yaw });
         report_keys(input, held);
         report_paddles(input, held[0]);

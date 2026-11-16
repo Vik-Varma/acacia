@@ -22,7 +22,11 @@ impl Entity {
 impl Entities {
     /// Solid entity boxes within `reach` blocks of `feet` (horizontally and vertically).
     pub fn solid_boxes(&self, feet: Vec3, reach: f32) -> Vec<Aabb> {
-        let near = |b: &Aabb| (0..3).all(|i| b.min[i] - reach <= feet[i] && feet[i] <= b.max[i] + reach);
-        self.iter().filter_map(Entity::solid_box).filter(near).collect()
+        let near =
+            |b: &Aabb| (0..3).all(|i| b.min[i] - reach <= feet[i] && feet[i] <= b.max[i] + reach);
+        self.iter()
+            .filter_map(Entity::solid_box)
+            .filter(near)
+            .collect()
     }
 }

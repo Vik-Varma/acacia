@@ -1526,6 +1526,10 @@ pub enum ContainerSlotType {
     RecipeFood,
     RecipeBlocks,
     RecipeFurnaceItems,
+    ReservedContainerA,
+    ReservedContainerB,
+    ReservedContainerC,
+    ReservedContainerD,
     Unknown(i64),
 }
 impl ContainerSlotType {
@@ -1599,6 +1603,10 @@ impl ContainerSlotType {
             65 => Self::RecipeFood,
             66 => Self::RecipeBlocks,
             67 => Self::RecipeFurnaceItems,
+            68 => Self::ReservedContainerA,
+            69 => Self::ReservedContainerB,
+            70 => Self::ReservedContainerC,
+            71 => Self::ReservedContainerD,
             v => Self::Unknown(v),
         }
     }
@@ -1672,6 +1680,10 @@ impl ContainerSlotType {
             Self::RecipeFood => 65,
             Self::RecipeBlocks => 66,
             Self::RecipeFurnaceItems => 67,
+            Self::ReservedContainerA => 68,
+            Self::ReservedContainerB => 69,
+            Self::ReservedContainerC => 70,
+            Self::ReservedContainerD => 71,
             Self::Unknown(v) => v,
         }
     }

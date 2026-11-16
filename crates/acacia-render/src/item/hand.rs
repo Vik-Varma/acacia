@@ -11,10 +11,33 @@ use crate::glint::Glint;
 
 /// An item in another entity's hand: `body` is the entity's model space to camera-relative
 /// world space (as the entity pass places it), `hand` from [`crate::entity::bake::Mesh::hand`].
-pub fn third_person(model: &ItemModel, body: Mat4, hand: Mat4, grip: Grip, blocking: bool, light_at: glam::DVec3) -> EntityInstance {
-    let frame = body * held_frame(Display::held(model, "", false, grip.left, blocking), hand, grip);
+pub fn third_person(
+    model: &ItemModel,
+    body: Mat4,
+    hand: Mat4,
+    grip: Grip,
+    blocking: bool,
+    light_at: glam::DVec3,
+) -> EntityInstance {
+    let frame = body
+        * held_frame(
+            Display::held(model, "", false, grip.left, blocking),
+            hand,
+            grip,
+        );
     let glint = model.glint.then_some(Glint::Item);
-    EntityInstance { layers: model.layers.clone(), skin: Some(model.skin.clone()), position: light_at, yaw: 0.0, scale: 1.0, pose: Pose::default(), frame: Some(frame), hurt: false, white: 0.0, glint }
+    EntityInstance {
+        layers: model.layers.clone(),
+        skin: Some(model.skin.clone()),
+        position: light_at,
+        yaw: 0.0,
+        scale: 1.0,
+        pose: Pose::default(),
+        frame: Some(frame),
+        hurt: false,
+        white: 0.0,
+        glint,
+    }
 }
 
 /// [`third_person`]'s item mesh to the holder's model space: Java's `ItemInHandLayer` chain, run
@@ -29,7 +52,11 @@ pub fn held_frame(display: Display, hand: Mat4, grip: Grip) -> Mat4 {
 pub fn fist(hand: Mat4, grip: Grip) -> Mat4 {
     const FLIP_Y: Vec3 = Vec3::new(1.0, -1.0, 1.0);
     let side = if grip.left { -1.0 } else { 1.0 };
-    let offset = if grip.baby { Vec3::new(0.0, 1.0, -4.5) } else { Vec3::new(side, 2.0, -10.0) };
+    let offset = if grip.baby {
+        Vec3::new(0.0, 1.0, -4.5)
+    } else {
+        Vec3::new(side, 2.0, -10.0)
+    };
     hand * Mat4::from_scale(FLIP_Y)
         * Mat4::from_rotation_x(-std::f32::consts::FRAC_PI_2)
         * Mat4::from_rotation_y(std::f32::consts::PI)
@@ -61,20 +88,45 @@ mod tests {
     fn a_resting_arm_holds_a_sword_forward_at_the_fist() {
         // Shoulder of a humanoid's right arm, in model space (blocks).
         let hand = Mat4::from_translation(Vec3::new(-5.0, 22.0, 0.0) / 16.0);
-        let frame = held_frame(Display::third_person(Form::Flat, false, false), hand, Grip::hand(false));
+        let frame = held_frame(
+            Display::third_person(Form::Flat, false, false),
+            hand,
+            Grip::hand(false),
+        );
         // A sword sprite: hilt bottom-left, tip top-right (item mesh space).
-        let ends = |frame: Mat4| (frame.transform_point3(Vec3::new(-0.5, -0.5, 0.0)), frame.transform_point3(Vec3::new(0.5, 0.5, 0.0)));
+        let ends = |frame: Mat4| {
+            (
+                frame.transform_point3(Vec3::new(-0.5, -0.5, 0.0)),
+                frame.transform_point3(Vec3::new(0.5, 0.5, 0.0)),
+            )
+        };
         let (hilt, tip) = ends(frame);
         let blade = (tip - hilt).normalize();
         // Model space faces -z: forward, a little down, no sideways lean (Java's 55° twist is about the blade).
-        assert!(blade.z < -0.9 && blade.y < 0.0 && blade.x.abs() < 0.1, "{blade}");
+        assert!(
+            blade.z < -0.9 && blade.y < 0.0 && blade.x.abs() < 0.1,
+            "{blade}"
+        );
         let fist = (hilt + tip) / 2.0;
-        assert!((fist.x + 0.375).abs() < 0.15 && (0.6..0.95).contains(&fist.y), "{fist}");
+        assert!(
+            (fist.x + 0.375).abs() < 0.15 && (0.6..0.95).contains(&fist.y),
+            "{fist}"
+        );
         // The left hand holds it pointing the same way, at the other fist.
-        let (left_hilt, left_tip) = ends(held_frame(Display::third_person(Form::Flat, true, false), Mat4::from_translation(Vec3::new(5.0, 22.0, 0.0) / 16.0), Grip::hand(true)));
-        assert!((left_tip - left_hilt).normalize().abs_diff_eq(blade, 1e-4), "{left_hilt} {left_tip}");
+        let (left_hilt, left_tip) = ends(held_frame(
+            Display::third_person(Form::Flat, true, false),
+            Mat4::from_translation(Vec3::new(5.0, 22.0, 0.0) / 16.0),
+            Grip::hand(true),
+        ));
+        assert!(
+            (left_tip - left_hilt).normalize().abs_diff_eq(blade, 1e-4),
+            "{left_hilt} {left_tip}"
+        );
         let left_fist = (left_hilt + left_tip) / 2.0;
-        assert!((left_fist.x + fist.x).abs() < 1e-4 && (left_fist.y - fist.y).abs() < 1e-4, "{left_fist} {fist}");
+        assert!(
+            (left_fist.x + fist.x).abs() < 1e-4 && (left_fist.y - fist.y).abs() < 1e-4,
+            "{left_fist} {fist}"
+        );
     }
 
     #[test]
@@ -83,10 +135,21 @@ mod tests {
         // Half the view's height over its depth at Java's 70° hand field of view.
         let half = 35.0f32.to_radians().tan();
         for held in [8.0, 16.0, 22.0, 30.0] {
-            let hold = first_person::Hold { main_hand: true, using: Some(first_person::Using::Eat { held, duration: 32.0 }), ..Default::default() };
-            let centre = (first_person::frame(&hold) * display.frame()).transform_point3(Vec3::ZERO);
+            let hold = first_person::Hold {
+                main_hand: true,
+                using: Some(first_person::Using::Eat {
+                    held,
+                    duration: 32.0,
+                }),
+                ..Default::default()
+            };
+            let centre =
+                (first_person::frame(&hold) * display.frame()).transform_point3(Vec3::ZERO);
             let (x, y) = (centre.x / -centre.z / half, centre.y / -centre.z / half);
-            assert!(centre.z < -0.3 && x.abs() < 0.4 && (-0.95..-0.3).contains(&y), "{held}: {centre} at {x} {y}");
+            assert!(
+                centre.z < -0.3 && x.abs() < 0.4 && (-0.95..-0.3).contains(&y),
+                "{held}: {centre} at {x} {y}"
+            );
         }
     }
 }
@@ -105,19 +168,42 @@ pub struct Display {
 impl Display {
     /// An entry as the model files write it: the translation in 1/16 block.
     pub(super) fn px(rotation: [f32; 3], translation: [f32; 3], scale: f32) -> Display {
-        Display { rotation: rotation.into(), translation: Vec3::from(translation) / 16.0, scale: Vec3::splat(scale) }
+        Display {
+            rotation: rotation.into(),
+            translation: Vec3::from(translation) / 16.0,
+            scale: Vec3::splat(scale),
+        }
     }
 
     /// A baked `ItemTransform` (rotation, translation in blocks, scale), for the `left` hand mirrored.
     pub(super) fn java(t: [f32; 9], left: bool) -> Display {
-        let display = Display { rotation: Vec3::new(t[0], t[1], t[2]), translation: Vec3::new(t[3], t[4], t[5]), scale: Vec3::new(t[6], t[7], t[8]) };
+        let display = Display {
+            rotation: Vec3::new(t[0], t[1], t[2]),
+            translation: Vec3::new(t[3], t[4], t[5]),
+            scale: Vec3::new(t[6], t[7], t[8]),
+        };
         if left { display.mirrored() } else { display }
     }
 
     /// The model's own entry for this hand, else [`Display::first_person`]'s or [`Display::third_person`]'s.
-    pub fn held(model: &ItemModel, name: &str, first_person: bool, left: bool, blocking: bool) -> Display {
-        let own = model.java.as_ref().and_then(|d| d.get(super::java::context::hand(first_person, left)));
-        own.unwrap_or_else(|| if first_person { Display::first_person(name, model.form, left, blocking) } else { Display::third_person(model.form, left, blocking) })
+    pub fn held(
+        model: &ItemModel,
+        name: &str,
+        first_person: bool,
+        left: bool,
+        blocking: bool,
+    ) -> Display {
+        let own = model
+            .java
+            .as_ref()
+            .and_then(|d| d.get(super::java::context::hand(first_person, left)));
+        own.unwrap_or_else(|| {
+            if first_person {
+                Display::first_person(name, model.form, left, blocking)
+            } else {
+                Display::third_person(model.form, left, blocking)
+            }
+        })
     }
 
     /// An item mesh (centred, z mirrored) to the hand's space: `ItemTransform.apply` with its `-0.5`.
@@ -127,7 +213,11 @@ impl Display {
 
     /// A left hand's entry as `ItemTransform.apply` reads it: mirrored in x.
     fn mirrored(self) -> Display {
-        Display { rotation: self.rotation * Vec3::new(1.0, -1.0, -1.0), translation: self.translation * Vec3::new(-1.0, 1.0, 1.0), ..self }
+        Display {
+            rotation: self.rotation * Vec3::new(1.0, -1.0, -1.0),
+            translation: self.translation * Vec3::new(-1.0, 1.0, 1.0),
+            ..self
+        }
     }
 
     /// `firstperson_righthand` or `firstperson_lefthand`; `blocking` raises a shield.
@@ -136,8 +226,12 @@ impl Display {
         let listed = match (name, form, left) {
             (_, Form::Shield, _) => shield::display(true, left, blocking),
             (_, Form::Banner, _) => held_banner::display(true),
-            ("minecraft:bow", _, false) => Display::px([-80.0, 260.0, -40.0], [-1.0, -2.0, 2.5], 0.9),
-            ("minecraft:bow", _, true) => Display::px([-80.0, -280.0, 40.0], [-1.0, -2.0, 2.5], 0.9),
+            ("minecraft:bow", _, false) => {
+                Display::px([-80.0, 260.0, -40.0], [-1.0, -2.0, 2.5], 0.9)
+            }
+            ("minecraft:bow", _, true) => {
+                Display::px([-80.0, -280.0, 40.0], [-1.0, -2.0, 2.5], 0.9)
+            }
             (_, Form::Block, _) => Display::px([0.0, 45.0, 0.0], [0.0; 3], 0.4),
             (_, Form::Flat, false) => Display::px([0.0, -90.0, 25.0], [1.13, 3.2, 1.13], 0.68),
             (_, Form::Flat, true) => Display::px([0.0, 90.0, -25.0], [1.13, 3.2, 1.13], 0.68),
@@ -162,12 +256,19 @@ impl Display {
     /// Java's item space (the model's unit box, centred) to the hand's.
     pub(super) fn frame(self) -> Mat4 {
         let [rx, ry, rz] = self.rotation.to_array().map(f32::to_radians);
-        Mat4::from_translation(self.translation) * Mat4::from_euler(EulerRot::XYZ, rx, ry, rz) * Mat4::from_scale(self.scale)
+        Mat4::from_translation(self.translation)
+            * Mat4::from_euler(EulerRot::XYZ, rx, ry, rz)
+            * Mat4::from_scale(self.scale)
     }
 }
 
 /// The item in one of the camera's hands ([`first_person::frame`]).
-pub fn first_person(model: &ItemModel, display: Display, camera: &Camera, hold: &first_person::Hold) -> EntityInstance {
+pub fn first_person(
+    model: &ItemModel,
+    display: Display,
+    camera: &Camera,
+    hold: &first_person::Hold,
+) -> EntityInstance {
     let forward = camera.forward();
     let right = camera.right();
     let up = right.cross(forward);
@@ -181,7 +282,8 @@ pub fn first_person(model: &ItemModel, display: Display, camera: &Camera, hold: 
         scale: display.scale.max_element(),
         pose: Pose::default(),
         frame: Some(frame),
-        hurt: false, white: 0.0,
+        hurt: false,
+        white: 0.0,
         glint: model.glint.then_some(Glint::Item),
     }
 }

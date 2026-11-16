@@ -24,10 +24,12 @@ pub fn storage(out: &mut Vec<u8>, values: &[u32], force_bits: Option<u8>) {
     let mut palette: Vec<u32> = Vec::new();
     let indices: Vec<usize> = values
         .iter()
-        .map(|v| palette.iter().position(|p| p == v).unwrap_or_else(|| {
-            palette.push(*v);
-            palette.len() - 1
-        }))
+        .map(|v| {
+            palette.iter().position(|p| p == v).unwrap_or_else(|| {
+                palette.push(*v);
+                palette.len() - 1
+            })
+        })
         .collect();
     let needed = [0u8, 1, 2, 3, 4, 5, 6, 8, 16]
         .into_iter()
@@ -44,7 +46,9 @@ pub fn storage(out: &mut Vec<u8>, values: &[u32], force_bits: Option<u8>) {
     for (i, &p) in indices.iter().enumerate() {
         words[i / per] |= (p as u32) << ((i % per) * bits as usize);
     }
-    words.iter().for_each(|w| out.extend_from_slice(&w.to_le_bytes()));
+    words
+        .iter()
+        .for_each(|w| out.extend_from_slice(&w.to_le_bytes()));
     var_i32(out, palette.len() as i32);
     palette.iter().for_each(|&p| var_i32(out, p as i32));
 }

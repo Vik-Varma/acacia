@@ -13,7 +13,11 @@ const NORMAL_MODE_INPUTS: u32 = 16;
 const SETTLE_TICKS: u32 = 17;
 /// Frame hitches while the world loads: (after input n, pause range in ms), each followed by two
 /// inputs in one batch (capture gaps: 404/325 and 700/187 ms after inputs 9-12; settle time implies one more).
-const STALLS: [(u32, u64, u64); 3] = [(9, 400, 700), (12, 190, 330), (LOADING_INPUTS + 6, 300, 450)];
+const STALLS: [(u32, u64, u64); 3] = [
+    (9, 400, 700),
+    (12, 190, 330),
+    (LOADING_INPUTS + 6, 300, 450),
+];
 
 use std::time::Duration;
 
@@ -66,7 +70,12 @@ impl Default for SpawnSequence {
 
 impl SpawnSequence {
     pub fn new(seed: u64) -> Self {
-        Self { ticks: 0, inputs: 0, initialized_at: None, rng: seed }
+        Self {
+            ticks: 0,
+            inputs: 0,
+            initialized_at: None,
+            rng: seed,
+        }
     }
 
     /// Inputs report PlayMode Screen from here on (before the loading screen ends, as vanilla does).
@@ -93,11 +102,16 @@ impl SpawnSequence {
             t.after.extend([LoadingScreenEnd, Initialized]);
             self.initialized_at = Some(self.ticks);
         }
-        if self.initialized_at.is_some_and(|at| self.ticks == at + SETTLE_TICKS) {
+        if self
+            .initialized_at
+            .is_some_and(|at| self.ticks == at + SETTLE_TICKS)
+        {
             t.after.push(Settled);
         }
         if let Some(&(_, lo, hi)) = STALLS.iter().find(|s| s.0 == self.inputs) {
-            t.stall = Some(Duration::from_millis(lo + crate::cadence::splitmix(&mut self.rng) % (hi - lo + 1)));
+            t.stall = Some(Duration::from_millis(
+                lo + crate::cadence::splitmix(&mut self.rng) % (hi - lo + 1),
+            ));
         }
         t
     }
@@ -106,15 +120,23 @@ impl SpawnSequence {
 /// Sends one step of the spawn sequence for the player `runtime_entity_id`.
 pub(crate) fn send(client: &acacia_client::Client, runtime_entity_id: u64, packet: SpawnPacket) {
     use acacia_client::proto::manual::Uuid;
-    use acacia_client::proto::packets::{EmoteList, ServerboundLoadingScreen, SetLocalPlayerAsInitialized};
-    let screen = |r#type| ServerboundLoadingScreen { r#type, loading_screen_id: None };
+    use acacia_client::proto::packets::{
+        EmoteList, ServerboundLoadingScreen, SetLocalPlayerAsInitialized,
+    };
+    let screen = |r#type| ServerboundLoadingScreen {
+        r#type,
+        loading_screen_id: None,
+    };
     match packet {
         SpawnPacket::LoadingScreenStart => client.send(&screen(LOADING_SCREEN_START)),
         SpawnPacket::LoadingScreenEnd => client.send(&screen(LOADING_SCREEN_END)),
         SpawnPacket::MouseOverNothing => client.send(&crate::interact::wire::mouse_over_nothing()),
         SpawnPacket::EmoteList => client.send(&EmoteList {
             player_id: runtime_entity_id,
-            emote_pieces: DEFAULT_EMOTES.iter().map(|id| id.parse::<Uuid>().expect("constant UUIDs")).collect(),
+            emote_pieces: DEFAULT_EMOTES
+                .iter()
+                .map(|id| id.parse::<Uuid>().expect("constant UUIDs"))
+                .collect(),
         }),
         SpawnPacket::Initialized => client.send(&SetLocalPlayerAsInitialized { runtime_entity_id }),
         SpawnPacket::Settled => client.send(&crate::reflex::clear_aim_assist()),
@@ -131,14 +153,41 @@ mod tests {
         let mut seq = SpawnSequence::default();
         let total = FIRST_INPUT_TICK + LOADING_INPUTS + SETTLE_TICKS + 5;
         let ticks: Vec<SpawnTick> = (0..total).map(|_| seq.tick()).collect();
-        let sent: Vec<SpawnPacket> = ticks.iter().flat_map(|t| t.before.iter().chain(&t.after).copied()).collect();
-        assert_eq!(sent, [LoadingScreenStart, MouseOverNothing, EmoteList, LoadingScreenEnd, Initialized, Settled]);
+        let sent: Vec<SpawnPacket> = ticks
+            .iter()
+            .flat_map(|t| t.before.iter().chain(&t.after).copied())
+            .collect();
+        assert_eq!(
+            sent,
+            [
+                LoadingScreenStart,
+                MouseOverNothing,
+                EmoteList,
+                LoadingScreenEnd,
+                Initialized,
+                Settled
+            ]
+        );
         let first_input = ticks.iter().position(|t| t.input).unwrap() as u32 + 1;
         assert_eq!(first_input, FIRST_INPUT_TICK);
-        assert_eq!(ticks.iter().filter(|t| t.input).count() as u32, total - (FIRST_INPUT_TICK - 1), "an input every tick from the first");
+        assert_eq!(
+            ticks.iter().filter(|t| t.input).count() as u32,
+            total - (FIRST_INPUT_TICK - 1),
+            "an input every tick from the first"
+        );
         assert!(seq.screen_mode());
-        let stalls: Vec<u64> = ticks.iter().filter_map(|t| t.stall).map(|d| d.as_millis() as u64).collect();
+        let stalls: Vec<u64> = ticks
+            .iter()
+            .filter_map(|t| t.stall)
+            .map(|d| d.as_millis() as u64)
+            .collect();
         assert_eq!(stalls.len(), STALLS.len());
-        assert!(stalls.iter().zip(STALLS).all(|(&ms, (_, lo, hi))| (lo..=hi).contains(&ms)), "{stalls:?}");
+        assert!(
+            stalls
+                .iter()
+                .zip(STALLS)
+                .all(|(&ms, (_, lo, hi))| (lo..=hi).contains(&ms)),
+            "{stalls:?}"
+        );
     }
 }

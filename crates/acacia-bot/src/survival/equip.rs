@@ -62,21 +62,27 @@ pub(crate) fn armor_slot(item: Item) -> Option<u8> {
 
 /// The hotbar slot an item from the inventory goes to: the first empty one, else the selected one.
 pub(crate) fn hotbar_target(inv: &Inventory) -> u8 {
-    (0..Inventory::HOTBAR_SLOTS).find(|&i| inv.main[usize::from(i)].is_empty()).unwrap_or(inv.selected_hotbar_slot)
+    (0..Inventory::HOTBAR_SLOTS)
+        .find(|&i| inv.main[usize::from(i)].is_empty())
+        .unwrap_or(inv.selected_hotbar_slot)
 }
 
 impl Bot {
     /// The first main-inventory slot holding `item`, hotbar first.
     pub fn find_item(&self, item: Item) -> Option<SlotRef> {
         let main = &self.state.inventory.main;
-        (0..main.len()).find(|&i| self.state.item(&main[i]) == Some(item)).map(|i| SlotRef::Main(i as u8))
+        (0..main.len())
+            .find(|&i| self.state.item(&main[i]) == Some(item))
+            .map(|i| SlotRef::Main(i as u8))
     }
 
     /// [`Bot::find_item`] by the server's identifier, for items with no [`Item`]: custom ones, Bedrock-only ones.
     pub fn find_item_named(&self, name: &str) -> Option<SlotRef> {
         let id = self.state.items.id(name)?;
         let main = &self.state.inventory.main;
-        (0..main.len()).find(|&i| !main[i].is_empty() && main[i].network_id == id).map(|i| SlotRef::Main(i as u8))
+        (0..main.len())
+            .find(|&i| !main[i].is_empty() && main[i].network_id == id)
+            .map(|i| SlotRef::Main(i as u8))
     }
 
     /// Puts the item in `from` on (armour, offhand) through the inventory screen, or brings it to
@@ -87,19 +93,31 @@ impl Bot {
 
     /// [`Bot::equip`] choosing how armour goes on. With [`EquipMethod::Use`] the piece is first
     /// brought to the hand, and a worn piece ends up in the hand's slot.
-    pub async fn equip_by(&mut self, from: SlotRef, to: Destination, method: EquipMethod) -> Result<(), ActionError> {
+    pub async fn equip_by(
+        &mut self,
+        from: SlotRef,
+        to: Destination,
+        method: EquipMethod,
+    ) -> Result<(), ActionError> {
         let stack = from.stack(&self.state).filter(|s| !s.is_empty()).cloned();
         let stack = stack.ok_or_else(|| ActionError::NotPossible(format!("{from:?} is empty")))?;
         let Some(slot) = to.armor_slot() else {
             return match (to, method) {
-                (_, EquipMethod::Use) => Err(ActionError::NotPossible(format!("only armour can be put on by use, not {to:?}"))),
+                (_, EquipMethod::Use) => Err(ActionError::NotPossible(format!(
+                    "only armour can be put on by use, not {to:?}"
+                ))),
                 (Destination::Hand, _) => self.equip_hand(from, &stack).await,
-                _ => self.wear(from, &stack, SlotRef::Offhand, whole(&stack)).await,
+                _ => {
+                    self.wear(from, &stack, SlotRef::Offhand, whole(&stack))
+                        .await
+                }
             };
         };
         let item = self.state.item(&stack);
         if item.and_then(armor_slot) != Some(slot) {
-            return Err(ActionError::NotPossible(format!("{item:?} cannot be worn as {to:?}")));
+            return Err(ActionError::NotPossible(format!(
+                "{item:?} cannot be worn as {to:?}"
+            )));
         }
         match method {
             EquipMethod::Inventory => self.wear(from, &stack, SlotRef::Armor(slot), 1).await,
@@ -107,7 +125,12 @@ impl Bot {
         }
     }
 
-    async fn wear_by_use(&mut self, from: SlotRef, stack: &ItemStack, slot: u8) -> Result<(), ActionError> {
+    async fn wear_by_use(
+        &mut self,
+        from: SlotRef,
+        stack: &ItemStack,
+        slot: u8,
+    ) -> Result<(), ActionError> {
         if from != SlotRef::Main(self.state.inventory.selected_hotbar_slot) {
             self.equip_hand(from, stack).await?;
             let pause = self.human.between(HOTBAR_SWITCH);
@@ -119,7 +142,8 @@ impl Bot {
         if stack.count == 1 {
             let inv = &mut self.state.inventory;
             let hand = usize::from(inv.selected_hotbar_slot);
-            inv.main[hand] = std::mem::replace(&mut inv.armor[usize::from(slot)], inv.main[hand].clone());
+            inv.main[hand] =
+                std::mem::replace(&mut inv.armor[usize::from(slot)], inv.main[hand].clone());
             return Ok(());
         }
         let worn = self.wait_until(WEAR_TIMEOUT, |bot, _| {
@@ -127,18 +151,28 @@ impl Bot {
             (*armor != before && armor.network_id == stack.network_id).then_some(())
         });
         match worn.await {
-            Err(ActionError::Timeout) => Err(ActionError::Rejected("the server did not put the armour on".into())),
+            Err(ActionError::Timeout) => Err(ActionError::Rejected(
+                "the server did not put the armour on".into(),
+            )),
             other => other,
         }
     }
 
-    async fn wear(&mut self, from: SlotRef, stack: &ItemStack, to: SlotRef, count: u8) -> Result<(), ActionError> {
+    async fn wear(
+        &mut self,
+        from: SlotRef,
+        stack: &ItemStack,
+        to: SlotRef,
+        count: u8,
+    ) -> Result<(), ActionError> {
         if from == to {
             return Ok(());
         }
         if to.stack(&self.state).is_some_and(|s| !s.is_empty()) {
             if u16::from(count) < stack.count {
-                return Err(ActionError::NotPossible(format!("{to:?} is occupied; move one item from the stack first")));
+                return Err(ActionError::NotPossible(format!(
+                    "{to:?} is occupied; move one item from the stack first"
+                )));
             }
             return self.swap_items(from, to).await;
         }
@@ -151,7 +185,12 @@ impl Bot {
 
     /// Brings `from` to the hand; `human`: pause as a player does first (a key press for a hotbar slot, a
     /// screen click for one moved up from the inventory), none when false (the Optimal profile).
-    pub(crate) async fn equip_hand_paced(&mut self, from: SlotRef, stack: &ItemStack, human: bool) -> Result<(), ActionError> {
+    pub(crate) async fn equip_hand_paced(
+        &mut self,
+        from: SlotRef,
+        stack: &ItemStack,
+        human: bool,
+    ) -> Result<(), ActionError> {
         if from == SlotRef::Main(self.state.inventory.selected_hotbar_slot) {
             return Ok(());
         }
@@ -159,7 +198,8 @@ impl Bot {
             SlotRef::Main(i) if i < Inventory::HOTBAR_SLOTS => (i, HOTBAR_KEY),
             _ => {
                 let target = hotbar_target(&self.state.inventory);
-                self.wear(from, stack, SlotRef::Main(target), whole(stack)).await?;
+                self.wear(from, stack, SlotRef::Main(target), whole(stack))
+                    .await?;
                 (target, CLICK)
             }
         };

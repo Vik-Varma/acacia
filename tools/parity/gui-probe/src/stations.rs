@@ -22,40 +22,121 @@ use crate::kit;
 pub fn replay(c: &Value, assets: &Assets, _state: &mut Map<String, Value>) -> Vec<GuiDraw> {
     let lang = kit::lang(assets);
     let game = kit::game(c);
-    let env = Env { font: assets.font.as_ref(), lang: &lang, advanced: kit::bool(c, "advanced"), game: &game, op: kit::bool(c, "op") };
+    let env = Env {
+        font: assets.font.as_ref(),
+        lang: &lang,
+        advanced: kit::bool(c, "advanced"),
+        game: &game,
+        op: kit::bool(c, "op"),
+    };
     let (width, height) = (kit::int(c, "width", 0), kit::int(c, "height", 0));
     let inventory = Text::translate("container.inventory", &[], &lang);
     let title = |fallback| kit::title(c, fallback, &lang);
     let station = Station {
         xp: kit::int(c, "xp", 0),
         creative: kit::bool(c, "creative"),
-        data: c["game"]["data"].as_array().into_iter().flatten().map(|v| v.as_i64().unwrap_or(0) as i32).collect(),
+        data: c["game"]["data"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|v| v.as_i64().unwrap_or(0) as i32)
+            .collect(),
     };
     let mut screen: Box<dyn Screen> = match c["kind"].as_str().unwrap_or_default() {
         "anvil" => {
-            let base = filled(c, Base::new(width, height, [176, 166], title("container.repair"), inventory, Anvil::slots()));
+            let base = filled(
+                c,
+                Base::new(
+                    width,
+                    height,
+                    [176, 166],
+                    title("container.repair"),
+                    inventory,
+                    Anvil::slots(),
+                ),
+            );
             let typed = c["name"].as_str();
-            Box::new(Anvil::new(base, station, typed, !kit::bool(c, "blink"), env.font, &lang, &game))
+            Box::new(Anvil::new(
+                base,
+                station,
+                typed,
+                !kit::bool(c, "blink"),
+                env.font,
+                &lang,
+                &game,
+            ))
         }
-        "grindstone" => Box::new(Grindstone::new(width, height, title("container.grindstone_title"), inventory)),
-        "smithing" => Box::new(Smithing::new(width, height, title("container.upgrade"), inventory, station, kit::int(c, "ticks", 0))),
-        "cartography" => Box::new(Cartography::new(width, height, title("container.cartography_table"), inventory, map(c), kit::bool(&c["game"], "extendable"))),
+        "grindstone" => Box::new(Grindstone::new(
+            width,
+            height,
+            title("container.grindstone_title"),
+            inventory,
+        )),
+        "smithing" => Box::new(Smithing::new(
+            width,
+            height,
+            title("container.upgrade"),
+            inventory,
+            station,
+            kit::int(c, "ticks", 0),
+        )),
+        "cartography" => Box::new(Cartography::new(
+            width,
+            height,
+            title("container.cartography_table"),
+            inventory,
+            map(c),
+            kit::bool(&c["game"], "extendable"),
+        )),
         "enchanting" => {
-            let pair = |key: &str| [c[key][0].as_f64().unwrap_or(0.0) as f32, c[key][1].as_f64().unwrap_or(0.0) as f32];
-            Box::new(Enchanting::new(width, height, title("container.enchant"), inventory, station, clues(c, &lang), pair("open"), pair("flip")))
+            let pair = |key: &str| {
+                [
+                    c[key][0].as_f64().unwrap_or(0.0) as f32,
+                    c[key][1].as_f64().unwrap_or(0.0) as f32,
+                ]
+            };
+            Box::new(Enchanting::new(
+                width,
+                height,
+                title("container.enchant"),
+                inventory,
+                station,
+                clues(c, &lang),
+                pair("open"),
+                pair("flip"),
+            ))
         }
         "beacon" => {
-            let effect = |key: &str| c[key].as_str().map(|id| id.trim_start_matches("minecraft:").to_owned());
+            let effect = |key: &str| {
+                c[key]
+                    .as_str()
+                    .map(|id| id.trim_start_matches("minecraft:").to_owned())
+            };
             let (primary, secondary) = (effect("primary"), effect("secondary"));
             let payment = kit::item(c, 0).is_some_and(|s| !s.is_empty());
-            Box::new(Beacon::new(width, height, title("container.beacon"), inventory, &station, primary.as_deref(), secondary.as_deref(), payment))
+            Box::new(Beacon::new(
+                width,
+                height,
+                title("container.beacon"),
+                inventory,
+                &station,
+                primary.as_deref(),
+                secondary.as_deref(),
+                payment,
+            ))
         }
         // A kind not ported yet draws nothing, so it shows as a divergence.
         _ => return Vec::new(),
     };
     fill(c, screen.base_mut());
     let mut gui = Gui::new(width, height);
-    frame(screen.as_mut(), &mut gui, &env, kit::mouse(c), kit::float(c, "partial", 0.0));
+    frame(
+        screen.as_mut(),
+        &mut gui,
+        &env,
+        kit::mouse(c),
+        kit::float(c, "partial", 0.0),
+    );
     gui.draws
 }
 
@@ -75,8 +156,15 @@ fn filled(c: &Value, mut base: Base) -> Base {
 /// The data of the first slot's map: its `map_id` among the case's `maps` ([id, scale, locked]).
 fn map(c: &Value) -> Option<MapData> {
     let id = kit::item(c, 0)?.get("map_id")?.as_i64()?;
-    let entry = c["maps"].as_array()?.iter().find(|m| m[0].as_i64() == Some(id))?;
-    Some(MapData { scale: entry[1].as_i64().unwrap_or(0) as i32, locked: entry[2].as_bool().unwrap_or(false), decorations: 0 })
+    let entry = c["maps"]
+        .as_array()?
+        .iter()
+        .find(|m| m[0].as_i64() == Some(id))?;
+    Some(MapData {
+        scale: entry[1].as_i64().unwrap_or(0) as i32,
+        locked: entry[2].as_bool().unwrap_or(false),
+        decorations: 0,
+    })
 }
 
 fn clues(c: &Value, lang: Lang) -> [Option<Clue>; 3] {

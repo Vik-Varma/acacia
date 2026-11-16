@@ -11,9 +11,9 @@ use acacia_client::proto::{Packet, RawPacket};
 use acacia_physics::{BlockPos, Vec3};
 use acacia_world::BlockState;
 
-use super::confirm::{give_back, Confirm, Expect, Verdict};
-use super::wire::SwingSource;
 use super::Face;
+use super::confirm::{Confirm, Expect, Verdict, give_back};
+use super::wire::SwingSource;
 use crate::act_timing::Phase;
 use crate::state::ItemStack;
 use crate::{ActionError, Bot};
@@ -57,7 +57,13 @@ impl<T> Default for Pipeline<T> {
 
 impl<T> Pipeline<T> {
     pub fn push(&mut self, target: BlockPos, confirm: Confirm, undo: Undo<T>) {
-        self.items.push(Item { target, confirm, echoed: false, undo, sent_at: Instant::now() });
+        self.items.push(Item {
+            target,
+            confirm,
+            echoed: false,
+            undo,
+            sent_at: Instant::now(),
+        });
     }
 
     pub fn targets(&self) -> impl Iterator<Item = BlockPos> + '_ {
@@ -75,11 +81,18 @@ impl<T> Pipeline<T> {
 
     /// A block update for `pos` arrived.
     pub fn echo(&mut self, pos: BlockPos) {
-        self.items.iter_mut().filter(|i| i.target == pos).for_each(|i| i.echoed = true);
+        self.items
+            .iter_mut()
+            .filter(|i| i.target == pos)
+            .for_each(|i| i.echoed = true);
     }
 
     /// Decides what can be decided at tick `now`, reading cells through `cell`.
-    pub fn settle<'s>(&mut self, now: u64, cell: impl Fn(BlockPos) -> Option<(u32, &'s BlockState)>) -> Vec<Decided<T>> {
+    pub fn settle<'s>(
+        &mut self,
+        now: u64,
+        cell: impl Fn(BlockPos) -> Option<(u32, &'s BlockState)>,
+    ) -> Vec<Decided<T>> {
         let mut out = Vec::new();
         let mut i = 0;
         while i < self.items.len() {
@@ -93,11 +106,30 @@ impl<T> Pipeline<T> {
             let it = self.items.swap_remove(i);
             let (first, waited) = (it.confirm.tries() == 1 && echoed, it.sent_at.elapsed());
             out.push(match verdict {
-                Verdict::Done => Decided { target: it.target, result: Ok(()), echoed: first, waited, undo: None },
+                Verdict::Done => Decided {
+                    target: it.target,
+                    result: Ok(()),
+                    echoed: first,
+                    waited,
+                    undo: None,
+                },
                 v => {
-                    let why = if let Verdict::Failed(why) = v { why } else { "the server did not place it".into() };
+                    let why = if let Verdict::Failed(why) = v {
+                        why
+                    } else {
+                        "the server did not place it".into()
+                    };
                     let replaced = it.undo.replaced.filter(|_| it.confirm.unechoed());
-                    Decided { target: it.target, result: Err(why), echoed: first, waited, undo: Some(Undo { replaced, extra: it.undo.extra }) }
+                    Decided {
+                        target: it.target,
+                        result: Err(why),
+                        echoed: first,
+                        waited,
+                        undo: Some(Undo {
+                            replaced,
+                            extra: it.undo.extra,
+                        }),
+                    }
                 }
             });
         }
@@ -115,25 +147,72 @@ pub(crate) struct StackUndo {
 
 impl Bot {
     /// [`Bot::place_block_at`] that returns once the click is out; [`Bot::settle_placements`] tells how it went.
-    pub(crate) async fn place_sent(&mut self, against: BlockPos, face: Face, click: Vec3) -> Result<(), ActionError> {
+    pub(crate) async fn place_sent(
+        &mut self,
+        against: BlockPos,
+        face: Face,
+        click: Vec3,
+    ) -> Result<(), ActionError> {
         let (target, half_slab) = self.aim_placement(against, face, click).await?;
-        if self.backend.require("pipelined placements")?.in_flight.targets().any(|t| t == target) {
-            return Err(ActionError::NotPossible(format!("a placement at {target:?} is already in flight")));
+        if self
+            .backend
+            .require("pipelined placements")?
+            .in_flight
+            .targets()
+            .any(|t| t == target)
+        {
+            return Err(ActionError::NotPossible(format!(
+                "a placement at {target:?} is already in flight"
+            )));
         }
         let admitted = self.admit_action().await?;
-        let (slot, before) = (self.state.inventory.selected_hotbar_slot, self.state.inventory.held().clone());
+        let (slot, before) = (
+            self.state.inventory.selected_hotbar_slot,
+            self.state.inventory.held().clone(),
+        );
         let expect = half_slab.map_or(Expect::Solid, Expect::Replaced);
         let mut confirm = self.confirmation(target, expect, 1);
         if half_slab.is_none() {
             confirm = confirm.predicted();
         }
         self.click_block(against, face, click, SwingSource::Build)?;
-        let speed = self.backend.movement().and_then(|m| m.state()).map_or(0.0, |s| s.vel[0].hypot(s.vel[2]));
-        let (dist, support) = (super::block_distance(self.eye_position(), against), self.block_at(against).map_or("?", |(_, s)| s.name));
-        tracing::debug!(?target, nth = self.governor.sent_this_tick(), speed, dist, ?face, support, "pipelined placement sent");
-        let replaced = (before.block_runtime_id != 0 && half_slab.is_none()).then(|| self.predict_block(target, before.block_runtime_id)).flatten();
+        let speed = self
+            .backend
+            .movement()
+            .and_then(|m| m.state())
+            .map_or(0.0, |s| s.vel[0].hypot(s.vel[2]));
+        let (dist, support) = (
+            super::block_distance(self.eye_position(), against),
+            self.block_at(against).map_or("?", |(_, s)| s.name),
+        );
+        tracing::debug!(
+            ?target,
+            nth = self.governor.sent_this_tick(),
+            speed,
+            dist,
+            ?face,
+            support,
+            "pipelined placement sent"
+        );
+        let replaced = (before.block_runtime_id != 0 && half_slab.is_none())
+            .then(|| self.predict_block(target, before.block_runtime_id))
+            .flatten();
         let predicted = self.state.inventory.held().clone();
-        self.backend.require_mut("pipelined placements")?.in_flight.push(target, confirm, Undo { replaced, extra: StackUndo { slot, before, predicted } });
+        self.backend
+            .require_mut("pipelined placements")?
+            .in_flight
+            .push(
+                target,
+                confirm,
+                Undo {
+                    replaced,
+                    extra: StackUndo {
+                        slot,
+                        before,
+                        predicted,
+                    },
+                },
+            );
         self.unclaim(admitted);
         Ok(())
     }
@@ -142,7 +221,10 @@ impl Bot {
     /// decided now and frees the governor slots of the rest, whose echoes then correct the world on their own.
     pub(crate) fn forget_placements(&mut self) {
         self.settle_placements();
-        let cleared = self.backend.bedrock_mut().map_or(0, |b| b.in_flight.clear());
+        let cleared = self
+            .backend
+            .bedrock_mut()
+            .map_or(0, |b| b.in_flight.clear());
         for _ in 0..cleared {
             self.governor.settled();
         }
@@ -150,19 +232,42 @@ impl Bot {
 
     /// Placements sent and not decided yet.
     pub(crate) fn placements_in_flight(&self) -> impl Iterator<Item = BlockPos> + '_ {
-        self.backend.bedrock().into_iter().flat_map(|b| b.in_flight.targets())
+        self.backend
+            .bedrock()
+            .into_iter()
+            .flat_map(|b| b.in_flight.targets())
     }
 
     /// Notes a block update for any in-flight target (every packet an action sees passes here).
     pub(crate) fn note_echo(&mut self, p: &RawPacket) {
-        let Some(b) = self.backend.bedrock_mut() else { return };
+        let Some(b) = self.backend.bedrock_mut() else {
+            return;
+        };
         if b.in_flight.is_empty() {
             return;
         }
         let positions: Vec<BlockPos> = match p.id {
-            UpdateBlock::ID => p.decode::<UpdateBlock>().ok().filter(|u| u.layer == 0).map(|u| vec![[u.position.x, u.position.y, u.position.z]]).unwrap_or_default(),
-            UpdateBlockSynced::ID => p.decode::<UpdateBlockSynced>().ok().filter(|u| u.layer == 0).map(|u| vec![[u.position.x, u.position.y, u.position.z]]).unwrap_or_default(),
-            UpdateSubchunkBlocks::ID => p.decode::<UpdateSubchunkBlocks>().map(|u| u.blocks.iter().map(|b| [b.position.x, b.position.y, b.position.z]).collect()).unwrap_or_default(),
+            UpdateBlock::ID => p
+                .decode::<UpdateBlock>()
+                .ok()
+                .filter(|u| u.layer == 0)
+                .map(|u| vec![[u.position.x, u.position.y, u.position.z]])
+                .unwrap_or_default(),
+            UpdateBlockSynced::ID => p
+                .decode::<UpdateBlockSynced>()
+                .ok()
+                .filter(|u| u.layer == 0)
+                .map(|u| vec![[u.position.x, u.position.y, u.position.z]])
+                .unwrap_or_default(),
+            UpdateSubchunkBlocks::ID => p
+                .decode::<UpdateSubchunkBlocks>()
+                .map(|u| {
+                    u.blocks
+                        .iter()
+                        .map(|b| [b.position.x, b.position.y, b.position.z])
+                        .collect()
+                })
+                .unwrap_or_default(),
             _ => return,
         };
         positions.into_iter().for_each(|pos| b.in_flight.echo(pos));
@@ -172,7 +277,9 @@ impl Bot {
     /// and outcome.
     pub(crate) fn settle_placements(&mut self) -> Vec<(BlockPos, Result<(), ActionError>)> {
         let now = self.governor.now();
-        let Some(b) = self.backend.bedrock_mut() else { return Vec::new() };
+        let Some(b) = self.backend.bedrock_mut() else {
+            return Vec::new();
+        };
         let mut pipeline = std::mem::take(&mut b.in_flight);
         let decided = pipeline.settle(now, |p| self.block_at(p));
         if let Some(b) = self.backend.bedrock_mut() {
@@ -200,7 +307,12 @@ impl Bot {
                 }
                 let target = d.target;
                 tracing::debug!(?target, result = ?d.result, "pipelined placement decided");
-                (target, d.result.map_err(|why| ActionError::Rejected(format!("placing at {target:?}: {why}"))))
+                (
+                    target,
+                    d.result.map_err(|why| {
+                        ActionError::Rejected(format!("placing at {target:?}: {why}"))
+                    }),
+                )
             })
             .collect()
     }

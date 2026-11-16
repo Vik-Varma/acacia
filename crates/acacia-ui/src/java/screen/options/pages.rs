@@ -7,7 +7,7 @@ use super::{Build, OptionsScreen};
 use crate::java::screen::Env;
 use crate::java::text::{Style, Text};
 use crate::java::widget::button::{Button, CycleButton, Display};
-use crate::java::widget::layout::{Linear, Layout, RowHelper, Settings};
+use crate::java::widget::layout::{Layout, Linear, RowHelper, Settings};
 use crate::java::widget::text::StringWidget;
 use crate::java::widget::{Ctx, Widget};
 
@@ -28,24 +28,82 @@ pub struct Client {
 }
 
 /// The page named `page` (`options` for `OptionsScreen` itself) after `init`.
-pub fn build(ctx: &Ctx, env: Env, page: &str, values: Values, client: Client) -> Option<OptionsScreen> {
-    let p = Page { ctx, env, values, client };
+pub fn build(
+    ctx: &Ctx,
+    env: Env,
+    page: &str,
+    values: Values,
+    client: Client,
+) -> Option<OptionsScreen> {
+    let p = Page {
+        ctx,
+        env,
+        values,
+        client,
+    };
     Some(match page {
         "options" => p.main(),
         "video" => p.video(),
         "sound" => p.sub("options.sounds.title", |p, b| {
             p.big(b, "sound.master");
-            p.small_ids(b, &["sound.music", "sound.record", "sound.weather", "sound.block", "sound.hostile", "sound.neutral", "sound.player", "sound.ambient", "sound.voice", "sound.ui"]);
+            p.small_ids(
+                b,
+                &[
+                    "sound.music",
+                    "sound.record",
+                    "sound.weather",
+                    "sound.block",
+                    "sound.hostile",
+                    "sound.neutral",
+                    "sound.player",
+                    "sound.ambient",
+                    "sound.voice",
+                    "sound.ui",
+                ],
+            );
             p.big(b, "soundDevice");
-            p.small_ids(b, &["showSubtitles", "directionalAudio", "musicFrequency", "musicToast"]);
+            p.small_ids(
+                b,
+                &[
+                    "showSubtitles",
+                    "directionalAudio",
+                    "musicFrequency",
+                    "musicToast",
+                ],
+            );
         }),
         "controls" => p.sub("controls.title", |p, b| {
-            let buttons = vec![p.button(150, "options.mouse_settings"), p.button(150, "controls.keybinds")];
+            let buttons = vec![
+                p.button(150, "options.mouse_settings"),
+                p.button(150, "controls.keybinds"),
+            ];
             p.list(b).add_small(buttons);
-            p.small_ids(b, &["toggleCrouch", "toggleSprint", "toggleAttack", "toggleUse", "autoJump", "sprintWindow", "quitShortcuts", "operatorItemsTab"]);
+            p.small_ids(
+                b,
+                &[
+                    "toggleCrouch",
+                    "toggleSprint",
+                    "toggleAttack",
+                    "toggleUse",
+                    "autoJump",
+                    "sprintWindow",
+                    "quitShortcuts",
+                    "operatorItemsTab",
+                ],
+            );
         }),
         "mouse" => p.sub("options.mouse_settings.title", |p, b| {
-            p.small_ids(b, &["sensitivity", "mouseWheelSensitivity", "discreteMouseScroll", "invertMouseX", "invertMouseY", "allowCursorChanges"]);
+            p.small_ids(
+                b,
+                &[
+                    "sensitivity",
+                    "mouseWheelSensitivity",
+                    "discreteMouseScroll",
+                    "invertMouseX",
+                    "invertMouseY",
+                    "allowCursorChanges",
+                ],
+            );
         }),
         "chat" => p.sub("options.chat.title", |p, b| p.small_ids(b, CHAT)),
         "accessibility" => p.accessibility(),
@@ -59,33 +117,101 @@ pub fn build(ctx: &Ctx, env: Env, page: &str, values: Values, client: Client) ->
             widgets.push(create_button(p.ctx, p.values, "mainHand", 150));
             p.list(b).add_small(widgets);
         }),
-        "font" => p.sub("options.font.title", |p, b| p.small_ids(b, &["forceUnicodeFont", "japaneseGlyphVariants"])),
+        "font" => p.sub("options.font.title", |p, b| {
+            p.small_ids(b, &["forceUnicodeFont", "japaneseGlyphVariants"])
+        }),
         "online" => p.sub("options.online.title", |p, b| p.online(b)),
         _ => return None,
     })
 }
 
-const PARTS: &[&str] = &["cape", "jacket", "left_sleeve", "right_sleeve", "left_pants_leg", "right_pants_leg", "hat"];
+const PARTS: &[&str] = &[
+    "cape",
+    "jacket",
+    "left_sleeve",
+    "right_sleeve",
+    "left_pants_leg",
+    "right_pants_leg",
+    "hat",
+];
 
 const CHAT: &[&str] = &[
-    "chatVisibility", "chatColors", "chatLinks", "chatLinksPrompt", "chatOpacity", "textBackgroundOpacity", "chatScale", "chatLineSpacing", "chatDelay",
-    "chatWidth", "chatHeightFocused", "chatHeightUnfocused", "narrator", "autoSuggestions", "hideMatchedNames", "reducedDebugInfo", "onlyShowSecureChat",
+    "chatVisibility",
+    "chatColors",
+    "chatLinks",
+    "chatLinksPrompt",
+    "chatOpacity",
+    "textBackgroundOpacity",
+    "chatScale",
+    "chatLineSpacing",
+    "chatDelay",
+    "chatWidth",
+    "chatHeightFocused",
+    "chatHeightUnfocused",
+    "narrator",
+    "autoSuggestions",
+    "hideMatchedNames",
+    "reducedDebugInfo",
+    "onlyShowSecureChat",
     "saveChatDrafts",
 ];
 
 /// After the first row of the narrator and the Controls link.
 const ACCESSIBILITY: &[&str] = &[
-    "showSubtitles", "highContrast", "menuBackgroundBlurriness", "textBackgroundOpacity", "backgroundForChatOnly", "chatOpacity", "chatLineSpacing", "chatDelay",
-    "notificationDisplayTime", "bobView", "screenEffectScale", "fovEffectScale", "darknessEffectScale", "damageTiltStrength", "glintSpeed", "glintStrength",
-    "hideLightningFlash", "darkMojangStudiosBackground", "panoramaSpeed", "hideSplashTexts", "narratorHotkey", "rotateWithMinecart", "highContrastBlockOutline",
+    "showSubtitles",
+    "highContrast",
+    "menuBackgroundBlurriness",
+    "textBackgroundOpacity",
+    "backgroundForChatOnly",
+    "chatOpacity",
+    "chatLineSpacing",
+    "chatDelay",
+    "notificationDisplayTime",
+    "bobView",
+    "screenEffectScale",
+    "fovEffectScale",
+    "darknessEffectScale",
+    "damageTiltStrength",
+    "glintSpeed",
+    "glintStrength",
+    "hideLightningFlash",
+    "darkMojangStudiosBackground",
+    "panoramaSpeed",
+    "hideSplashTexts",
+    "narratorHotkey",
+    "rotateWithMinecart",
+    "highContrastBlockOutline",
 ];
 
-const DISPLAY: &[&str] = &["framerateLimit", "enableVsync", "inactivityFpsLimit", "guiScale", "fullscreen", "exclusiveFullscreen", "gamma", "preferredGraphicsBackend"];
+const DISPLAY: &[&str] = &[
+    "framerateLimit",
+    "enableVsync",
+    "inactivityFpsLimit",
+    "guiScale",
+    "fullscreen",
+    "exclusiveFullscreen",
+    "gamma",
+    "preferredGraphicsBackend",
+];
 
 const QUALITY: &[&str] = &[
-    "biomeBlendRadius", "renderDistance", "prioritizeChunkUpdates", "simulationDistance", "ambientOcclusion", "cloudStatus", "particles", "mipmapLevels",
-    "entityShadows", "entityDistanceScaling", "menuBackgroundBlurriness", "cloudRange", "cutoutLeaves", "improvedTransparency", "textureFiltering",
-    "maxAnisotropyBit", "weatherRadius",
+    "biomeBlendRadius",
+    "renderDistance",
+    "prioritizeChunkUpdates",
+    "simulationDistance",
+    "ambientOcclusion",
+    "cloudStatus",
+    "particles",
+    "mipmapLevels",
+    "entityShadows",
+    "entityDistanceScaling",
+    "menuBackgroundBlurriness",
+    "cloudRange",
+    "cutoutLeaves",
+    "improvedTransparency",
+    "textureFiltering",
+    "maxAnisotropyBit",
+    "weatherRadius",
 ];
 
 struct Page<'a, 'b> {
@@ -97,7 +223,11 @@ struct Page<'a, 'b> {
 
 /// A list section header: underlined and bold.
 fn section(ctx: &Ctx, key: &str) -> Text {
-    ctx.tr(key).with_style(&Style { bold: Some(true), underlined: Some(true), ..Style::default() })
+    ctx.tr(key).with_style(&Style {
+        bold: Some(true),
+        underlined: Some(true),
+        ..Style::default()
+    })
 }
 
 impl Page<'_, '_> {
@@ -108,7 +238,16 @@ impl Page<'_, '_> {
     /// `CycleButton.onOffBuilder(value).create(name)`, known by `id`.
     fn on_off(&self, id: impl Into<Cow<'static, str>>, name: &str, on: bool) -> Box<dyn Widget> {
         let shown = self.ctx.tr(if on { "options.on" } else { "options.off" });
-        let mut b = CycleButton::new(self.ctx.lang, 0, 0, 150, 20, self.ctx.tr(name), shown, Display::NameAndValue);
+        let mut b = CycleButton::new(
+            self.ctx.lang,
+            0,
+            0,
+            150,
+            20,
+            self.ctx.tr(name),
+            shown,
+            Display::NameAndValue,
+        );
         b.base.id = id.into();
         Box::new(b)
     }
@@ -163,10 +302,16 @@ impl Page<'_, '_> {
 
     fn accessibility(&self) -> OptionsScreen {
         let mut b = Build::new(33, 33);
-        let title = b.add(StringWidget::fit(self.ctx.font, self.ctx.tr("options.accessibility.title")));
+        let title = b.add(StringWidget::fit(
+            self.ctx.font,
+            self.ctx.tr("options.accessibility.title"),
+        ));
         b.layout.add_header(title);
         let c = self.client;
-        let first = vec![self.option("narrator"), self.button(150, "options.controls")];
+        let first = vec![
+            self.option("narrator"),
+            self.button(150, "options.controls"),
+        ];
         self.list(&mut b).add_small(first);
         self.small_with(&mut b, ACCESSIBILITY, |id, w| match id {
             "highContrast" => w.base_mut().active = c.high_contrast_pack,
@@ -184,27 +329,51 @@ impl Page<'_, '_> {
         let mut b = Build::new(33, 33);
         let mut header = Linear::new(true, 2);
         header.grid.defaults = header.grid.defaults.align_x(0.5).align_y(0.5);
-        header.add_default(b.add(StringWidget::fit(self.ctx.font, self.ctx.tr("options.videoTitle"))));
+        header.add_default(b.add(StringWidget::fit(
+            self.ctx.font,
+            self.ctx.tr("options.videoTitle"),
+        )));
         if value(self.values, "preferredGraphicsBackend").s() != "DEFAULT" {
             let warning = self.ctx.tr("options.restartRequired").with_color(0xDF_5050);
             header.add_default(b.add(StringWidget::fit(self.ctx.font, warning)));
         }
         b.layout.add_header(header.into_elem());
-        self.list(&mut b).add_header(self.ctx, section(self.ctx, "options.video.display.header"));
+        self.list(&mut b)
+            .add_header(self.ctx, section(self.ctx, "options.video.display.header"));
         // No monitor: the exclusive mode slider ranges over -1 alone.
-        let mode = Box::new(crate::java::widget::slider::Slider::new(0, 0, 310, 20, self.ctx.tr("options.fullscreen.unavailable"), 0.0));
+        let mode = Box::new(crate::java::widget::slider::Slider::new(
+            0,
+            0,
+            310,
+            20,
+            self.ctx.tr("options.fullscreen.unavailable"),
+            0.0,
+        ));
         self.list(&mut b).add_big(mode);
         self.small_ids(&mut b, DISPLAY);
-        self.list(&mut b).add_header(self.ctx, section(self.ctx, "options.video.quality.header"));
+        self.list(&mut b)
+            .add_header(self.ctx, section(self.ctx, "options.video.quality.header"));
         self.big(&mut b, "graphicsPreset");
-        let anisotropic = !self.client.ticked || value(self.values, "textureFiltering").s() == "ANISOTROPIC";
+        let anisotropic =
+            !self.client.ticked || value(self.values, "textureFiltering").s() == "ANISOTROPIC";
         self.small_with(&mut b, QUALITY, |id, w| {
             if id == "maxAnisotropyBit" {
                 w.base_mut().active = anisotropic;
             }
         });
-        self.list(&mut b).add_header(self.ctx, section(self.ctx, "options.video.preferences.header"));
-        self.small_ids(&mut b, &["showAutosaveIndicator", "vignette", "attackIndicator", "chunkSectionFadeInTime"]);
+        self.list(&mut b).add_header(
+            self.ctx,
+            section(self.ctx, "options.video.preferences.header"),
+        );
+        self.small_ids(
+            &mut b,
+            &[
+                "showAutosaveIndicator",
+                "vignette",
+                "attackIndicator",
+                "chunkSectionFadeInTime",
+            ],
+        );
         let done = b.add(Button::named(self.ctx, 200, DONE));
         b.layout.add_footer(done);
         b.finish(self.env)
@@ -212,19 +381,34 @@ impl Page<'_, '_> {
 
     fn online(&self, b: &mut Build) {
         let c = self.client;
-        self.list(b).add_header(self.ctx, section(self.ctx, "options.online.friends.header"));
-        let mut requests = self.on_off("options.allowFriendRequests", "options.allowFriendRequests", c.friend_requests);
+        self.list(b)
+            .add_header(self.ctx, section(self.ctx, "options.online.friends.header"));
+        let mut requests = self.on_off(
+            "options.allowFriendRequests",
+            "options.allowFriendRequests",
+            c.friend_requests,
+        );
         requests.base_mut().active = c.friends;
-        self.list(b).add_small(vec![self.on_off("options.friendsList", "options.friendsList", c.friends), requests]);
-        let mut notifications = self.on_off("inGameNotification", "options.inGameNotification", value(self.values, "inGameNotification").b());
+        self.list(b).add_small(vec![
+            self.on_off("options.friendsList", "options.friendsList", c.friends),
+            requests,
+        ]);
+        let mut notifications = self.on_off(
+            "inGameNotification",
+            "options.inGameNotification",
+            value(self.values, "inGameNotification").b(),
+        );
         notifications.base_mut().active = c.friends;
         let mut presence = create_button(self.ctx, self.values, "sharePresence", 150);
         presence.base_mut().active = c.friends;
         self.list(b).add_small(vec![notifications, presence]);
-        self.list(b).add_big(self.button(150, "options.online.xboxSettings"));
-        self.list(b).add_header(self.ctx, section(self.ctx, "options.online.servers.header"));
+        self.list(b)
+            .add_big(self.button(150, "options.online.xboxSettings"));
+        self.list(b)
+            .add_header(self.ctx, section(self.ctx, "options.online.servers.header"));
         self.big(b, "allowServerListing");
-        self.list(b).add_header(self.ctx, section(self.ctx, "options.online.realms.header"));
+        self.list(b)
+            .add_header(self.ctx, section(self.ctx, "options.online.realms.header"));
         self.big(b, "realmsNotifications");
     }
 
@@ -238,7 +422,9 @@ impl Page<'_, '_> {
         header.add(title, d.align_x(0.5));
         let mut sub = Linear::new(false, 8);
         b.widgets.push(create_button(ctx, self.values, "fov", 150));
-        sub.add_default(crate::java::widget::layout::Elem::Widget(b.widgets.len() - 1));
+        sub.add_default(crate::java::widget::layout::Elem::Widget(
+            b.widgets.len() - 1,
+        ));
         sub.add_default(b.add(Button::named(ctx, 150, "options.online")));
         header.add_default(sub.into_elem());
         b.layout.add_header(header.into_elem());
@@ -252,7 +438,8 @@ impl Page<'_, '_> {
             let d = grid.defaults;
             helper.add(&mut grid, e, 1, d);
         }
-        b.layout.add_contents(crate::java::widget::layout::Elem::Layout(Box::new(grid)));
+        b.layout
+            .add_contents(crate::java::widget::layout::Elem::Layout(Box::new(grid)));
         let done = b.add(Button::named(ctx, 200, DONE));
         b.layout.add_footer(done);
         b.finish(self.env)
@@ -263,6 +450,14 @@ impl Page<'_, '_> {
 pub const DONE: &str = "gui.done";
 
 const MAIN_BUTTONS: &[&str] = &[
-    "options.skinCustomisation", "options.sounds", "options.video", "options.controls", "options.language", "options.chat", "options.resourcepack",
-    "options.accessibility", "options.telemetry", "options.credits_and_attribution",
+    "options.skinCustomisation",
+    "options.sounds",
+    "options.video",
+    "options.controls",
+    "options.language",
+    "options.chat",
+    "options.resourcepack",
+    "options.accessibility",
+    "options.telemetry",
+    "options.credits_and_attribution",
 ];

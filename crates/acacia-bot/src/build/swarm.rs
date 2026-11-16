@@ -43,7 +43,15 @@ impl Builder {
         let who = who.into();
         // On the board from now (feet unknown: NaN crowds nobody), so others count this bot from their first restock.
         board.heartbeat(&who, [f32::NAN; 3]);
-        self.swarm = Some(Swarm { board, who, claimed: Vec::new(), acted: Vec::new(), taken: HashSet::new(), others: Vec::new(), home: ((0, 1), 0, i32::MIN..i32::MAX) });
+        self.swarm = Some(Swarm {
+            board,
+            who,
+            claimed: Vec::new(),
+            acted: Vec::new(),
+            taken: HashSet::new(),
+            others: Vec::new(),
+            home: ((0, 1), 0, i32::MIN..i32::MAX),
+        });
         self
     }
 
@@ -54,24 +62,47 @@ impl Builder {
 
     /// The cell is beside one another bot claimed (pillars keep out: they would wall off its clicks).
     pub(super) fn theirs(&self, p: BlockPos) -> bool {
-        self.swarm.as_ref().is_some_and(|s| s.taken.iter().any(|t| (t[0] - p[0]).abs() <= 1 && (t[2] - p[2]).abs() <= 1 && (t[1] - p[1]).abs() <= 1))
+        self.swarm.as_ref().is_some_and(|s| {
+            s.taken.iter().any(|t| {
+                (t[0] - p[0]).abs() <= 1 && (t[2] - p[2]).abs() <= 1 && (t[1] - p[1]).abs() <= 1
+            })
+        })
     }
 
     /// Extra travel, in blocks, for work at `p`: it is outside this bot's home band.
     pub(super) fn away_cost(&self, p: BlockPos) -> f32 {
         match &self.swarm {
-            Some(Swarm { home: (_, axis, band), .. }) if !band.contains(&p[*axis]) => AWAY,
+            Some(Swarm {
+                home: (_, axis, band),
+                ..
+            }) if !band.contains(&p[*axis]) => AWAY,
             _ => 0.0,
         }
     }
 
     /// The footprint cut along its longer side into one band per bot, each with as many blocks to place.
     fn cut_home(&mut self, (rank, bots): (usize, usize)) {
-        let extent = |i: usize| self.cells.iter().map(|c| c.pos[i]).max().unwrap_or(0) - self.cells.iter().map(|c| c.pos[i]).min().unwrap_or(0);
+        let extent = |i: usize| {
+            self.cells.iter().map(|c| c.pos[i]).max().unwrap_or(0)
+                - self.cells.iter().map(|c| c.pos[i]).min().unwrap_or(0)
+        };
         let axis = if extent(0) >= extent(2) { 0 } else { 2 };
-        let mut at: Vec<i32> = self.cells.iter().filter(|c| !c.target.is_air()).map(|c| c.pos[axis]).collect();
+        let mut at: Vec<i32> = self
+            .cells
+            .iter()
+            .filter(|c| !c.target.is_air())
+            .map(|c| c.pos[axis])
+            .collect();
         at.sort_unstable();
-        let cut = |k: usize| if k == 0 { i32::MIN } else if k >= bots { i32::MAX } else { at.get(k * at.len() / bots).copied().unwrap_or(i32::MAX) };
+        let cut = |k: usize| {
+            if k == 0 {
+                i32::MIN
+            } else if k >= bots {
+                i32::MAX
+            } else {
+                at.get(k * at.len() / bots).copied().unwrap_or(i32::MAX)
+            }
+        };
         let band = cut(rank)..cut(rank + 1);
         if let Some(s) = &mut self.swarm {
             s.home = ((rank, bots), axis, band);
@@ -80,7 +111,11 @@ impl Builder {
 
     /// Feet in `cell` would crowd another bot.
     pub(super) fn crowded(&self, cell: BlockPos) -> bool {
-        self.swarm.as_ref().is_some_and(|s| s.others.iter().any(|o| flat(*o, cell) < ROOM && (o[1] - cell[1] as f32).abs() < 2.0))
+        self.swarm.as_ref().is_some_and(|s| {
+            s.others
+                .iter()
+                .any(|o| flat(*o, cell) < ROOM && (o[1] - cell[1] as f32).abs() < 2.0)
+        })
     }
 
     /// Another bot's body is in the cell.
@@ -124,9 +159,17 @@ impl Builder {
     /// another bot holds `target`. `acts`: the step acts on `target` now (it starts a grace).
     pub(super) fn claim_batch(&mut self, target: Option<BlockPos>, acts: bool) -> bool {
         let (mut batch, tick) = (std::mem::take(&mut self.batch), self.tick);
-        let Some(s) = &mut self.swarm else { return true };
+        let Some(s) = &mut self.swarm else {
+            return true;
+        };
         s.acted.retain(|(_, t)| tick < t + GRACE);
-        batch.extend(s.acted.iter().map(|(p, _)| *p).filter(|p| !batch.contains(p)).collect::<Vec<_>>());
+        batch.extend(
+            s.acted
+                .iter()
+                .map(|(p, _)| *p)
+                .filter(|p| !batch.contains(p))
+                .collect::<Vec<_>>(),
+        );
         if batch != s.claimed {
             s.claimed = s.board.claim(&s.who, &batch);
             s.taken = s.board.taken(&s.who);
@@ -148,17 +191,23 @@ impl Builder {
 
     /// Cells this bot holds and cells other bots hold (0, 0 without a board).
     pub(super) fn claims(&self) -> (usize, usize) {
-        self.swarm.as_ref().map_or((0, 0), |s| (s.claimed.len(), s.taken.len()))
+        self.swarm
+            .as_ref()
+            .map_or((0, 0), |s| (s.claimed.len(), s.taken.len()))
     }
 
     /// Bots sharing the job (1 without a board).
     pub(super) fn sharers(&self) -> u32 {
-        self.swarm.as_ref().map_or(1, |s| s.board.others(&s.who).len() as u32 + 1)
+        self.swarm
+            .as_ref()
+            .map_or(1, |s| s.board.others(&s.who).len() as u32 + 1)
     }
 
     /// The board lets this bot open `station` now (always without a board).
     pub(super) fn open_station(&self, station: BlockPos) -> bool {
-        self.swarm.as_ref().is_none_or(|s| s.board.open_station(&s.who, station))
+        self.swarm
+            .as_ref()
+            .is_none_or(|s| s.board.open_station(&s.who, station))
     }
 
     pub(super) fn close_station(&self, station: BlockPos) {

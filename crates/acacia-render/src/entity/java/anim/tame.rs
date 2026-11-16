@@ -15,7 +15,14 @@ fn body_roll(s: &RenderState, offset: f32) -> f32 {
 
 pub(super) fn wolf(p: &mut Poses, s: &RenderState) {
     let (pos, speed) = (s.walk_pos(), s.walk_speed());
-    p.y_rot("tail", if s.flag("isAngry") { 0.0 } else { cos(pos * 0.6662) * 1.4 * speed });
+    p.y_rot(
+        "tail",
+        if s.flag("isAngry") {
+            0.0
+        } else {
+            cos(pos * 0.6662) * 1.4 * speed
+        },
+    );
     let adult = !s.baby();
     if s.flag("isSitting") {
         wolf_sitting(p, s.age_scale(), adult);
@@ -26,7 +33,10 @@ pub(super) fn wolf(p: &mut Poses, s: &RenderState) {
         p.x_rot("left_front_leg", cos(pos * 0.6662) * 1.4 * speed);
     }
     p.z_rot("body", body_roll(s, -0.16));
-    let (head_roll, tail_roll) = (s.num("headRollAngle") + body_roll(s, 0.0), body_roll(s, -0.2));
+    let (head_roll, tail_roll) = (
+        s.num("headRollAngle") + body_roll(s, 0.0),
+        body_roll(s, -0.2),
+    );
     if adult {
         p.z_rot("real_head", head_roll);
         p.z_rot("upper_body", body_roll(s, -0.08));
@@ -36,7 +46,11 @@ pub(super) fn wolf(p: &mut Poses, s: &RenderState) {
         p.z_rot("tail", tail_roll);
     }
     head(p, s);
-    let tail = if s.has("tailAngle") { s.num("tailAngle") } else { pi_div(5.0) };
+    let tail = if s.has("tailAngle") {
+        s.num("tailAngle")
+    } else {
+        pi_div(5.0)
+    };
     p.x_rot("tail", tail);
 }
 

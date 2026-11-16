@@ -85,7 +85,8 @@ impl Verifier {
             keys,
             issuer: MULTIPLAYER_ISSUER.into(),
             audience: MULTIPLAYER_AUDIENCE.into(),
-            chain_root: jwt::parse_public_key_der_b64(MOJANG_ROOT_KEY).expect("MOJANG_ROOT_KEY is a P-384 key"),
+            chain_root: jwt::parse_public_key_der_b64(MOJANG_ROOT_KEY)
+                .expect("MOJANG_ROOT_KEY is a P-384 key"),
             leeway: DEFAULT_LEEWAY_SECS,
         }
     }
@@ -139,7 +140,10 @@ impl Verifier {
         let client = jws::decode(part, request.client_jwt)?;
         jws::verify_es384(part, &client, &subject.key)?;
         let client_data =
-            ClientData::deserialize(&client.claims).map_err(|e| VerifyError::Malformed { part, reason: e.to_string() })?;
+            ClientData::deserialize(&client.claims).map_err(|e| VerifyError::Malformed {
+                part,
+                reason: e.to_string(),
+            })?;
         Ok(VerifiedLogin {
             identity: subject.identity,
             authenticated: subject.authenticated,
@@ -155,6 +159,7 @@ impl Verifier {
             return None;
         }
         let legacy = chain::verify(&self.chain_root, chain, now, self.leeway).ok()?;
-        (legacy.authenticated && legacy.identity.xuid == subject.identity.xuid).then_some(legacy.identity.title_id)?
+        (legacy.authenticated && legacy.identity.xuid == subject.identity.xuid)
+            .then_some(legacy.identity.title_id)?
     }
 }

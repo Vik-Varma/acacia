@@ -19,14 +19,22 @@ fn f(v: f32) -> f64 {
 pub fn wire_color(power: u8) -> [f32; 3] {
     let p = f32::from(power) / 15.0;
     let red = p * 0.6 + if p > 0.0 { 0.4 } else { 0.3 };
-    [red, (p * p * 0.7 - 0.5).clamp(0.0, 1.0), (p * p * 0.6 - 0.7).clamp(0.0, 1.0)]
+    [
+        red,
+        (p * p * 0.7 - 0.5).clamp(0.0, 1.0),
+        (p * p * 0.6 - 0.7).clamp(0.0, 1.0),
+    ]
 }
 
 /// `BlockBehaviour.OffsetType.XZ` for a block whose offset reaches `max`.
 pub fn offset_xz(cell: IVec3, max: f32) -> DVec3 {
     let seed = level::seed(cell.x, 0, cell.z);
     let axis = |bits: i64| (((bits & 15) as f32 / 15.0) as f64 - 0.5) * 0.5;
-    DVec3::new(axis(seed).clamp(-f(max), f(max)), 0.0, axis(seed >> 8).clamp(-f(max), f(max)))
+    DVec3::new(
+        axis(seed).clamp(-f(max), f(max)),
+        0.0,
+        axis(seed >> 8).clamp(-f(max), f(max)),
+    )
 }
 
 impl Engine {
@@ -37,15 +45,19 @@ impl Engine {
         match kind {
             A::Falling { color, sand } => {
                 if self.animate.next_int(16) == 0 && level::free(blocks, cell - IVec3::Y) {
-                    self.below(cell,Options::colored(Type::FallingDust, color));
+                    self.below(cell, Options::colored(Type::FallingDust, color));
                 }
-                if sand && blocks.block(cell + IVec3::Y).is_some_and(|b| b.name == "minecraft:air") {
+                if sand
+                    && blocks
+                        .block(cell + IVec3::Y)
+                        .is_some_and(|b| b.name == "minecraft:air")
+                {
                     self.animate.next_int(2100);
                 }
             }
             A::Brushable(color) => {
                 if self.animate.next_int(16) == 0 && level::free(blocks, cell - IVec3::Y) {
-                    self.below(cell,Options::colored(Type::FallingDust, color));
+                    self.below(cell, Options::colored(Type::FallingDust, color));
                 }
             }
             A::RedstoneOre => {
@@ -55,7 +67,13 @@ impl Engine {
                     }
                     // RedStoneOreBlock draws from the level's random, not the one it is handed.
                     let r = &mut self.level;
-                    let mut at = |s: i32| if s != 0 { 0.5 + 0.5625 * f64::from(s) } else { f(r.next_float()) };
+                    let mut at = |s: i32| {
+                        if s != 0 {
+                            0.5 + 0.5625 * f64::from(s)
+                        } else {
+                            f(r.next_float())
+                        }
+                    };
                     let p = c + DVec3::new(at(d.x), at(d.y), at(d.z));
                     self.add(&redstone(), p, zero);
                 }
@@ -63,7 +81,10 @@ impl Engine {
             A::RedstoneWire(power) => {
                 let color = Options::dust(wire_color(power), 1.0);
                 let sides = level::wire_sides(blocks, cell);
-                for (i, h) in [IVec3::NEG_Z, IVec3::X, IVec3::Z, IVec3::NEG_X].into_iter().enumerate() {
+                for (i, h) in [IVec3::NEG_Z, IVec3::X, IVec3::Z, IVec3::NEG_X]
+                    .into_iter()
+                    .enumerate()
+                {
                     match sides[i] {
                         level::Side::Up => {
                             self.wire_line(&color, c, h, IVec3::Y, -0.5, 0.5);
@@ -76,30 +97,55 @@ impl Engine {
             }
             A::Repeater { facing, delay } => {
                 let r = &mut self.animate;
-                let p = c + DVec3::new(0.5, 0.4, 0.5) + DVec3::new((r.next_double() - 0.5) * 0.2, (r.next_double() - 0.5) * 0.2, (r.next_double() - 0.5) * 0.2);
-                let offset = (if r.next_boolean() { f32::from(delay) * 2.0 - 1.0 } else { -5.0 }) / 16.0;
-                let shift = DVec3::new(f(offset) * f64::from(facing.x), 0.0, f(offset) * f64::from(facing.z));
+                let p = c
+                    + DVec3::new(0.5, 0.4, 0.5)
+                    + DVec3::new(
+                        (r.next_double() - 0.5) * 0.2,
+                        (r.next_double() - 0.5) * 0.2,
+                        (r.next_double() - 0.5) * 0.2,
+                    );
+                let offset = (if r.next_boolean() {
+                    f32::from(delay) * 2.0 - 1.0
+                } else {
+                    -5.0
+                }) / 16.0;
+                let shift = DVec3::new(
+                    f(offset) * f64::from(facing.x),
+                    0.0,
+                    f(offset) * f64::from(facing.z),
+                );
                 self.add(&redstone(), p + shift, zero);
             }
             A::Lever { facing, attached } => {
                 if self.animate.next_float() < 0.25 {
-                    let p = c + DVec3::splat(0.5) + 0.1 * facing.as_dvec3() + 0.2 * attached.as_dvec3();
+                    let p =
+                        c + DVec3::splat(0.5) + 0.1 * facing.as_dvec3() + 0.2 * attached.as_dvec3();
                     self.add(&Options::dust([1.0, 0.0, 0.0], 0.5), p, zero);
                 }
             }
             A::RespawnAnchor => {
                 self.animate.next_int(100);
                 let r = &mut self.animate;
-                let p = c + DVec3::new(0.5, 1.0, 0.5) + DVec3::new(0.5 - r.next_double(), 0.0, 0.5 - r.next_double());
+                let p = c
+                    + DVec3::new(0.5, 1.0, 0.5)
+                    + DVec3::new(0.5 - r.next_double(), 0.0, 0.5 - r.next_double());
                 let ya = f(r.next_float()) * 0.04;
                 self.simple(Type::ReversePortal, p, DVec3::new(0.0, ya, 0.0));
             }
             A::BubbleColumn { drag } => {
                 if drag {
-                    self.add_always(&Options::simple(Type::CurrentDown), c + DVec3::new(0.5, 0.8, 0.0), zero);
+                    self.add_always(
+                        &Options::simple(Type::CurrentDown),
+                        c + DVec3::new(0.5, 0.8, 0.0),
+                        zero,
+                    );
                 } else {
                     let up = DVec3::new(0.0, 0.04, 0.0);
-                    self.add_always(&Options::simple(Type::BubbleColumnUp), c + DVec3::new(0.5, 0.0, 0.5), up);
+                    self.add_always(
+                        &Options::simple(Type::BubbleColumnUp),
+                        c + DVec3::new(0.5, 0.0, 0.5),
+                        up,
+                    );
                     let r = &mut self.animate;
                     let p = c + DVec3::new(f(r.next_float()), f(r.next_float()), f(r.next_float()));
                     self.add_always(&Options::simple(Type::BubbleColumnUp), p, up);
@@ -113,18 +159,42 @@ impl Engine {
                 let d = DIRECTIONS[self.animate.next_int(6) as usize];
                 if d.y == 0 {
                     let r = &mut self.animate;
-                    let x = if d.x == 0 { 0.5 - r.next_double() } else { f64::from(d.x) * 0.6 };
-                    let z = if d.z == 0 { 0.5 - r.next_double() } else { f64::from(d.z) * 0.6 };
+                    let x = if d.x == 0 {
+                        0.5 - r.next_double()
+                    } else {
+                        f64::from(d.x) * 0.6
+                    };
+                    let z = if d.z == 0 {
+                        0.5 - r.next_double()
+                    } else {
+                        f64::from(d.z) * 0.6
+                    };
                     let ya = f(r.next_float()) * 0.04;
-                    let sculk = Options::transition([0x39 as f32 / 255.0, 0xD6 as f32 / 255.0, 0xE0 as f32 / 255.0], [1.0, 0.0, 0.0], 1.0);
-                    self.add(&sculk, c + DVec3::new(0.5, 0.25, 0.5) + DVec3::new(x, 0.0, z), DVec3::new(0.0, ya, 0.0));
+                    let sculk = Options::transition(
+                        [
+                            0x39 as f32 / 255.0,
+                            0xD6 as f32 / 255.0,
+                            0xE0 as f32 / 255.0,
+                        ],
+                        [1.0, 0.0, 0.0],
+                        1.0,
+                    );
+                    self.add(
+                        &sculk,
+                        c + DVec3::new(0.5, 0.25, 0.5) + DVec3::new(x, 0.0, z),
+                        DVec3::new(0.0, ya, 0.0),
+                    );
                 }
             }
             A::PotentSulfur => {
-                if level::fluid(blocks, cell + IVec3::Y).is_source() && level::fluid(blocks, cell + IVec3::Y).fluid == Fluid::Water {
+                if level::fluid(blocks, cell + IVec3::Y).is_source()
+                    && level::fluid(blocks, cell + IVec3::Y).fluid == Fluid::Water
+                {
                     for _ in 0..2 {
                         let r = &mut self.animate;
-                        let p = c + DVec3::Y + DVec3::new(f(r.next_float()), f(r.next_float()), f(r.next_float()));
+                        let p = c
+                            + DVec3::Y
+                            + DVec3::new(f(r.next_float()), f(r.next_float()), f(r.next_float()));
                         self.add_always(&Options::simple(Type::SulfurBubbles), p, zero);
                     }
                     self.animate.next_int(10);
@@ -138,7 +208,11 @@ impl Engine {
                 for _ in 0..3 {
                     if self.animate.next_boolean() {
                         let r = &mut self.animate;
-                        let p = DVec3::new(centre.x + r.next_double() / 5.0, c.y + (0.5 - r.next_double()), centre.z + r.next_double() / 5.0);
+                        let p = DVec3::new(
+                            centre.x + r.next_double() / 5.0,
+                            c.y + (0.5 - r.next_double()),
+                            centre.z + r.next_double() / 5.0,
+                        );
                         self.simple(Type::Smoke, p, zero);
                     }
                 }
@@ -149,7 +223,12 @@ impl Engine {
                 if self.animate.next_int(6) == 0 {
                     if level::fluid(blocks, cell).fluid == Fluid::Water {
                         let r = &mut self.animate;
-                        let p = centre + DVec3::new(f((r.next_float() * 2.0 - 1.0) / 3.0), 0.4, f((r.next_float() * 2.0 - 1.0) / 3.0));
+                        let p = centre
+                            + DVec3::new(
+                                f((r.next_float() * 2.0 - 1.0) / 3.0),
+                                0.4,
+                                f((r.next_float() * 2.0 - 1.0) / 3.0),
+                            );
                         let v = DVec3::new(0.0, f(r.next_float()), 0.0);
                         self.simple(Type::HappyVillager, p, v);
                     } else {
@@ -172,7 +251,9 @@ impl Engine {
             }
             A::DeadBush => {
                 let below = blocks.block(cell - IVec3::Y).map_or("", |b| b.name);
-                if self.animate.next_int(130) == 0 && (below == "minecraft:red_sand" || below.ends_with("terracotta")) {
+                if self.animate.next_int(130) == 0
+                    && (below == "minecraft:red_sand" || below.ends_with("terracotta"))
+                {
                     self.animate.next_int(3);
                 }
             }
@@ -181,7 +262,15 @@ impl Engine {
     }
 
     /// `RedstoneWireBlock.spawnParticlesAlongLine`.
-    fn wire_line(&mut self, color: &Options, c: DVec3, side: IVec3, along: IVec3, from: f32, to: f32) {
+    fn wire_line(
+        &mut self,
+        color: &Options,
+        c: DVec3,
+        side: IVec3,
+        along: IVec3,
+        from: f32,
+        to: f32,
+    ) {
         let span = to - from;
         let r = &mut self.animate;
         if r.next_float() < 0.2 * span {
@@ -201,7 +290,13 @@ impl Engine {
         let smoke = |engine: &mut Engine, p: DVec3| engine.simple(Type::LargeSmoke, p, DVec3::ZERO);
         if !burns(cell - IVec3::Y) && !level::sturdy(blocks, cell - IVec3::Y) {
             // West, east, north, south, then above; each face's near edge is 0.1 deep.
-            for (side, edge) in [(IVec3::NEG_X, 0), (IVec3::X, 0), (IVec3::NEG_Z, 2), (IVec3::Z, 2), (IVec3::Y, 1)] {
+            for (side, edge) in [
+                (IVec3::NEG_X, 0),
+                (IVec3::X, 0),
+                (IVec3::NEG_Z, 2),
+                (IVec3::Z, 2),
+                (IVec3::Y, 1),
+            ] {
                 if !burns(cell + side) {
                     continue;
                 }
@@ -221,7 +316,11 @@ impl Engine {
         } else {
             for _ in 0..3 {
                 let r = &mut self.animate;
-                let p = DVec3::new(c.x + r.next_double(), c.y + r.next_double() * 0.5 + 0.5, c.z + r.next_double());
+                let p = DVec3::new(
+                    c.x + r.next_double(),
+                    c.y + r.next_double() * 0.5 + 0.5,
+                    c.z + r.next_double(),
+                );
                 smoke(self, p);
             }
         }
@@ -232,7 +331,9 @@ impl Engine {
         if level::fluid(blocks, cell).fluid != Fluid::None || self.level.next_float() < 0.3 {
             return;
         }
-        let Some(shape) = level::extent(blocks, cell) else { return };
+        let Some(shape) = level::extent(blocks, cell) else {
+            return;
+        };
         if shape.top < 1.0 || level::impermeable(blocks, cell) {
             return;
         }
@@ -241,7 +342,8 @@ impl Engine {
             y + shape.bottom - 0.05
         } else {
             let below = cell - IVec3::Y;
-            let open = level::extent(blocks, below).is_some_and(|b| b.top < 1.0) || !level::full_collision(blocks, below);
+            let open = level::extent(blocks, below).is_some_and(|b| b.top < 1.0)
+                || !level::full_collision(blocks, below);
             if !open || level::fluid(blocks, below).fluid != Fluid::None {
                 return;
             }
@@ -250,7 +352,11 @@ impl Engine {
         let r = &mut self.level;
         let (a, b) = (r.next_double(), r.next_double());
         let c = cell.as_dvec3();
-        let p = DVec3::new(level::lerp(a, c.x + shape.x[0], c.x + shape.x[1]), height, level::lerp(b, c.z + shape.z[0], c.z + shape.z[1]));
+        let p = DVec3::new(
+            level::lerp(a, c.x + shape.x[0], c.x + shape.x[1]),
+            height,
+            level::lerp(b, c.z + shape.z[0], c.z + shape.z[1]),
+        );
         self.simple(Type::DrippingHoney, p, DVec3::ZERO);
     }
 
@@ -263,8 +369,14 @@ impl Engine {
         if chance > 0.12 {
             return;
         }
-        let Some(above) = level::above_stalactite(blocks, cell) else { return };
-        let fluid = if blocks.block(above).is_some_and(|b| b.name == "minecraft:mud") && !self.nether {
+        let Some(above) = level::above_stalactite(blocks, cell) else {
+            return;
+        };
+        let fluid = if blocks
+            .block(above)
+            .is_some_and(|b| b.name == "minecraft:mud")
+            && !self.nether
+        {
             Fluid::Water
         } else {
             level::fluid(blocks, above).fluid
@@ -280,7 +392,9 @@ impl Engine {
         };
         // The tip's shape starts 5 pixels up; the drop hangs a pixel under that.
         let offset = offset_xz(cell, 0.125);
-        let p = cell.as_dvec3() + DVec3::new(0.5, 5.0 / 16.0, 0.5) + DVec3::new(offset.x, -0.0625, offset.z);
+        let p = cell.as_dvec3()
+            + DVec3::new(0.5, 5.0 / 16.0, 0.5)
+            + DVec3::new(offset.x, -0.0625, offset.z);
         self.simple(ty, p, DVec3::ZERO);
     }
 }

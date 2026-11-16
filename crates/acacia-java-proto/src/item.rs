@@ -31,7 +31,11 @@ pub struct ItemStack {
 
 impl ItemStack {
     pub fn new(item: i32, count: i32) -> Self {
-        Self { item, count, components: Components::default() }
+        Self {
+            item,
+            count,
+            components: Components::default(),
+        }
     }
 }
 
@@ -122,7 +126,9 @@ impl Components {
         if !self.enchantments.is_empty() {
             put(ENCHANTMENTS, &|out| {
                 write_varint(self.enchantments.len() as i32, out);
-                self.enchantments.iter().for_each(|&(id, level)| [id, level].iter().for_each(|&v| write_varint(v, out)));
+                self.enchantments.iter().for_each(|&(id, level)| {
+                    [id, level].iter().for_each(|&v| write_varint(v, out))
+                });
             });
         }
         if let Some(id) = self.map_id {
@@ -150,7 +156,12 @@ impl Wire for Components {
 }
 
 /// Reads component `id`'s value into `components` when the bot keeps it, else skips it.
-fn read_component(id: i32, input: &mut &[u8], depth: u32, components: &mut Components) -> Result<(), Error> {
+fn read_component(
+    id: i32,
+    input: &mut &[u8],
+    depth: u32,
+    components: &mut Components,
+) -> Result<(), Error> {
     match id {
         MAX_STACK_SIZE => components.max_stack_size = Some(read_varint(input)?),
         MAX_DAMAGE => components.max_damage = Some(read_varint(input)?),
@@ -164,7 +175,9 @@ fn read_component(id: i32, input: &mut &[u8], depth: u32, components: &mut Compo
         ENCHANTMENTS => {
             components.enchantments.clear();
             for _ in 0..read_len(input)? {
-                components.enchantments.push((read_varint(input)?, read_varint(input)?));
+                components
+                    .enchantments
+                    .push((read_varint(input)?, read_varint(input)?));
             }
         }
         MAP_ID => components.map_id = Some(read_varint(input)?),
@@ -180,7 +193,11 @@ impl Wire for Option<ItemStack> {
             return Ok(None);
         }
         let item = read_varint(input)?;
-        Ok(Some(ItemStack { item, count, components: Components::read(input)? }))
+        Ok(Some(ItemStack {
+            item,
+            count,
+            components: Components::read(input)?,
+        }))
     }
 
     fn write(&self, out: &mut Vec<u8>) {

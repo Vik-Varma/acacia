@@ -17,12 +17,23 @@ pub struct Shot {
 impl Shot {
     pub fn from_env() -> Option<Shot> {
         let path = std::env::var_os("ACACIA_SCREENSHOT")?.into();
-        let after = std::env::var("ACACIA_SHOT_AFTER").ok().and_then(|s| s.parse().ok()).unwrap_or(15.0);
-        Some(Shot { path, after: Duration::from_secs_f32(after), world_at: None, taken: false })
+        let after = std::env::var("ACACIA_SHOT_AFTER")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(15.0);
+        Some(Shot {
+            path,
+            after: Duration::from_secs_f32(after),
+            world_at: None,
+            taken: false,
+        })
     }
 
     pub fn place(camera: &mut Camera, player: DVec3) {
-        let rise: f64 = std::env::var("ACACIA_RISE").ok().and_then(|s| s.parse().ok()).unwrap_or(0.0);
+        let rise: f64 = std::env::var("ACACIA_RISE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.0);
         let at = std::env::var("ACACIA_AT").ok().and_then(|s| {
             let mut c = s.split(',').map(|v| v.parse::<f64>().ok());
             Some(DVec3::new(c.next()??, c.next()??, c.next()??))

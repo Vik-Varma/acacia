@@ -6,8 +6,8 @@ use crate::collide::{Blocks, Colliders, Context};
 use crate::fluid::FluidContact;
 use crate::input::{Keys, Pose};
 use crate::mount_body::MountBody;
-use crate::mth::{cos, floor, sin, DEG_TO_RAD};
-use crate::support::{Support, BELOW_MOVEMENT_OFFSET};
+use crate::mth::{DEG_TO_RAD, cos, floor, sin};
+use crate::support::{BELOW_MOVEMENT_OFFSET, Support};
 
 pub const WIDTH: f32 = 0.6;
 pub const STEP_HEIGHT: f32 = 0.6;
@@ -83,7 +83,12 @@ pub struct Player {
 
 impl Player {
     pub fn at(pos: [f64; 3]) -> Player {
-        Player { pos, has_food: true, flying_speed: 0.05, ..Player::default() }
+        Player {
+            pos,
+            has_food: true,
+            flying_speed: 0.05,
+            ..Player::default()
+        }
     }
 
     pub fn fall_distance(&self) -> f64 {
@@ -137,7 +142,8 @@ impl Player {
     }
 
     pub(crate) fn fits(&self, world: &impl Blocks, pose: Pose) -> bool {
-        self.colliders(world).no_collision(&Aabb::of_entity(self.pos, WIDTH, pose.height()).deflated(FIT_MARGIN))
+        self.colliders(world)
+            .no_collision(&Aabb::of_entity(self.pos, WIDTH, pose.height()).deflated(FIT_MARGIN))
     }
 
     pub(crate) fn block_pos(&self) -> [i32; 3] {
@@ -172,7 +178,11 @@ impl Player {
     }
 
     pub(crate) fn gravity(&self) -> f64 {
-        if self.delta[1] <= 0.0 && self.effects.slow_falling { 0.08_f64.min(0.01) } else { 0.08 }
+        if self.delta[1] <= 0.0 && self.effects.slow_falling {
+            0.08_f64.min(0.01)
+        } else {
+            0.08
+        }
     }
 
     pub(crate) fn in_lava(&self) -> bool {
@@ -184,7 +194,11 @@ impl Player {
     }
 
     pub(crate) fn jump_threshold(&self) -> f64 {
-        if (self.eye_height() as f64) < 0.4 { 0.0 } else { 0.4 }
+        if (self.eye_height() as f64) < 0.4 {
+            0.0
+        } else {
+            0.4
+        }
     }
 
     pub(crate) fn on_climbable(&self, world: &impl Blocks) -> bool {
@@ -204,19 +218,27 @@ impl Player {
             return false;
         }
         let below = world.block_state([here[0], here[1] - 1, here[2]]);
-        below.block() == acacia_registry::Block::Ladder && below.get(prop::HorizontalFacing) == state.get(prop::HorizontalFacing)
+        below.block() == acacia_registry::Block::Ladder
+            && below.get(prop::HorizontalFacing) == state.get(prop::HorizontalFacing)
     }
 
     /// `getBlockJumpFactor`.
     pub(crate) fn block_jump_factor(&self, world: &impl Blocks) -> f32 {
         let here = jump_factor(world.block_state(self.block_pos()).block());
-        let below = jump_factor(world.block_state(self.on_pos(world, BELOW_MOVEMENT_OFFSET)).block());
+        let below = jump_factor(
+            world
+                .block_state(self.on_pos(world, BELOW_MOVEMENT_OFFSET))
+                .block(),
+        );
         if here as f64 == 1.0 { below } else { here }
     }
 
     /// `getJumpPower(multiplier)` for a jump strength.
     pub(crate) fn jump_power(&self, world: &impl Blocks, strength: f32, multiplier: f32) -> f32 {
-        let boost = self.effects.jump_boost.map_or(0.0, |amp| 0.1_f32 * (amp as f32 + 1.0));
+        let boost = self
+            .effects
+            .jump_boost
+            .map_or(0.0, |amp| 0.1_f32 * (amp as f32 + 1.0));
         strength * multiplier * self.block_jump_factor(world) + boost
     }
 

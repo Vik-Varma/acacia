@@ -47,14 +47,27 @@ impl Fonts {
         let mut warnings = Vec::new();
         let defs = manager::load(resources, &mut warnings);
         let files = manager::by_file(&defs);
-        let sets = defs.iter().map(|(id, list)| (id.clone(), FontSet::new(list.clone(), options))).collect();
-        Fonts { defs, sets, missing: FontSet::new(Vec::new(), options), files, options, warnings }
+        let sets = defs
+            .iter()
+            .map(|(id, list)| (id.clone(), FontSet::new(list.clone(), options)))
+            .collect();
+        Fonts {
+            defs,
+            sets,
+            missing: FontSet::new(Vec::new(), options),
+            files,
+            options,
+            warnings,
+        }
     }
 
     /// The game's fonts: the jar's `assets` (its `assets/minecraft`) under the asset index at
     /// `index_root` (`indexes/` and `objects/`), when it is there.
     pub fn java(assets: &Path, index_root: Option<&Path>, options: FontOptions) -> Fonts {
-        Fonts::load(&Resources::java(assets, index_root.map(|r| (r, ASSET_INDEX))), options)
+        Fonts::load(
+            &Resources::java(assets, index_root.map(|r| (r, ASSET_INDEX))),
+            options,
+        )
     }
 
     /// `FontManager.updateOptions`.
@@ -76,7 +89,9 @@ impl Fonts {
 
     /// `getFontSetRaw` for a style's font (`None` is the default font).
     pub fn set(&self, font: Option<&str>) -> &FontSet {
-        self.sets.get(font.unwrap_or(DEFAULT)).unwrap_or(&self.missing)
+        self.sets
+            .get(font.unwrap_or(DEFAULT))
+            .unwrap_or(&self.missing)
     }
 
     /// `Font.getGlyphSource(style.font).getGlyph(c)` (`Minecraft.font`: fishy advances kept).
@@ -96,12 +111,28 @@ impl Fonts {
     /// special glyph.
     pub fn texels(&self, texture: &GlyphTexture) -> Option<(u32, u32, Vec<u8>)> {
         match texture {
-            GlyphTexture::Sheet(id) => self.sheet(id).map(|i| (i.width(), i.height(), i.to_rgba8().into_raw())),
+            GlyphTexture::Sheet(id) => self
+                .sheet(id)
+                .map(|i| (i.width(), i.height(), i.to_rgba8().into_raw())),
             GlyphTexture::Unihex(file, c) => match self.files.get(file).map(|p| &**p) {
-                Some(Provider::Unihex(_, glyphs, _)) => glyphs.get(c).map(|g| (g.width().max(0) as u32, 16, g.rgba())),
+                Some(Provider::Unihex(_, glyphs, _)) => glyphs
+                    .get(c)
+                    .map(|g| (g.width().max(0) as u32, 16, g.rgba())),
                 _ => None,
             },
-            GlyphTexture::Missing => Some((5, 8, (0..40).flat_map(|i| if matches!(i % 5, 0 | 4) || !(5..35).contains(&i) { [255; 4] } else { [0; 4] }).collect())),
+            GlyphTexture::Missing => Some((
+                5,
+                8,
+                (0..40)
+                    .flat_map(|i| {
+                        if matches!(i % 5, 0 | 4) || !(5..35).contains(&i) {
+                            [255; 4]
+                        } else {
+                            [0; 4]
+                        }
+                    })
+                    .collect(),
+            )),
             GlyphTexture::White => Some((5, 8, vec![255; 160])),
         }
     }
@@ -117,10 +148,24 @@ impl Metrics for Fonts {
         self.glyph(u32::from(c), style).advance(style.is_bold())
     }
 
-    fn active_areas(&self, text: &Text, x: f32, y: f32, color: u32, shadow: bool) -> super::active::TextAreas {
+    fn active_areas(
+        &self,
+        text: &Text,
+        x: f32,
+        y: f32,
+        color: u32,
+        shadow: bool,
+    ) -> super::active::TextAreas {
         // Obfuscated glyphs take Font.random's next; hovering does not need the same ones drawn.
-        let p = self.prepare(text, Pen::gui(x, y, color, shadow), &mut super::mth::JavaRandom::new(0));
-        super::active::TextAreas { bounds: p.bounds, areas: p.areas }
+        let p = self.prepare(
+            text,
+            Pen::gui(x, y, color, shadow),
+            &mut super::mth::JavaRandom::new(0),
+        );
+        super::active::TextAreas {
+            bounds: p.bounds,
+            areas: p.areas,
+        }
     }
 }
 

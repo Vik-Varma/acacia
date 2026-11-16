@@ -17,8 +17,12 @@ use crate::poses::setup;
 pub fn layers(layers: &BTreeMap<String, Part>, record: &Value, report: &mut Report) {
     let name = record["case"].as_str().unwrap_or_default();
     let mut case = report.case(name);
-    let Some((model, poses, state)) = setup(layers, record, &mut case) else { return };
-    let Some(family) = record["layer"].as_str().and_then(Family::of_layer) else { return };
+    let Some((model, poses, state)) = setup(layers, record, &mut case) else {
+        return;
+    };
+    let Some(family) = record["layer"].as_str().and_then(Family::of_layer) else {
+        return;
+    };
     let body = Mat4::from_scale(Vec3::new(1.0, 1.0, -1.0));
     let expected = record["hands"].as_object().cloned().unwrap_or_default();
     for (arm, matrix) in &expected {
@@ -27,15 +31,37 @@ pub fn layers(layers: &BTreeMap<String, Part>, record: &Value, report: &mut Repo
             case.diverge(&format!("hand {arm}"), "an arm", "none");
             continue;
         };
-        let got = body * fist(hand, Grip { left, baby: state.baby() });
-        case.numbers(&format!("hand {arm}"), &floats(matrix), &got.to_cols_array(), 1e-5);
+        let got = body
+            * fist(
+                hand,
+                Grip {
+                    left,
+                    baby: state.baby(),
+                },
+            );
+        case.numbers(
+            &format!("hand {arm}"),
+            &floats(matrix),
+            &got.to_cols_array(),
+            1e-5,
+        );
     }
     for (what, matrix) in record["heads"].as_object().into_iter().flatten() {
-        let Some(head) = mesh::head(model, &poses, mesh::HeadTransforms::DEFAULT, what == "skull") else {
+        let Some(head) = mesh::head(
+            model,
+            &poses,
+            mesh::HeadTransforms::DEFAULT,
+            what == "skull",
+        ) else {
             case.diverge(&format!("head {what}"), "a head", "none");
             continue;
         };
-        case.numbers(&format!("head {what}"), &floats(matrix), &(body * head).to_cols_array(), 1e-5);
+        case.numbers(
+            &format!("head {what}"),
+            &floats(matrix),
+            &(body * head).to_cols_array(),
+            1e-5,
+        );
     }
     for (slot, worn) in record["armor"].as_object().into_iter().flatten() {
         let mut case = report.case(&format!("{name} {slot}"));
@@ -49,7 +75,10 @@ pub fn layers(layers: &BTreeMap<String, Part>, record: &Value, report: &mut Repo
     }
     for (suffix, overlay) in record["overlays"].as_object().into_iter().flatten() {
         let mut case = report.case(&format!("{name} {suffix}"));
-        let Some(part) = overlay["layer"].as_str().and_then(|layer| layers.get(layer)) else {
+        let Some(part) = overlay["layer"]
+            .as_str()
+            .and_then(|layer| layers.get(layer))
+        else {
             case.diverge("layer", &overlay["layer"], "absent in the look");
             continue;
         };

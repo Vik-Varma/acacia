@@ -57,9 +57,12 @@ mod reads;
 mod registry;
 mod sign_in;
 
+pub use entity_delta::{ENTITY_NUMBERS, EntityDelta};
 pub use host::{Host, HostConfig};
-#[cfg(feature = "fake-sign-in")]
-pub use sign_in::{FakeSignIn, FAKE_USER_CODE};
-pub use sign_in::{default_profiles_folder, DeviceCode, LoginFuture, MicrosoftSignIn, MsaAccount, OnlineLogin, Prompt, SignIn};
 pub use outbound::Outbound;
-pub use entity_delta::{EntityDelta, ENTITY_NUMBERS};
+pub use sign_in::{
+    DeviceCode, LoginFuture, MicrosoftSignIn, MsaAccount, OnlineLogin, Prompt, SignIn,
+    default_profiles_folder,
+};
+#[cfg(feature = "fake-sign-in")]
+pub use sign_in::{FAKE_USER_CODE, FakeSignIn};

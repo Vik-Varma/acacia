@@ -3,17 +3,17 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use acacia_raknet::{Reliability, Server, ServerConfig, ServerEvent};
 use acacia_proto::packets::{Disconnect, DisconnectContent};
 use acacia_proto::types::DisconnectFailReason;
-use acacia_proto::{packets, GAME_VERSION, Packet, PROTOCOL_VERSION};
+use acacia_proto::{GAME_VERSION, PROTOCOL_VERSION, Packet, packets};
+use acacia_raknet::{Reliability, Server, ServerConfig, ServerEvent};
 use bytes::Bytes;
 use serde_json::json;
 use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
-use crate::peer::{encode, Peer, Received};
+use crate::peer::{Peer, Received, encode};
 use crate::script::Script;
 
 /// How long [`FakeServer::recv`] and [`FakeServer::spawned`] wait before failing the test.
@@ -55,7 +55,14 @@ impl FakeServer {
         let (commands, commands_rx) = mpsc::unbounded_channel();
         let (changes_tx, changes) = watch::channel(());
         let task = tokio::spawn(run(socket, script, shared.clone(), commands_rx, changes_tx));
-        Ok(Self { addr, shared, commands, changes, cursor: Mutex::new(0), task })
+        Ok(Self {
+            addr,
+            shared,
+            commands,
+            changes,
+            cursor: Mutex::new(0),
+            task,
+        })
     }
 
     pub fn addr(&self) -> SocketAddr {
@@ -93,12 +100,16 @@ impl FakeServer {
         let raw = self
             .wait_for(|s| {
                 let mut cursor = self.cursor.lock().expect(LOCK);
-                let i = *cursor + s.received[*cursor..].iter().position(|r| r.packet.id == T::ID)?;
+                let i = *cursor
+                    + s.received[*cursor..]
+                        .iter()
+                        .position(|r| r.packet.id == T::ID)?;
                 *cursor = i + 1;
                 Some(s.received[i].packet.clone())
             })
             .await?;
-        raw.decode().map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))
+        raw.decode()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))
     }
 
     /// What the server sent so far (script and test packets), in order.
@@ -106,7 +117,10 @@ impl FakeServer {
         self.shared.lock().expect(LOCK).sent.clone()
     }
 
-    pub(crate) async fn wait_for<R>(&self, mut check: impl FnMut(&Shared) -> Option<R>) -> io::Result<R> {
+    pub(crate) async fn wait_for<R>(
+        &self,
+        mut check: impl FnMut(&Shared) -> Option<R>,
+    ) -> io::Result<R> {
         let mut changes = self.changes.clone();
         let wait = async {
             loop {
@@ -115,18 +129,33 @@ impl FakeServer {
                     return Ok(r);
                 }
                 if changes.changed().await.is_err() {
-                    return Err(io::Error::new(io::ErrorKind::BrokenPipe, "fake server stopped"));
+                    return Err(io::Error::new(
+                        io::ErrorKind::BrokenPipe,
+                        "fake server stopped",
+                    ));
                 }
             }
         };
-        tokio::time::timeout(WAIT_TIMEOUT, wait).await.unwrap_or_else(|_| Err(io::Error::new(io::ErrorKind::TimedOut, "fake server wait timed out")))
+        tokio::time::timeout(WAIT_TIMEOUT, wait)
+            .await
+            .unwrap_or_else(|_| {
+                Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "fake server wait timed out",
+                ))
+            })
     }
 
     /// Both directions as an acacia-mitm capture, for `capdiff` against a vanilla capture.
     pub fn write_capture(&self, path: &std::path::Path) -> io::Result<()> {
         let shared = self.shared.lock().expect(LOCK);
         let ms = |d: Duration| d.as_secs_f64() * 1000.0;
-        let mut all: Vec<(bool, &Received)> = shared.sent.iter().map(|r| (false, r)).chain(shared.received.iter().map(|r| (true, r))).collect();
+        let mut all: Vec<(bool, &Received)> = shared
+            .sent
+            .iter()
+            .map(|r| (false, r))
+            .chain(shared.received.iter().map(|r| (true, r)))
+            .collect();
         all.sort_by_key(|(_, r)| r.t);
         let mut lines = Vec::new();
         let mut line = |v: serde_json::Value| lines.push(v.to_string());
@@ -143,7 +172,9 @@ impl FakeServer {
                 spawned = None;
             }
             let dir = if from_client { "C>S" } else { "S>C" };
-            line(json!({ "dir": dir, "id": r.packet.id, "len": r.packet.body.len(), "name": name, "raw": hex::encode(&r.packet.body), "t": ms(r.t) }));
+            line(
+                json!({ "dir": dir, "id": r.packet.id, "len": r.packet.body.len(), "name": name, "raw": hex::encode(&r.packet.body), "t": ms(r.t) }),
+            );
         }
         std::fs::write(path, lines.join("\n") + "\n")
     }
@@ -155,9 +186,17 @@ impl Drop for FakeServer {
     }
 }
 
-async fn run(socket: UdpSocket, script: Script, shared: Arc<Mutex<Shared>>, mut commands: mpsc::UnboundedReceiver<Command>, changes: watch::Sender<()>) {
+async fn run(
+    socket: UdpSocket,
+    script: Script,
+    shared: Arc<Mutex<Shared>>,
+    mut commands: mpsc::UnboundedReceiver<Command>,
+    changes: watch::Sender<()>,
+) {
     let port = socket.local_addr().map_or(0, |a| a.port());
-    let motd = format!("MCPE;fake server;{PROTOCOL_VERSION};{GAME_VERSION};0;10;1;fake;Survival;1;{port};{port};0;");
+    let motd = format!(
+        "MCPE;fake server;{PROTOCOL_VERSION};{GAME_VERSION};0;10;1;fake;Survival;1;{port};{port};0;"
+    );
     let mut server = Server::new(ServerConfig::new(1, motd), Instant::now());
     let mut peer: Option<(SocketAddr, Peer)> = None;
     let mut kicked = false;
@@ -167,7 +206,9 @@ async fn run(socket: UdpSocket, script: Script, shared: Arc<Mutex<Shared>>, mut 
         let now = Instant::now();
         while let Some(event) = server.poll_event() {
             match event {
-                ServerEvent::Connected { addr, .. } if peer.is_none() => peer = Some((addr, Peer::new(script.clone(), now))),
+                ServerEvent::Connected { addr, .. } if peer.is_none() => {
+                    peer = Some((addr, Peer::new(script.clone(), now)))
+                }
                 ServerEvent::Message(addr, msg) => {
                     if let Some((a, p)) = &mut peer
                         && *a == addr
@@ -201,7 +242,12 @@ async fn run(socket: UdpSocket, script: Script, shared: Arc<Mutex<Shared>>, mut 
             let _ = socket.send_to(&d, to).await;
         }
         let due = peer.as_ref().and_then(|(_, p)| p.next_due());
-        let deadline = server.poll_timeout().into_iter().chain(due).min().unwrap_or(now + Duration::from_millis(100));
+        let deadline = server
+            .poll_timeout()
+            .into_iter()
+            .chain(due)
+            .min()
+            .unwrap_or(now + Duration::from_millis(100));
         tokio::select! {
             r = socket.recv_from(&mut buf) => {
                 if let Ok((n, from)) = r {
@@ -228,6 +274,9 @@ fn kick(message: String) -> Disconnect {
     Disconnect {
         reason: DisconnectFailReason::Kicked,
         hide_disconnect_reason: false,
-        content: Some(DisconnectContent { message, filtered_message: String::new() }),
+        content: Some(DisconnectContent {
+            message,
+            filtered_message: String::new(),
+        }),
     }
 }

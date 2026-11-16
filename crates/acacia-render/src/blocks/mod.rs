@@ -21,8 +21,8 @@ use crate::assets::flipbook::{Animation, Atlas};
 use crate::assets::image::{Alpha, Texture};
 pub use cull::{Cull, Skip};
 pub use fluid::FluidRules;
-pub use shape::{Box16, ModelFace, Shape, short_name};
 pub use light::{FaceShapes, LightFacts};
+pub use shape::{Box16, ModelFace, Shape, short_name};
 pub use tint::Tint;
 
 /// How a face's texture alpha is used; the value is the shader's material index.
@@ -108,7 +108,19 @@ pub struct BuildReport {
 }
 
 /// Blocks whose textures have alpha even though the block is a solid cube in the game.
-const CUTOUT_CUBES: &[&str] = &["leaves", "glass", "spawner", "ice", "roots", "scaffolding", "cobweb", "grate", "vault", "beacon", "chorus"];
+const CUTOUT_CUBES: &[&str] = &[
+    "leaves",
+    "glass",
+    "spawner",
+    "ice",
+    "roots",
+    "scaffolding",
+    "cobweb",
+    "grate",
+    "vault",
+    "beacon",
+    "chorus",
+];
 const TRANSLUCENT: &[&str] = &["stained_glass", "slime", "honey_block"];
 
 impl BlockTable {
@@ -129,12 +141,28 @@ impl BlockTable {
         report.blocks_without_textures.dedup();
         report.missing_images = textures.missing;
         let fallback = BlockTable::cube(0);
-        (BlockTable { blocks, fallback, biome_blend: 1, lighting: Default::default(), light_shapes: Arc::default() }, textures.atlas, report)
+        (
+            BlockTable {
+                blocks,
+                fallback,
+                biome_blend: 1,
+                lighting: Default::default(),
+                light_shapes: Arc::default(),
+            },
+            textures.atlas,
+            report,
+        )
     }
 
     /// One block per runtime id.
     pub fn from_blocks(blocks: Vec<RenderBlock>) -> BlockTable {
-        BlockTable { blocks, fallback: BlockTable::cube(0), biome_blend: 1, lighting: Default::default(), light_shapes: Arc::default() }
+        BlockTable {
+            blocks,
+            fallback: BlockTable::cube(0),
+            biome_blend: 1,
+            lighting: Default::default(),
+            light_shapes: Arc::default(),
+        }
     }
 
     /// Runtime ids past the registry (unknown custom blocks) render as a missing-texture cube.
@@ -160,7 +188,14 @@ impl BlockTable {
             fluid_rules: FluidRules::CUBE,
             model: None,
             cull: None,
-            light: LightFacts { solid_render: true, full_collision: true, dampening: 15, dark: true, ambient_occlusion: true, ..LightFacts::default() },
+            light: LightFacts {
+                solid_render: true,
+                full_collision: true,
+                dampening: 15,
+                dark: true,
+                ambient_occlusion: true,
+                ..LightFacts::default()
+            },
         }
     }
 }
@@ -179,19 +214,38 @@ fn face_names(pack: &Pack, state: &BlockState) -> Option<[String; 6]> {
             "iron_chain" => pack.block_faces("chain"),
             _ => None,
         })
-        .or_else(|| pack.texture(name).map(|_| std::array::from_fn(|_| name.to_owned())))?;
+        .or_else(|| {
+            pack.texture(name)
+                .map(|_| std::array::from_fn(|_| name.to_owned()))
+        })?;
     Some(facing::orient(faces, state))
 }
 
-fn build_block(state: &BlockState, faces: Option<[String; 6]>, textures: &mut Textures) -> RenderBlock {
+fn build_block(
+    state: &BlockState,
+    faces: Option<[String; 6]>,
+    textures: &mut Textures,
+) -> RenderBlock {
     let name = short_name(state.name);
     let model = model::classify(state).map(Arc::new);
-    let shape = if model.is_some() { Shape::None } else { shape::classify(state) };
+    let shape = if model.is_some() {
+        Shape::None
+    } else {
+        shape::classify(state)
+    };
     // A lever takes two images: its model is built here, where they resolve.
     let shape = match name {
         "lever" => {
-            let (direction, thrown) = (state.property("lever_direction").unwrap_or_default(), state.property("open_bit") == Some("1"));
-            Shape::Model(lever::faces(direction, thrown, textures.resolve("cobblestone").layer, textures.resolve("lever").layer))
+            let (direction, thrown) = (
+                state.property("lever_direction").unwrap_or_default(),
+                state.property("open_bit") == Some("1"),
+            );
+            Shape::Model(lever::faces(
+                direction,
+                thrown,
+                textures.resolve("cobblestone").layer,
+                textures.resolve("lever").layer,
+            ))
         }
         _ => shape,
     };
@@ -204,7 +258,9 @@ fn build_block(state: &BlockState, faces: Option<[String; 6]>, textures: &mut Te
         _ if state.is_lava() => Fluid::Lava,
         _ => Fluid::None,
     };
-    let translucent = fluid == Fluid::Water || TRANSLUCENT.iter().any(|t| name.contains(t)) || matches!(name, "ice" | "portal");
+    let translucent = fluid == Fluid::Water
+        || TRANSLUCENT.iter().any(|t| name.contains(t))
+        || matches!(name, "ice" | "portal");
     let cutout_cube = CUTOUT_CUBES.iter().any(|c| name.contains(c));
     let layer = match shape {
         Shape::None => Layer::Invisible,
@@ -218,7 +274,11 @@ fn build_block(state: &BlockState, faces: Option<[String; 6]>, textures: &mut Te
         _ if fluid == Fluid::Lava || r.alpha == Alpha::Opaque => Material::Opaque,
         _ => Material::Cutout,
     });
-    let occludes = shape == Shape::Cube && layer == Layer::Solid && material.iter().all(|m| matches!(m, Material::Opaque | Material::Overlay));
+    let occludes = shape == Shape::Cube
+        && layer == Layer::Solid
+        && material
+            .iter()
+            .all(|m| matches!(m, Material::Opaque | Material::Overlay));
     RenderBlock {
         shape,
         layer,
@@ -258,7 +318,11 @@ struct Resolved {
 }
 
 impl Resolved {
-    const MISSING: Resolved = Resolved { layer: 0, alpha: Alpha::Opaque, overlay: false };
+    const MISSING: Resolved = Resolved {
+        layer: 0,
+        alpha: Alpha::Opaque,
+        overlay: false,
+    };
 }
 
 /// Loads each distinct image once into the texture-array layer list.
@@ -271,8 +335,16 @@ struct Textures<'a> {
 
 impl<'a> Textures<'a> {
     fn new(pack: &'a Pack) -> Self {
-        let atlas = Atlas { layers: vec![Texture::missing()], animations: Vec::new() };
-        Textures { pack, atlas, by_name: FxHashMap::default(), missing: Vec::new() }
+        let atlas = Atlas {
+            layers: vec![Texture::missing()],
+            animations: Vec::new(),
+        };
+        Textures {
+            pack,
+            atlas,
+            by_name: FxHashMap::default(),
+            missing: Vec::new(),
+        }
     }
 
     fn resolve(&mut self, texture_name: &str) -> Resolved {
@@ -294,7 +366,9 @@ impl<'a> Textures<'a> {
         let warn = |e: &crate::Error| tracing::warn!(%e, "texture");
         let image = match self.pack.flipbook(texture_name) {
             Some(book) => {
-                let strip = Texture::load_frames(&file, tex.quad).inspect_err(warn).ok()?;
+                let strip = Texture::load_frames(&file, tex.quad)
+                    .inspect_err(warn)
+                    .ok()?;
                 let still = strip.first()?.clone();
                 let animation = Animation::new(layer, strip, book);
                 let first = animation.as_ref().map_or(still, |a| a.at(0));
@@ -303,7 +377,11 @@ impl<'a> Textures<'a> {
             }
             None => Texture::load(&file, tex.quad).inspect_err(warn).ok()?,
         };
-        let r = Resolved { layer, alpha: image.alpha(), overlay: tex.overlay };
+        let r = Resolved {
+            layer,
+            alpha: image.alpha(),
+            overlay: tex.overlay,
+        };
         self.atlas.layers.push(image);
         Some(r)
     }

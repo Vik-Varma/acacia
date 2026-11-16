@@ -34,7 +34,11 @@ pub fn named_color(name: &str) -> Option<u32> {
 
 /// `TextColor.parseColor`: a name or `#RRGGBB`.
 pub fn parse_color(s: &str) -> Option<u32> {
-    named_color(s).or_else(|| s.strip_prefix('#').filter(|h| h.len() == 6).and_then(|h| u32::from_str_radix(h, 16).ok()))
+    named_color(s).or_else(|| {
+        s.strip_prefix('#')
+            .filter(|h| h.len() == 6)
+            .and_then(|h| u32::from_str_radix(h, 16).ok())
+    })
 }
 
 /// A style; `None` inherits from the enclosing one.
@@ -55,7 +59,10 @@ pub struct Style {
 
 impl Style {
     pub fn color(c: u32) -> Style {
-        Style { color: Some(c), ..Style::default() }
+        Style {
+            color: Some(c),
+            ..Style::default()
+        }
     }
 
     /// Fills unset fields from `base` (`Style.applyTo`).
@@ -99,7 +106,15 @@ impl Style {
     pub fn legacy(&self, code: char, own: &Style) -> Style {
         if let Some(c) = COLORS.iter().find(|c| c.0 == code) {
             let off = Some(false);
-            return Style { color: Some(c.2), bold: off, italic: off, underlined: off, strikethrough: off, obfuscated: off, ..self.clone() };
+            return Style {
+                color: Some(c.2),
+                bold: off,
+                italic: off,
+                underlined: off,
+                strikethrough: off,
+                obfuscated: off,
+                ..self.clone()
+            };
         }
         let mut s = self.clone();
         match code {
@@ -150,12 +165,21 @@ impl Text {
         if text.is_empty() {
             return Text::default();
         }
-        Text { spans: vec![Span { text, style: Style::default() }], forward: false }
+        Text {
+            spans: vec![Span {
+                text,
+                style: Style::default(),
+            }],
+            forward: false,
+        }
     }
 
     /// These spans as a `FormattedCharSequence` (`forward` of each), not reordered when drawn.
     pub fn as_forward(self) -> Text {
-        Text { forward: true, ..self }
+        Text {
+            forward: true,
+            ..self
+        }
     }
 
     pub fn styled(s: impl Into<String>, style: &Style) -> Text {
@@ -204,7 +228,10 @@ impl Text {
         if !self.spans.iter().any(|s| s.text.contains('§')) {
             return self.clone();
         }
-        let mut out = Text { forward: self.forward, ..Text::default() };
+        let mut out = Text {
+            forward: self.forward,
+            ..Text::default()
+        };
         for span in &self.spans {
             let mut style = span.style.clone();
             let mut current = String::new();
@@ -223,13 +250,19 @@ impl Text {
                 let next = style.legacy(code.to_ascii_lowercase(), &span.style);
                 if next != style {
                     if !current.is_empty() {
-                        out.spans.push(Span { text: std::mem::take(&mut current), style: style.clone() });
+                        out.spans.push(Span {
+                            text: std::mem::take(&mut current),
+                            style: style.clone(),
+                        });
                     }
                     style = next;
                 }
             }
             if !current.is_empty() {
-                out.spans.push(Span { text: current, style });
+                out.spans.push(Span {
+                    text: current,
+                    style,
+                });
             }
         }
         out
@@ -237,7 +270,8 @@ impl Text {
 
     /// `ChatFormatting.stripFormatting`.
     pub fn strip_legacy(&self) -> Text {
-        let code = |c: char| matches!(c.to_ascii_lowercase(), '0'..='9' | 'a'..='f' | 'k'..='o' | 'r');
+        let code =
+            |c: char| matches!(c.to_ascii_lowercase(), '0'..='9' | 'a'..='f' | 'k'..='o' | 'r');
         let spans = self.spans.iter().filter_map(|span| {
             let mut text = String::with_capacity(span.text.len());
             let mut chars = span.text.chars().peekable();
@@ -248,14 +282,22 @@ impl Text {
                     text.push(c);
                 }
             }
-            (!text.is_empty()).then(|| Span { text, style: span.style.clone() })
+            (!text.is_empty()).then(|| Span {
+                text,
+                style: span.style.clone(),
+            })
         });
-        Text { spans: spans.collect(), forward: self.forward }
+        Text {
+            spans: spans.collect(),
+            forward: self.forward,
+        }
     }
 
     /// Characters with their styles.
     pub fn chars(&self) -> impl Iterator<Item = (char, &Style)> {
-        self.spans.iter().flat_map(|s| s.text.chars().map(move |c| (c, &s.style)))
+        self.spans
+            .iter()
+            .flat_map(|s| s.text.chars().map(move |c| (c, &s.style)))
     }
 
     /// Characters `[from, to)`, styles kept.
@@ -263,12 +305,19 @@ impl Text {
         let mut out = Text::default();
         let mut index = 0;
         for span in &self.spans {
-            let part: String = span.text.chars().filter(|_| {
-                index += 1;
-                (from..to).contains(&(index - 1))
-            }).collect();
+            let part: String = span
+                .text
+                .chars()
+                .filter(|_| {
+                    index += 1;
+                    (from..to).contains(&(index - 1))
+                })
+                .collect();
             if !part.is_empty() {
-                out.spans.push(Span { text: part, style: span.style.clone() });
+                out.spans.push(Span {
+                    text: part,
+                    style: span.style.clone(),
+                });
             }
         }
         out
@@ -282,16 +331,27 @@ impl Text {
             Value::Bool(b) => Text::literal(b.to_string()),
             // A list is its first element with the rest as siblings in its style.
             Value::Array(list) => {
-                let Some((first, rest)) = list.split_first() else { return Text::default() };
-                let style = first.as_object().map(|o| object_style(o, lang)).unwrap_or_default();
-                rest.iter().fold(Text::from_json(first, lang), |t, s| t.append(Text::from_json(s, lang).with_style(&style)))
+                let Some((first, rest)) = list.split_first() else {
+                    return Text::default();
+                };
+                let style = first
+                    .as_object()
+                    .map(|o| object_style(o, lang))
+                    .unwrap_or_default();
+                rest.iter().fold(Text::from_json(first, lang), |t, s| {
+                    t.append(Text::from_json(s, lang).with_style(&style))
+                })
             }
             Value::Object(o) => {
                 let style = object_style(o, lang);
                 let content = if let Some(t) = o.get("text") {
                     Text::literal(t.as_str().map_or_else(|| t.to_string(), str::to_owned))
                 } else if let Some(key) = o.get("translate").and_then(Value::as_str) {
-                    let args: Vec<Text> = o.get("with").and_then(Value::as_array).map(|a| a.iter().map(|x| Text::from_json(x, lang)).collect()).unwrap_or_default();
+                    let args: Vec<Text> = o
+                        .get("with")
+                        .and_then(Value::as_array)
+                        .map(|a| a.iter().map(|x| Text::from_json(x, lang)).collect())
+                        .unwrap_or_default();
                     match (lang(key), o.get("fallback").and_then(Value::as_str)) {
                         (None, Some(fallback)) => format_translation(fallback, &args),
                         _ => Text::translate(key, &args, lang),
@@ -301,8 +361,14 @@ impl Text {
                 } else {
                     Text::default()
                 };
-                let extra = o.get("extra").and_then(Value::as_array).into_iter().flatten();
-                extra.fold(content.with_style(&style), |t, e| t.append(Text::from_json(e, lang).with_style(&style)))
+                let extra = o
+                    .get("extra")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten();
+                extra.fold(content.with_style(&style), |t, e| {
+                    t.append(Text::from_json(e, lang).with_style(&style))
+                })
             }
             Value::Null => Text::default(),
         }
@@ -320,7 +386,13 @@ pub fn json_root_style(v: &Value) -> Style {
 
 fn object_style(o: &serde_json::Map<String, Value>, lang: Lang) -> Style {
     let flag = |k: &str| o.get(k).and_then(Value::as_bool);
-    let font = o.get("font").and_then(Value::as_str).map(|f| if f.contains(':') { f.to_owned() } else { format!("minecraft:{f}") });
+    let font = o.get("font").and_then(Value::as_str).map(|f| {
+        if f.contains(':') {
+            f.to_owned()
+        } else {
+            format!("minecraft:{f}")
+        }
+    });
     let shadow_color = o.get("shadow_color").and_then(|c| match c {
         Value::Number(n) => n.as_i64().map(|v| v as u32),
         _ => None,
@@ -334,7 +406,10 @@ fn object_style(o: &serde_json::Map<String, Value>, lang: Lang) -> Style {
         strikethrough: flag("strikethrough"),
         obfuscated: flag("obfuscated"),
         font,
-        hover: o.get("hover_event").and_then(|h| HoverEvent::from_json(h, lang)).map(Arc::new),
+        hover: o
+            .get("hover_event")
+            .and_then(|h| HoverEvent::from_json(h, lang))
+            .map(Arc::new),
     }
 }
 
@@ -358,7 +433,11 @@ pub fn format_translation(template: &str, args: &[Text]) -> Text {
             j += 1;
         }
         let number = if j > digits && chars.get(j) == Some(&'$') {
-            let n = chars[digits..j].iter().collect::<String>().parse::<usize>().ok();
+            let n = chars[digits..j]
+                .iter()
+                .collect::<String>()
+                .parse::<usize>()
+                .ok();
             j += 1;
             n
         } else {
@@ -375,10 +454,21 @@ pub fn format_translation(template: &str, args: &[Text]) -> Text {
                 i += 1;
             }
             Some('s') => {
-                let index = number.map_or_else(|| { next += 1; next - 1 }, |n| n.wrapping_sub(1));
-                let Some(arg) = args.get(index) else { return Text::literal(template) };
+                let index = number.map_or_else(
+                    || {
+                        next += 1;
+                        next - 1
+                    },
+                    |n| n.wrapping_sub(1),
+                );
+                let Some(arg) = args.get(index) else {
+                    return Text::literal(template);
+                };
                 if !literal.is_empty() {
-                    out.spans.push(Span { text: std::mem::take(&mut literal), style: Style::default() });
+                    out.spans.push(Span {
+                        text: std::mem::take(&mut literal),
+                        style: Style::default(),
+                    });
                 }
                 out.spans.extend(arg.spans.iter().cloned());
                 i = j + 1;
@@ -387,7 +477,10 @@ pub fn format_translation(template: &str, args: &[Text]) -> Text {
         }
     }
     if !literal.is_empty() {
-        out.spans.push(Span { text: literal, style: Style::default() });
+        out.spans.push(Span {
+            text: literal,
+            style: Style::default(),
+        });
     }
     out
 }

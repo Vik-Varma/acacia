@@ -1,5 +1,7 @@
 use crate::auth::{Account, AuthClient, RealmProtocol};
-use crate::{measure_ping_regions, Client, ClientBuilder, ConnectError, SignalingTarget, Socks5Proxy};
+use crate::{
+    Client, ClientBuilder, ConnectError, SignalingTarget, Socks5Proxy, measure_ping_regions,
+};
 
 const DEFAULT_SIGNALING_HOST: &str = "signal.franchise.minecraft-services.net";
 
@@ -25,7 +27,9 @@ pub async fn realm_builder(
     let (key, credentials) = account.login_credentials().await?;
     Ok(match route {
         RealmRoute::Address(address) => Client::builder(address).online(credentials, key),
-        RealmRoute::Signaled(target) => Client::builder(target.peer.clone()).online(credentials, key).signaling(target),
+        RealmRoute::Signaled(target) => Client::builder(target.peer.clone())
+            .online(credentials, key)
+            .signaling(target),
     })
 }
 
@@ -53,11 +57,15 @@ pub async fn realm_route(
     }
     let token = account.service_token().await?.authorization_header;
     let host = signaling_host(auth).await?;
-    let target = SignalingTarget::from_realm(&join, token, &host).ok_or(RealmJoinError::Unsupported(join.protocol))?;
+    let target = SignalingTarget::from_realm(&join, token, &host)
+        .ok_or(RealmJoinError::Unsupported(join.protocol))?;
     Ok(RealmRoute::Signaled(target))
 }
 
 /// Discovery's signaling service host (what vanilla dials for realms and friends' worlds).
 pub(crate) async fn signaling_host(auth: &AuthClient) -> Result<String, crate::auth::Error> {
-    Ok(auth.signaling_environment().await?.map_or_else(|| DEFAULT_SIGNALING_HOST.to_owned(), |env| env.service_uri))
+    Ok(auth
+        .signaling_environment()
+        .await?
+        .map_or_else(|| DEFAULT_SIGNALING_HOST.to_owned(), |env| env.service_uri))
 }

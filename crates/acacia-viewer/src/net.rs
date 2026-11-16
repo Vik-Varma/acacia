@@ -10,9 +10,9 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::time::{Duration, Instant};
 
 use acacia_bot::client::{Client, ClientBuilder, PacketFilter};
+use acacia_bot::state::Trackers;
 use acacia_bot::{Bot, BotConfig, BotEvent, Events};
 use acacia_render::biome::BiomeColors;
-use acacia_bot::state::Trackers;
 use acacia_render::block_models::BlockDataMap;
 use acacia_render::entity::EntityModels;
 use acacia_world::World;
@@ -46,7 +46,10 @@ pub enum NetEvent {
     Me(Box<Me>),
     Sound(audio::Cue),
     /// A block broke there; `block` is its runtime id, for the chips.
-    Broken { pos: glam::IVec3, block: u32 },
+    Broken {
+        pos: glam::IVec3,
+        block: u32,
+    },
     Particles(crate::particles::Spawn),
     /// A title, subtitle or action bar text (or a clear).
     Title(acacia_bot::events::Title),
@@ -66,7 +69,12 @@ pub enum NetEvent {
     Sidebar(Option<acacia_ui::sidebar::Sidebar>),
     /// A chat line, with `§` codes; `message` may be a `%key` that `params` fill.
     /// `rawtext` is the message's JSON when it came as one (`acacia_bot::events` `ChatMessage`).
-    Chat { sender: Option<String>, message: String, params: Vec<String>, rawtext: Option<String> },
+    Chat {
+        sender: Option<String>,
+        message: String,
+        params: Vec<String>,
+        rawtext: Option<String>,
+    },
     /// Sent once, before any [`NetEvent::Entities`].
     EntityModels(Arc<EntityModels>),
     Entities(Vec<Tracked>),
@@ -104,7 +112,9 @@ impl Net {
                 Ok(_) => {}
                 Err(RecvTimeoutError::Disconnected) => break,
                 Err(RecvTimeoutError::Timeout) => {
-                    tracing::warn!("bot did not disconnect within 3 s; the server may hold the session (ServerIdConflict)");
+                    tracing::warn!(
+                        "bot did not disconnect within 3 s; the server may hold the session (ServerIdConflict)"
+                    );
                     break;
                 }
             }
@@ -120,12 +130,21 @@ pub fn spawn(options: Options, files: PathBuf) -> Net {
     std::thread::Builder::new()
         .name("bot".into())
         .spawn(move || {
-            let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("tokio runtime");
-            let reason = rt.block_on(run(options, &files, &tx, quit_rx, commands_rx)).unwrap_or_else(|e| format!("error: {e}"));
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("tokio runtime");
+            let reason = rt
+                .block_on(run(options, &files, &tx, quit_rx, commands_rx))
+                .unwrap_or_else(|e| format!("error: {e}"));
             let _ = tx.send(NetEvent::Ended(reason));
         })
         .expect("spawn bot thread");
-    Net { events, commands, quit: Some(quit) }
+    Net {
+        events,
+        commands,
+        quit: Some(quit),
+    }
 }
 
 /// Returns why the session ended.
@@ -137,13 +156,33 @@ async fn run(
     mut commands: UnboundedReceiver<Command>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let send = |e| tx.send(e).map_err(|_| "window closed");
-    send(NetEvent::Status(format!("connecting to {}", options.server)))?;
-    let builder = login(Client::builder(&options.server).chunk_radius(options.radius), &options.name).await?;
+    send(NetEvent::Status(format!(
+        "connecting to {}",
+        options.server
+    )))?;
+    let builder = login(
+        Client::builder(&options.server).chunk_radius(options.radius),
+        &options.name,
+    )
+    .await?;
     let subscribe = packets::forwarded().fold(PacketFilter::none(), PacketFilter::with);
-    let trackers = Trackers { entities: true, skins: true, maps: true, ..Trackers::default() };
+    let trackers = Trackers {
+        entities: true,
+        skins: true,
+        maps: true,
+        ..Trackers::default()
+    };
     let events = Events::TICKS | Events::CHAT | Events::TITLES;
     // The death screen respawns (control::Command::Respawn), as a player does.
-    let config = BotConfig { physics: true, auto_respawn: false, subscribe, trackers, events, mouse_input: true, ..BotConfig::default() };
+    let config = BotConfig {
+        physics: true,
+        auto_respawn: false,
+        subscribe,
+        trackers,
+        events,
+        mouse_input: true,
+        ..BotConfig::default()
+    };
     let models = Arc::new(EntityModels::load(files));
     send(NetEvent::EntityModels(models.clone()))?;
     let mut feed = Feed::new(models);
@@ -167,7 +206,10 @@ async fn run(
     let mut current: Option<Arc<World>> = None;
     let mut biome_logged = false;
     let mut time = None;
-    let (mut block_data, mut signs) = (Arc::new(BlockDataMap::new()), Arc::new(crate::sign_text::Texts::new()));
+    let (mut block_data, mut signs) = (
+        Arc::new(BlockDataMap::new()),
+        Arc::new(crate::sign_text::Texts::new()),
+    );
     let mut reports = 0u32;
     // `next` only returns for caller-facing events, which a viewer barely subscribes to; the
     // timer reports world and position changes in between (`next` is cancel-safe).
@@ -255,18 +297,30 @@ async fn run(
                 return Ok("quit".into());
             }
         }
-        let world = bot.bedrock().and_then(|b| b.world()).and_then(|w| w.view()).map(|v| v.world().clone());
+        let world = bot
+            .bedrock()
+            .and_then(|b| b.world())
+            .and_then(|w| w.view())
+            .map(|v| v.world().clone());
         if let Some(world) = world.filter(|w| current.as_ref().is_none_or(|c| !Arc::ptr_eq(c, w))) {
             current = Some(world.clone());
             send(NetEvent::World(world))?;
         }
         if let Some(world) = &current {
             let p = bot.state().player.eye_position();
-            send(NetEvent::Player(DVec3::new(p.x.into(), p.y.into(), p.z.into())))?;
+            send(NetEvent::Player(DVec3::new(
+                p.x.into(),
+                p.y.into(),
+                p.z.into(),
+            )))?;
             send(NetEvent::Entities(feed.snapshot(&bot)))?;
             let now = bot.state().environment.time;
             if time.replace(now) != Some(now) {
-                tracing::debug!(time = now, rain = bot.state().environment.rain, "time of day");
+                tracing::debug!(
+                    time = now,
+                    rain = bot.state().environment.rain,
+                    "time of day"
+                );
                 send(NetEvent::Time(now))?;
             }
             reports += 1;
@@ -285,7 +339,10 @@ async fn run(
             }
             if !biome_logged {
                 let (x, y, z) = (p.x.floor() as i32, p.y.floor() as i32, p.z.floor() as i32);
-                if let Some(id) = world.get(x >> 4, z >> 4).and_then(|c| c.read().biome(x, y, z)) {
+                if let Some(id) = world
+                    .get(x >> 4, z >> 4)
+                    .and_then(|c| c.read().biome(x, y, z))
+                {
                     tracing::debug!(id, x, y, z, "biome under the bot");
                     biome_logged = true;
                 }
@@ -294,10 +351,19 @@ async fn run(
     }
 }
 
-async fn login(builder: ClientBuilder, name: &str) -> Result<ClientBuilder, Box<dyn std::error::Error>> {
-    let Some(account) = name.strip_prefix('@') else { return Ok(builder.offline(name)) };
+async fn login(
+    builder: ClientBuilder,
+    name: &str,
+) -> Result<ClientBuilder, Box<dyn std::error::Error>> {
+    let Some(account) = name.strip_prefix('@') else {
+        return Ok(builder.offline(name));
+    };
     use acacia_bot::client::auth::{Account, AuthClient, AuthConfig, FileTokenCache};
-    let account = Account::new(Arc::new(AuthClient::new(AuthConfig::default())?), Arc::new(FileTokenCache::new(".tokens")?), account);
+    let account = Account::new(
+        Arc::new(AuthClient::new(AuthConfig::default())?),
+        Arc::new(FileTokenCache::new(".tokens")?),
+        account,
+    );
     let (key, credentials) = account.login_credentials().await?;
     Ok(builder.online(credentials, key))
 }

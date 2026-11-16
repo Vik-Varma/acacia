@@ -3,9 +3,16 @@ use crate::build::{LocalBoard, TaskBoard};
 #[test]
 fn a_cell_is_never_claimed_twice() {
     let b = LocalBoard::manual(100);
-    assert_eq!(b.claim("a", &[[0, 0, 0], [1, 0, 0]]), vec![[0, 0, 0], [1, 0, 0]]);
+    assert_eq!(
+        b.claim("a", &[[0, 0, 0], [1, 0, 0]]),
+        vec![[0, 0, 0], [1, 0, 0]]
+    );
     assert_eq!(b.claim("b", &[[1, 0, 0], [2, 0, 0]]), vec![[2, 0, 0]]);
-    assert_eq!(b.claim("a", &[[0, 0, 0]]), vec![[0, 0, 0]], "a new claim replaces the old one");
+    assert_eq!(
+        b.claim("a", &[[0, 0, 0]]),
+        vec![[0, 0, 0]],
+        "a new claim replaces the old one"
+    );
     assert_eq!(b.claim("b", &[[1, 0, 0]]), vec![[1, 0, 0]], "a gave it up");
     b.release("a");
     assert_eq!(b.claim("c", &[[0, 0, 0], [1, 0, 0]]), vec![[0, 0, 0]]);

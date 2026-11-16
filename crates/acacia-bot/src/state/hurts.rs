@@ -20,7 +20,9 @@ impl Hurts {
     pub fn apply(&mut self, packet: &RawPacket) -> Result<(), DecodeError> {
         let p: EntityEvent = packet.decode()?;
         match p.event_id {
-            EntityEventEventId::HurtAnimation => *self.hurts.entry(p.runtime_entity_id).or_default() += 1,
+            EntityEventEventId::HurtAnimation => {
+                *self.hurts.entry(p.runtime_entity_id).or_default() += 1
+            }
             EntityEventEventId::DeathAnimation => _ = self.dying.insert(p.runtime_entity_id),
             EntityEventEventId::Respawn => _ = self.dying.remove(&p.runtime_entity_id),
             _ => {}

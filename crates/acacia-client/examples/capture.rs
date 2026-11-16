@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use acacia_client::auth::{Account, AuthClient, AuthConfig, FileTokenCache};
-use acacia_client::{Client, EveryPack, Event, PacketFilter, Socks5Proxy};
+use acacia_client::{Client, Event, EveryPack, PacketFilter, Socks5Proxy};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,11 +17,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let outdir = PathBuf::from(outdir);
     std::fs::create_dir_all(&outdir)?;
-    let filter = if ids.is_empty() { PacketFilter::all() } else { ids.iter().map(|i| i.parse::<u32>()).collect::<Result<_, _>>()? };
-    let proxy = std::env::var("BEDROCK_PROXY").ok().map(|p| Socks5Proxy::parse(&p)).transpose()?;
+    let filter = if ids.is_empty() {
+        PacketFilter::all()
+    } else {
+        ids.iter()
+            .map(|i| i.parse::<u32>())
+            .collect::<Result<_, _>>()?
+    };
+    let proxy = std::env::var("BEDROCK_PROXY")
+        .ok()
+        .map(|p| Socks5Proxy::parse(&p))
+        .transpose()?;
 
     // Long enough to download a network's resource packs (The Hive: several) before spawning.
-    let mut builder = Client::builder(server.as_str()).filter(filter).event_capacity(4096).login_timeout(Duration::from_secs(180));
+    let mut builder = Client::builder(server.as_str())
+        .filter(filter)
+        .event_capacity(4096)
+        .login_timeout(Duration::from_secs(180));
     if let Some(p) = &proxy {
         builder = builder.proxy(p.clone());
     }
@@ -30,8 +42,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     builder = match name.strip_prefix('@') {
         Some(account) => {
-            let config = AuthConfig { proxy: proxy.as_ref().map(Socks5Proxy::to_url), ..AuthConfig::default() };
-            let account = Account::new(Arc::new(AuthClient::new(config)?), Arc::new(FileTokenCache::new(".tokens")?), account);
+            let config = AuthConfig {
+                proxy: proxy.as_ref().map(Socks5Proxy::to_url),
+                ..AuthConfig::default()
+            };
+            let account = Account::new(
+                Arc::new(AuthClient::new(config)?),
+                Arc::new(FileTokenCache::new(".tokens")?),
+                account,
+            );
             let (key, credentials) = account.login_credentials().await?;
             builder.online(credentials, key)
         }

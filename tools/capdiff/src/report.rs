@@ -2,10 +2,10 @@
 
 use std::collections::{BTreeMap, HashSet};
 
-use acacia_proto::{packets, Packet as _};
+use acacia_proto::{Packet as _, packets};
 
-use acacia_testserver::capture::{Packet, Session};
 use crate::diff;
+use acacia_testserver::capture::{Packet, Session};
 
 /// Client packets sent this often are compared by cadence, not by individual reactions or fields.
 const STREAM_MIN: usize = 20;
@@ -23,7 +23,12 @@ fn ms(t: Option<f64>) -> String {
 pub fn summary(a: &Session, b: &Session) {
     for (side, s) in [("left ", a), ("right", b)] {
         let end = s.packets.last().map_or(0.0, |p| p.t);
-        println!("{side}: {:.1} s, spawned at {} ms, {} client packets", end / 1000.0, ms(s.spawned), s.client().count());
+        println!(
+            "{side}: {:.1} s, spawned at {} ms, {} client packets",
+            end / 1000.0,
+            ms(s.spawned),
+            s.client().count()
+        );
     }
 }
 
@@ -38,12 +43,24 @@ fn counts(s: &Session) -> BTreeMap<&str, (usize, f64)> {
 pub fn inventory(a: &Session, b: &Session) {
     section("Client packets (count, first sent ms); ✗ = only one side sends it");
     let (ca, cb) = (counts(a), counts(b));
-    let mut names: Vec<&str> = ca.keys().chain(cb.keys()).copied().collect::<HashSet<_>>().into_iter().collect();
+    let mut names: Vec<&str> = ca
+        .keys()
+        .chain(cb.keys())
+        .copied()
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
     names.sort_by(|x, y| first(&ca, &cb, x).total_cmp(&first(&ca, &cb, y)));
     for name in names {
         let (l, r) = (ca.get(name), cb.get(name));
-        let mark = if l.is_none() || r.is_none() { "✗" } else { " " };
-        let cell = |c: Option<&(usize, f64)>| c.map_or(format!("{:>14}", "-"), |(n, t)| format!("{n:>6} @{t:>7.0}"));
+        let mark = if l.is_none() || r.is_none() {
+            "✗"
+        } else {
+            " "
+        };
+        let cell = |c: Option<&(usize, f64)>| {
+            c.map_or(format!("{:>14}", "-"), |(n, t)| format!("{n:>6} @{t:>7.0}"))
+        };
         println!("{mark} {name:<36} {}   {}", cell(l), cell(r));
     }
 }
@@ -66,7 +83,15 @@ fn sequence(s: &Session, window: f64, streams: &HashSet<&str>) -> Vec<String> {
             _ => out.push((p.name.clone(), 1)),
         }
     }
-    out.into_iter().map(|(name, n)| if n > 1 { format!("{name} ×{}", bucket(n)) } else { name }).collect()
+    out.into_iter()
+        .map(|(name, n)| {
+            if n > 1 {
+                format!("{name} ×{}", bucket(n))
+            } else {
+                name
+            }
+        })
+        .collect()
 }
 
 /// Run lengths rounded so jitter of a tick or two does not show as a difference.
@@ -80,11 +105,22 @@ fn bucket(n: usize) -> String {
 }
 
 pub fn order(a: &Session, b: &Session, window: f64) {
-    section(&format!("Order up to {:.0} s after spawn; streams at their first send (- left only, + right only)", window / 1000.0));
+    section(&format!(
+        "Order up to {:.0} s after spawn; streams at their first send (- left only, + right only)",
+        window / 1000.0
+    ));
     let (ca, cb) = (counts(a), counts(b));
-    let streams: HashSet<&str> = ca.iter().chain(&cb).filter(|(_, c)| c.0 >= STREAM_MIN).map(|(n, _)| *n).collect();
+    let streams: HashSet<&str> = ca
+        .iter()
+        .chain(&cb)
+        .filter(|(_, c)| c.0 >= STREAM_MIN)
+        .map(|(n, _)| *n)
+        .collect();
     let (sa, sb) = (sequence(a, window, &streams), sequence(b, window, &streams));
-    let (la, lb): (Vec<&str>, Vec<&str>) = (sa.iter().map(String::as_str).collect(), sb.iter().map(String::as_str).collect());
+    let (la, lb): (Vec<&str>, Vec<&str>) = (
+        sa.iter().map(String::as_str).collect(),
+        sb.iter().map(String::as_str).collect(),
+    );
     if diff::print(&diff::lines(&la, &lb), 2) == 0 {
         println!("    same order");
     }
@@ -101,17 +137,22 @@ fn triggers(s: &Session) -> BTreeMap<&str, (&str, f64)> {
         } else if counts[p.name.as_str()].0 < STREAM_MIN
             && let Some(trigger) = last_server
         {
-            out.entry(p.name.as_str()).or_insert((trigger.name.as_str(), p.t - trigger.t));
+            out.entry(p.name.as_str())
+                .or_insert((trigger.name.as_str(), p.t - trigger.t));
         }
     }
     out
 }
 
 pub fn reactions(a: &Session, b: &Session) {
-    section("Reaction: first send after the latest server packet (! = other trigger or >2x and >50 ms off)");
+    section(
+        "Reaction: first send after the latest server packet (! = other trigger or >2x and >50 ms off)",
+    );
     let (ta, tb) = (triggers(a), triggers(b));
     for (name, &(trig_a, da)) in &ta {
-        let Some(&(trig_b, db)) = tb.get(name) else { continue };
+        let Some(&(trig_b, db)) = tb.get(name) else {
+            continue;
+        };
         let off = trig_a != trig_b || ((da - db).abs() > 50.0 && (da.max(db) > 2.0 * da.min(db)));
         let mark = if off { "!" } else { " " };
         println!("{mark} {name:<36} {da:>7.0} after {trig_a:<28} {db:>7.0} after {trig_b}");
@@ -132,18 +173,34 @@ fn percentiles(s: &Session, name: &str) -> Option<[f64; 3]> {
 pub fn cadence(a: &Session, b: &Session) {
     section("Cadence: gap between sends, ms p10/p50/p90");
     let (ca, cb) = (counts(a), counts(b));
-    for name in ca.keys().filter(|n| ca[*n].0 >= STREAM_MIN || cb.get(*n).is_some_and(|c| c.0 >= STREAM_MIN)) {
-        let fmt = |p: Option<[f64; 3]>| p.map_or(format!("{:>17}", "-"), |[x, y, z]| format!("{x:>5.0}/{y:>5.0}/{z:>5.0}"));
-        println!("  {name:<36} {}   {}", fmt(percentiles(a, name)), fmt(percentiles(b, name)));
+    for name in ca
+        .keys()
+        .filter(|n| ca[*n].0 >= STREAM_MIN || cb.get(*n).is_some_and(|c| c.0 >= STREAM_MIN))
+    {
+        let fmt = |p: Option<[f64; 3]>| {
+            p.map_or(format!("{:>17}", "-"), |[x, y, z]| {
+                format!("{x:>5.0}/{y:>5.0}/{z:>5.0}")
+            })
+        };
+        println!(
+            "  {name:<36} {}   {}",
+            fmt(percentiles(a, name)),
+            fmt(percentiles(b, name))
+        );
     }
 }
 
 pub fn fields(a: &Session, b: &Session) {
     section("Fields of one-off client packets, first of each (- left, + right)");
     let (ca, cb) = (counts(a), counts(b));
-    for name in ca.keys().filter(|n| ca[*n].0 <= ONE_OFF_MAX && cb.get(*n).is_some_and(|c| c.0 <= ONE_OFF_MAX)) {
+    for name in ca
+        .keys()
+        .filter(|n| ca[*n].0 <= ONE_OFF_MAX && cb.get(*n).is_some_and(|c| c.0 <= ONE_OFF_MAX))
+    {
         let firsts = |s: &Session| s.client().find(|p| p.name == *name).and_then(dump);
-        let (Some(da), Some(db)) = (firsts(a), firsts(b)) else { continue };
+        let (Some(da), Some(db)) = (firsts(a), firsts(b)) else {
+            continue;
+        };
         if da == db {
             continue;
         }

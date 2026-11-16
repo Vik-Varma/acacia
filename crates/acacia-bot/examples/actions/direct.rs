@@ -1,24 +1,36 @@
 //! The direct controls a player at the keyboard uses (`interact/direct.rs`): aim set by the caller,
 //! mining advanced per tick, clicks sent at once.
 
-use acacia_bot::interact::{facing_face, Face};
-use acacia_bot::items::SlotRef;
 use acacia_bot::Bot;
+use acacia_bot::interact::{Face, facing_face};
+use acacia_bot::items::SlotRef;
 
-use crate::{find, Check, Pos};
+use crate::{Check, Pos, find};
 
 const AIR: &str = "minecraft:air";
 
 /// Two blocks east of the feet, at feet height (the flat world's ground is just below).
 fn spot(bot: &Bot) -> Result<Pos, Box<dyn std::error::Error>> {
-    let feet = bot.bedrock().and_then(|b| b.movement()).and_then(|m| m.position()).ok_or("no simulated position")?;
-    Ok([feet[0].floor() as i32 + 2, feet[1].floor() as i32, feet[2].floor() as i32])
+    let feet = bot
+        .bedrock()
+        .and_then(|b| b.movement())
+        .and_then(|m| m.position())
+        .ok_or("no simulated position")?;
+    Ok([
+        feet[0].floor() as i32 + 2,
+        feet[1].floor() as i32,
+        feet[2].floor() as i32,
+    ])
 }
 
 fn aim(bot: &mut Bot, pos: Pos, face: Face) {
     let eye = bot.eye_position();
     let o = face.click_offset();
-    let target = [pos[0] as f32 + o[0], pos[1] as f32 + o[1], pos[2] as f32 + o[2]];
+    let target = [
+        pos[0] as f32 + o[0],
+        pos[1] as f32 + o[1],
+        pos[2] as f32 + o[2],
+    ];
     if let Some(c) = bot.controls() {
         c.look_at(eye, target);
     }

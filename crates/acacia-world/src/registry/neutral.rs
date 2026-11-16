@@ -31,9 +31,14 @@ pub(super) static TABLES: LazyLock<Tables> = LazyLock::new(|| {
     assert_eq!(&BLOB[..4], b"ANB1", "neutral.bin: bad magic");
     let u32_at = |at: usize| u32::from_le_bytes(BLOB[at..at + 4].try_into().unwrap());
     let n = u32_at(4) as usize;
-    let to_neutral = (0..n).map(|i| (u32_at(8 + i * 5), NeutralFlags(BLOB[12 + i * 5]))).collect();
+    let to_neutral = (0..n)
+        .map(|i| (u32_at(8 + i * 5), NeutralFlags(BLOB[12 + i * 5])))
+        .collect();
     let at = 8 + n * 5;
     let m = u32_at(at) as usize;
     let from_neutral = (0..m).map(|i| u32_at(at + 4 + i * 4)).collect();
-    Tables { to_neutral, from_neutral }
+    Tables {
+        to_neutral,
+        from_neutral,
+    }
 });

@@ -13,12 +13,22 @@ impl EntityPass {
     pub fn new(device: &wgpu::Device, color: wgpu::TextureFormat, globals: &wgpu::Buffer) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("entity"),
-            source: wgpu::ShaderSource::Wgsl(concat!(include_str!("../globals.wgsl"), include_str!("../entity.wgsl")).into()),
+            source: wgpu::ShaderSource::Wgsl(
+                concat!(
+                    include_str!("../globals.wgsl"),
+                    include_str!("../entity.wgsl")
+                )
+                .into(),
+            ),
         });
         let buffer = |binding, ty| wgpu::BindGroupLayoutEntry {
             binding,
             visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-            ty: wgpu::BindingType::Buffer { ty, has_dynamic_offset: false, min_binding_size: None },
+            ty: wgpu::BindingType::Buffer {
+                ty,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
             count: None,
         };
         let [glint_item, glint_armor, glint_sampler] = GlintTextures::layout_entries(3);
@@ -49,7 +59,8 @@ impl EntityPass {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let over_bind_group = Self::bind_group(device, &layout, &over_globals, &instances, &bones, &glint);
+        let over_bind_group =
+            Self::bind_group(device, &layout, &over_globals, &instances, &bones, &glint);
         EntityPass {
             pipelines: pipelines::new(device, color, &pipeline_layout, &shader),
             started: Instant::now(),
@@ -80,22 +91,52 @@ impl EntityPass {
         glint: &GlintTextures,
     ) -> wgpu::BindGroup {
         let buffers = [globals, instances, bones];
-        let buffers = (0..).zip(buffers).map(|(binding, b)| wgpu::BindGroupEntry { binding, resource: b.as_entire_binding() });
+        let buffers = (0..).zip(buffers).map(|(binding, b)| wgpu::BindGroupEntry {
+            binding,
+            resource: b.as_entire_binding(),
+        });
         let entries: Vec<_> = buffers.chain(glint.entries(3)).collect();
-        device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("entity"), layout, entries: &entries })
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("entity"),
+            layout,
+            entries: &entries,
+        })
     }
 
-    pub fn set_glint(&mut self, device: &wgpu::Device, globals: &wgpu::Buffer, glint: GlintTextures) {
+    pub fn set_glint(
+        &mut self,
+        device: &wgpu::Device,
+        globals: &wgpu::Buffer,
+        glint: GlintTextures,
+    ) {
         self.glint = glint;
         self.rebind(device, globals);
     }
 
     pub(super) fn rebind(&mut self, device: &wgpu::Device, globals: &wgpu::Buffer) {
-        self.bind_group = Self::bind_group(device, &self.layout, globals, &self.instances, &self.bones, &self.glint);
-        self.over_bind_group = Self::bind_group(device, &self.layout, &self.over_globals, &self.instances, &self.bones, &self.glint);
+        self.bind_group = Self::bind_group(
+            device,
+            &self.layout,
+            globals,
+            &self.instances,
+            &self.bones,
+            &self.glint,
+        );
+        self.over_bind_group = Self::bind_group(
+            device,
+            &self.layout,
+            &self.over_globals,
+            &self.instances,
+            &self.bones,
+            &self.glint,
+        );
     }
 
-    pub(in crate::gpu) fn set_over_globals(&self, queue: &wgpu::Queue, globals: &super::super::globals::Globals) {
+    pub(in crate::gpu) fn set_over_globals(
+        &self,
+        queue: &wgpu::Queue,
+        globals: &super::super::globals::Globals,
+    ) {
         queue.write_buffer(&self.over_globals, 0, bytemuck::bytes_of(globals));
     }
 }

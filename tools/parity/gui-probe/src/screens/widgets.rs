@@ -4,10 +4,14 @@ use std::borrow::Cow;
 
 use acacia_ui::java::gui::{Gui, GuiDraw};
 use acacia_ui::java::text::{Text, json_root_style};
-use acacia_ui::java::widget::button::{Button, Checkbox, CycleButton, Display, ImageButton, SpriteIconButton, Sprites};
+use acacia_ui::java::widget::button::{
+    Button, Checkbox, CycleButton, Display, ImageButton, SpriteIconButton, Sprites,
+};
 use acacia_ui::java::widget::edit_box::EditBox;
 use acacia_ui::java::widget::slider::Slider;
-use acacia_ui::java::widget::text::{Fill, FocusableTextWidget, MultiLineText, MultiLineTextWidget, Overflow, StringWidget};
+use acacia_ui::java::widget::text::{
+    Fill, FocusableTextWidget, MultiLineText, MultiLineTextWidget, Overflow, StringWidget,
+};
 use acacia_ui::java::widget::{Ctx, Widget, render};
 use serde_json::{Map, Value};
 
@@ -18,7 +22,13 @@ use crate::Assets;
 const MILLIS: i64 = 1_000_000_000;
 
 fn sprites(v: &Value) -> Sprites {
-    let s: Vec<Cow<'static, str>> = v.as_array().into_iter().flatten().filter_map(Value::as_str).map(|s| Cow::Owned(s.to_owned())).collect();
+    let s: Vec<Cow<'static, str>> = v
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(|s| Cow::Owned(s.to_owned()))
+        .collect();
     Sprites(s[0].clone(), s[1].clone(), s[2].clone(), s[3].clone())
 }
 
@@ -51,8 +61,17 @@ pub fn replay(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<Gui
     gui.draws
 }
 
-fn widget(c: &Value, ctx: &Ctx, lang: &std::collections::HashMap<String, String>) -> Option<Box<dyn Widget>> {
-    let (x, y, w, h) = (int(c, "x", 0), int(c, "y", 0), int(c, "w", 150), int(c, "h", 20));
+fn widget(
+    c: &Value,
+    ctx: &Ctx,
+    lang: &std::collections::HashMap<String, String>,
+) -> Option<Box<dyn Widget>> {
+    let (x, y, w, h) = (
+        int(c, "x", 0),
+        int(c, "y", 0),
+        int(c, "w", 150),
+        int(c, "h", 20),
+    );
     let msg = text(&c["message"], lang);
     let m = ctx.font;
     Some(match c["kind"].as_str()? {
@@ -61,10 +80,20 @@ fn widget(c: &Value, ctx: &Ctx, lang: &std::collections::HashMap<String, String>
             b.highlight = c["highlight"].as_bool();
             Box::new(b)
         }
-        "image" => Box::new(ImageButton { base: acacia_ui::java::widget::Base::new(x, y, w, h, msg), sprites: sprites(&c["sprites"]) }),
+        "image" => Box::new(ImageButton {
+            base: acacia_ui::java::widget::Base::new(x, y, w, h, msg),
+            sprites: sprites(&c["sprites"]),
+        }),
         "icon" => {
             let size = ints(&c["spriteSize"]);
-            let mut b = SpriteIconButton::new(w, h, msg, sprites(&c["sprites"]), [size[0], size[1]], flag(c, "iconOnly", true));
+            let mut b = SpriteIconButton::new(
+                w,
+                h,
+                msg,
+                sprites(&c["sprites"]),
+                [size[0], size[1]],
+                flag(c, "iconOnly", true),
+            );
             let offset = ints(&c["spriteOffset"]);
             b.sprite_offset = [offset[0], offset[1]];
             b.base.x = x;
@@ -73,19 +102,31 @@ fn widget(c: &Value, ctx: &Ctx, lang: &std::collections::HashMap<String, String>
             Box::new(b)
         }
         "cycle" => {
-            let values: Vec<Text> = c["values"].as_array()?.iter().map(|v| text(v, lang)).collect();
+            let values: Vec<Text> = c["values"]
+                .as_array()?
+                .iter()
+                .map(|v| text(v, lang))
+                .collect();
             let display = match c["display"].as_str() {
                 Some("VALUE") => Display::Value,
                 Some("HIDE") => Display::Hide,
                 _ => Display::NameAndValue,
             };
             let value = values[int(c, "value", 0) as usize].clone();
-            let mut b = CycleButton::new(ctx.lang, x, y, w, h, text(&c["name"], lang), value, display);
+            let mut b =
+                CycleButton::new(ctx.lang, x, y, w, h, text(&c["name"], lang), value, display);
             b.sprite = c["sprite"].as_str().map(|s| Cow::Owned(s.to_owned()));
             Box::new(b)
         }
         "checkbox" => {
-            let mut b = Checkbox::new(m, x, y, c["maxWidth"].as_i64().map(|v| v as i32), msg, flag(c, "selected", false));
+            let mut b = Checkbox::new(
+                m,
+                x,
+                y,
+                c["maxWidth"].as_i64().map(|v| v as i32),
+                msg,
+                flag(c, "selected", false),
+            );
             b.text.ellipsis = json_root_style(&c["message"]);
             Box::new(b)
         }
@@ -98,7 +139,11 @@ fn widget(c: &Value, ctx: &Ctx, lang: &std::collections::HashMap<String, String>
         "string" => {
             let mut s = StringWidget::new(m, x, y, w, h, msg);
             if int(c, "maxWidth", 0) > 0 {
-                let overflow = if c["overflow"].as_str() == Some("SCROLLING") { Overflow::Scrolling } else { Overflow::Clamped };
+                let overflow = if c["overflow"].as_str() == Some("SCROLLING") {
+                    Overflow::Scrolling
+                } else {
+                    Overflow::Clamped
+                };
                 s = s.with_max_width(int(c, "maxWidth", 0), overflow);
             }
             Box::new(s)
@@ -118,7 +163,14 @@ fn widget(c: &Value, ctx: &Ctx, lang: &std::collections::HashMap<String, String>
                 Some("NEVER") => Fill::Never,
                 _ => Fill::Always,
             };
-            let mut f = FocusableTextWidget::new(m, msg, int(c, "padding", 4), int(c, "maxWidth", -1), flag(c, "alwaysBorder", true), fill);
+            let mut f = FocusableTextWidget::new(
+                m,
+                msg,
+                int(c, "padding", 4),
+                int(c, "maxWidth", -1),
+                flag(c, "alwaysBorder", true),
+                fill,
+            );
             f.base.x = x;
             f.base.y = y;
             Box::new(f)
@@ -128,7 +180,16 @@ fn widget(c: &Value, ctx: &Ctx, lang: &std::collections::HashMap<String, String>
 }
 
 #[allow(clippy::too_many_arguments)]
-fn edit_box(c: &Value, m: &dyn acacia_ui::java::gui::Metrics, x: i32, y: i32, w: i32, h: i32, msg: Text, lang: &std::collections::HashMap<String, String>) -> EditBox {
+fn edit_box(
+    c: &Value,
+    m: &dyn acacia_ui::java::gui::Metrics,
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+    msg: Text,
+    lang: &std::collections::HashMap<String, String>,
+) -> EditBox {
     let mut b = EditBox::new(x, y, w, h, msg);
     b.max_length = int(c, "maxLength", 32) as usize;
     b.bordered = flag(c, "bordered", true);

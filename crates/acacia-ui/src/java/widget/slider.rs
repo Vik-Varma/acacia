@@ -16,7 +16,11 @@ pub struct Slider {
 
 impl Slider {
     pub fn new(x: i32, y: i32, w: i32, h: i32, message: Text, value: f64) -> Slider {
-        Slider { base: Base::new(x, y, w, h, message), value, can_change: false }
+        Slider {
+            base: Base::new(x, y, w, h, message),
+            value,
+            can_change: false,
+        }
     }
 
     /// `setValue`: clamped to the track.
@@ -55,7 +59,8 @@ impl Widget for Slider {
             Key::Right => 1.0,
             _ => return None,
         };
-        self.can_change.then(|| Some(self.set_value(self.value + step / f64::from(self.base.w - 8))))
+        self.can_change
+            .then(|| Some(self.set_value(self.value + step / f64::from(self.base.w - 8))))
     }
     fn set_focused(&mut self, focused: bool, pointer: bool) {
         self.base.focused = focused;
@@ -73,10 +78,26 @@ impl Widget for Slider {
     }
     fn extract(&mut self, ctx: &mut Ctx, hovered: bool) {
         let b = &self.base;
-        let track = if b.is_active() && b.focused && !self.can_change { "widget/slider_highlighted" } else { "widget/slider" };
-        let handle = if !b.is_active() || (!hovered && !self.can_change) { "widget/slider_handle" } else { "widget/slider_handle_highlighted" };
-        ctx.gui.sprite_tinted(track, b.x, b.y, b.w, b.h, white(b.alpha));
-        ctx.gui.sprite_tinted(handle, b.x + (self.value * f64::from(b.w - 8)) as i32, b.y, 8, b.h, white(b.alpha));
+        let track = if b.is_active() && b.focused && !self.can_change {
+            "widget/slider_highlighted"
+        } else {
+            "widget/slider"
+        };
+        let handle = if !b.is_active() || (!hovered && !self.can_change) {
+            "widget/slider_handle"
+        } else {
+            "widget/slider_handle_highlighted"
+        };
+        ctx.gui
+            .sprite_tinted(track, b.x, b.y, b.w, b.h, white(b.alpha));
+        ctx.gui.sprite_tinted(
+            handle,
+            b.x + (self.value * f64::from(b.w - 8)) as i32,
+            b.y,
+            8,
+            b.h,
+            white(b.alpha),
+        );
         ctx.scrolling_over(b, b.shown_message(), 2, b.alpha);
     }
 }

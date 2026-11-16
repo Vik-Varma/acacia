@@ -28,10 +28,19 @@ struct ModelFile {
 }
 
 /// Slots hold a texture id or, in newer files, `{"sprite": id}`.
-fn texture_map<'de, D: serde::Deserializer<'de>>(de: D) -> Result<HashMap<String, String>, D::Error> {
+fn texture_map<'de, D: serde::Deserializer<'de>>(
+    de: D,
+) -> Result<HashMap<String, String>, D::Error> {
     let raw: HashMap<String, Value> = HashMap::deserialize(de)?;
-    let id = |v: &Value| v.as_str().or_else(|| v.get("sprite")?.as_str()).map(str::to_owned);
-    Ok(raw.into_iter().filter_map(|(slot, v)| Some((slot, id(&v)?))).collect())
+    let id = |v: &Value| {
+        v.as_str()
+            .or_else(|| v.get("sprite")?.as_str())
+            .map(str::to_owned)
+    };
+    Ok(raw
+        .into_iter()
+        .filter_map(|(slot, v)| Some((slot, id(&v)?)))
+        .collect())
 }
 
 #[derive(Deserialize, Clone)]
@@ -93,7 +102,9 @@ pub struct Resolved {
 impl Resolved {
     /// The texture id a face's `#slot` names.
     pub fn texture(&self, reference: &str) -> Option<&str> {
-        let id = self.textures.get(reference.strip_prefix('#').unwrap_or(reference))?;
+        let id = self
+            .textures
+            .get(reference.strip_prefix('#').unwrap_or(reference))?;
         (!id.starts_with('#')).then_some(id.as_str())
     }
 }
@@ -112,13 +123,21 @@ pub fn strip_namespace(id: &str) -> &str {
 
 impl Models {
     pub fn new(assets: PathBuf) -> Models {
-        Models { assets, files: HashMap::new(), invalid: Vec::new() }
+        Models {
+            assets,
+            files: HashMap::new(),
+            invalid: Vec::new(),
+        }
     }
 
     fn file(&mut self, id: &str) -> Option<&ModelFile> {
         if !self.files.contains_key(id) {
             let text = std::fs::read(self.assets.join(format!("models/{id}.json"))).ok();
-            let file = text.and_then(|t| serde_json::from_slice(&t).inspect_err(|_| self.invalid.push(id.to_owned())).ok());
+            let file = text.and_then(|t| {
+                serde_json::from_slice(&t)
+                    .inspect_err(|_| self.invalid.push(id.to_owned()))
+                    .ok()
+            });
             self.files.insert(id.to_owned(), file);
         }
         self.files[id].as_ref()
@@ -129,7 +148,9 @@ impl Models {
         let (mut slots, mut elements, mut ambient_occlusion) = (HashMap::new(), None, None);
         let mut current = id.to_owned();
         for _ in 0..MAX_PARENTS {
-            let Some(file) = self.file(&current) else { break };
+            let Some(file) = self.file(&current) else {
+                break;
+            };
             for (slot, texture) in &file.textures {
                 slots.entry(slot.clone()).or_insert_with(|| texture.clone());
             }
@@ -142,8 +163,20 @@ impl Models {
                 None => break,
             }
         }
-        let textures = slots.iter().map(|(slot, value)| (slot.clone(), strip_namespace(&follow(value, &slots, 0)).to_owned())).collect();
-        Resolved { textures, elements: elements.unwrap_or_default(), ambient_occlusion: ambient_occlusion.unwrap_or(true) }
+        let textures = slots
+            .iter()
+            .map(|(slot, value)| {
+                (
+                    slot.clone(),
+                    strip_namespace(&follow(value, &slots, 0)).to_owned(),
+                )
+            })
+            .collect();
+        Resolved {
+            textures,
+            elements: elements.unwrap_or_default(),
+            ambient_occlusion: ambient_occlusion.unwrap_or(true),
+        }
     }
 }
 
@@ -162,18 +195,35 @@ mod tests {
     fn a_child_inherits_elements_and_fills_its_parents_slots() {
         let dir = std::env::temp_dir().join(format!("lookbake-models-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("models/block")).unwrap();
-        let write = |name: &str, json: &str| std::fs::write(dir.join(format!("models/block/{name}.json")), json).unwrap();
-        write("cube", r##"{"elements": [{"from": [0,0,0], "to": [16,16,16], "faces": {"up": {"texture": "#up", "cullface": "up"}}}]}"##);
-        write("cube_all", r##"{"parent": "minecraft:block/cube", "ambientocclusion": false, "textures": {"up": "#all", "particle": "#all"}}"##);
-        write("stone", r##"{"parent": "minecraft:block/cube_all", "textures": {"all": "minecraft:block/stone"}}"##);
+        let write = |name: &str, json: &str| {
+            std::fs::write(dir.join(format!("models/block/{name}.json")), json).unwrap()
+        };
+        write(
+            "cube",
+            r##"{"elements": [{"from": [0,0,0], "to": [16,16,16], "faces": {"up": {"texture": "#up", "cullface": "up"}}}]}"##,
+        );
+        write(
+            "cube_all",
+            r##"{"parent": "minecraft:block/cube", "ambientocclusion": false, "textures": {"up": "#all", "particle": "#all"}}"##,
+        );
+        write(
+            "stone",
+            r##"{"parent": "minecraft:block/cube_all", "textures": {"all": "minecraft:block/stone"}}"##,
+        );
         write("broken", "{");
 
         let mut models = Models::new(dir.clone());
         let stone = models.resolve("block/stone");
         assert_eq!(stone.elements.len(), 1);
         assert!(!stone.ambient_occlusion && models.resolve("block/cube").ambient_occlusion);
-        assert_eq!((stone.texture("#up"), stone.texture("#missing")), (Some("block/stone"), None));
-        assert!(models.resolve("block/broken").elements.is_empty() && models.resolve("block/absent").elements.is_empty());
+        assert_eq!(
+            (stone.texture("#up"), stone.texture("#missing")),
+            (Some("block/stone"), None)
+        );
+        assert!(
+            models.resolve("block/broken").elements.is_empty()
+                && models.resolve("block/absent").elements.is_empty()
+        );
         assert_eq!(models.invalid, ["block/broken"]);
         std::fs::remove_dir_all(&dir).unwrap();
     }

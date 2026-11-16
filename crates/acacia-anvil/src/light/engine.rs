@@ -44,7 +44,8 @@ impl Lighter {
                         }
                         if p.emission > 0 {
                             for (_, d) in rows {
-                                self.emitters.extend((d..d + 16).map(|d| (d as u32, p.emission)));
+                                self.emitters
+                                    .extend((d..d + 16).map(|d| (d as u32, p.emission)));
                             }
                         }
                     }

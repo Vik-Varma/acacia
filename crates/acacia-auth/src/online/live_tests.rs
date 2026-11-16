@@ -21,7 +21,11 @@ async fn live_device_token_signature_accepted() {
 async fn live_discovery_and_default_nsal() {
     let http = Http::new(&AuthConfig::default()).unwrap();
     let d = minecraft::discover(&http, GAME_VERSION).await.unwrap();
-    println!("signaling={:?} qos_beacons={}", d.signaling, d.qos_beacons.len());
+    println!(
+        "signaling={:?} qos_beacons={}",
+        d.signaling,
+        d.qos_beacons.len()
+    );
     let env = d.auth;
     assert_eq!(env.playfab_title_id, "20CA2");
     let default = nsal::fetch_default(&http).await.unwrap();

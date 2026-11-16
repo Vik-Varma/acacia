@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::{Semaphore, mpsc};
 
 use crate::Event;
 
@@ -13,7 +13,12 @@ pub(crate) struct Closed;
 pub(crate) fn channel(capacity: usize) -> (EventSender, EventReceiver) {
     let (tx, rx) = mpsc::unbounded_channel();
     let room = Arc::new(Semaphore::new(capacity));
-    let receiver = EventReceiver { rx, room: room.clone(), batch: Vec::new().into_iter(), held: 0 };
+    let receiver = EventReceiver {
+        rx,
+        room: room.clone(),
+        batch: Vec::new().into_iter(),
+        held: 0,
+    };
     (EventSender { tx, room, capacity }, receiver)
 }
 
@@ -40,7 +45,11 @@ impl EventSender {
     /// Waits for room for the front of `pending`, then sends it. Cancel-safe: nothing is taken until room is.
     pub async fn send(&self, pending: &mut Vec<Event>) -> Result<(), Closed> {
         let n = self.batch_len(pending);
-        self.room.acquire_many(n as u32).await.map_err(|_| Closed)?.forget();
+        self.room
+            .acquire_many(n as u32)
+            .await
+            .map_err(|_| Closed)?
+            .forget();
         self.send_permitted(pending, n)
     }
 
@@ -56,7 +65,11 @@ impl EventSender {
     fn send_permitted(&self, pending: &mut Vec<Event>, n: usize) -> Result<(), Closed> {
         // Usually the whole queue goes: hand its buffer over rather than copy it out.
         // Capped: a join burst's size would ride along with every later batch.
-        let batch = if n == pending.len() { std::mem::replace(pending, Vec::with_capacity(n.min(64))) } else { pending.drain(..n).collect() };
+        let batch = if n == pending.len() {
+            std::mem::replace(pending, Vec::with_capacity(n.min(64)))
+        } else {
+            pending.drain(..n).collect()
+        };
         self.tx.send((batch, n)).map_err(|_| Closed)
     }
 }
@@ -120,7 +133,9 @@ mod tests {
     use super::*;
 
     fn events(n: usize) -> Vec<Event> {
-        (0..n).map(|_| Event::Disconnected(DisconnectReason::LocalClose)).collect()
+        (0..n)
+            .map(|_| Event::Disconnected(DisconnectReason::LocalClose))
+            .collect()
     }
 
     #[tokio::test]
@@ -133,10 +148,13 @@ mod tests {
         assert!(rx.try_recv().is_some() && rx.try_recv().is_some());
         // Finding the batch used up returns its room, before the receiver waits for more.
         assert!(rx.try_recv().is_none());
-        let sent = tokio::time::timeout(std::time::Duration::from_secs(5), tx.send(&mut pending)).await;
+        let sent =
+            tokio::time::timeout(std::time::Duration::from_secs(5), tx.send(&mut pending)).await;
         sent.expect("room came back").ok().expect("open");
         assert_eq!(pending.len(), 1);
-        tx.send_final(std::mem::take(&mut pending)).ok().expect("open");
+        tx.send_final(std::mem::take(&mut pending))
+            .ok()
+            .expect("open");
         assert_eq!(std::iter::from_fn(|| rx.try_recv()).count(), 3);
     }
 

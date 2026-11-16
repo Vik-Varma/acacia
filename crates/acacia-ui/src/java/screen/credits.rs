@@ -15,7 +15,10 @@ pub const LICENSES: &str = "credits_and_attribution.button.licenses";
 /// `init` at the env's size.
 pub fn credits_and_attribution(ctx: &Ctx, env: Env) -> OptionsScreen {
     let mut b = Build::new(33, 33);
-    let title = b.add(StringWidget::fit(ctx.font, ctx.tr("credits_and_attribution.screen.title")));
+    let title = b.add(StringWidget::fit(
+        ctx.font,
+        ctx.tr("credits_and_attribution.screen.title"),
+    ));
     b.layout.add_header(title);
     let mut content = Linear::new(true, 8);
     content.grid.defaults = content.grid.defaults.align_x(0.5);

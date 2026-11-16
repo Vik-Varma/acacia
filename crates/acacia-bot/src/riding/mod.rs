@@ -15,9 +15,11 @@ pub(crate) use exit::{Mount, STILL_SQ};
 
 use std::time::Duration;
 
-use acacia_client::proto::packets::{ClientCameraAimAssist, ClientCameraAimAssistAction, Interact, InteractActionId};
-use acacia_client::proto::types::Vec3f;
 use acacia_client::proto::RawPacket;
+use acacia_client::proto::packets::{
+    ClientCameraAimAssist, ClientCameraAimAssistAction, Interact, InteractActionId,
+};
+use acacia_client::proto::types::Vec3f;
 
 use crate::movement::Idle;
 use crate::state::Vehicle;
@@ -56,16 +58,30 @@ impl Bot {
     /// Interact, empty hand in the capture) and waits for the server's link. Pigs and striders need a
     /// saddle (the same click holding one); boats and minecarts don't. Servers refuse mounts while sneaking.
     pub async fn mount(&mut self, runtime_id: u64) -> Result<Vehicle, ActionError> {
-        if let Some(v) = self.state.riding.vehicle.as_ref().filter(|v| v.runtime_id == Some(runtime_id)) {
+        if let Some(v) = self
+            .state
+            .riding
+            .vehicle
+            .as_ref()
+            .filter(|v| v.runtime_id == Some(runtime_id))
+        {
             return Ok(v.clone());
         }
         if self.backend.controls().is_some_and(|c| c.sneak) {
             return Err(ActionError::NotPossible("sneaking".into()));
         }
         self.interact_entity(runtime_id).await?;
-        let seated = |bot: &Bot, _: &RawPacket| bot.state.riding.vehicle.clone().filter(|v| v.runtime_id == Some(runtime_id));
+        let seated = |bot: &Bot, _: &RawPacket| {
+            bot.state
+                .riding
+                .vehicle
+                .clone()
+                .filter(|v| v.runtime_id == Some(runtime_id))
+        };
         match self.wait_until(LINK_TIMEOUT, seated).await {
-            Err(ActionError::Timeout) => Err(ActionError::Rejected(format!("not seated on entity {runtime_id}"))),
+            Err(ActionError::Timeout) => Err(ActionError::Rejected(format!(
+                "not seated on entity {runtime_id}"
+            ))),
             other => other,
         }
     }
@@ -117,7 +133,13 @@ impl Bot {
 
     /// `eye`: the dismount tick's input position, which vanilla repeats in LeaveVehicle.
     fn leave_vehicle(&mut self, eye: Vec3f) {
-        let target = self.state.riding.vehicle.as_ref().and_then(|v| v.runtime_id).unwrap_or(0);
+        let target = self
+            .state
+            .riding
+            .vehicle
+            .as_ref()
+            .and_then(|v| v.runtime_id)
+            .unwrap_or(0);
         self.send_bedrock(&Interact {
             action_id: InteractActionId::LeaveVehicle,
             target_entity_id: target,

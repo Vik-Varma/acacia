@@ -1,12 +1,14 @@
 //! The client's side of a dimension change (docs/DESIGN.md "Dimension travel").
 
-use acacia_client::proto::packets::{ChangeDimension, PlayerAction, ServerboundLoadingScreen, ShowCredits};
+use acacia_client::proto::packets::{
+    ChangeDimension, PlayerAction, ServerboundLoadingScreen, ShowCredits,
+};
 use acacia_client::proto::types::Action;
 use acacia_client::proto::{Packet, RawPacket};
 use acacia_world::ChunkView;
 
-use crate::spawn::{LOADING_SCREEN_END, LOADING_SCREEN_START};
 use crate::Bot;
+use crate::spawn::{LOADING_SCREEN_END, LOADING_SCREEN_START};
 
 pub(crate) const PACKETS: &[u32] = &[ChangeDimension::ID, PlayerAction::ID, ShowCredits::ID];
 
@@ -49,7 +51,10 @@ impl Travel {
     /// A loading screen packet, if the server announced a screen: BDS kicks (UnexpectedPacket) for one it
     /// does not expect, and the change after a death in another dimension carries no id.
     fn loading_screen(&self, r#type: i32) -> Option<ServerboundLoadingScreen> {
-        self.loading_screen_id.map(|id| ServerboundLoadingScreen { r#type, loading_screen_id: Some(id) })
+        self.loading_screen_id.map(|id| ServerboundLoadingScreen {
+            r#type,
+            loading_screen_id: Some(id),
+        })
     }
 
     /// One client tick. `placed`: the terrain at the player's position has arrived. `moved`: the server
@@ -59,14 +64,20 @@ impl Travel {
         // After the credits the change names no position (y 32767): it follows the acknowledgement.
         let placed = placed && (moved || !self.respawn);
         match &mut self.settled {
-            None if self.server_ready && (placed || self.respawn) || self.waited >= ARRIVAL_WAIT_TICKS => {
+            None if self.server_ready && (placed || self.respawn)
+                || self.waited >= ARRIVAL_WAIT_TICKS =>
+            {
                 self.settled = Some(0);
                 Step::Leave
             }
             None => Step::Wait,
             Some(ticks) => {
                 *ticks += 1;
-                if *ticks > SETTLE_TICKS && (placed || *ticks > ARRIVAL_WAIT_TICKS) { Step::Arrived } else { Step::Wait }
+                if *ticks > SETTLE_TICKS && (placed || *ticks > ARRIVAL_WAIT_TICKS) {
+                    Step::Arrived
+                } else {
+                    Step::Wait
+                }
             }
         }
     }
@@ -76,27 +87,42 @@ impl Travel {
 /// BDS names the real position in `ChangeDimension`, so unlike at spawn there is no ground to wait for.
 pub(crate) fn terrain_arrived(view: &ChunkView, [x, y, z]: [f32; 3]) -> bool {
     let column_arrived = |x: f32, z: f32| {
-        let Some(chunk) = view.chunk((x.floor() as i32) >> 4, (z.floor() as i32) >> 4) else { return false };
+        let Some(chunk) = view.chunk((x.floor() as i32) >> 4, (z.floor() as i32) >> 4) else {
+            return false;
+        };
         let chunk = chunk.read();
         let dim = chunk.dimension();
         let sections = (dim.height >> 4) as i32;
         let section = |y: f32| (y.floor() as i32 - dim.min_y) >> 4;
         // Outside the dimension's height there is nothing to arrive.
-        (section(y - 1.0)..=section(y + 2.0)).filter(|s| (0..sections).contains(s)).all(|s| chunk.section_known(s as usize))
+        (section(y - 1.0)..=section(y + 2.0))
+            .filter(|s| (0..sections).contains(s))
+            .all(|s| chunk.section_known(s as usize))
     };
-    [(-0.3, -0.3), (0.3, -0.3), (-0.3, 0.3), (0.3, 0.3)].iter().all(|&(dx, dz)| column_arrived(x + dx, z + dz))
+    [(-0.3, -0.3), (0.3, -0.3), (-0.3, 0.3), (0.3, 0.3)]
+        .iter()
+        .all(|&(dx, dz)| column_arrived(x + dx, z + dz))
 }
 
 impl Bot {
     /// Opens the loading screen on `ChangeDimension` and notes the server's acknowledgement.
     pub(crate) fn on_travel_packet(&mut self, packet: &RawPacket) {
-        let Some(b) = self.backend.bedrock_mut() else { return };
+        let Some(b) = self.backend.bedrock_mut() else {
+            return;
+        };
         match packet.id {
             ChangeDimension::ID => {
-                let Ok(change) = packet.decode::<ChangeDimension>() else { return };
+                let Ok(change) = packet.decode::<ChangeDimension>() else {
+                    return;
+                };
                 tracing::debug!(?change, "dimension change");
                 let teleports = self.state.player.teleports;
-                let travel = Travel { loading_screen_id: change.loading_screen_id, respawn: change.respawn, teleports, ..Travel::default() };
+                let travel = Travel {
+                    loading_screen_id: change.loading_screen_id,
+                    respawn: change.respawn,
+                    teleports,
+                    ..Travel::default()
+                };
                 if let Some(screen) = travel.loading_screen(LOADING_SCREEN_START) {
                     b.client.send(&screen);
                 }
@@ -113,9 +139,15 @@ impl Bot {
             // Leaving the End: BDS brings the player back only once the client reports the credits over.
             ShowCredits::ID => {
                 let me = self.state.player.runtime_entity_id;
-                if packet.decode::<ShowCredits>().is_ok_and(|c| c.runtime_entity_id == me && c.status == CREDITS_START) {
+                if packet
+                    .decode::<ShowCredits>()
+                    .is_ok_and(|c| c.runtime_entity_id == me && c.status == CREDITS_START)
+                {
                     tracing::debug!("credits skipped");
-                    b.client.send(&ShowCredits { runtime_entity_id: me, status: CREDITS_END });
+                    b.client.send(&ShowCredits {
+                        runtime_entity_id: me,
+                        status: CREDITS_END,
+                    });
                 }
             }
             _ => {}
@@ -125,14 +157,19 @@ impl Bot {
     /// One tick of a pending dimension change. `placed`: the terrain at the new position has arrived.
     /// True when movement may run: the change is over, or (with none pending) `placed`.
     pub(crate) fn travel_tick(&mut self, placed: bool) -> bool {
-        let Some(b) = self.backend.bedrock_mut() else { return placed };
-        let Some(travel) = &mut b.travel else { return placed };
+        let Some(b) = self.backend.bedrock_mut() else {
+            return placed;
+        };
+        let Some(travel) = &mut b.travel else {
+            return placed;
+        };
         match travel.tick(placed, self.state.player.teleports != travel.teleports) {
             Step::Wait => {}
             Step::Leave => {
                 tracing::debug!(?travel, "leaving the dimension loading screen");
                 let me = self.state.player.runtime_entity_id;
-                b.client.send(&crate::sleep::player_action(me, Action::DimensionChangeAck));
+                b.client
+                    .send(&crate::sleep::player_action(me, Action::DimensionChangeAck));
                 if let Some(screen) = travel.loading_screen(LOADING_SCREEN_END) {
                     b.client.send(&screen);
                 }
@@ -156,21 +193,54 @@ mod tests {
 
     #[test]
     fn leaves_the_screen_once_both_sides_are_ready_then_settles() {
-        let mut travel = Travel { loading_screen_id: Some(7), ..Travel::default() };
-        assert!(steps(&mut travel, 5, true).iter().all(|s| *s == Step::Wait), "no server acknowledgement yet");
+        let mut travel = Travel {
+            loading_screen_id: Some(7),
+            ..Travel::default()
+        };
+        assert!(
+            steps(&mut travel, 5, true).iter().all(|s| *s == Step::Wait),
+            "no server acknowledgement yet"
+        );
         travel.server_ready = true;
-        assert!(steps(&mut travel, 5, false).iter().all(|s| *s == Step::Wait), "no terrain yet");
+        assert!(
+            steps(&mut travel, 5, false)
+                .iter()
+                .all(|s| *s == Step::Wait),
+            "no terrain yet"
+        );
         assert_eq!(travel.tick(true, false), Step::Leave);
-        assert!(steps(&mut travel, SETTLE_TICKS, true).iter().all(|s| *s == Step::Wait));
+        assert!(
+            steps(&mut travel, SETTLE_TICKS, true)
+                .iter()
+                .all(|s| *s == Step::Wait)
+        );
         assert_eq!(travel.tick(true, false), Step::Arrived);
     }
 
     #[test]
     fn out_of_the_end_waits_for_the_position_after_leaving_the_screen() {
-        let mut travel = Travel { loading_screen_id: Some(7), respawn: true, server_ready: true, ..Travel::default() };
-        assert_eq!(travel.tick(false, false), Step::Leave, "the placeholder position has no terrain to wait for");
-        assert!(steps(&mut travel, SETTLE_TICKS + 20, true).iter().all(|s| *s == Step::Wait), "no position yet");
-        assert_eq!(travel.tick(false, true), Step::Wait, "terrain at the real position");
+        let mut travel = Travel {
+            loading_screen_id: Some(7),
+            respawn: true,
+            server_ready: true,
+            ..Travel::default()
+        };
+        assert_eq!(
+            travel.tick(false, false),
+            Step::Leave,
+            "the placeholder position has no terrain to wait for"
+        );
+        assert!(
+            steps(&mut travel, SETTLE_TICKS + 20, true)
+                .iter()
+                .all(|s| *s == Step::Wait),
+            "no position yet"
+        );
+        assert_eq!(
+            travel.tick(false, true),
+            Step::Wait,
+            "terrain at the real position"
+        );
         assert_eq!(travel.tick(true, true), Step::Arrived);
     }
 
@@ -184,9 +254,21 @@ mod tests {
 
     #[test]
     fn loading_screen_packets_only_for_an_announced_screen() {
-        let announced = Travel { loading_screen_id: Some(0), ..Travel::default() };
-        let screen = announced.loading_screen(LOADING_SCREEN_START).expect("id 0 is an id");
-        assert_eq!((screen.r#type, screen.loading_screen_id), (LOADING_SCREEN_START, Some(0)));
-        assert!(Travel::default().loading_screen(LOADING_SCREEN_END).is_none());
+        let announced = Travel {
+            loading_screen_id: Some(0),
+            ..Travel::default()
+        };
+        let screen = announced
+            .loading_screen(LOADING_SCREEN_START)
+            .expect("id 0 is an id");
+        assert_eq!(
+            (screen.r#type, screen.loading_screen_id),
+            (LOADING_SCREEN_START, Some(0))
+        );
+        assert!(
+            Travel::default()
+                .loading_screen(LOADING_SCREEN_END)
+                .is_none()
+        );
     }
 }

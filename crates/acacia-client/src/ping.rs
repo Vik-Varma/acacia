@@ -4,9 +4,9 @@ use std::time::{Duration, Instant};
 use acacia_session::raknet;
 use bytes::BytesMut;
 
-use crate::socks5::Socks5Proxy;
-use crate::transport::{raknet_client_guid, resolve, Transport};
 use crate::ConnectError;
+use crate::socks5::Socks5Proxy;
+use crate::transport::{Transport, raknet_client_guid, resolve};
 
 const ATTEMPTS: u32 = 3;
 const ATTEMPT_TIMEOUT: Duration = Duration::from_secs(1);
@@ -56,7 +56,10 @@ pub async fn ping(server: &str, proxy: Option<&Socks5Proxy>) -> Result<ServerSta
     ping_addr(resolve(server).await?, proxy).await
 }
 
-pub(crate) async fn ping_addr(addr: SocketAddr, proxy: Option<&Socks5Proxy>) -> Result<ServerStatus, ConnectError> {
+pub(crate) async fn ping_addr(
+    addr: SocketAddr,
+    proxy: Option<&Socks5Proxy>,
+) -> Result<ServerStatus, ConnectError> {
     let transport = Transport::connect(addr, proxy).await?;
     let guid = raknet_client_guid();
     let mut buf = vec![0u8; 2048];
@@ -66,7 +69,9 @@ pub(crate) async fn ping_addr(addr: SocketAddr, proxy: Option<&Socks5Proxy>) -> 
         let sent = Instant::now();
         transport.send(&ping).await?;
         let deadline = tokio::time::Instant::now() + ATTEMPT_TIMEOUT;
-        while let Ok(received) = tokio::time::timeout_at(deadline, transport.recv_from(&mut buf)).await {
+        while let Ok(received) =
+            tokio::time::timeout_at(deadline, transport.recv_from(&mut buf)).await
+        {
             if let Ok(pong) = raknet::parse_pong(&buf[received?.0]) {
                 return Ok(ServerStatus::parse(pong.motd, sent.elapsed()));
             }
@@ -81,9 +86,18 @@ mod tests {
 
     #[test]
     fn parses_bedrock_advertisement() {
-        let s = ServerStatus::parse("MCPE;Example Network;2193;26.51;16569;50000;123;Sub;Survival;1;19132;19133;".into(), Duration::ZERO);
-        assert_eq!((s.motd.as_str(), s.protocol, s.players_online, s.players_max), ("Example Network", 2193, 16569, 50000));
+        let s = ServerStatus::parse(
+            "MCPE;Example Network;2193;26.51;16569;50000;123;Sub;Survival;1;19132;19133;".into(),
+            Duration::ZERO,
+        );
+        assert_eq!(
+            (s.motd.as_str(), s.protocol, s.players_online, s.players_max),
+            ("Example Network", 2193, 16569, 50000)
+        );
         assert_eq!(s.game_mode, "Survival");
-        assert_eq!(ServerStatus::parse("MCPE;x".into(), Duration::ZERO).players_max, 0);
+        assert_eq!(
+            ServerStatus::parse("MCPE;x".into(), Duration::ZERO).players_max,
+            0
+        );
     }
 }

@@ -21,9 +21,17 @@ pub(super) const RESULT_TIMEOUT: Duration = Duration::from_secs(3);
 
 impl Bot {
     /// [`Bot::craft_with`] on Java, whatever the mode.
-    pub(super) async fn java_craft(&mut self, item: Item, count: u32, table: Option<BlockPos>) -> Result<u32, ActionError> {
+    pub(super) async fn java_craft(
+        &mut self,
+        item: Item,
+        count: u32,
+        table: Option<BlockPos>,
+    ) -> Result<u32, ActionError> {
         match table {
-            Some(pos) => self.open_station_and_look(pos, &[WindowType::Workbench]).await?,
+            Some(pos) => {
+                self.open_station_and_look(pos, &[WindowType::Workbench])
+                    .await?
+            }
             None => self.hold_java_inventory(true),
         }
         let result = self.java_craft_loop(item, count, table.is_some()).await;
@@ -39,7 +47,12 @@ impl Bot {
         back.and(closed).map(|()| made)
     }
 
-    async fn java_craft_loop(&mut self, item: Item, count: u32, table: bool) -> Result<u32, ActionError> {
+    async fn java_craft_loop(
+        &mut self,
+        item: Item,
+        count: u32,
+        table: bool,
+    ) -> Result<u32, ActionError> {
         let cells = grid_cells(table);
         let mut made = 0;
         while made < count {
@@ -52,7 +65,11 @@ impl Bot {
                 Err(ActionError::NotPossible(_)) if made > 0 => break,
                 Err(e) => return Err(e),
             };
-            if self.java_place_from_book((i32::from(item.java_id()), per_craft), &placements, times).await? == 0 {
+            if self
+                .java_place_from_book((i32::from(item.java_id()), per_craft), &placements, times)
+                .await?
+                == 0
+            {
                 for op in placement_clicks(&self.state, &placements) {
                     self.click_pause().await?;
                     self.item_stack_request(&[op]).await?;
@@ -61,11 +78,18 @@ impl Bot {
             self.click_pause().await?;
             let before = held(&self.state, item);
             self.java_take_result(0).await?;
-            let emptied = |bot: &Bot, _: &_| cells.iter().all(|c| c.stack(&bot.state).is_none_or(|s| s.is_empty())).then_some(());
+            let emptied = |bot: &Bot, _: &_| {
+                cells
+                    .iter()
+                    .all(|c| c.stack(&bot.state).is_none_or(|s| s.is_empty()))
+                    .then_some(())
+            };
             self.wait_until(RESULT_TIMEOUT, emptied).await?;
             let output = held(&self.state, item).saturating_sub(before);
             if output == 0 {
-                return Err(ActionError::Rejected(format!("the server crafted no {item}")));
+                return Err(ActionError::Rejected(format!(
+                    "the server crafted no {item}"
+                )));
             }
             made += output;
         }
@@ -80,13 +104,23 @@ impl Bot {
 
     /// Closes the own inventory, sent with the next tick.
     async fn java_close_inventory(&mut self) -> Result<(), ActionError> {
-        let Backend::Java(java) = &mut self.backend else { return Ok(()) };
-        java.client.close_screen().map_err(|_| ActionError::Disconnected)?;
+        let Backend::Java(java) = &mut self.backend else {
+            return Ok(());
+        };
+        java.client
+            .close_screen()
+            .map_err(|_| ActionError::Disconnected)?;
         self.next_tick(|_, _| false).await.map(|_| ())
     }
 }
 
 /// How many of `item` the main inventory holds.
 pub(super) fn held(state: &GameState, item: Item) -> u32 {
-    state.inventory.main.iter().filter(|s| !s.is_empty() && state.item(s) == Some(item)).map(|s| u32::from(s.count)).sum()
+    state
+        .inventory
+        .main
+        .iter()
+        .filter(|s| !s.is_empty() && state.item(s) == Some(item))
+        .map(|s| u32::from(s.count))
+        .sum()
 }

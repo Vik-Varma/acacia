@@ -63,7 +63,14 @@ const BLENDED_MATERIALS: [&str; 1] = ["outer"];
 const SWIRL_MATERIALS: [&str; 1] = ["charged"];
 /// Materials with effects the entity pass does not draw (the guardian's ghost): their layers are
 /// left out. `enchanted` layers too: the glint is the instance's ([`super::EntityInstance::glint`]).
-const OVERLAY_MATERIALS: [&str; 6] = ["ghost", "wind", "bioluminescent", "dissolve", "spectator", "enchanted"];
+const OVERLAY_MATERIALS: [&str; 6] = [
+    "ghost",
+    "wind",
+    "bioluminescent",
+    "dissolve",
+    "spectator",
+    "enchanted",
+];
 
 impl Blend {
     /// For a layer of `material`; `None` for one that is not drawn.
@@ -72,14 +79,28 @@ impl Blend {
         if any(&OVERLAY_MATERIALS) {
             return None;
         }
-        Some(if any(&SWIRL_MATERIALS) { Blend::Swirl } else if any(&BLENDED_MATERIALS) { Blend::Alpha } else { Blend::Opaque })
+        Some(if any(&SWIRL_MATERIALS) {
+            Blend::Swirl
+        } else if any(&BLENDED_MATERIALS) {
+            Blend::Alpha
+        } else {
+            Blend::Opaque
+        })
     }
 }
 
 impl Layer {
     /// `model` in one texture, opaque.
     pub fn plain(model: ModelId, texture: TextureId) -> Layer {
-        Layer { model, textures: [texture, NO_TEXTURE, NO_TEXTURE], tint: None, dye: None, hidden: [0; 4], blend: Blend::Opaque, fade: Fade::Full }
+        Layer {
+            model,
+            textures: [texture, NO_TEXTURE, NO_TEXTURE],
+            tint: None,
+            dye: None,
+            hidden: [0; 4],
+            blend: Blend::Opaque,
+            fade: Fade::Full,
+        }
     }
 }
 
@@ -92,6 +113,9 @@ mod tests {
         assert_eq!(Blend::of("creeper"), Some(Blend::Opaque));
         assert_eq!(Blend::of("charged_creeper"), Some(Blend::Swirl));
         assert_eq!(Blend::of("slime_outer"), Some(Blend::Alpha));
-        assert_eq!((Blend::of("guardian_ghost"), Blend::of("armor_enchanted")), (None, None));
+        assert_eq!(
+            (Blend::of("guardian_ghost"), Blend::of("armor_enchanted")),
+            (None, None)
+        );
     }
 }

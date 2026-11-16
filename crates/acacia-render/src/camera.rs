@@ -18,7 +18,15 @@ pub struct Camera {
 
 impl Camera {
     pub fn new(position: DVec3) -> Self {
-        Camera { position, yaw: 0.0, pitch: 0.0, fov_y: 70f32.to_radians(), aspect: 16.0 / 9.0, bob: Mat4::IDENTITY, biome: None }
+        Camera {
+            position,
+            yaw: 0.0,
+            pitch: 0.0,
+            fov_y: 70f32.to_radians(),
+            aspect: 16.0 / 9.0,
+            bob: Mat4::IDENTITY,
+            biome: None,
+        }
     }
 
     pub fn forward(&self) -> Vec3 {
@@ -47,7 +55,9 @@ impl Camera {
     /// Camera-relative view-projection with reverse-Z and an infinite far plane.
     pub fn view_proj(&self) -> Mat4 {
         use glam::camera::rh::{proj::directx::perspective_infinite_reverse, view::look_to_mat4};
-        perspective_infinite_reverse(self.fov_y, self.aspect, 0.05) * self.bob * look_to_mat4(Vec3::ZERO, self.forward(), Vec3::Y)
+        perspective_infinite_reverse(self.fov_y, self.aspect, 0.05)
+            * self.bob
+            * look_to_mat4(Vec3::ZERO, self.forward(), Vec3::Y)
     }
 }
 
@@ -59,8 +69,19 @@ pub struct Frustum {
 impl Frustum {
     /// Left, right, bottom, top, near (the far plane is at infinity).
     pub fn new(view_proj: Mat4) -> Self {
-        let r = [view_proj.row(0), view_proj.row(1), view_proj.row(2), view_proj.row(3)];
-        let planes = [r[3] + r[0], r[3] - r[0], r[3] + r[1], r[3] - r[1], r[3] - r[2]];
+        let r = [
+            view_proj.row(0),
+            view_proj.row(1),
+            view_proj.row(2),
+            view_proj.row(3),
+        ];
+        let planes = [
+            r[3] + r[0],
+            r[3] - r[0],
+            r[3] + r[1],
+            r[3] - r[1],
+            r[3] - r[2],
+        ];
         Frustum { planes }
     }
 
@@ -84,8 +105,17 @@ mod tests {
     fn frustum_keeps_what_is_ahead_only() {
         let cam = Camera::new(DVec3::ZERO);
         let f = Frustum::new(cam.view_proj());
-        assert!(f.intersects_box(Vec3::new(-1.0, -1.0, 10.0), Vec3::new(1.0, 1.0, 12.0)), "south is ahead");
-        assert!(!f.intersects_box(Vec3::new(-1.0, -1.0, -12.0), Vec3::new(1.0, 1.0, -10.0)), "north is behind");
-        assert!(!f.intersects_box(Vec3::new(50.0, -1.0, 1.0), Vec3::new(52.0, 1.0, 2.0)), "far right");
+        assert!(
+            f.intersects_box(Vec3::new(-1.0, -1.0, 10.0), Vec3::new(1.0, 1.0, 12.0)),
+            "south is ahead"
+        );
+        assert!(
+            !f.intersects_box(Vec3::new(-1.0, -1.0, -12.0), Vec3::new(1.0, 1.0, -10.0)),
+            "north is behind"
+        );
+        assert!(
+            !f.intersects_box(Vec3::new(50.0, -1.0, 1.0), Vec3::new(52.0, 1.0, 2.0)),
+            "far right"
+        );
     }
 }

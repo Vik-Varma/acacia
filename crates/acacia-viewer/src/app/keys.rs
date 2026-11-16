@@ -66,7 +66,9 @@ impl App {
                     self.camera.position = p;
                 }
             }
-            (KeyCode::KeyC, true) if self.mode == Mode::Fly => self.settings.change_and_save(|s| s.cave_culling = !s.cave_culling),
+            (KeyCode::KeyC, true) if self.mode == Mode::Fly => self
+                .settings
+                .change_and_save(|s| s.cave_culling = !s.cave_culling),
             (KeyCode::KeyL, true) => self.switch_look(),
             (KeyCode::KeyV, true) if self.mode == Mode::Fly => self.toggle_vsync(),
             _ => match self.mode {

@@ -25,8 +25,23 @@ pub struct SuggestionsList {
 
 impl SuggestionsList {
     /// The list's constructor: `rect` placed by the caller, the first completion selected.
-    pub fn new(rect: [i32; 4], original: Vec<u16>, list: Vec<Suggestion>, fill: u32, input: &mut EditBox) -> SuggestionsList {
-        let mut s = SuggestionsList { rect, original, list, offset: 0, current: 0, last_mouse: (0, 0), tab_cycles: false, fill };
+    pub fn new(
+        rect: [i32; 4],
+        original: Vec<u16>,
+        list: Vec<Suggestion>,
+        fill: u32,
+        input: &mut EditBox,
+    ) -> SuggestionsList {
+        let mut s = SuggestionsList {
+            rect,
+            original,
+            list,
+            offset: 0,
+            current: 0,
+            last_mouse: (0, 0),
+            tab_cycles: false,
+            fill,
+        };
         s.select(input, 0);
         s
     }
@@ -40,10 +55,18 @@ impl SuggestionsList {
     /// `select`: the grey rest of the chosen completion after the input.
     pub fn select(&mut self, input: &mut EditBox, index: isize) {
         let n = self.list.len() as isize;
-        let i = if index < 0 { index + n } else if index >= n { index - n } else { index };
+        let i = if index < 0 {
+            index + n
+        } else if index >= n {
+            index - n
+        } else {
+            index
+        };
         self.current = i as usize;
         let applied = self.list[self.current].apply(&self.original);
-        input.suggestion = applied.strip_prefix(input.value().as_str()).map(str::to_owned);
+        input.suggestion = applied
+            .strip_prefix(input.value().as_str())
+            .map(str::to_owned);
     }
 
     fn max_offset(&self) -> usize {
@@ -57,7 +80,9 @@ impl SuggestionsList {
             self.offset = self.current.min(self.max_offset());
         } else if self.current > self.offset + LINE_LIMIT - 1 {
             // lineStartOffset is 1 in the chat screen.
-            self.offset = (self.current + 1).saturating_sub(LINE_LIMIT).min(self.max_offset());
+            self.offset = (self.current + 1)
+                .saturating_sub(LINE_LIMIT)
+                .min(self.max_offset());
         }
     }
 
@@ -70,7 +95,10 @@ impl SuggestionsList {
     /// The completion `useSuggestion` applies: the new value and where the caret goes.
     pub fn chosen(&self) -> (String, usize) {
         let s = &self.list[self.current];
-        (s.apply(&self.original), s.start + s.text.encode_utf16().count())
+        (
+            s.apply(&self.original),
+            s.start + s.text.encode_utf16().count(),
+        )
     }
 
     pub fn tab_cycles(&self) -> bool {
@@ -112,8 +140,18 @@ impl SuggestionsList {
             if mouse.0 > rx && mouse.0 < rx + rw && mouse.1 > y && mouse.1 < y + 12 && moved {
                 self.select(input, (i + self.offset) as isize);
             }
-            let color = if i + self.offset == self.current { SELECTED } else { UNSELECTED };
-            gui.text(Text::legacy(&self.list[i + self.offset].text), rx + 1, y + 2, color, true);
+            let color = if i + self.offset == self.current {
+                SELECTED
+            } else {
+                UNSELECTED
+            };
+            gui.text(
+                Text::legacy(&self.list[i + self.offset].text),
+                rx + 1,
+                y + 2,
+                color,
+                true,
+            );
         }
     }
 }

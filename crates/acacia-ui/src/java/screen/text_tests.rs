@@ -16,7 +16,13 @@ fn sign_text_dims_unless_glowing() {
 #[test]
 fn sign_typing_stops_at_the_line_width() {
     let m = Fixed(6.0);
-    let sign = Sign { wood: "oak".into(), hanging: true, wall: false, dye: "black".into(), glowing: false };
+    let sign = Sign {
+        wood: "oak".into(),
+        hanging: true,
+        wall: false,
+        dye: "black".into(),
+        glowing: false,
+    };
     let mut edit = SignEdit::new(Default::default(), 0);
     for c in "abcdefghijklmnop".chars() {
         edit.char_typed(&m, &sign, c);
@@ -32,7 +38,10 @@ fn multiline_wraps_and_keeps_a_trailing_newline_line() {
     let mut f = MultilineField::new(&m, 30);
     f.set_value(&m, "aaa bbb ccc\n", false);
     let lines = f.lines().to_vec();
-    assert_eq!((lines.len(), lines[0].0, lines[2].1, lines[3]), (4, 0, 11, (12, 12)));
+    assert_eq!(
+        (lines.len(), lines[0].0, lines[2].1, lines[3]),
+        (4, 0, 11, (12, 12))
+    );
     f.seek(lines[1].0 + 1);
     f.seek_line(&m, 1);
     assert_eq!(f.cursor, lines[2].0 + 1);

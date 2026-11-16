@@ -1,9 +1,12 @@
 use acacia_auth::{Account, JavaProfile};
-use acacia_java_proto::packets::{AcceptTeleportation, Empty, EncryptionHello, EncryptionKey, INTENT_LOGIN, Intention, KeepAlive, LoginCompression, LoginFinished, LoginHello, Ping, PlayerPosition, SelectKnownPacks};
 use acacia_java_proto::dialog::{Dialog, Shown, read_show_dialog};
-use acacia_java_proto::tag::Tag;
+use acacia_java_proto::packets::{
+    AcceptTeleportation, Empty, EncryptionHello, EncryptionKey, INTENT_LOGIN, Intention, KeepAlive,
+    LoginCompression, LoginFinished, LoginHello, Ping, PlayerPosition, SelectKnownPacks,
+};
 use acacia_java_proto::recipe_book::BookRecipe;
 use acacia_java_proto::recipes::{StonecutterRecipe, read_update_recipes};
+use acacia_java_proto::tag::Tag;
 use acacia_java_proto::{PROTOCOL_VERSION, VarInt, Wire, ids, read_varint};
 use md5::{Digest, Md5};
 use tokio::net::TcpStream;
@@ -62,20 +65,64 @@ impl Client {
     /// Joins any server as the account's Java profile.
     pub async fn join_online(host: &str, port: u16, account: &Account) -> Result<Self, Error> {
         let player = account.java_profile().await?;
-        let uuid = u128::from_str_radix(&player.uuid, 16).map_err(|e| Error::Crypto(format!("profile id {}: {e}", player.uuid)))?;
-        Self::join(host, port, &player.name.clone(), uuid, Some((account, &player))).await
+        let uuid = u128::from_str_radix(&player.uuid, 16)
+            .map_err(|e| Error::Crypto(format!("profile id {}: {e}", player.uuid)))?;
+        Self::join(
+            host,
+            port,
+            &player.name.clone(),
+            uuid,
+            Some((account, &player)),
+        )
+        .await
     }
 
-    async fn join(host: &str, port: u16, name: &str, uuid: u128, session: Session<'_>) -> Result<Self, Error> {
+    async fn join(
+        host: &str,
+        port: u16,
+        name: &str,
+        uuid: u128,
+        session: Session<'_>,
+    ) -> Result<Self, Error> {
         let mut c = Connection::new(TcpStream::connect((host, port)).await?);
-        let intention = Intention { protocol: VarInt(PROTOCOL_VERSION), host: host.to_owned(), port, intent: VarInt(INTENT_LOGIN) };
-        c.send(ids::handshake::serverbound::INTENTION, &intention).await?;
-        c.send(ids::login::serverbound::HELLO, &LoginHello { name: name.to_owned(), uuid }).await?;
+        let intention = Intention {
+            protocol: VarInt(PROTOCOL_VERSION),
+            host: host.to_owned(),
+            port,
+            intent: VarInt(INTENT_LOGIN),
+        };
+        c.send(ids::handshake::serverbound::INTENTION, &intention)
+            .await?;
+        c.send(
+            ids::login::serverbound::HELLO,
+            &LoginHello {
+                name: name.to_owned(),
+                uuid,
+            },
+        )
+        .await?;
         let profile = login(&mut c, session).await?;
-        let Registries { enchantments, dialogs } = configure(&mut c).await?;
+        let Registries {
+            enchantments,
+            dialogs,
+        } = configure(&mut c).await?;
         let mut inventory = Inventory::default();
         inventory.enchantments = enchantments.into();
-        Ok(Self { link: Link::spawn(c), uuid: profile.uuid, name: profile.name, pose: Pose::default(), world: World::default(), movement: Movement::default(), actions: Actions::default(), inventory, stonecutter: Vec::new(), dialog: None, dialogs, recipe_book: Vec::new(), loaded_sent: false })
+        Ok(Self {
+            link: Link::spawn(c),
+            uuid: profile.uuid,
+            name: profile.name,
+            pose: Pose::default(),
+            world: World::default(),
+            movement: Movement::default(),
+            actions: Actions::default(),
+            inventory,
+            stonecutter: Vec::new(),
+            dialog: None,
+            dialogs,
+            recipe_book: Vec::new(),
+            loaded_sent: false,
+        })
     }
 
     /// The next packet, already applied to the world and movement. Cancel-safe.
@@ -112,9 +159,27 @@ impl Client {
             from::PLAYER_POSITION => {
                 let position = PlayerPosition::read(&mut &body[..])?;
                 let to = self.movement.teleported(&position);
-                self.pose = Pose { position: to.pos, y_rot: to.y_rot, x_rot: to.x_rot };
-                let Pose { position: [x, y, z], y_rot, x_rot } = self.pose;
-                self.send(to::ACCEPT_TELEPORTATION, &AcceptTeleportation { id: position.id, x, y, z, y_rot, x_rot })?;
+                self.pose = Pose {
+                    position: to.pos,
+                    y_rot: to.y_rot,
+                    x_rot: to.x_rot,
+                };
+                let Pose {
+                    position: [x, y, z],
+                    y_rot,
+                    x_rot,
+                } = self.pose;
+                self.send(
+                    to::ACCEPT_TELEPORTATION,
+                    &AcceptTeleportation {
+                        id: position.id,
+                        x,
+                        y,
+                        z,
+                        y_rot,
+                        x_rot,
+                    },
+                )?;
                 if !std::mem::replace(&mut self.loaded_sent, true) {
                     self.send(to::PLAYER_LOADED, &Empty {})?;
                 }
@@ -123,7 +188,12 @@ impl Client {
             from::SHOW_DIALOG => {
                 let shown = read_show_dialog(&mut &body[..])?;
                 self.dialog = Some(match shown {
-                    Shown::Registry(n) => self.dialogs.get(n).cloned().flatten().map_or(shown, Shown::Inline),
+                    Shown::Registry(n) => self
+                        .dialogs
+                        .get(n)
+                        .cloned()
+                        .flatten()
+                        .map_or(shown, Shown::Inline),
                     inline => inline,
                 });
             }
@@ -150,13 +220,25 @@ impl Client {
 type Session<'a> = Option<(&'a Account, &'a JavaProfile)>;
 
 /// Answers the server's encryption request and turns encryption on.
-async fn encrypt(c: &mut Connection, hello: EncryptionHello, session: Session<'_>) -> Result<(), Error> {
+async fn encrypt(
+    c: &mut Connection,
+    hello: EncryptionHello,
+    session: Session<'_>,
+) -> Result<(), Error> {
     let secret = random_secret();
     if hello.should_authenticate {
         let (account, player) = session.ok_or(Error::NeedsAccount)?;
-        account.join_java_session(player, &server_hash(&hello.server_id, &secret, &hello.public_key)).await?;
+        account
+            .join_java_session(
+                player,
+                &server_hash(&hello.server_id, &secret, &hello.public_key),
+            )
+            .await?;
     }
-    let key = EncryptionKey { secret: rsa_encrypt(&hello.public_key, &secret)?, challenge: rsa_encrypt(&hello.public_key, &hello.challenge)? };
+    let key = EncryptionKey {
+        secret: rsa_encrypt(&hello.public_key, &secret)?,
+        challenge: rsa_encrypt(&hello.public_key, &hello.challenge)?,
+    };
     c.send(ids::login::serverbound::KEY, &key).await?;
     c.enable_encryption(&secret);
     Ok(())
@@ -169,7 +251,9 @@ async fn login(c: &mut Connection, session: Session<'_>) -> Result<LoginFinished
         let mut input = &body[..];
         match id {
             from::HELLO => encrypt(c, EncryptionHello::read(&mut input)?, session).await?,
-            from::LOGIN_COMPRESSION => c.set_compression(LoginCompression::read(&mut input)?.threshold.0),
+            from::LOGIN_COMPRESSION => {
+                c.set_compression(LoginCompression::read(&mut input)?.threshold.0)
+            }
             from::LOGIN_FINISHED => {
                 let profile = LoginFinished::read(&mut input)?;
                 c.send(to::LOGIN_ACKNOWLEDGED, &Empty {}).await?;
@@ -197,15 +281,29 @@ async fn configure(c: &mut Connection) -> Result<Registries, Error> {
         let (id, body) = c.read().await?;
         let mut input = &body[..];
         match id {
-            from::KEEP_ALIVE => c.send(to::KEEP_ALIVE, &KeepAlive::read(&mut input)?).await?,
+            from::KEEP_ALIVE => {
+                c.send(to::KEEP_ALIVE, &KeepAlive::read(&mut input)?)
+                    .await?
+            }
             from::PING => c.send(to::PONG, &Ping::read(&mut input)?).await?,
             // Claiming the server's own packs means it omits the vanilla registry contents.
-            from::SELECT_KNOWN_PACKS => c.send(to::SELECT_KNOWN_PACKS, &SelectKnownPacks::read(&mut input)?).await?,
+            from::SELECT_KNOWN_PACKS => {
+                c.send(to::SELECT_KNOWN_PACKS, &SelectKnownPacks::read(&mut input)?)
+                    .await?
+            }
             from::REGISTRY_DATA => match String::read(&mut input)?.as_str() {
-                ENCHANTMENT_REGISTRY => registries.enchantments = registry_entries(&mut input)?.into_iter().map(|(name, _)| name).collect(),
+                ENCHANTMENT_REGISTRY => {
+                    registries.enchantments = registry_entries(&mut input)?
+                        .into_iter()
+                        .map(|(name, _)| name)
+                        .collect()
+                }
                 DIALOG_REGISTRY => {
                     let entries = registry_entries(&mut input)?;
-                    registries.dialogs = entries.iter().map(|(_, data)| data.as_ref().and_then(Dialog::from_tag)).collect();
+                    registries.dialogs = entries
+                        .iter()
+                        .map(|(_, data)| data.as_ref().and_then(Dialog::from_tag))
+                        .collect();
                 }
                 _ => {}
             },
@@ -228,7 +326,14 @@ fn registry_entries(input: &mut &[u8]) -> Result<Vec<(String, Option<Tag>)>, Err
     let mut entries = Vec::new();
     for _ in 0..read_varint(input)? {
         let name = String::read(input)?;
-        let data = if bool::read(input)? { Some(Tag::read_root(input)?.ok_or(acacia_java_proto::Error::Invalid("registry entry NBT"))?) } else { None };
+        let data = if bool::read(input)? {
+            Some(
+                Tag::read_root(input)?
+                    .ok_or(acacia_java_proto::Error::Invalid("registry entry NBT"))?,
+            )
+        } else {
+            None
+        };
         entries.push((name, data));
     }
     Ok(entries)
@@ -245,6 +350,9 @@ mod tests {
     #[test]
     fn offline_uuid_matches_vanilla() {
         // UUIDUtil.createOfflinePlayerUUID("Notch")
-        assert_eq!(offline_uuid("Notch"), 0xb50ad385_829d_3141_a216_7e7d7539ba7f);
+        assert_eq!(
+            offline_uuid("Notch"),
+            0xb50ad385_829d_3141_a216_7e7d7539ba7f
+        );
     }
 }

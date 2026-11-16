@@ -16,9 +16,15 @@ fn num(v: &Value) -> f32 {
 }
 
 fn main() {
-    let path = std::env::args().nth(1).expect("usage: overlays_probe <overlays.jsonl>");
+    let path = std::env::args()
+        .nth(1)
+        .expect("usage: overlays_probe <overlays.jsonl>");
     let mut out = compare::Report::default();
-    for line in std::fs::read_to_string(path).expect("oracle records").lines().filter(|l| !l.trim().is_empty()) {
+    for line in std::fs::read_to_string(path)
+        .expect("oracle records")
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+    {
         let r: Value = serde_json::from_str(line).expect("oracle record");
         let name = r["case"].as_str().unwrap_or_default();
         let mut case = out.case(name);
@@ -38,18 +44,36 @@ fn main() {
                 }
             }
             Some("creeper") => {
-                case.numbers("white", &[num(&r["white"])], &[overlay::creeper_white(num(&r["swelling"]))], 0.0);
+                case.numbers(
+                    "white",
+                    &[num(&r["white"])],
+                    &[overlay::creeper_white(num(&r["swelling"]))],
+                    0.0,
+                );
             }
             Some("shake") => {
                 let kind = r["kind"].as_str().unwrap_or_default();
-                let shake = Shake { frozen: flag("frozen"), converting: flag("converting"), suffocating: flag("suffocating") };
+                let shake = Shake {
+                    frozen: flag("frozen"),
+                    converting: flag("converting"),
+                    suffocating: flag("suffocating"),
+                };
                 let shaking = overlay::shaking(kind, shake);
                 if r["shaking"].as_bool() != Some(shaking) {
                     case.diverge("shaking", r["shaking"].to_string(), shaking);
                 }
-                let turn = if shaking { overlay::shake_degrees(num(&r["age"])) } else { 0.0 };
+                let turn = if shaking {
+                    overlay::shake_degrees(num(&r["age"]))
+                } else {
+                    0.0
+                };
                 let matrix = joml_rotation(Vec3::Y, 180.0 - turn);
-                case.numbers("matrix", &compare::floats(&r["matrix"]), &matrix.to_cols_array(), 1e-6);
+                case.numbers(
+                    "matrix",
+                    &compare::floats(&r["matrix"]),
+                    &matrix.to_cols_array(),
+                    1e-6,
+                );
             }
             _ => case.diverge("case", "a known kind", name),
         }

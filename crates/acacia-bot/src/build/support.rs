@@ -4,8 +4,8 @@
 use acacia_physics::{BlockPos, Vec3};
 
 use super::builder::Builder;
-use super::plan::{fill, free, go, no_stand, unbuilt, Next, STANDS};
-use super::reach::{fills_from, stands, Keep};
+use super::plan::{Next, STANDS, fill, free, go, no_stand, unbuilt};
+use super::reach::{Keep, fills_from, stands};
 use super::status::Phase;
 use super::structure::Block;
 use crate::pathfind::process::{Ctx, Look};
@@ -26,13 +26,33 @@ pub(super) fn column(b: &Builder, cx: &Ctx, pos: BlockPos) -> Option<Next> {
     if ok(cx.eye()) && free(b, cx, cell) {
         return Some(Next::Act(Phase::Building, fill(b, cell)));
     }
-    go(Phase::Building, cell, stands(cell, cx.pos, cx.look, &Keep { feet: &|f| f == cell || no_stand(b, cx.look, f), pillar: &|c| unbuilt(b, cx.look, c) }, &ok, STANDS), b)
+    go(
+        Phase::Building,
+        cell,
+        stands(
+            cell,
+            cx.pos,
+            cx.look,
+            &Keep {
+                feet: &|f| f == cell || no_stand(b, cx.look, f),
+                pillar: &|c| unbuilt(b, cx.look, c),
+            },
+            &ok,
+            STANDS,
+        ),
+        b,
+    )
 }
 
 /// The cell to prop a log from: its axis takes a click on a face along it, so with neither cell along the axis
 /// solid, the first one the structure leaves empty (live: a taiga house's eave logs run along z beside
 /// cobblestone, and 72 rested for want of a stand). Only once the cell has rested: a neighbour may come first.
-pub(super) fn prop_for(b: &Builder, look: &dyn Look, pos: BlockPos, target: &Block) -> Option<BlockPos> {
+pub(super) fn prop_for(
+    b: &Builder,
+    look: &dyn Look,
+    pos: BlockPos,
+    target: &Block,
+) -> Option<BlockPos> {
     let d = match target.prop("pillar_axis")? {
         "x" => [1, 0, 0],
         "y" => [0, 1, 0],
@@ -43,7 +63,9 @@ pub(super) fn prop_for(b: &Builder, look: &dyn Look, pos: BlockPos, target: &Blo
     if !b.rested(pos) || along.iter().any(|c| look.solid(*c) != Some(false)) {
         return None;
     }
-    along.into_iter().find(|c| b.target(*c).is_none_or(Block::is_air))
+    along
+        .into_iter()
+        .find(|c| b.target(*c).is_none_or(Block::is_air))
 }
 
 /// Builds the prop at `cell`: the column under the cell above it, ending in the cell.

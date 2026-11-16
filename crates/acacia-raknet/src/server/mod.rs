@@ -17,8 +17,8 @@ use schedule::Schedule;
 
 use crate::conn::Conn;
 use crate::types::DisconnectReason;
-use crate::wire::datagram::{Reliability, FLAG_VALID};
-use crate::wire::{connected as c, offline as o, WireError};
+use crate::wire::datagram::{FLAG_VALID, Reliability};
+use crate::wire::{WireError, connected as c, offline as o};
 
 struct Peer {
     conn: Conn,
@@ -33,12 +33,23 @@ struct Peer {
 
 impl Peer {
     fn new(conn: Conn, guid: u64, handshake_deadline: Instant) -> Self {
-        Self { conn, guid, connected: false, handshake_deadline, ready: false, wakes: Vec::new() }
+        Self {
+            conn,
+            guid,
+            connected: false,
+            handshake_deadline,
+            ready: false,
+            wakes: Vec::new(),
+        }
     }
 
     fn poll_timeout(&self) -> Instant {
         let conn = self.conn.poll_timeout();
-        if self.connected { conn } else { conn.min(self.handshake_deadline) }
+        if self.connected {
+            conn
+        } else {
+            conn.min(self.handshake_deadline)
+        }
     }
 
     fn handle_timeout(&mut self, now: Instant) -> Result<(), DisconnectReason> {
@@ -96,7 +107,10 @@ impl Server {
 
     /// The connected peers.
     pub fn peers(&self) -> impl Iterator<Item = SocketAddr> + '_ {
-        self.peers.iter().filter(|(_, p)| p.connected).map(|(&addr, _)| addr)
+        self.peers
+            .iter()
+            .filter(|(_, p)| p.connected)
+            .map(|(&addr, _)| addr)
     }
 
     /// `None` unless `peer` is connected.
@@ -129,7 +143,8 @@ impl Server {
     /// Sends `peer` a disconnection notification and forgets it; no event follows.
     pub fn close(&mut self, peer: SocketAddr, now: Instant) {
         if let Some(mut p) = self.peers.remove(&peer) {
-            self.outbox.extend(p.conn.close(now).into_iter().map(|d| (peer, d)));
+            self.outbox
+                .extend(p.conn.close(now).into_iter().map(|d| (peer, d)));
         }
     }
 
@@ -143,7 +158,9 @@ impl Server {
             return Some(out);
         }
         while let Some(addr) = self.schedule.pop_ready() {
-            let Some(p) = self.peers.get_mut(&addr) else { continue };
+            let Some(p) = self.peers.get_mut(&addr) else {
+                continue;
+            };
             p.ready = false;
             match p.conn.poll_transmit(now) {
                 Some(d) => {
@@ -162,7 +179,13 @@ impl Server {
 
     pub fn handle_timeout(&mut self, now: Instant) {
         for (at, addr) in self.schedule.take_due(now) {
-            let Some(p) = self.peers.get_mut(&addr).filter(|p| p.wakes.last() == Some(&at)) else { continue };
+            let Some(p) = self
+                .peers
+                .get_mut(&addr)
+                .filter(|p| p.wakes.last() == Some(&at))
+            else {
+                continue;
+            };
             p.wakes.pop();
             match p.handle_timeout(now) {
                 // Not armed here: until poll_transmit takes what is due, its timeout is still `now`.
@@ -179,7 +202,11 @@ impl Server {
             _ = self.handle_offline(now, from, id, &data);
             return;
         };
-        if let Err(reason) = p.conn.handle_datagram(now, &data).and_then(|()| self.handle_messages(now, from)) {
+        if let Err(reason) = p
+            .conn
+            .handle_datagram(now, &data)
+            .and_then(|()| self.handle_messages(now, from))
+        {
             self.drop_peer(from, reason);
         } else if let Some(p) = self.peers.get_mut(&from) {
             self.schedule.touch(from, p);
@@ -190,7 +217,8 @@ impl Server {
         if let Some(p) = self.peers.remove(&addr)
             && p.connected
         {
-            self.events.push_back(ServerEvent::Disconnected(addr, reason));
+            self.events
+                .push_back(ServerEvent::Disconnected(addr, reason));
         }
     }
 
@@ -202,12 +230,17 @@ impl Server {
             match msg[0] {
                 c::ID_CONNECTION_REQUEST if !p.connected => {
                     let request_time = c::parse_connection_request(&msg).map_err(protocol)?;
-                    let accepted = c::connection_request_accepted(from, request_time, p.conn.time(now));
+                    let accepted =
+                        c::connection_request_accepted(from, request_time, p.conn.time(now));
                     p.conn.queue(accepted, Reliability::Reliable);
                 }
                 c::ID_NEW_INCOMING_CONNECTION if !p.connected => {
                     p.connected = true;
-                    self.events.push_back(ServerEvent::Connected { addr: from, guid: p.guid, mtu: p.conn.mtu() });
+                    self.events.push_back(ServerEvent::Connected {
+                        addr: from,
+                        guid: p.guid,
+                        mtu: p.conn.mtu(),
+                    });
                 }
                 c::ID_DISCONNECTION_NOTIFICATION => return Err(DisconnectReason::ClientClosed),
                 _ if p.connected => self.events.push_back(ServerEvent::Message(from, msg)),

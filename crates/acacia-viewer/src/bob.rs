@@ -27,31 +27,58 @@ pub struct Bob {
 
 impl Bob {
     pub fn tick(&mut self, me: &Me, now: Instant) {
-        let moved = self.last_eye.replace(me.eye).map_or(0.0, |last| (me.eye - last).with_y(0.0).length() as f32);
+        let moved = self
+            .last_eye
+            .replace(me.eye)
+            .map_or(0.0, |last| (me.eye - last).with_y(0.0).length() as f32);
         self.walk_before = self.walk;
         self.walk += moved * 0.6;
         self.bob_before = self.bob;
-        let target = if me.on_ground && me.alive { moved.min(0.1) } else { 0.0 };
+        let target = if me.on_ground && me.alive {
+            moved.min(0.1)
+        } else {
+            0.0
+        };
         self.bob += (target - self.bob) * 0.4;
         self.fov_before = self.fov;
         let fov = if self.fov == 0.0 { 1.0 } else { self.fov };
         self.fov = fov + (fov_modifier(me.sprinting, me.flying) - fov) * 0.5;
-        if self.hurts.replace(me.hurts).is_some_and(|before| me.hurts > before) {
+        if self
+            .hurts
+            .replace(me.hurts)
+            .is_some_and(|before| me.hurts > before)
+        {
             self.hurt_at = Some(now);
         }
-        self.dead_since = if me.alive { None } else { self.dead_since.or(Some(now)) };
+        self.dead_since = if me.alive {
+            None
+        } else {
+            self.dead_since.or(Some(now))
+        };
         self.ticked = Some(now);
     }
 
     /// The camera's field of view (from the chosen `base` degrees) and sway at `now`; without
     /// `bobbing` only the hurt roll is left, as in Java.
     pub fn apply(&self, base: f32, bobbing: bool, fov_y: &mut f32, bob: &mut Mat4, now: Instant) {
-        let t = self.ticked.map_or(1.0, |at| (now.saturating_duration_since(at).as_secs_f32() / TICK.as_secs_f32()).min(1.0));
-        let fov = if self.fov == 0.0 { 1.0 } else { self.fov_before + (self.fov - self.fov_before) * t };
+        let t = self.ticked.map_or(1.0, |at| {
+            (now.saturating_duration_since(at).as_secs_f32() / TICK.as_secs_f32()).min(1.0)
+        });
+        let fov = if self.fov == 0.0 {
+            1.0
+        } else {
+            self.fov_before + (self.fov - self.fov_before) * t
+        };
         *fov_y = (base * fov.max(0.1)).to_radians();
-        let ticks_since = |at: Option<Instant>| at.map(|at| now.saturating_duration_since(at).as_secs_f32() / TICK.as_secs_f32());
+        let ticks_since = |at: Option<Instant>| {
+            at.map(|at| now.saturating_duration_since(at).as_secs_f32() / TICK.as_secs_f32())
+        };
         let roll = hurt_roll(ticks_since(self.hurt_at), ticks_since(self.dead_since));
-        let amount = if bobbing { self.bob_before + (self.bob - self.bob_before) * t } else { 0.0 };
+        let amount = if bobbing {
+            self.bob_before + (self.bob - self.bob_before) * t
+        } else {
+            0.0
+        };
         *bob = roll * sway(-(self.walk + (self.walk - self.walk_before) * t), amount);
     }
 }
@@ -94,7 +121,10 @@ mod tests {
         assert_eq!(sway(1.3, 0.0), Mat4::IDENTITY);
         assert!((fov_modifier(true, false) - 1.15).abs() < 1e-6);
         assert_eq!(fov_modifier(false, false), 1.0);
-        assert_eq!((hurt_roll(None, None), hurt_roll(Some(10.0), None)), (Mat4::IDENTITY, Mat4::IDENTITY));
+        assert_eq!(
+            (hurt_roll(None, None), hurt_roll(Some(10.0), None)),
+            (Mat4::IDENTITY, Mat4::IDENTITY)
+        );
     }
 
     #[test]
@@ -103,6 +133,9 @@ mod tests {
         // sin(g⁴π) peaks at g⁴ = 0.5: about 1.6 ticks into the hurt.
         let peak = (1.0 - 0.5f32.powf(0.25)) * 10.0;
         assert!((roll(hurt_roll(Some(peak), None)) + 14.0).abs() < 0.01);
-        assert!((roll(hurt_roll(None, Some(0.0))).abs() - 0.0).abs() < 0.01 && (roll(hurt_roll(None, Some(1e6))) - 40.0).abs() < 0.1);
+        assert!(
+            (roll(hurt_roll(None, Some(0.0))).abs() - 0.0).abs() < 0.01
+                && (roll(hurt_roll(None, Some(1e6))) - 40.0).abs() < 0.1
+        );
     }
 }

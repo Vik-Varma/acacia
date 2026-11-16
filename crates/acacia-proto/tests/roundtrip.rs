@@ -125,13 +125,35 @@ fn bds_container_and_camera_bodies() {
 
     let fade: CameraInstruction = bds_body("000001010000803f000000400000404000000000000000");
     let time = fade.fade.unwrap().time.unwrap();
-    assert_eq!([time.fade_in_duration, time.wait_duration, time.fade_out_duration], [1.0, 2.0, 3.0]);
+    assert_eq!(
+        [
+            time.fade_in_duration,
+            time.wait_duration,
+            time.fade_out_duration
+        ],
+        [1.0, 2.0, 3.0]
+    );
     let colour: CameraInstruction = bds_body("0000010001000000000000803f00000000000000000000");
-    assert_eq!(colour.fade.unwrap().color_rgb, Some(Vec3f { x: 0.0, y: 1.0, z: 0.0 }));
+    assert_eq!(
+        colour.fade.unwrap().color_rgb,
+        Some(Vec3f {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0
+        })
+    );
 
     let fov: CameraInstruction = bds_body("0000000000010000704200000040066c696e65617200000000");
     let fov = fov.fov.unwrap();
-    assert_eq!((fov.field_of_view, fov.ease_time, fov.ease_type.as_str(), fov.clear), (60.0, 2.0, "linear", false));
+    assert_eq!(
+        (
+            fov.field_of_view,
+            fov.ease_time,
+            fov.ease_type.as_str(),
+            fov.clear
+        ),
+        (60.0, 2.0, "linear", false)
+    );
     let cleared: CameraInstruction = bds_body("0000000000010000000000000000066c696e65617201000000");
     assert!(cleared.fov.unwrap().clear);
 }

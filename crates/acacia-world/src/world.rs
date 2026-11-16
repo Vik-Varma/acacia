@@ -30,7 +30,10 @@ struct Slot {
 
 impl SharedChunk {
     fn new(slot: Slot) -> Arc<SharedChunk> {
-        Arc::new(SharedChunk { slot: RwLock::new(slot), owner: AtomicU64::new(NO_OWNER) })
+        Arc::new(SharedChunk {
+            slot: RwLock::new(slot),
+            owner: AtomicU64::new(NO_OWNER),
+        })
     }
 
     pub fn read(&self) -> MappedRwLockReadGuard<'_, Chunk> {
@@ -41,14 +44,21 @@ impl SharedChunk {
     /// [`World`] itself) always may.
     fn claim(&self, view: u64) -> bool {
         view == NO_OWNER
-            || match self.owner.compare_exchange(NO_OWNER, view, Ordering::AcqRel, Ordering::Acquire) {
+            || match self.owner.compare_exchange(
+                NO_OWNER,
+                view,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
                 Ok(_) => true,
                 Err(owner) => owner == view,
             }
     }
 
     pub(crate) fn release(&self, view: u64) {
-        let _ = self.owner.compare_exchange(view, NO_OWNER, Ordering::AcqRel, Ordering::Acquire);
+        let _ = self
+            .owner
+            .compare_exchange(view, NO_OWNER, Ordering::AcqRel, Ordering::Acquire);
     }
 }
 
@@ -82,14 +92,24 @@ pub struct World {
 impl World {
     pub fn new(registry: Arc<BlockRegistry>, dimension_id: i32, ids: BlockIds) -> Arc<World> {
         let dim = Dimension::from_id(dimension_id, registry.air_id());
-        Arc::new(World { registry, dim, ids, chunks: RwLock::default(), next_view: AtomicU64::new(NO_OWNER + 1), changes: Notifier::default() })
+        Arc::new(World {
+            registry,
+            dim,
+            ids,
+            chunks: RwLock::default(),
+            next_view: AtomicU64::new(NO_OWNER + 1),
+            changes: Notifier::default(),
+        })
     }
 
     /// Translates a wire block id (chunk palettes, `UpdateBlock`) to a runtime id.
     pub fn runtime_id(&self, wire_id: u32) -> u32 {
         match self.ids {
             BlockIds::Runtime => wire_id,
-            BlockIds::Hashed => self.registry.runtime_id_from_hash(wire_id).unwrap_or(self.dim.air),
+            BlockIds::Hashed => self
+                .registry
+                .runtime_id_from_hash(wire_id)
+                .unwrap_or(self.dim.air),
         }
     }
 
@@ -116,7 +136,12 @@ impl World {
 
     /// Positions of chunks still held by at least one view.
     pub fn chunk_positions(&self) -> Vec<(i32, i32)> {
-        self.chunks.read().iter().filter(|(_, w)| w.strong_count() > 0).map(|(&p, _)| p).collect()
+        self.chunks
+            .read()
+            .iter()
+            .filter(|(_, w)| w.strong_count() > 0)
+            .map(|(&p, _)| p)
+            .collect()
     }
 
     /// Every content change applied from now on. Chunks already loaded are not replayed: read
@@ -127,7 +152,11 @@ impl World {
 
     /// Chunks still held by at least one view.
     pub fn live_chunks(&self) -> usize {
-        self.chunks.read().values().filter(|w| w.strong_count() > 0).count()
+        self.chunks
+            .read()
+            .values()
+            .filter(|w| w.strong_count() > 0)
+            .count()
     }
 
     /// Decodes a `LevelChunk` payload, or reuses the shared chunk when the payload is identical.
@@ -151,11 +180,19 @@ impl World {
         payload: &[u8],
     ) -> Result<(Arc<SharedChunk>, Inserted), Error> {
         let hash = payload_hash(sub_chunk_count, payload);
-        if let Some(c) = self.get(x, z).filter(|c| c.slot.read().payload_hash == Some(hash) || !c.claim(view)) {
+        if let Some(c) = self
+            .get(x, z)
+            .filter(|c| c.slot.read().payload_hash == Some(hash) || !c.claim(view))
+        {
             return Ok((c, Inserted::Shared));
         }
-        let chunk = Chunk::decode_mapped(x, z, self.dim, sub_chunk_count, payload, &|id| self.runtime_id(id))?;
-        let fresh = Slot { chunk, payload_hash: Some(hash) };
+        let chunk = Chunk::decode_mapped(x, z, self.dim, sub_chunk_count, payload, &|id| {
+            self.runtime_id(id)
+        })?;
+        let fresh = Slot {
+            chunk,
+            payload_hash: Some(hash),
+        };
         let mut map = self.chunks.write();
         if let Some(c) = map.get(&(x, z)).and_then(Weak::upgrade) {
             if !c.claim(view) {
@@ -189,8 +226,18 @@ impl World {
         self.set_block_by(NO_OWNER, x, y, z, layer, wire_id)
     }
 
-    pub(crate) fn set_block_by(&self, view: u64, x: i32, y: i32, z: i32, layer: u32, wire_id: u32) -> bool {
-        let Some(c) = self.get(x >> 4, z >> 4) else { return false };
+    pub(crate) fn set_block_by(
+        &self,
+        view: u64,
+        x: i32,
+        y: i32,
+        z: i32,
+        layer: u32,
+        wire_id: u32,
+    ) -> bool {
+        let Some(c) = self.get(x >> 4, z >> 4) else {
+            return false;
+        };
         if !c.claim(view) {
             return true;
         }
@@ -204,17 +251,31 @@ impl World {
     }
 
     /// Decodes a `SubChunk` entry into the chunk at `(x, z)`, creating an empty chunk if needed.
-    pub fn insert_sub_chunk(&self, x: i32, section_y: i32, z: i32, payload: &[u8]) -> Result<Arc<SharedChunk>, Error> {
+    pub fn insert_sub_chunk(
+        &self,
+        x: i32,
+        section_y: i32,
+        z: i32,
+        payload: &[u8],
+    ) -> Result<Arc<SharedChunk>, Error> {
         self.insert_sub_chunk_by(NO_OWNER, x, section_y, z, payload)
     }
 
-    pub(crate) fn insert_sub_chunk_by(&self, view: u64, x: i32, section_y: i32, z: i32, payload: &[u8]) -> Result<Arc<SharedChunk>, Error> {
+    pub(crate) fn insert_sub_chunk_by(
+        &self,
+        view: u64,
+        x: i32,
+        section_y: i32,
+        z: i32,
+        payload: &[u8],
+    ) -> Result<Arc<SharedChunk>, Error> {
         let c = self.get_or_create(x, z);
         if !c.claim(view) {
             return Ok(c);
         }
         let mut slot = c.slot.write();
-        slot.chunk.set_sub_chunk_mapped(section_y, payload, &|id| self.runtime_id(id))?;
+        slot.chunk
+            .set_sub_chunk_mapped(section_y, payload, &|id| self.runtime_id(id))?;
         slot.payload_hash = None;
         drop(slot);
         self.changes.send(ChunkChange::Section { x, section_y, z });
@@ -227,7 +288,13 @@ impl World {
         self.insert_sub_chunk_limit_by(NO_OWNER, x, z, count)
     }
 
-    pub(crate) fn insert_sub_chunk_limit_by(&self, view: u64, x: i32, z: i32, count: usize) -> Arc<SharedChunk> {
+    pub(crate) fn insert_sub_chunk_limit_by(
+        &self,
+        view: u64,
+        x: i32,
+        z: i32,
+        count: usize,
+    ) -> Arc<SharedChunk> {
         let c = self.get_or_create(x, z);
         if c.claim(view) {
             let mut slot = c.slot.write();
@@ -244,7 +311,13 @@ impl World {
         self.insert_sub_chunk_air_by(NO_OWNER, x, section_y, z)
     }
 
-    pub(crate) fn insert_sub_chunk_air_by(&self, view: u64, x: i32, section_y: i32, z: i32) -> Arc<SharedChunk> {
+    pub(crate) fn insert_sub_chunk_air_by(
+        &self,
+        view: u64,
+        x: i32,
+        section_y: i32,
+        z: i32,
+    ) -> Arc<SharedChunk> {
         let c = self.get_or_create(x, z);
         if c.claim(view) {
             let mut slot = c.slot.write();
@@ -262,7 +335,13 @@ impl World {
         self.insert_biomes_by(NO_OWNER, x, z, payload)
     }
 
-    pub(crate) fn insert_biomes_by(&self, view: u64, x: i32, z: i32, payload: &[u8]) -> Arc<SharedChunk> {
+    pub(crate) fn insert_biomes_by(
+        &self,
+        view: u64,
+        x: i32,
+        z: i32,
+        payload: &[u8],
+    ) -> Arc<SharedChunk> {
         let c = self.get_or_create(x, z);
         if c.claim(view) {
             c.slot.write().chunk.set_biomes(payload);
@@ -274,8 +353,16 @@ impl World {
     fn get_or_create(&self, x: i32, z: i32) -> Arc<SharedChunk> {
         self.get(x, z).unwrap_or_else(|| {
             let mut map = self.chunks.write();
-            let fresh = || SharedChunk::new(Slot { chunk: Chunk::empty(x, z, self.dim), payload_hash: None });
-            let c = map.get(&(x, z)).and_then(Weak::upgrade).unwrap_or_else(fresh);
+            let fresh = || {
+                SharedChunk::new(Slot {
+                    chunk: Chunk::empty(x, z, self.dim),
+                    payload_hash: None,
+                })
+            };
+            let c = map
+                .get(&(x, z))
+                .and_then(Weak::upgrade)
+                .unwrap_or_else(fresh);
             map.insert((x, z), Arc::downgrade(&c));
             c
         })

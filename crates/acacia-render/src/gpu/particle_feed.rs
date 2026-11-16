@@ -26,11 +26,24 @@ pub struct ParticleFeed {
 
 impl ParticleFeed {
     pub fn new(device: &wgpu::Device, color: wgpu::TextureFormat, globals: &wgpu::Buffer) -> Self {
-        ParticleFeed { chips: ParticlePass::new(device, color), sprites: SpritePass::new(device, color, globals), sheet: None, particles: Particles::default(), tick: 0 }
+        ParticleFeed {
+            chips: ParticlePass::new(device, color),
+            sprites: SpritePass::new(device, color, globals),
+            sheet: None,
+            particles: Particles::default(),
+            tick: 0,
+        }
     }
 
     /// `textures` is the block texture array the chips are cut from.
-    pub fn draw(&self, device: &wgpu::Device, pass: &mut wgpu::RenderPass<'_>, globals: &wgpu::Buffer, textures: &wgpu::TextureView, sampler: &wgpu::Sampler) {
+    pub fn draw(
+        &self,
+        device: &wgpu::Device,
+        pass: &mut wgpu::RenderPass<'_>,
+        globals: &wgpu::Buffer,
+        textures: &wgpu::TextureView,
+        sampler: &wgpu::Sampler,
+    ) {
         self.chips.draw(device, pass, globals, textures, sampler);
         self.sprites.draw(pass);
     }
@@ -46,8 +59,17 @@ impl Renderer {
 
     /// `count` particles (or bursts) within `spread` blocks of `at`; `velocity` as Java's
     /// `addParticle` takes it.
-    pub fn spawn_particles(&mut self, kind: Kind, at: DVec3, velocity: Vec3, count: u32, spread: f32) {
-        self.particles.particles.scatter(kind, at, velocity, count, spread);
+    pub fn spawn_particles(
+        &mut self,
+        kind: Kind,
+        at: DVec3,
+        velocity: Vec3,
+        count: u32,
+        spread: f32,
+    ) {
+        self.particles
+            .particles
+            .scatter(kind, at, velocity, count, spread);
     }
 
     /// The look's particle sprites ([`Sheet::load`]); they also decide whose particles spawn.
@@ -78,10 +100,26 @@ impl Renderer {
         let light_at = |p: DVec3| light.at(p);
         let (forward, right) = (camera.forward(), camera.right());
         let up = right.cross(forward);
-        feed.chips.prepare(&self.device, &self.queue, &feed.particles.chips, partial, camera.position, right, up, light_at);
+        feed.chips.prepare(
+            &self.device,
+            &self.queue,
+            &feed.particles.chips,
+            partial,
+            camera.position,
+            right,
+            up,
+            light_at,
+        );
         if let Some(sheet) = &feed.sheet {
             let draws = feed.particles.draws(sheet, partial, light_at);
-            feed.sprites.prepare(&self.device, &self.queue, &draws, camera.position, right, up);
+            feed.sprites.prepare(
+                &self.device,
+                &self.queue,
+                &draws,
+                camera.position,
+                right,
+                up,
+            );
         }
     }
 }
@@ -96,7 +134,10 @@ struct WorldBlocks<'a> {
 
 impl<'a> WorldBlocks<'a> {
     fn new(world: &'a World) -> Self {
-        WorldBlocks { world, last: RefCell::new(None) }
+        WorldBlocks {
+            world,
+            last: RefCell::new(None),
+        }
     }
 
     fn id(&self, cell: IVec3, layer: impl Fn(&Chunk) -> u32) -> Option<u32> {
@@ -112,10 +153,15 @@ impl<'a> WorldBlocks<'a> {
 
 impl Blocks for WorldBlocks<'_> {
     fn block(&self, cell: IVec3) -> Option<&BlockState> {
-        self.world.registry().get(self.id(cell, |c| c.block(cell.x, cell.y, cell.z))?)
+        self.world
+            .registry()
+            .get(self.id(cell, |c| c.block(cell.x, cell.y, cell.z))?)
     }
 
     fn liquid(&self, cell: IVec3) -> Option<&BlockState> {
-        self.world.registry().get(self.id(cell, |c| c.liquid(cell.x, cell.y, cell.z))?).filter(|s| s.is_liquid())
+        self.world
+            .registry()
+            .get(self.id(cell, |c| c.liquid(cell.x, cell.y, cell.z))?)
+            .filter(|s| s.is_liquid())
     }
 }

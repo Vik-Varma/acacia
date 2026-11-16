@@ -17,7 +17,7 @@ pub use candidates::LocalCandidate;
 use crate::frame::Reassembler;
 use crate::identity::identity_line;
 use crate::server_identity::{unix_now, verify_answer};
-use crate::{cert, sdp, Error, Identity};
+use crate::{Error, Identity, cert, sdp};
 
 /// Peers that omit `a=max-message-size` accept 64 KiB (RFC 8841).
 const DEFAULT_MAX_MESSAGE: usize = 65536;
@@ -75,7 +75,11 @@ pub struct Connection {
 
 impl Connection {
     /// Builds the SDP offer (identity asserted) with `local` embedded, for `POST /v1/join/{id}`.
-    pub fn offer(local: SocketAddr, identity: &Identity, now: Instant) -> Result<(Self, String), Error> {
+    pub fn offer(
+        local: SocketAddr,
+        identity: &Identity,
+        now: Instant,
+    ) -> Result<(Self, String), Error> {
         Self::new_offer(identity, now, Some(local))
     }
 
@@ -85,14 +89,23 @@ impl Connection {
         Self::new_offer(identity, now, None)
     }
 
-    fn new_offer(identity: &Identity, now: Instant, embedded: Option<SocketAddr>) -> Result<(Self, String), Error> {
+    fn new_offer(
+        identity: &Identity,
+        now: Instant,
+        embedded: Option<SocketAddr>,
+    ) -> Result<(Self, String), Error> {
         let (ufrag, pass) = sdp::ice_credentials();
         let config = Rtc::builder()
-            .set_local_ice_credentials(IceCreds { ufrag: ufrag.clone(), pass })
+            .set_local_ice_credentials(IceCreds {
+                ufrag: ufrag.clone(),
+                pass,
+            })
             .set_dtls_cert(cert::libwebrtc_certificate()?);
         let mut rtc = Box::new(config.build(now));
         if let Some(local) = embedded {
-            rtc.add_local_candidate(Candidate::host(local, "udp").map_err(|e| Error::Sdp(e.to_string()))?);
+            rtc.add_local_candidate(
+                Candidate::host(local, "udp").map_err(|e| Error::Sdp(e.to_string()))?,
+            );
         }
         let mut api = rtc.sdp_api();
         api.add_channel_with_config(ChannelConfig {
@@ -107,9 +120,16 @@ impl Connection {
             reliability: Reliability::MaxRetransmits { retransmits: 0 },
             ..Default::default()
         });
-        let (offer, pending) = api.apply().ok_or_else(|| Error::Sdp("no changes to offer".into()))?;
+        let (offer, pending) = api
+            .apply()
+            .ok_or_else(|| Error::Sdp("no changes to offer".into()))?;
         let str0m_offer = offer.to_sdp_string();
-        let offer = sdp::vanilla_sdp(&str0m_offer, &identity_line(&str0m_offer, identity), embedded, &[]);
+        let offer = sdp::vanilla_sdp(
+            &str0m_offer,
+            &identity_line(&str0m_offer, identity),
+            embedded,
+            &[],
+        );
         let mut conn = Self::new(rtc, embedded, ufrag, sdp::str0m_mid(&str0m_offer));
         conn.pending_offer = Some(pending);
         Ok((conn, offer))
@@ -156,15 +176,21 @@ impl Connection {
     }
 
     pub fn accept_answer(&mut self, answer: &str, now: Instant) -> Result<(), Error> {
-        let pending = self.pending_offer.take().ok_or_else(|| Error::Sdp("answer already accepted".into()))?;
+        let pending = self
+            .pending_offer
+            .take()
+            .ok_or_else(|| Error::Sdp("answer already accepted".into()))?;
         if let Some(size) = sdp::max_message_size(answer)? {
             self.max_message = size;
         }
-        let asserted = answer.lines().any(|l| l.starts_with(crate::identity::IDENTITY));
+        let asserted = answer
+            .lines()
+            .any(|l| l.starts_with(crate::identity::IDENTITY));
         if asserted || !self.identityless_host_ok {
             self.server_key = Some(verify_answer(answer, unix_now())?);
         }
-        let answer = SdpAnswer::from_sdp_string(&sdp::answer_for_str0m(answer, &self.mid)).map_err(|e| Error::Sdp(e.to_string()))?;
+        let answer = SdpAnswer::from_sdp_string(&sdp::answer_for_str0m(answer, &self.mid))
+            .map_err(|e| Error::Sdp(e.to_string()))?;
         self.rtc.sdp_api().accept_answer(pending, answer)?;
         for c in std::mem::take(&mut self.early_candidates) {
             self.rtc.add_remote_candidate(c);
@@ -192,7 +218,13 @@ impl Connection {
     }
 
     /// A datagram `peer` sent to our TURN allocation at `relay`, already unwrapped.
-    pub fn handle_relayed(&mut self, now: Instant, relay: SocketAddr, peer: SocketAddr, data: &[u8]) {
+    pub fn handle_relayed(
+        &mut self,
+        now: Instant,
+        relay: SocketAddr,
+        peer: SocketAddr,
+        data: &[u8],
+    ) {
         if self.relays.contains(&relay) {
             self.receive(now, relay, peer, data);
         } else {

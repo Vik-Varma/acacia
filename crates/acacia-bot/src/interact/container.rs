@@ -1,8 +1,8 @@
 use std::time::Duration;
 
+use acacia_client::proto::RawPacket;
 use acacia_client::proto::packets::{ContainerClose, Interact, InteractActionId};
 use acacia_client::proto::types::{BlockCoordinates, WindowID, WindowType};
-use acacia_client::proto::RawPacket;
 use acacia_physics::BlockPos;
 
 use crate::state::{Container, Inventory};
@@ -21,10 +21,17 @@ impl Bot {
             self.close_container().await?;
         }
         self.container_settled().await?;
-        self.use_item_on_block(pos, super::facing_face(self.eye_position(), pos)).await?;
-        let opened = self.wait_until(CONTAINER_TIMEOUT, |bot, _| bot.open_container().cloned()).await?;
+        self.use_item_on_block(pos, super::facing_face(self.eye_position(), pos))
+            .await?;
+        let opened = self
+            .wait_until(CONTAINER_TIMEOUT, |bot, _| bot.open_container().cloned())
+            .await?;
         // Contents follow ContainerOpen in a separate InventoryContent; slot actions need them.
-        let filled = |bot: &Bot, _: &RawPacket| bot.open_container().filter(|c| !c.slots.is_empty()).cloned();
+        let filled = |bot: &Bot, _: &RawPacket| {
+            bot.open_container()
+                .filter(|c| !c.slots.is_empty())
+                .cloned()
+        };
         let container = match self.wait_until(CONTENTS_TIMEOUT, filled).await {
             Ok(container) => container,
             Err(ActionError::Timeout) => self.open_container().cloned().unwrap_or(opened),
@@ -36,7 +43,11 @@ impl Bot {
     /// Java's `OpenScreen` does not say which block opened: it is the one just clicked.
     fn place_java_window(&mut self, mut container: Container, pos: BlockPos) -> Container {
         if container.position.is_none() && self.backend.bedrock().is_none() {
-            container.position = Some(BlockCoordinates { x: pos[0], y: pos[1], z: pos[2] });
+            container.position = Some(BlockCoordinates {
+                x: pos[0],
+                y: pos[1],
+                z: pos[2],
+            });
             if let Some(open) = self.state.containers.open.as_mut() {
                 open.position = container.position.clone();
             }
@@ -54,7 +65,9 @@ impl Bot {
         };
         #[cfg(feature = "java")]
         if let crate::bot::Backend::Java(java) = &mut self.backend {
-            java.client.close_screen().map_err(|_| ActionError::Disconnected)?;
+            java.client
+                .close_screen()
+                .map_err(|_| ActionError::Disconnected)?;
             self.state.containers.open = None;
             return Ok(());
         }
@@ -76,15 +89,27 @@ impl Bot {
 
     /// The open container, unless it is the player's own inventory.
     pub fn open_container(&self) -> Option<&Container> {
-        self.state.containers.open.as_ref().filter(|c| !Inventory::is_player_window(c.window_id))
+        self.state
+            .containers
+            .open
+            .as_ref()
+            .filter(|c| !Inventory::is_player_window(c.window_id))
     }
 }
 
 /// The client's close: vanilla sends no window type, and names no window for the trade screen
 /// (the server still echoes the real one).
 fn close_packet(open: &Container) -> ContainerClose {
-    let window_id = if open.window_type == WindowType::Trading { WindowID::None } else { WindowID::from_raw(i64::from(open.window_id)) };
-    ContainerClose { window_id, window_type: WindowType::None, server: false }
+    let window_id = if open.window_type == WindowType::Trading {
+        WindowID::None
+    } else {
+        WindowID::from_raw(i64::from(open.window_id))
+    };
+    ContainerClose {
+        window_id,
+        window_type: WindowType::None,
+        server: false,
+    }
 }
 
 #[cfg(test)]
@@ -93,9 +118,22 @@ mod tests {
 
     #[test]
     fn close_names_the_window_but_not_its_type_and_not_the_trade_screen() {
-        let open = |window_type| Container { window_id: 6, window_type, position: None, entity: None, title: None, slots: Vec::new() };
+        let open = |window_type| Container {
+            window_id: 6,
+            window_type,
+            position: None,
+            entity: None,
+            title: None,
+            slots: Vec::new(),
+        };
         let beacon = close_packet(&open(WindowType::Beacon));
-        assert_eq!((beacon.window_id.to_raw(), beacon.window_type, beacon.server), (6, WindowType::None, false));
-        assert_eq!(close_packet(&open(WindowType::Trading)).window_id, WindowID::None);
+        assert_eq!(
+            (beacon.window_id.to_raw(), beacon.window_type, beacon.server),
+            (6, WindowType::None, false)
+        );
+        assert_eq!(
+            close_packet(&open(WindowType::Trading)).window_id,
+            WindowID::None
+        );
     }
 }

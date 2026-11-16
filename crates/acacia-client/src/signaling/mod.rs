@@ -10,19 +10,19 @@ use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
 pub use acacia_nethernet::signaling::SignalingProtocol;
-use acacia_nethernet::signaling::{SignalingEvent, SignalingSession, DEFAULT_PING_INTERVAL};
+use acacia_nethernet::signaling::{DEFAULT_PING_INTERVAL, SignalingEvent, SignalingSession};
 use acacia_nethernet::turn::IceServers;
 use acacia_nethernet::{Identity, Signal};
 use futures_util::StreamExt;
 pub(crate) use keepalive::Keepalive;
-pub(crate) use ws::{open as open_stream, Io};
 use rand_core::{OsRng, RngCore};
+pub(crate) use ws::{Io, open as open_stream};
 
+use crate::ConnectError;
 use crate::net_wire::NetherNetWire;
 use crate::socks5::Socks5Proxy;
 use crate::transport::Transport;
 use crate::trickle::{self, SignalPath};
-use crate::ConnectError;
 
 /// Offer, ICE and DTLS together; go-nethernet allows 15 s for the connection alone.
 const DIAL_TIMEOUT: Duration = Duration::from_secs(30);
@@ -50,32 +50,58 @@ impl SignalingTarget {
             P::NetherNet => SignalingProtocol::Legacy,
             P::RakNet | P::Other(_) => return None,
         };
-        Some(Self { host: bare_host(host), protocol, peer: join.address.clone(), mc_token })
+        Some(Self {
+            host: bare_host(host),
+            protocol,
+            peer: join.address.clone(),
+            mc_token,
+        })
     }
 
     /// The target for one of a friend's `SupportedConnections`; None if it isn't signaled. A JSON-RPC
     /// entry without a `PmsgId` falls back to legacy signaling to its NetherNet id, as PrismarineJS dials.
-    pub fn from_friend(connection: &acacia_auth::WorldConnection, mc_token: String, host: &str) -> Option<Self> {
+    pub fn from_friend(
+        connection: &acacia_auth::WorldConnection,
+        mc_token: String,
+        host: &str,
+    ) -> Option<Self> {
         use acacia_auth::ConnectionKind as K;
-        let (protocol, peer) = match (connection.kind, &connection.pmsg_id, &connection.nethernet_id) {
+        let (protocol, peer) = match (
+            connection.kind,
+            &connection.pmsg_id,
+            &connection.nethernet_id,
+        ) {
             (K::SignalingJsonRpc, Some(pmsg), _) => (SignalingProtocol::JsonRpc, pmsg),
-            (K::SignalingJsonRpc | K::SignalingLegacy, _, Some(id)) => (SignalingProtocol::Legacy, id),
+            (K::SignalingJsonRpc | K::SignalingLegacy, _, Some(id)) => {
+                (SignalingProtocol::Legacy, id)
+            }
             _ => return None,
         };
-        Some(Self { host: bare_host(host), protocol, peer: peer.clone(), mc_token })
+        Some(Self {
+            host: bare_host(host),
+            protocol,
+            peer: peer.clone(),
+            mc_token,
+        })
     }
 }
 
 /// Discovery gives the host as a URL.
 #[cfg(feature = "online")]
 fn bare_host(host: &str) -> String {
-    host.trim_start_matches("wss://").trim_start_matches("https://").trim_end_matches('/').to_owned()
+    host.trim_start_matches("wss://")
+        .trim_start_matches("https://")
+        .trim_end_matches('/')
+        .to_owned()
 }
 
 impl SignalingTarget {
     fn url(&self, own_id: u64) -> String {
         match self.host.strip_prefix("ws://") {
-            Some(plain) => self.protocol.url(plain, own_id).replacen("wss://", "ws://", 1),
+            Some(plain) => self
+                .protocol
+                .url(plain, own_id)
+                .replacen("wss://", "ws://", 1),
             None => self.protocol.url(&self.host, own_id),
         }
     }
@@ -91,7 +117,11 @@ pub(crate) struct Dialed {
     pub keepalive: Keepalive,
 }
 
-pub(crate) async fn dial(target: &SignalingTarget, identity: &Identity, proxy: Option<&Socks5Proxy>) -> Result<Dialed, ConnectError> {
+pub(crate) async fn dial(
+    target: &SignalingTarget,
+    identity: &Identity,
+    proxy: Option<&Socks5Proxy>,
+) -> Result<Dialed, ConnectError> {
     let deadline = Instant::now() + DIAL_TIMEOUT;
     let own_id = OsRng.next_u64();
     let headers = [
@@ -100,12 +130,27 @@ pub(crate) async fn dial(target: &SignalingTarget, identity: &Identity, proxy: O
         ("request-id", OsRng.next_u64().to_string()),
     ];
     let (socket, remote) = ws::connect(&target.url(own_id), &headers, proxy).await?;
-    let session = SignalingSession::new(target.protocol, own_id, DEFAULT_PING_INTERVAL, Instant::now());
-    let mut path = ServicePath { socket, session, peer: &target.peer, ice_servers: None };
+    let session = SignalingSession::new(
+        target.protocol,
+        own_id,
+        DEFAULT_PING_INTERVAL,
+        Instant::now(),
+    );
+    let mut path = ServicePath {
+        socket,
+        session,
+        peer: &target.peer,
+        ice_servers: None,
+    };
     let transport = Transport::bind(remote, proxy).await?;
     let wire = trickle::connect(&mut path, &transport, identity, deadline).await?;
     let keepalive = Keepalive::spawn(path.socket, path.session);
-    Ok(Dialed { transport, wire, remote, keepalive })
+    Ok(Dialed {
+        transport,
+        wire,
+        remote,
+        keepalive,
+    })
 }
 
 struct ServicePath<'a> {

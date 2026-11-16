@@ -7,10 +7,10 @@ use crate::block_factors::bounce;
 use crate::collide::{Blocks, Colliders, Context};
 use crate::fluid::FluidScan;
 use crate::input::Keys;
-use crate::lerp::Lerp;
 use crate::inside::Move;
-use crate::mth::{cos, length_sqr, sin, wrap_degrees, DEG_TO_RAD};
-use crate::support::{Support, LEGACY_ON_POS};
+use crate::lerp::Lerp;
+use crate::mth::{DEG_TO_RAD, cos, length_sqr, sin, wrap_degrees};
+use crate::support::{LEGACY_ON_POS, Support};
 
 pub const WIDTH: f32 = 1.375;
 pub const HEIGHT: f32 = 0.5625;
@@ -59,7 +59,12 @@ pub struct Boat {
 impl Boat {
     /// A boat at rest where the client sees it, with the status its last unridden tick found.
     pub fn new(world: &impl Blocks, pos: [f64; 3], yaw: f32, raft: bool) -> Boat {
-        let mut boat = Boat { pos, yaw, raft, ..Boat::default() };
+        let mut boat = Boat {
+            pos,
+            yaw,
+            raft,
+            ..Boat::default()
+        };
         boat.status = boat.read_status(world);
         boat
     }
@@ -70,8 +75,16 @@ impl Boat {
 
     /// Where `positionRider` puts a lone player's feet.
     pub fn rider_feet(&self) -> [f64; 3] {
-        let ride_height = if self.raft { HEIGHT * 0.8888889 } else { HEIGHT / 3.0 };
-        [self.pos[0], self.pos[1] + ride_height as f64 - PLAYER_ATTACHMENT, self.pos[2]]
+        let ride_height = if self.raft {
+            HEIGHT * 0.8888889
+        } else {
+            HEIGHT / 3.0
+        };
+        [
+            self.pos[0],
+            self.pos[1] + ride_height as f64 - PLAYER_ATTACHMENT,
+            self.pos[2],
+        ]
     }
 
     /// `AbstractBoat.clampRotation` after `positionRider` turned the rider with the boat: the rider's yaw.
@@ -88,8 +101,15 @@ impl Boat {
         self.interpolate(world);
         self.old_status = self.status;
         self.status = self.read_status(world);
-        let under = matches!(self.status, BoatStatus::UnderWater | BoatStatus::UnderFlowingWater);
-        self.out_of_control = if under { self.out_of_control + 1.0 } else { 0.0 };
+        let under = matches!(
+            self.status,
+            BoatStatus::UnderWater | BoatStatus::UnderFlowingWater
+        );
+        self.out_of_control = if under {
+            self.out_of_control + 1.0
+        } else {
+            0.0
+        };
         FluidScan::of(world, self.bounding_box(), None, true).push(&mut self.delta, false);
         self.float(world);
         let paddles = self.control(keys);
@@ -99,16 +119,27 @@ impl Boat {
     }
 
     pub(crate) fn colliders<'a, W: Blocks>(&'a self, world: &'a W) -> Colliders<'a, W> {
-        Colliders { world, context: Context { feet: self.pos[1], ..Context::default() }, entities: &self.solid_entities }
+        Colliders {
+            world,
+            context: Context {
+                feet: self.pos[1],
+                ..Context::default()
+            },
+            entities: &self.solid_entities,
+        }
     }
 
     /// `floatBoat`.
     fn float(&mut self, world: &impl Blocks) {
-        let landing = self.old_status == BoatStatus::InAir && !matches!(self.status, BoatStatus::InAir | BoatStatus::OnLand);
+        let landing = self.old_status == BoatStatus::InAir
+            && !matches!(self.status, BoatStatus::InAir | BoatStatus::OnLand);
         if landing {
             self.water_level = self.pos[1] + HEIGHT as f64 * 1.0;
             let target = (self.water_level_above(world) - HEIGHT) as f64 + 0.101;
-            if self.colliders(world).no_collision(&self.bounding_box().moved([0.0, target - self.pos[1], 0.0])) {
+            if self
+                .colliders(world)
+                .no_collision(&self.bounding_box().moved([0.0, target - self.pos[1], 0.0]))
+            {
                 self.pos[1] = target;
                 self.delta[1] *= 0.0;
                 self.last_yd = 0.0;
@@ -117,7 +148,11 @@ impl Boat {
             return;
         }
         let (inv_friction, vspeed, buoyancy) = match self.status {
-            BoatStatus::InWater => (0.9_f32, -GRAVITY, (self.water_level - self.pos[1]) / HEIGHT as f64),
+            BoatStatus::InWater => (
+                0.9_f32,
+                -GRAVITY,
+                (self.water_level - self.pos[1]) / HEIGHT as f64,
+            ),
             BoatStatus::UnderFlowingWater => (0.9, -7.0E-4, 0.0),
             BoatStatus::UnderWater => (0.45, -GRAVITY, 0.01_f32 as f64),
             BoatStatus::InAir => (0.9, -GRAVITY, 0.0),
@@ -128,7 +163,11 @@ impl Boat {
             }
         };
         let d = self.delta;
-        self.delta = [d[0] * inv_friction as f64, d[1] + vspeed, d[2] * inv_friction as f64];
+        self.delta = [
+            d[0] * inv_friction as f64,
+            d[1] + vspeed,
+            d[2] * inv_friction as f64,
+        ];
         self.delta_rotation *= inv_friction;
         if buoyancy > 0.0 {
             self.delta[1] = (self.delta[1] + buoyancy * (GRAVITY / 0.65)) * 0.75;
@@ -156,8 +195,15 @@ impl Boat {
         }
         let x = sin((-self.yaw * DEG_TO_RAD) as f64) * acceleration;
         let z = cos((self.yaw * DEG_TO_RAD) as f64) * acceleration;
-        self.delta = [self.delta[0] + x as f64, self.delta[1] + 0.0, self.delta[2] + z as f64];
-        [keys.right && !keys.left || keys.forward, keys.left && !keys.right || keys.forward]
+        self.delta = [
+            self.delta[0] + x as f64,
+            self.delta[1] + 0.0,
+            self.delta[2] + z as f64,
+        ];
+        [
+            keys.right && !keys.left || keys.forward,
+            keys.left && !keys.right || keys.forward,
+        ]
     }
 
     /// `Entity.move` for `MoverType.SELF`, with the boat's `checkFallDamage`.
@@ -170,7 +216,9 @@ impl Boat {
             self.stuck = [0.0; 3];
             self.delta = [0.0; 3];
         }
-        let movement = self.colliders(world).collide(self.bounding_box(), delta, self.on_ground, 0.0);
+        let movement =
+            self.colliders(world)
+                .collide(self.bounding_box(), delta, self.on_ground, 0.0);
         let moved = length_sqr(movement);
         if moved > 1.0E-7 || length_sqr(delta) - moved < 1.0E-7 {
             let from = self.pos;
@@ -186,9 +234,17 @@ impl Boat {
         let below = self.vertical_collision && delta[1] < 0.0;
         self.on_ground = below;
         let mut support = self.support;
-        support.update(&self.colliders(world), self.bounding_box(), self.pos, below, movement);
+        support.update(
+            &self.colliders(world),
+            self.bounding_box(),
+            self.pos,
+            below,
+            movement,
+        );
         self.support = support;
-        let effect_block = world.block_state(self.support.on_pos(world, self.pos, LEGACY_ON_POS)).block();
+        let effect_block = world
+            .block_state(self.support.on_pos(world, self.pos, LEGACY_ON_POS))
+            .block();
         self.last_yd = self.delta[1];
         if (delta[1].abs() > 0.0 && self.vertical_collision) || self.horizontal_collision {
             self.restitute(effect_block, x_hit, z_hit, below, movement);
@@ -199,7 +255,14 @@ impl Boat {
     }
 
     /// `restituteMovementAfterCollisions`: boats bounce only off blocks, at 0.8 of a living entity's bounce.
-    fn restitute(&mut self, block: Block, x_hit: bool, z_hit: bool, below: bool, movement: [f64; 3]) {
+    fn restitute(
+        &mut self,
+        block: Block,
+        x_hit: bool,
+        z_hit: bool,
+        below: bool,
+        movement: [f64; 3],
+    ) {
         let current = self.delta;
         let mut restitution = 0.0;
         if x_hit {
@@ -213,7 +276,11 @@ impl Boat {
         }
         if below {
             let bounces = !(-current[1] <= GRAVITY) && !block.is(BlockTag::SuppressesBounce);
-            restitution = if bounces { (bounce(block) * 0.8) as f64 } else { 0.0 };
+            restitution = if bounces {
+                (bounce(block) * 0.8) as f64
+            } else {
+                0.0
+            };
         }
         let (gravity, drag) = if restitution > 0.0 {
             let portion = movement[1] / current[1];

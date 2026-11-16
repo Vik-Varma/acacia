@@ -1,14 +1,17 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use acacia_client::proto::packets::{ClientCacheMissResponse, CorrectPlayerMovePrediction, MovePlayer, PlayerAuthInput, SetEntityData, SetEntityMotion};
-use acacia_client::{BlobStore, MemoryBlobStore};
-use acacia_client::proto::types::{InputData as F, MetadataFlags1, Vec3f};
 use acacia_client::proto::Packet;
+use acacia_client::proto::packets::{
+    ClientCacheMissResponse, CorrectPlayerMovePrediction, MovePlayer, PlayerAuthInput,
+    SetEntityData, SetEntityMotion,
+};
+use acacia_client::proto::types::{InputData as F, MetadataFlags1, Vec3f};
+use acacia_client::{BlobStore, MemoryBlobStore};
 use acacia_physics::Vec3;
 
 use super::Event;
-use crate::movement::{Controls, Movement, EYE_HEIGHT};
+use crate::movement::{Controls, EYE_HEIGHT, Movement};
 use crate::state::GameState;
 use crate::world::{PhysicsWorld, SharedWorlds, WorldTracker};
 
@@ -63,7 +66,9 @@ impl CorrectionDiff {
     /// A disagreement in position or velocity beyond `tolerance` (a correction for a tick we did not
     /// simulate counts).
     pub fn mismatch(&self, tolerance: f32) -> bool {
-        !self.explained && (self.error().is_none_or(|e| e > tolerance) || self.delta_err.is_some_and(|e| e > tolerance))
+        !self.explained
+            && (self.error().is_none_or(|e| e > tolerance)
+                || self.delta_err.is_some_and(|e| e > tolerance))
     }
 }
 
@@ -84,7 +89,10 @@ pub struct Report {
 
 impl Report {
     /// Corrections we disagree with beyond `tolerance`, and those skipped as teleport lags.
-    pub fn correction_mismatches(&self, tolerance: f32) -> (Vec<&CorrectionDiff>, Vec<&CorrectionDiff>) {
+    pub fn correction_mismatches(
+        &self,
+        tolerance: f32,
+    ) -> (Vec<&CorrectionDiff>, Vec<&CorrectionDiff>) {
         let (lagged, mismatches) = self
             .corrections
             .iter()
@@ -143,8 +151,17 @@ pub fn replay(events: &[Event], tolerance: f32, resync: bool) -> Report {
                     && d.runtime_entity_id == state.me().runtime_entity_id
                     && let Some(f) = super::actor_flags(&d)
                 {
-                    let (sprinting, swimming) = (f.0 & MetadataFlags1::SPRINTING.0 != 0, f.0 & MetadataFlags1::SWIMMING.0 != 0);
-                    tracing::trace!(tick = last_tick, server_tick = d.tick, sprinting, swimming, "server actor flags");
+                    let (sprinting, swimming) = (
+                        f.0 & MetadataFlags1::SPRINTING.0 != 0,
+                        f.0 & MetadataFlags1::SWIMMING.0 != 0,
+                    );
+                    tracing::trace!(
+                        tick = last_tick,
+                        server_tick = d.tick,
+                        sprinting,
+                        swimming,
+                        "server actor flags"
+                    );
                 }
                 if p.id == SetEntityMotion::ID
                     && let Ok(m) = p.decode::<SetEntityMotion>()
@@ -159,22 +176,40 @@ pub fn replay(events: &[Event], tolerance: f32, resync: bool) -> Report {
                     // Geyser stamps no tick: compare with the latest tick instead.
                     let tick = if c.tick == 0 { last_tick } else { c.tick };
                     let blocks = nearby_blocks(&world, feet(server));
-                    let (pos, delta) = ours.get(&tick).map_or((None, None), |&(p, d)| (Some(p), Some(dist(d, vec3(&c.delta)))));
+                    let (pos, delta) = ours.get(&tick).map_or((None, None), |&(p, d)| {
+                        (Some(p), Some(dist(d, vec3(&c.delta))))
+                    });
                     let sent = sent.get(&tick).copied();
                     tracing::trace!(tick, ours = ?ours.get(&tick).map(|&(_, d)| d), server = ?vec3(&c.delta), "correction delta");
                     // A late freeze still shows in the position two ticks on.
-                    let explained = (tick.saturating_sub(FREEZE_CARRY)..=tick).any(|t| match frozen.get(&t) {
-                        Some(Some(used)) => movement.freeze_at(t).1.is_some_and(|f| (f - used).abs() > 1e-6),
-                        Some(None) => true,
-                        None => false,
-                    });
+                    let explained =
+                        (tick.saturating_sub(FREEZE_CARRY)..=tick).any(|t| match frozen.get(&t) {
+                            Some(Some(used)) => movement
+                                .freeze_at(t)
+                                .1
+                                .is_some_and(|f| (f - used).abs() > 1e-6),
+                            Some(None) => true,
+                            None => false,
+                        });
                     let deltas = (ours.get(&tick).map(|&(_, d)| d), vec3(&c.delta));
-                    report.corrections.push(CorrectionDiff { tick, mark: mark.clone(), ours: pos, server, delta_err: delta, deltas, sent, explained, blocks });
+                    report.corrections.push(CorrectionDiff {
+                        tick,
+                        mark: mark.clone(),
+                        ours: pos,
+                        server,
+                        delta_err: delta,
+                        deltas,
+                        sent,
+                        explained,
+                        blocks,
+                    });
                 }
                 let _ = movement.apply(p, &state.me());
             }
             Event::Input(body) => {
-                let Ok(rec) = PlayerAuthInput::decode(&mut &body[..]) else { continue };
+                let Ok(rec) = PlayerAuthInput::decode(&mut &body[..]) else {
+                    continue;
+                };
                 let recorded = vec3(&rec.position);
                 tracing::trace!(tick = rec.tick, pos = ?recorded, delta = ?vec3(&rec.delta), flags = ?rec.input_data, "sent input");
                 if !movement.is_started() {
@@ -189,19 +224,33 @@ pub fn replay(events: &[Event], tolerance: f32, resync: bool) -> Report {
                 // Traces don't record armour; a glide start means an elytra was worn.
                 movement.elytra |= rec.input_data.contains(&F::StartGliding);
                 movement.recorded_want_down = Some(rec.input_data.contains(&F::WantDown));
-                let (Some(view), Some(registry)) = (world.view(), world.registry()) else { continue };
-                let Some(out) = movement.tick(&PhysicsWorld { view, registry }) else { continue };
+                let (Some(view), Some(registry)) = (world.view(), world.registry()) else {
+                    continue;
+                };
+                let Some(out) = movement.tick(&PhysicsWorld { view, registry }) else {
+                    continue;
+                };
                 let pos = vec3(&out.position);
                 ours.insert(out.tick, (pos, vec3(&out.delta)));
                 sent.insert(out.tick, (recorded, vec3(&rec.delta)));
-                let received = view.chunk((pos[0].floor() as i32) >> 4, (pos[2].floor() as i32) >> 4).is_some();
+                let received = view
+                    .chunk((pos[0].floor() as i32) >> 4, (pos[2].floor() as i32) >> 4)
+                    .is_some();
                 frozen.insert(out.tick, received.then(|| movement.freeze_at(out.tick).0));
                 last_tick = out.tick;
                 report.ticks += 1;
                 let delta_err = dist(vec3(&out.delta), vec3(&rec.delta));
                 if dist(pos, recorded) > tolerance || delta_err > tolerance {
                     let blocks = nearby_blocks(&world, feet(recorded));
-                    report.diverged.push(TickDiff { tick: out.tick, mark: mark.clone(), ours: pos, recorded, delta_err, blocks, near_event: false });
+                    report.diverged.push(TickDiff {
+                        tick: out.tick,
+                        mark: mark.clone(),
+                        ours: pos,
+                        recorded,
+                        delta_err,
+                        blocks,
+                        near_event: false,
+                    });
                     if resync {
                         movement.resync(out.tick, feet(recorded), vec3(&rec.delta));
                     }
@@ -217,7 +266,8 @@ pub fn replay(events: &[Event], tolerance: f32, resync: bool) -> Report {
     for c in &mut report.corrections {
         c.explained |= moves.iter().any(|&(effect, target, arrived)| {
             let at_target = target.is_some_and(|t| dist(t, c.server) < 1e-3);
-            effect.abs_diff(c.tick) <= EVENT_WINDOW && (at_target || (effect <= c.tick && arrived >= c.tick))
+            effect.abs_diff(c.tick) <= EVENT_WINDOW
+                && (at_target || (effect <= c.tick && arrived >= c.tick))
         });
     }
     report
@@ -226,7 +276,9 @@ pub fn replay(events: &[Event], tolerance: f32, resync: bool) -> Report {
 /// Distinct non-air block names in the player's box (widened by 0.1) and the layer below its feet.
 fn nearby_blocks(world: &WorldTracker, [x, y, z]: Vec3) -> String {
     use acacia_world::BlockAccess;
-    let (Some(view), Some(registry)) = (world.view(), world.registry()) else { return String::new() };
+    let (Some(view), Some(registry)) = (world.view(), world.registry()) else {
+        return String::new();
+    };
     let span = |lo: f32, hi: f32| lo.floor() as i32..=hi.floor() as i32;
     let mut names: Vec<&str> = Vec::new();
     for bx in span(x - 0.4, x + 0.4) {
@@ -255,7 +307,13 @@ fn nearby_blocks(world: &WorldTracker, [x, y, z]: Vec3) -> String {
                     .find(|(s, _)| s.is_water());
                 // `L` marks water in the second (liquid) layer.
                 if let Some((s, layer)) = state {
-                    liquids.push(format!("{},{},{}:{}{layer}", bx - fx, by - fy, bz - fz, s.liquid_depth));
+                    liquids.push(format!(
+                        "{},{},{}:{}{layer}",
+                        bx - fx,
+                        by - fy,
+                        bz - fz,
+                        s.liquid_depth
+                    ));
                 }
             }
         }
@@ -265,8 +323,16 @@ fn nearby_blocks(world: &WorldTracker, [x, y, z]: Vec3) -> String {
         let mut found = Vec::new();
         for bz in fz - 1..=fz + 1 {
             for bx in fx - 1..=fx + 1 {
-                if let Some(s) = registry.get(view.block(bx, by, bz)).filter(|s| !s.is_air() && !s.name.ends_with(":stone")) {
-                    found.push(format!("{},{}:{}", bx - fx, bz - fz, s.name.trim_start_matches("minecraft:")));
+                if let Some(s) = registry
+                    .get(view.block(bx, by, bz))
+                    .filter(|s| !s.is_air() && !s.name.ends_with(":stone"))
+                {
+                    found.push(format!(
+                        "{},{}:{}",
+                        bx - fx,
+                        bz - fz,
+                        s.name.trim_start_matches("minecraft:")
+                    ));
                 }
             }
         }
@@ -286,7 +352,12 @@ fn nearby_blocks(world: &WorldTracker, [x, y, z]: Vec3) -> String {
         for by in fy..=fy + 2 {
             for bz in fz - 1..=fz + 1 {
                 for bx in fx - 1..=fx + 1 {
-                    let Some(s) = registry.get(view.block(bx, by, bz)).filter(|s| !s.boxes.is_empty() && !s.name.ends_with(":stone")) else { continue };
+                    let Some(s) = registry
+                        .get(view.block(bx, by, bz))
+                        .filter(|s| !s.boxes.is_empty() && !s.name.ends_with(":stone"))
+                    else {
+                        continue;
+                    };
                     let boxes: Vec<_> = s.boxes.iter().map(|b| (b.min, b.max)).collect();
                     out += &format!("\n  [{bx},{by},{bz}] {} {boxes:?}", s.name);
                 }
@@ -301,7 +372,11 @@ fn nearby_blocks(world: &WorldTracker, [x, y, z]: Vec3) -> String {
 
 /// Layers feet-1..=feet+2 of the 5x5 around the feet (x across, z down): `.` air, `#` full block, `~` water
 /// (with its depth), else the first letter of the name.
-fn block_map(view: &impl acacia_world::BlockAccess, registry: &acacia_world::BlockRegistry, [fx, fy, fz]: [i32; 3]) -> String {
+fn block_map(
+    view: &impl acacia_world::BlockAccess,
+    registry: &acacia_world::BlockRegistry,
+    [fx, fy, fz]: [i32; 3],
+) -> String {
     let mut out = String::new();
     for by in fy - 1..=fy + 2 {
         out += &format!("\n  y{:+}", by - fy);
@@ -309,11 +384,18 @@ fn block_map(view: &impl acacia_world::BlockAccess, registry: &acacia_world::Blo
             out += " ";
             for bx in fx - 2..=fx + 2 {
                 let solid = registry.get(view.block(bx, by, bz)).filter(|s| !s.is_air());
-                let water = [view.block(bx, by, bz), view.liquid(bx, by, bz)].into_iter().filter_map(|id| registry.get(id)).find(|s| s.is_water());
+                let water = [view.block(bx, by, bz), view.liquid(bx, by, bz)]
+                    .into_iter()
+                    .filter_map(|id| registry.get(id))
+                    .find(|s| s.is_water());
                 out += &match (solid, water) {
                     (Some(s), _) if !s.is_water() => {
                         let n = s.name.trim_start_matches("minecraft:");
-                        if n == "stone" { "#".into() } else { n[..1].to_string() }
+                        if n == "stone" {
+                            "#".into()
+                        } else {
+                            n[..1].to_string()
+                        }
                     }
                     (_, Some(w)) => format!("{}", w.liquid_depth % 10),
                     _ => ".".into(),

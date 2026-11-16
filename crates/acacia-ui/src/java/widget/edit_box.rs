@@ -64,13 +64,21 @@ impl EditBox {
     }
 
     pub fn inner_width(&self) -> i32 {
-        if self.bordered { self.base.w - 8 } else { self.base.w }
+        if self.bordered {
+            self.base.w - 8
+        } else {
+            self.base.w
+        }
     }
 
     /// `setHint`: an unstyled hint turns dark grey.
     pub fn set_hint(&mut self, hint: Text) {
         let plain = hint.spans.iter().all(|s| s.style == Style::default());
-        self.hint = Some(if plain { hint.with_color(0x55_5555) } else { hint });
+        self.hint = Some(if plain {
+            hint.with_color(0x55_5555)
+        } else {
+            hint
+        });
     }
 
     /// `setValue`: cut to `max_length`, cursor and selection at the end.
@@ -122,14 +130,27 @@ impl EditBox {
     /// scrolls leaves a centred field's text where it was. Kept relative to the box.
     pub fn update_text_position(&mut self, m: &dyn Metrics) {
         let b = &self.base;
-        let shown = plain_head(m, &sub(&self.value, self.display_pos, len(&self.value)), self.inner_width());
-        let dx = if self.centered { (b.w - width_str(m, &shown)) / 2 } else if self.bordered { 4 } else { 0 };
+        let shown = plain_head(
+            m,
+            &sub(&self.value, self.display_pos, len(&self.value)),
+            self.inner_width(),
+        );
+        let dx = if self.centered {
+            (b.w - width_str(m, &shown)) / 2
+        } else if self.bordered {
+            4
+        } else {
+            0
+        };
         let dy = if self.bordered { (b.h - 8) / 2 } else { 0 };
         self.text_offset = (dx, dy);
     }
 
     fn text_pos(&self) -> (i32, i32) {
-        (self.base.x + self.text_offset.0, self.base.y + self.text_offset.1)
+        (
+            self.base.x + self.text_offset.0,
+            self.base.y + self.text_offset.1,
+        )
     }
 }
 
@@ -145,23 +166,41 @@ impl Widget for EditBox {
         let m = ctx.font;
         if self.bordered {
             // WidgetSprites(sprite, focused): focus picks the sprite whether active or not.
-            let sprite = if b.focused { "widget/text_field_highlighted" } else { "widget/text_field" };
+            let sprite = if b.focused {
+                "widget/text_field_highlighted"
+            } else {
+                "widget/text_field"
+            };
             ctx.gui.sprite(sprite, b.x, b.y, b.w, b.h);
         }
         let (text_x, text_y) = self.text_pos();
-        let color = if self.editable { self.text_color } else { self.text_color_uneditable };
+        let color = if self.editable {
+            self.text_color
+        } else {
+            self.text_color_uneditable
+        };
         let rel_cursor = self.cursor as i64 - self.display_pos as i64;
-        let shown = plain_head(m, &sub(&self.value, self.display_pos, len(&self.value)), self.inner_width());
+        let shown = plain_head(
+            m,
+            &sub(&self.value, self.display_pos, len(&self.value)),
+            self.inner_width(),
+        );
         let shown_len = len(&shown) as i64;
         let on_screen = rel_cursor >= 0 && rel_cursor <= shown_len;
         let blink = (ctx.millis - self.focused_time) / 300 % 2 == 0;
         let show_cursor = b.focused && blink && on_screen;
         let mut draw_x = text_x;
-        let rel_highlight = (self.highlight as i64 - self.display_pos as i64).clamp(0, shown_len) as usize;
+        let rel_highlight =
+            (self.highlight as i64 - self.display_pos as i64).clamp(0, shown_len) as usize;
         if !shown.is_empty() {
-            let half = if on_screen { sub(&shown, 0, rel_cursor as usize) } else { shown.clone() };
+            let half = if on_screen {
+                sub(&shown, 0, rel_cursor as usize)
+            } else {
+                shown.clone()
+            };
             let w = width_str(m, &half);
-            ctx.gui.text(Text::literal(half), draw_x, text_y, color, self.shadow);
+            ctx.gui
+                .text(Text::literal(half), draw_x, text_y, color, self.shadow);
             draw_x += w + 1;
         }
         let insert = self.cursor < len(&self.value) || len(&self.value) >= self.max_length;
@@ -173,7 +212,13 @@ impl Widget for EditBox {
             draw_x -= 1;
         }
         if !shown.is_empty() && on_screen && rel_cursor < shown_len {
-            ctx.gui.text(Text::literal(sub(&shown, rel_cursor as usize, len(&shown))), draw_x, text_y, color, self.shadow);
+            ctx.gui.text(
+                Text::literal(sub(&shown, rel_cursor as usize, len(&shown))),
+                draw_x,
+                text_y,
+                color,
+                self.shadow,
+            );
         }
         if let Some(hint) = &self.hint
             && shown.is_empty()
@@ -182,18 +227,32 @@ impl Widget for EditBox {
             ctx.gui.text(hint.clone(), draw_x, text_y, color, true);
         }
         if !insert && let Some(s) = &self.suggestion {
-            ctx.gui.text(Text::literal(s.clone()), cursor_x - 1, text_y, SUGGESTION_COLOR, self.shadow);
+            ctx.gui.text(
+                Text::literal(s.clone()),
+                cursor_x - 1,
+                text_y,
+                SUGGESTION_COLOR,
+                self.shadow,
+            );
         }
         if rel_highlight as i64 != rel_cursor {
             let highlight_x = text_x + width_str(m, &sub(&shown, 0, rel_highlight));
             let right = b.x + b.w;
-            ctx.gui.highlight(cursor_x.min(right), text_y - 1, (highlight_x - 1).min(right), text_y + 1 + 9, self.invert_highlight);
+            ctx.gui.highlight(
+                cursor_x.min(right),
+                text_y - 1,
+                (highlight_x - 1).min(right),
+                text_y + 1 + 9,
+                self.invert_highlight,
+            );
         }
         if show_cursor {
             if insert {
-                ctx.gui.fill(cursor_x, text_y - 1, cursor_x + 1, text_y + 10, color);
+                ctx.gui
+                    .fill(cursor_x, text_y - 1, cursor_x + 1, text_y + 10, color);
             } else {
-                ctx.gui.text(Text::literal("_"), cursor_x, text_y, color, self.shadow);
+                ctx.gui
+                    .text(Text::literal("_"), cursor_x, text_y, color, self.shadow);
             }
         }
     }

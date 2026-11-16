@@ -2,7 +2,7 @@ use acacia_registry::prop::{Bottom, StabilityDistance};
 use acacia_registry::{Block, BlockState, CollisionBox};
 
 use crate::aabb::Aabb;
-use crate::fluid::{fluid_of, Face};
+use crate::fluid::{Face, fluid_of};
 use crate::mth::{floor, horizontal_sqr, length_sqr};
 
 const EPS: f64 = 1.0E-7;
@@ -68,13 +68,19 @@ impl Context {
             return state.java_collision();
         }
         let hanging = state.get(StabilityDistance) != Some(0) && state.get(Bottom) == Some(true);
-        Some(if hanging && self.is_above(y, 0.0) { &SCAFFOLD_BOTTOM } else { &[] })
+        Some(if hanging && self.is_above(y, 0.0) {
+            &SCAFFOLD_BOTTOM
+        } else {
+            &[]
+        })
     }
 }
 
 /// A rough `isFaceSturdy` from collision boxes: one box must cover the whole face.
 pub fn full_face(state: BlockState, face: Face) -> bool {
-    let Some(boxes) = state.java_collision() else { return false };
+    let Some(boxes) = state.java_collision() else {
+        return false;
+    };
     boxes.iter().any(|b| match face {
         Face::Down => b[1] == 0.0 && b[0] == 0.0 && b[3] == 1.0 && b[2] == 0.0 && b[5] == 1.0,
         Face::North => b[2] == 0.0 && b[0] == 0.0 && b[3] == 1.0 && b[1] == 0.0 && b[4] == 1.0,
@@ -114,7 +120,9 @@ impl Shape {
         let (b, c) = ((axis + 1) % 3, (axis + 2) % 3);
         for part in self.boxes() {
             let (lo, hi) = part.split_at(3);
-            let overlaps = |o: usize| lo[o] + at[o] < moving.max[o] - EPS && hi[o] + at[o] > moving.min[o] + EPS;
+            let overlaps = |o: usize| {
+                lo[o] + at[o] < moving.max[o] - EPS && hi[o] + at[o] > moving.min[o] + EPS
+            };
             if !overlaps(b) || !overlaps(c) {
                 continue;
             }
@@ -181,8 +189,13 @@ impl<W: Blocks> Colliders<'_, W> {
             for y in low[1]..=high[1] {
                 for x in low[0]..=high[0] {
                     let state = self.world.state(x, y, z).and_then(BlockState::from_id);
-                    let Some(boxes) = state.and_then(|s| self.boxes(s, [x, y, z])) else { continue };
-                    let shape = Shape { pos: [x, y, z], boxes: Boxes::Block(boxes) };
+                    let Some(boxes) = state.and_then(|s| self.boxes(s, [x, y, z])) else {
+                        continue;
+                    };
+                    let shape = Shape {
+                        pos: [x, y, z],
+                        boxes: Boxes::Block(boxes),
+                    };
                     if !boxes.is_empty() && shape.intersects(area) {
                         shapes.push(shape);
                     }
@@ -199,7 +212,9 @@ impl<W: Blocks> Colliders<'_, W> {
             .filter(|e| e.intersects(area))
             .map(|e| Shape {
                 pos: [0; 3],
-                boxes: Boxes::Entity([[e.min[0], e.min[1], e.min[2], e.max[0], e.max[1], e.max[2]]]),
+                boxes: Boxes::Entity([[
+                    e.min[0], e.min[1], e.min[2], e.max[0], e.max[1], e.max[2],
+                ]]),
             })
             .collect();
         shapes.extend(self.blocks_in(area));
@@ -211,27 +226,46 @@ impl<W: Blocks> Colliders<'_, W> {
     }
 
     /// `Entity.collide`: the movement left after collisions, including stepping up.
-    pub fn collide(&self, area: Aabb, movement: [f64; 3], on_ground: bool, max_step: f32) -> [f64; 3] {
+    pub fn collide(
+        &self,
+        area: Aabb,
+        movement: [f64; 3],
+        on_ground: bool,
+        max_step: f32,
+    ) -> [f64; 3] {
         let step = if length_sqr(movement) == 0.0 {
             movement
         } else {
-            collide_with_shapes(movement, &area, &self.shapes_in(&area.expanded_towards(movement)))
+            collide_with_shapes(
+                movement,
+                &area,
+                &self.shapes_in(&area.expanded_towards(movement)),
+            )
         };
         let blocked = |axis: usize| movement[axis] != step[axis];
         let landed = blocked(1) && movement[1] < 0.0;
         if max_step <= 0.0 || !(landed || on_ground) || !(blocked(0) || blocked(2)) {
             return step;
         }
-        let ground = if landed { area.moved([0.0, step[1], 0.0]) } else { area };
+        let ground = if landed {
+            area.moved([0.0, step[1], 0.0])
+        } else {
+            area
+        };
         let mut reach = ground.expanded_towards([movement[0], max_step as f64, movement[2]]);
         if !landed {
             reach = reach.expanded_towards([0.0, (-1.0E-5_f32) as f64, 0.0]);
         }
         let shapes = self.shapes_in(&reach);
         for height in step_heights(&ground, &shapes, max_step, step[1] as f32) {
-            let stepped = collide_with_shapes([movement[0], height as f64, movement[2]], &ground, &shapes);
+            let stepped =
+                collide_with_shapes([movement[0], height as f64, movement[2]], &ground, &shapes);
             if horizontal_sqr(stepped) > horizontal_sqr(step) {
-                return [stepped[0], stepped[1] - (area.min[1] - ground.min[1]), stepped[2]];
+                return [
+                    stepped[0],
+                    stepped[1] - (area.min[1] - ground.min[1]),
+                    stepped[2],
+                ];
             }
         }
         step
@@ -242,7 +276,9 @@ impl<W: Blocks> Colliders<'_, W> {
         let mut best: Option<([i32; 3], f64)> = None;
         for shape in self.blocks_in(area) {
             let p = shape.pos;
-            let d = (0..3).map(|a| (p[a] as f64 + 0.5 - pos[a]).powi(2)).sum::<f64>();
+            let d = (0..3)
+                .map(|a| (p[a] as f64 + 0.5 - pos[a]).powi(2))
+                .sum::<f64>();
             let rank = |v: [i32; 3]| (v[1], v[2], v[0]);
             if best.is_none_or(|(q, e)| d < e || (d == e && rank(q) < rank(p))) {
                 best = Some((p, d));
@@ -266,7 +302,11 @@ fn collide_with_shapes(movement: [f64; 3], area: &Aabb, shapes: &[Shape]) -> [f6
     if shapes.is_empty() {
         return movement;
     }
-    let order = if movement[0].abs() < movement[2].abs() { [1, 2, 0] } else { [1, 0, 2] };
+    let order = if movement[0].abs() < movement[2].abs() {
+        [1, 2, 0]
+    } else {
+        [1, 0, 2]
+    };
     let mut resolved = [0.0; 3];
     for axis in order {
         if movement[axis] != 0.0 {

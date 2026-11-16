@@ -64,7 +64,9 @@ impl Body {
 
     /// Largest per-axis position difference.
     pub fn error(&self, other: &Body) -> f32 {
-        (0..3).map(|i| (self.pos[i] - other.pos[i]).abs()).fold(0.0, f32::max)
+        (0..3)
+            .map(|i| (self.pos[i] - other.pos[i]).abs())
+            .fold(0.0, f32::max)
     }
 }
 

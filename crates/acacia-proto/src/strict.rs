@@ -39,7 +39,10 @@ impl RawPacket {
     /// Like [`RawPacket::decode`], but a leniency or bytes left after the body are errors.
     pub fn decode_strict<T: Packet>(&self) -> Result<T, DecodeError> {
         if self.id != T::ID {
-            return Err(DecodeError::IdMismatch { expected: T::ID, actual: self.id });
+            return Err(DecodeError::IdMismatch {
+                expected: T::ID,
+                actual: self.id,
+            });
         }
         FIRST.set(None);
         let mut r = &self.body[..];

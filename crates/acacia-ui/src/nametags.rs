@@ -24,9 +24,17 @@ pub fn draw(list: &mut DrawList, theme: &Theme, tags: &[Tag]) {
     let base = list.scale;
     for tag in tags {
         list.scale = base * tag.scale;
-        let (w, x, y) = (font.width(&tag.text), tag.x / tag.scale, tag.y / tag.scale - LINE_HEIGHT);
+        let (w, x, y) = (
+            font.width(&tag.text),
+            tag.x / tag.scale,
+            tag.y / tag.scale - LINE_HEIGHT,
+        );
         let left = x - w / 2.0;
-        list.fill(white, [left - 1.0, y - 1.0, left + w + 1.0, y + LINE_HEIGHT - 1.0], BACKGROUND);
+        list.fill(
+            white,
+            [left - 1.0, y - 1.0, left + w + 1.0, y + LINE_HEIGHT - 1.0],
+            BACKGROUND,
+        );
         font.draw(list, &tag.text, left, y, 0xFFFFFF, 1.0, false);
     }
     list.scale = base;

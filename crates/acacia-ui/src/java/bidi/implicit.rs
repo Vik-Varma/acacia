@@ -5,7 +5,9 @@ use super::props::*;
 use super::ubidi::{Bidi, Isolate};
 
 /// `groupProp`: dir prop to `impTabProps` column.
-const GROUP_PROP: [u8; 25] = [0, 1, 2, 7, 8, 3, 9, 6, 5, 4, 4, 10, 10, 12, 10, 10, 10, 11, 10, 4, 4, 4, 4, 13, 14];
+const GROUP_PROP: [u8; 25] = [
+    0, 1, 2, 7, 8, 3, 9, 6, 5, 4, 4, 10, 10, 12, 10, 10, 10, 11, 10, 4, 4, 4, 4, 13, 14,
+];
 const PROP_ON: u8 = 4;
 
 /// `impTabProps`: low 5 bits the next state, high 3 the action; column 15 the state's resolved prop.
@@ -20,20 +22,46 @@ const IMP_TAB_PROPS: [[u8; 16]; 24] = [
     [33, 34, 36, 37, 7, 47, 49, 7, 78, 7, 7, 7, 35, 50, 53, 4],
     [33, 34, 38, 38, 8, 48, 49, 8, 8, 8, 8, 8, 35, 50, 53, 4],
     [33, 34, 4, 37, 7, 47, 49, 7, 9, 7, 9, 9, 35, 18, 21, 4],
-    [97, 98, 4, 101, 135, 111, 113, 135, 142, 135, 10, 135, 99, 18, 21, 2],
+    [
+        97, 98, 4, 101, 135, 111, 113, 135, 142, 135, 10, 135, 99, 18, 21, 2,
+    ],
     [33, 34, 4, 37, 39, 47, 49, 39, 11, 39, 11, 11, 35, 18, 21, 2],
-    [97, 98, 100, 5, 135, 111, 113, 135, 142, 135, 12, 135, 99, 114, 117, 3],
-    [97, 98, 6, 6, 136, 112, 113, 136, 136, 136, 13, 136, 99, 18, 21, 3],
-    [33, 34, 132, 37, 7, 47, 49, 7, 14, 7, 14, 14, 35, 146, 149, 4],
-    [33, 34, 36, 37, 39, 15, 49, 39, 41, 39, 15, 39, 35, 50, 53, 5],
-    [33, 34, 38, 38, 40, 16, 49, 40, 40, 40, 16, 40, 35, 50, 53, 5],
-    [33, 34, 36, 37, 39, 47, 17, 39, 41, 39, 17, 39, 35, 50, 53, 6],
-    [33, 34, 18, 37, 39, 47, 49, 83, 20, 83, 18, 18, 35, 18, 21, 0],
-    [97, 98, 18, 101, 135, 111, 113, 135, 142, 135, 19, 135, 99, 18, 21, 0],
-    [33, 34, 18, 37, 39, 47, 49, 39, 20, 39, 20, 20, 35, 18, 21, 0],
-    [33, 34, 21, 37, 39, 47, 49, 86, 23, 86, 21, 21, 35, 18, 21, 3],
-    [97, 98, 21, 101, 135, 111, 113, 135, 142, 135, 22, 135, 99, 18, 21, 3],
-    [33, 34, 21, 37, 39, 47, 49, 39, 23, 39, 23, 23, 35, 18, 21, 3],
+    [
+        97, 98, 100, 5, 135, 111, 113, 135, 142, 135, 12, 135, 99, 114, 117, 3,
+    ],
+    [
+        97, 98, 6, 6, 136, 112, 113, 136, 136, 136, 13, 136, 99, 18, 21, 3,
+    ],
+    [
+        33, 34, 132, 37, 7, 47, 49, 7, 14, 7, 14, 14, 35, 146, 149, 4,
+    ],
+    [
+        33, 34, 36, 37, 39, 15, 49, 39, 41, 39, 15, 39, 35, 50, 53, 5,
+    ],
+    [
+        33, 34, 38, 38, 40, 16, 49, 40, 40, 40, 16, 40, 35, 50, 53, 5,
+    ],
+    [
+        33, 34, 36, 37, 39, 47, 17, 39, 41, 39, 17, 39, 35, 50, 53, 6,
+    ],
+    [
+        33, 34, 18, 37, 39, 47, 49, 83, 20, 83, 18, 18, 35, 18, 21, 0,
+    ],
+    [
+        97, 98, 18, 101, 135, 111, 113, 135, 142, 135, 19, 135, 99, 18, 21, 0,
+    ],
+    [
+        33, 34, 18, 37, 39, 47, 49, 39, 20, 39, 20, 20, 35, 18, 21, 0,
+    ],
+    [
+        33, 34, 21, 37, 39, 47, 49, 86, 23, 86, 21, 21, 35, 18, 21, 3,
+    ],
+    [
+        97, 98, 21, 101, 135, 111, 113, 135, 142, 135, 22, 135, 99, 18, 21, 3,
+    ],
+    [
+        33, 34, 21, 37, 39, 47, 49, 39, 23, 39, 23, 23, 35, 18, 21, 3,
+    ],
 ];
 
 type ImpTab = [[u8; 8]; 6];
@@ -117,17 +145,32 @@ impl Bidi {
 
     pub(super) fn resolve_implicit_levels(&mut self, start: usize, limit: usize, sor: u8, eor: u8) {
         let run_level = self.levels[start];
-        let imp_tab = if run_level & 1 == 0 { &IMP_TAB_L } else { &IMP_TAB_R };
-        let mut ls = LevState { imp_tab, start_on: -1, run_start: start, state: 0, run_level };
+        let imp_tab = if run_level & 1 == 0 {
+            &IMP_TAB_L
+        } else {
+            &IMP_TAB_R
+        };
+        let mut ls = LevState {
+            imp_tab,
+            start_on: -1,
+            run_start: start,
+            state: 0,
+            run_level,
+        };
         let mut start1;
         let mut state_imp: u8;
         if self.dir_props[start] == PDI {
             let saved = self.isolates[self.isolate_count as usize];
-            (ls.start_on, start1, state_imp, ls.state) = (saved.start_on, saved.start1, saved.state_imp, saved.state);
+            (ls.start_on, start1, state_imp, ls.state) =
+                (saved.start_on, saved.start1, saved.state_imp, saved.state);
             self.isolate_count -= 1;
         } else {
             start1 = start;
-            state_imp = if self.dir_props[start] == NSM { 1 + sor } else { 0 };
+            state_imp = if self.dir_props[start] == NSM {
+                1 + sor
+            } else {
+                0
+            };
             self.process_property_seq(&mut ls, sor, start, start);
         }
         let mut start2 = start;
@@ -176,7 +219,12 @@ impl Bidi {
         }
         if matches!(self.last_kept(start, limit), LRI | RLI) && limit < self.text.len() {
             self.isolate_count += 1;
-            let saved = Isolate { start_on: ls.start_on, start1, state_imp, state: ls.state };
+            let saved = Isolate {
+                start_on: ls.start_on,
+                start1,
+                state_imp,
+                state: ls.state,
+            };
             let at = self.isolate_count as usize;
             if at == self.isolates.len() {
                 self.isolates.push(saved);

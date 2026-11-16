@@ -150,7 +150,11 @@ impl SnapshotReader {
     }
 
     pub fn get(&self) -> BotSnapshot {
-        BotSnapshot { hot: self.hot(), cold: self.cold(), entities: self.entities() }
+        BotSnapshot {
+            hot: self.hot(),
+            cold: self.cold(),
+            entities: self.entities(),
+        }
     }
 
     /// The bot's terrain (`None` before StartGame); blocks via `World::get(cx, cz)` and the chunk's read lock.

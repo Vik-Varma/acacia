@@ -5,8 +5,8 @@ use rand_core::OsRng;
 use serde_json::{Value, json};
 
 use super::*;
-use crate::jwt::{self, public_key_der_b64};
 use crate::LoginCredentials;
+use crate::jwt::{self, public_key_der_b64};
 
 fn key() -> SigningKey {
     SigningKey::random(&mut OsRng)
@@ -38,7 +38,9 @@ fn jwt_round_trip_and_tamper() {
     let (pk, claims) = jwt::decode_self_signed(&token).unwrap();
     assert_eq!(pk, pubkey(&k));
     assert_eq!(claims, json!({"a": 1}));
-    let sig_len = jwt::decode(&token).map(|_| token.rsplit('.').next().unwrap().len()).unwrap();
+    let sig_len = jwt::decode(&token)
+        .map(|_| token.rsplit('.').next().unwrap().len())
+        .unwrap();
     assert_eq!(sig_len, 128, "96-byte raw r||s is 128 base64url chars");
 
     let other = jwt::sign(&key(), &json!({"a": 2})).unwrap();
@@ -54,7 +56,11 @@ fn jwt_round_trip_and_tamper() {
 fn public_key_round_trip() {
     let k = key();
     let b64 = public_key_der_b64(&k);
-    assert_eq!(STANDARD.decode(&b64).unwrap().len(), 120, "P-384 SPKI DER is 120 bytes");
+    assert_eq!(
+        STANDARD.decode(&b64).unwrap().len(),
+        120,
+        "P-384 SPKI DER is 120 bytes"
+    );
     assert_eq!(jwt::parse_public_key_der_b64(&b64).unwrap(), pubkey(&k));
 }
 
@@ -79,7 +85,10 @@ fn offline_request_structure() {
     let decoded: ClientData = serde_json::from_value(cd).unwrap();
     assert_eq!(decoded, client);
     let skin = STANDARD.decode(&decoded.skin.skin_data).unwrap();
-    assert_eq!(skin.len() as u32, decoded.skin.skin_image_width * decoded.skin.skin_image_height * 4);
+    assert_eq!(
+        skin.len() as u32,
+        decoded.skin.skin_image_width * decoded.skin.skin_image_height * 4
+    );
 }
 
 #[test]
@@ -95,21 +104,66 @@ fn client_data_has_exactly_vanilla_keys() {
 /// The client-data claim names the vanilla Windows 1.26.52 client sent, sorted
 /// (docs/research/vanilla-capture-2026-10-01.md).
 const VANILLA_CLIENT_DATA_KEYS: [&str; 46] = [
-    "AnimatedImageData", "ArmSize", "CapeData", "CapeId", "CapeImageHeight", "CapeImageWidth",
-    "CapeOnClassicSkin", "ClientEditorConnectionIntent", "ClientIsEditorCapable", "ClientRandomId",
-    "CompatibleWithClientSideChunkGen", "CurrentInputMode", "DefaultInputMode", "DeviceId",
-    "DeviceModel", "DeviceOS", "FilterProfanity", "GameVersion", "GraphicsMode", "GuiScale",
-    "LanguageCode", "MaxViewDistance", "MemoryTier", "OverrideSkin", "PersonaPieces", "PersonaSkin",
-    "PieceTintColors", "PlatformOfflineId", "PlatformOnlineId", "PlatformType", "PremiumSkin",
-    "ProfileHash", "SelfSignedId", "ServerAddress", "SkinAnimationData", "SkinColor", "SkinData",
-    "SkinGeometryData", "SkinGeometryDataEngineVersion", "SkinId", "SkinImageHeight",
-    "SkinImageWidth", "SkinResourcePatch", "ThirdPartyName", "TrustedSkin", "UIProfile",
+    "AnimatedImageData",
+    "ArmSize",
+    "CapeData",
+    "CapeId",
+    "CapeImageHeight",
+    "CapeImageWidth",
+    "CapeOnClassicSkin",
+    "ClientEditorConnectionIntent",
+    "ClientIsEditorCapable",
+    "ClientRandomId",
+    "CompatibleWithClientSideChunkGen",
+    "CurrentInputMode",
+    "DefaultInputMode",
+    "DeviceId",
+    "DeviceModel",
+    "DeviceOS",
+    "FilterProfanity",
+    "GameVersion",
+    "GraphicsMode",
+    "GuiScale",
+    "LanguageCode",
+    "MaxViewDistance",
+    "MemoryTier",
+    "OverrideSkin",
+    "PersonaPieces",
+    "PersonaSkin",
+    "PieceTintColors",
+    "PlatformOfflineId",
+    "PlatformOnlineId",
+    "PlatformType",
+    "PremiumSkin",
+    "ProfileHash",
+    "SelfSignedId",
+    "ServerAddress",
+    "SkinAnimationData",
+    "SkinColor",
+    "SkinData",
+    "SkinGeometryData",
+    "SkinGeometryDataEngineVersion",
+    "SkinId",
+    "SkinImageHeight",
+    "SkinImageWidth",
+    "SkinResourcePatch",
+    "ThirdPartyName",
+    "TrustedSkin",
+    "UIProfile",
 ];
 
-fn online_creds(mojang: &SigningKey, identity: &SigningKey, token: Option<&str>) -> LoginCredentials {
+fn online_creds(
+    mojang: &SigningKey,
+    identity: &SigningKey,
+    token: Option<&str>,
+) -> LoginCredentials {
     // Stand-in for multiplayer.minecraft.net's 2-JWT chain.
     let chain = vec![
-        jwt::sign(mojang, &json!({"identityPublicKey": public_key_der_b64(identity)})).unwrap(),
+        jwt::sign(
+            mojang,
+            &json!({"identityPublicKey": public_key_der_b64(identity)}),
+        )
+        .unwrap(),
         jwt::sign(identity, &json!({"extraData": {"XUID": "123"}})).unwrap(),
     ];
     LoginCredentials {
@@ -130,18 +184,29 @@ fn online_request_is_token_only_with_sorted_client_data() {
     let client = ClientData::default_for("Steve", "example.org:19132", "1.26.50");
     let req = build_connection_request(&creds, &client_key, &client);
     let len = i32::from_le_bytes(req[..4].try_into().unwrap()) as usize;
-    assert_eq!(&req[4..4 + len], br#"{"AuthenticationType":0,"Token":"mp.token.value"}"#);
+    assert_eq!(
+        &req[4..4 + len],
+        br#"{"AuthenticationType":0,"Token":"mp.token.value"}"#
+    );
 
     let (_, client_jwt) = split(&req);
     let (_, claims) = jwt::decode_self_signed(&client_jwt).unwrap();
     assert!(claims.get("PlayFabId").is_none() && claims.get("PartyId").is_none());
     // Order on the wire: each claim name appears in the raw payload after the previous one.
-    let raw = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(client_jwt.split('.').nth(1).unwrap()).unwrap();
+    let raw = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(client_jwt.split('.').nth(1).unwrap())
+        .unwrap();
     let raw = String::from_utf8(raw).unwrap();
     let mut names: Vec<&String> = claims.as_object().unwrap().keys().collect();
     names.sort_unstable();
-    let positions: Vec<usize> = names.iter().map(|k| raw.find(&format!("\"{k}\":")).unwrap()).collect();
-    assert!(positions.windows(2).all(|w| w[0] < w[1]), "claims not in sorted order: {raw:.200}");
+    let positions: Vec<usize> = names
+        .iter()
+        .map(|k| raw.find(&format!("\"{k}\":")).unwrap())
+        .collect();
+    assert!(
+        positions.windows(2).all(|w| w[0] < w[1]),
+        "claims not in sorted order: {raw:.200}"
+    );
 }
 
 #[test]

@@ -10,13 +10,21 @@ const FIND_TICKS: u32 = 400;
 const REACH: f64 = 3.5;
 const SETTLE_TICKS: u32 = 40;
 /// (ticks, forward, yaw turn per tick, jump held).
-const COURSE: [(u32, f32, f32, bool); 6] =
-    [(40, 1.0, 0.0, false), (30, 1.0, 3.0, false), (12, 1.0, 0.0, true), (30, 1.0, 0.0, false), (20, 0.0, 0.0, false), (20, -1.0, 0.0, false)];
+const COURSE: [(u32, f32, f32, bool); 6] = [
+    (40, 1.0, 0.0, false),
+    (30, 1.0, 3.0, false),
+    (12, 1.0, 0.0, true),
+    (30, 1.0, 0.0, false),
+    (20, 0.0, 0.0, false),
+    (20, -1.0, 0.0, false),
+];
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let [host, port] = &args[..2] else { return Err("usage: java_mount <host> <port> [name]".into()) };
+    let [host, port] = &args[..2] else {
+        return Err("usage: java_mount <host> <port> [name]".into());
+    };
     let name = args.get(2).map_or("Rider", String::as_str);
     let kind = std::env::var("ACACIA_MOUNT").unwrap_or_else(|_| "pig".into());
     let mut config = BotConfig::default();
@@ -52,7 +60,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("dismount {:?}", bot.dismount().await);
     }
     bot.wait_ticks(40).await?;
-    println!("off: riding {} corrections {:?}", bot.vehicle().is_some(), bot.boat_corrections());
+    println!(
+        "off: riding {} corrections {:?}",
+        bot.vehicle().is_some(),
+        bot.boat_corrections()
+    );
     bot.disconnect().await;
     Ok(())
 }
@@ -63,14 +75,25 @@ fn nearest(bot: &Bot, kind: &str) -> Option<u64> {
         let f = e.feet();
         ((f.x - eye[0]).powi(2) + (f.y - eye[1]).powi(2) + (f.z - eye[2]).powi(2)).sqrt()
     };
-    bot.state().entities.iter().filter(|e| e.kind.ends_with(kind) && f64::from(apart(e)) < REACH).map(|e| e.runtime_id).next()
+    bot.state()
+        .entities
+        .iter()
+        .filter(|e| e.kind.ends_with(kind) && f64::from(apart(e)) < REACH)
+        .map(|e| e.runtime_id)
+        .next()
 }
 
 fn print_mount(bot: &Bot, t: u32) {
     match bot.java_mount() {
         Some(m) => println!(
             "t {t} {:?} {:.4?} yaw {:.2} ground {} delta {:.4?} cooldown {} corrections {:?}",
-            m.kind, m.body.pos, m.body.yaw, m.body.on_ground, m.body.delta, m.dash_cooldown, bot.boat_corrections()
+            m.kind,
+            m.body.pos,
+            m.body.yaw,
+            m.body.on_ground,
+            m.body.delta,
+            m.dash_cooldown,
+            bot.boat_corrections()
         ),
         None => println!("t {t} not driving; vehicle {:?}", bot.vehicle()),
     }

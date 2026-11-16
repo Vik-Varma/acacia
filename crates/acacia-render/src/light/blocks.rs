@@ -36,9 +36,18 @@ impl PropsTable {
     /// Bedrock's light data: unknown ids block all light.
     pub fn new(registry: &BlockRegistry) -> Self {
         let cells = (0..registry.len() as u32)
-            .map(|id| Cell { props: registry.get(id).map_or(15, |s| props(s.light_emission, s.light_filter)), shape: 0 })
+            .map(|id| Cell {
+                props: registry
+                    .get(id)
+                    .map_or(15, |s| props(s.light_emission, s.light_filter)),
+                shape: 0,
+            })
             .collect();
-        PropsTable { cells, shapes: Vec::new(), java: false }
+        PropsTable {
+            cells,
+            shapes: Vec::new(),
+            java: false,
+        }
     }
 
     /// The table's own light facts under Java lighting, else [`PropsTable::new`].
@@ -48,26 +57,43 @@ impl PropsTable {
         }
         let cell = |id: u32| {
             let f = table.get(id).light;
-            Cell { props: props(f.emission, f.dampening), shape: u8::try_from(f.shape).expect("at most 255 light shapes") }
+            Cell {
+                props: props(f.emission, f.dampening),
+                shape: u8::try_from(f.shape).expect("at most 255 light shapes"),
+            }
         };
         let cells = (0..registry.len() as u32).map(cell).collect();
-        PropsTable { cells, shapes: table.light_shapes.to_vec(), java: true }
+        PropsTable {
+            cells,
+            shapes: table.light_shapes.to_vec(),
+            java: true,
+        }
     }
 
     pub fn rules(&self) -> Rules<'_> {
-        if self.java { Rules::Java(&self.shapes) } else { Rules::Bedrock }
+        if self.java {
+            Rules::Java(&self.shapes)
+        } else {
+            Rules::Bedrock
+        }
     }
 
     /// Both layers: the brighter emission and the stronger filter (waterlogged blocks), the block's shape.
     #[inline]
     fn of(&self, block: u32, liquid: u32) -> Cell {
         let (a, b) = (self.get(block), self.get(liquid));
-        Cell { props: (a.props & 0xF0).max(b.props & 0xF0) | (a.props & 15).max(b.props & 15), shape: a.shape }
+        Cell {
+            props: (a.props & 0xF0).max(b.props & 0xF0) | (a.props & 15).max(b.props & 15),
+            shape: a.shape,
+        }
     }
 
     #[inline]
     fn get(&self, id: u32) -> Cell {
-        self.cells.get(id as usize).copied().unwrap_or(Cell { props: 15, shape: 0 })
+        self.cells.get(id as usize).copied().unwrap_or(Cell {
+            props: 15,
+            shape: 0,
+        })
     }
 }
 
@@ -80,7 +106,8 @@ impl LightBlocks for WorldBlocks<'_> {
     fn column(&self, cx: i32, cz: i32) -> Option<Vec<Option<Box<[Cell; SECTION_VOLUME]>>>> {
         let shared = self.world.get(cx, cz)?;
         let chunk = shared.read();
-        let (mut blocks, mut liquid) = (Box::new([0; SECTION_VOLUME]), Box::new([0; SECTION_VOLUME]));
+        let (mut blocks, mut liquid) =
+            (Box::new([0; SECTION_VOLUME]), Box::new([0; SECTION_VOLUME]));
         let dim = self.world.dimension();
         let sections = (0..dim.height as usize / 16).map(|index| {
             let air_only = chunk.section_uniform(index) == Some(dim.air);

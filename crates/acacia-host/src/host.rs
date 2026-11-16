@@ -85,18 +85,36 @@ impl Host {
         let registry = Arc::new(Mutex::new(Registry::new(shards, config.max_open_calls)));
         let on_panic: OnPanic = {
             let registry = registry.clone();
-            Arc::new(move |id, message| registry.lock().panicked(&acacia_api::BotId(id.0.clone()), &message))
+            Arc::new(move |id, message| {
+                registry
+                    .lock()
+                    .panicked(&acacia_api::BotId(id.0.clone()), &message)
+            })
         };
         let (mut threads, mut bufs) = (Vec::new(), Vec::new());
         for index in 0..shards {
             let shard = Shard::start(index, on_panic.clone())?;
-            let flusher = Flusher { buf: ShardBuf::new(), tx: tx.clone(), every: config.flush_every, max_held: config.max_held };
+            let flusher = Flusher {
+                buf: ShardBuf::new(),
+                tx: tx.clone(),
+                every: config.flush_every,
+                max_held: config.max_held,
+            };
             bufs.push(flusher.buf.clone());
-            shard.submit(ShardJobId(format!("flusher-{index}")), Box::new(move || Box::pin(flusher.run())));
+            shard.submit(
+                ShardJobId(format!("flusher-{index}")),
+                Box::new(move || Box::pin(flusher.run())),
+            );
             threads.push(shard);
         }
-        let provider = config.sign_in.unwrap_or_else(|| Arc::new(MicrosoftSignIn::default()));
-        let sign_ins = Arc::new(SignIns::new(provider, config.profiles_folder, bufs[0].clone()));
+        let provider = config
+            .sign_in
+            .unwrap_or_else(|| Arc::new(MicrosoftSignIn::default()));
+        let sign_ins = Arc::new(SignIns::new(
+            provider,
+            config.profiles_folder,
+            bufs[0].clone(),
+        ));
         let host = Host {
             registry,
             shards: Mutex::new(threads),
@@ -123,7 +141,10 @@ impl Host {
             Method::SignIn(params) => return self.sign_ins.sign_in(call, params),
             Method::CancelCall(p) => return self.cancel_call(call, p.call),
             method => {
-                let bot = method.bot().cloned().ok_or_else(|| ApiError::new(ErrorCode::BadParams, "no bot named"))?;
+                let bot = method
+                    .bot()
+                    .cloned()
+                    .ok_or_else(|| ApiError::new(ErrorCode::BadParams, "no bot named"))?;
                 return self.registry.lock().send(&bot, call, method);
             }
         };
@@ -143,7 +164,11 @@ impl Host {
             max_batch_bytes: self.max_batch_bytes,
         };
         let job: Job = Box::new(move || Box::pin(bot::run(spawn)));
-        let submitted = self.shards.lock().get(shard).is_some_and(|s| s.submit(id.clone(), job));
+        let submitted = self
+            .shards
+            .lock()
+            .get(shard)
+            .is_some_and(|s| s.submit(id.clone(), job));
         if !submitted {
             self.registry.lock().remove(&acacia_api::BotId(id.0));
             return Err(ApiError::new(ErrorCode::Closed, "the host has shut down"));
@@ -159,7 +184,10 @@ impl Host {
         }
         let registry = self.registry.lock();
         let sent = registry.created_by(target).is_some_and(|bot| {
-            let cancel = Method::Cancel(CancelParams { bot: bot.clone(), call: target });
+            let cancel = Method::Cancel(CancelParams {
+                bot: bot.clone(),
+                call: target,
+            });
             registry.send(&bot, call, cancel).is_ok()
         });
         if !sent {
@@ -195,7 +223,10 @@ impl Host {
     pub fn shutdown_blocking(&self) {
         std::thread::scope(|s| {
             s.spawn(|| {
-                let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("a runtime for shutdown");
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("a runtime for shutdown");
                 runtime.block_on(self.shutdown());
             });
         });

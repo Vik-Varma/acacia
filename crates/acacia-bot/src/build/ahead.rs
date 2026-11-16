@@ -24,17 +24,30 @@ pub(super) struct Cell<'a> {
 
 fn view(t: &Block) -> Option<BlockView> {
     let r = BlockRegistry::vanilla();
-    r.find(&t.name, &t.props).or_else(|| r.find(&t.name, "")).and_then(|id| r.get(id)).map(BlockView::of)
+    r.find(&t.name, &t.props)
+        .or_else(|| r.find(&t.name, ""))
+        .and_then(|id| r.get(id))
+        .map(BlockView::of)
 }
 
 /// The `ready` cells and, over each, the open cells of the same block stacked on it.
-pub(super) fn cells<'a>(b: &'a Builder, look: &dyn Look, ready: &[(usize, String)]) -> Vec<Cell<'a>> {
+pub(super) fn cells<'a>(
+    b: &'a Builder,
+    look: &dyn Look,
+    ready: &[(usize, String)],
+) -> Vec<Cell<'a>> {
     let mut out = Vec::new();
     for (i, _) in ready {
         let mut pos = b.cells[*i].pos;
         let name = &b.cells[*i].target.name;
-        while let Some(target) = b.target(pos).filter(|t| &t.name == name && (pos == b.cells[*i].pos || look.solid(pos) == Some(false))) {
-            out.push(Cell { pos, target, view: view(target) });
+        while let Some(target) = b.target(pos).filter(|t| {
+            &t.name == name && (pos == b.cells[*i].pos || look.solid(pos) == Some(false))
+        }) {
+            out.push(Cell {
+                pos,
+                target,
+                view: view(target),
+            });
             pos[1] += 1;
         }
     }
@@ -49,7 +62,10 @@ struct Ahead<'a> {
 
 impl Look for Ahead<'_> {
     fn solid(&self, p: BlockPos) -> Option<bool> {
-        self.placed.get(&p).map(|v| v.solid()).or_else(|| self.base.solid(p))
+        self.placed
+            .get(&p)
+            .map(|v| v.solid())
+            .or_else(|| self.base.solid(p))
     }
 
     fn find(&self, target: &Target) -> Option<Vec3> {
@@ -69,13 +85,29 @@ impl Look for Ahead<'_> {
 /// column stops at its first cell out of reach.
 pub(super) fn reaches(cells: &[Cell], eye: Vec3, look: &dyn Look, slack: f32) -> Vec<BlockPos> {
     let mut order: Vec<&Cell> = cells.iter().collect();
-    order.sort_by(|a, b| a.pos[1].cmp(&b.pos[1]).then(dist(eye, b.pos).total_cmp(&dist(eye, a.pos))));
+    order.sort_by(|a, b| {
+        a.pos[1]
+            .cmp(&b.pos[1])
+            .then(dist(eye, b.pos).total_cmp(&dist(eye, a.pos)))
+    });
     let mut placed = HashMap::new();
     let mut out = Vec::new();
     for c in order {
         let below = [c.pos[0], c.pos[1] - 1, c.pos[2]];
         let stacked = cells.iter().any(|o| o.pos == below);
-        if (!stacked || out.contains(&below)) && click_for(c.pos, c.target, eye, &Ahead { base: look, placed: &placed }, slack).is_some() {
+        if (!stacked || out.contains(&below))
+            && click_for(
+                c.pos,
+                c.target,
+                eye,
+                &Ahead {
+                    base: look,
+                    placed: &placed,
+                },
+                slack,
+            )
+            .is_some()
+        {
             placed.extend(c.view.map(|v| (c.pos, v)));
             out.push(c.pos);
         }
@@ -89,13 +121,25 @@ pub(super) fn reaches(cells: &[Cell], eye: Vec3, look: &dyn Look, slack: f32) ->
 pub(super) fn waits_for_upright(b: &Builder, open: impl Fn(usize) -> bool, pos: BlockPos) -> bool {
     let upright = |j: usize| super::rules::only_from_above(&b.cells[j].target);
     let beside = |[dx, dz]: [i32; 2]| b.index.get(&[pos[0] + dx, pos[1], pos[2] + dz]).copied();
-    !b.index.get(&pos).is_some_and(|&i| upright(i)) && [[1, 0], [-1, 0], [0, 1], [0, -1]].into_iter().filter_map(beside).any(|j| open(j) && upright(j))
+    !b.index.get(&pos).is_some_and(|&i| upright(i))
+        && [[1, 0], [-1, 0], [0, 1], [0, -1]]
+            .into_iter()
+            .filter_map(beside)
+            .any(|j| open(j) && upright(j))
 }
 
 /// `ready` with its first rank (held item, lowest layer) farthest first, the rest as it was.
-pub(super) fn far_first<'a>(ready: &'a [(usize, String)], eye: Vec3, pos: impl Fn(usize) -> BlockPos, held: Option<&str>) -> Vec<&'a (usize, String)> {
+pub(super) fn far_first<'a>(
+    ready: &'a [(usize, String)],
+    eye: Vec3,
+    pos: impl Fn(usize) -> BlockPos,
+    held: Option<&str>,
+) -> Vec<&'a (usize, String)> {
     let rank = |(i, item): &(usize, String)| (Some(item.as_str()) != held, pos(*i)[1]);
-    let lead = ready.iter().take_while(|r| Some(rank(r)) == ready.first().map(rank)).count();
+    let lead = ready
+        .iter()
+        .take_while(|r| Some(rank(r)) == ready.first().map(rank))
+        .count();
     let mut out: Vec<&(usize, String)> = ready.iter().collect();
     out[..lead].sort_by(|(i, _), (j, _)| dist(eye, pos(*j)).total_cmp(&dist(eye, pos(*i))));
     out

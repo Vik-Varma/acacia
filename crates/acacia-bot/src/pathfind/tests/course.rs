@@ -27,8 +27,15 @@ fn at(p: BlockPos) -> BlockPos {
 /// The parkour section, with the end of the classic lane leading into it.
 fn course() -> Grid {
     let g = Grid::new();
-    g.fill(at([40, -4, -1]), at([EXIT_X, -1, 1]), "stone").fill(at([40, 0, -2]), at([EXIT_X, 5, -2]), "glass").fill(at([40, 0, 2]), at([EXIT_X, 5, 2]), "glass");
-    for (a, b, block) in legs::lane(true).into_iter().chain(legs::LEGS.iter().filter(|l| l.far()).flat_map(|l| l.build.iter().copied())) {
+    g.fill(at([40, -4, -1]), at([EXIT_X, -1, 1]), "stone")
+        .fill(at([40, 0, -2]), at([EXIT_X, 5, -2]), "glass")
+        .fill(at([40, 0, 2]), at([EXIT_X, 5, 2]), "glass");
+    for (a, b, block) in legs::lane(true).into_iter().chain(
+        legs::LEGS
+            .iter()
+            .filter(|l| l.far())
+            .flat_map(|l| l.build.iter().copied()),
+    ) {
         g.fill(at(a), at(b), block);
     }
     g
@@ -42,11 +49,20 @@ fn course_plans_complete_when_pressed_for_time() {
     let g = course();
     let mut incomplete = Vec::new();
     for profile in PROFILES {
-        let opts = SearchOpts { profile, budget: Duration::from_secs(1), ..SearchOpts::default() };
+        let opts = SearchOpts {
+            profile,
+            budget: Duration::from_secs(1),
+            ..SearchOpts::default()
+        };
         let mut from = at([EXIT_X, 0, 0]);
         for leg in legs::LEGS.iter().filter(|l| l.far()) {
             let goal = Goal::Block(at(leg.goal));
-            let path = plan(&g, &standing([from[0] as f32 + 0.5, from[1] as f32, from[2] as f32 + 0.5]), &goal, &opts);
+            let path = plan(
+                &g,
+                &standing([from[0] as f32 + 0.5, from[1] as f32, from[2] as f32 + 0.5]),
+                &goal,
+                &opts,
+            );
             if !path.complete {
                 incomplete.push(format!("{profile:?} {}", leg.name));
             }
@@ -66,17 +82,31 @@ fn parkour_course_legs() {
     // COURSE_MACROS=off: the same legs planned with classic moves only (live, macros lost to off on gap3 and sprint40).
     let macros = std::env::var("COURSE_MACROS").map_or(true, |v| v != "off");
     for profile in PROFILES {
-        let opts = SearchOpts { macros, ..macro_opts(profile) };
+        let opts = SearchOpts {
+            macros,
+            ..macro_opts(profile)
+        };
         for &seed in seeds(profile) {
             let [x, y, z] = at([EXIT_X, 0, 0]);
             let mut m = standing([x as f32 + 0.5, y as f32, z as f32 + 0.5]);
             for leg in legs::LEGS.iter().filter(|l| l.far()) {
                 let goal = Goal::Block(at(leg.goal));
                 let path = plan(&g, &m, &goal, &opts);
-                assert!(path.complete, "{profile:?} seed {seed} {}: no plan", leg.name);
-                let style = Style { seed, shortcuts: true };
-                let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drive(&g, &mut m, path.nodes, &goal, &opts, style, |_, _| {})));
-                let outcome = run.as_ref().map_or("FAILED".to_string(), |o| format!("{} ticks, {} diverged", o.ticks, o.diverged));
+                assert!(
+                    path.complete,
+                    "{profile:?} seed {seed} {}: no plan",
+                    leg.name
+                );
+                let style = Style {
+                    seed,
+                    shortcuts: true,
+                };
+                let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    drive(&g, &mut m, path.nodes, &goal, &opts, style, |_, _| {})
+                }));
+                let outcome = run.as_ref().map_or("FAILED".to_string(), |o| {
+                    format!("{} ticks, {} diverged", o.ticks, o.diverged)
+                });
                 eprintln!("COURSE {profile:?} seed {seed} {:8} {outcome}", leg.name);
                 if run.is_ok_and(|o| o.diverged == 0) {
                     m.controls.stop();

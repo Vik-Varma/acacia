@@ -5,10 +5,10 @@ mod chunks;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use acacia_client::proto::nbt::{self, root_string, Nbt, Network, Value};
+use acacia_client::proto::nbt::{self, Nbt, Network, Value, root_string};
 use acacia_client::proto::packets::{
-    BlockEntityData, ChangeDimension, LevelChunk, NetworkChunkPublisherUpdate, StartGame, Subchunk, UpdateBlock, UpdateBlockSynced,
-    UpdateSubchunkBlocks,
+    BlockEntityData, ChangeDimension, LevelChunk, NetworkChunkPublisherUpdate, StartGame, Subchunk,
+    UpdateBlock, UpdateBlockSynced, UpdateSubchunkBlocks,
 };
 use acacia_client::proto::types::BlockCoordinates;
 use acacia_client::proto::{DecodeError, Packet, RawPacket};
@@ -71,16 +71,24 @@ struct Kept {
 
 impl Kept {
     fn raw(raw: &[u8]) -> Self {
-        Kept { raw: raw.into(), nbt: OnceLock::new() }
+        Kept {
+            raw: raw.into(),
+            nbt: OnceLock::new(),
+        }
     }
 
     fn decoded(nbt: Nbt) -> Self {
-        Kept { raw: Box::default(), nbt: OnceLock::from(Some(nbt)) }
+        Kept {
+            raw: Box::default(),
+            nbt: OnceLock::from(Some(nbt)),
+        }
     }
 
     /// `None` for a document that does not parse.
     fn nbt(&self) -> Option<&Nbt> {
-        self.nbt.get_or_init(|| nbt::read::<Network>(&mut &self.raw[..]).ok()).as_ref()
+        self.nbt
+            .get_or_init(|| nbt::read::<Network>(&mut &self.raw[..]).ok())
+            .as_ref()
     }
 }
 
@@ -95,7 +103,10 @@ pub struct BlockEntities {
 
 impl BlockEntities {
     pub(crate) fn new(tracking: BlockEntityTracking) -> Self {
-        Self { tracking, ..Self::default() }
+        Self {
+            tracking,
+            ..Self::default()
+        }
     }
 
     pub fn tracking(&self) -> BlockEntityTracking {
@@ -114,8 +125,13 @@ impl BlockEntities {
             Subchunk::ID => self.sub_chunk(packet.decode()?),
             NetworkChunkPublisherUpdate::ID => {
                 let p: NetworkChunkPublisherUpdate = packet.decode()?;
-                let (cx, cz, radius) = (p.coordinates.x >> 4, p.coordinates.z >> 4, (p.radius as i32 >> 4) + 1);
-                self.columns.retain(|&(x, z), _| (x - cx).abs() <= radius && (z - cz).abs() <= radius);
+                let (cx, cz, radius) = (
+                    p.coordinates.x >> 4,
+                    p.coordinates.z >> 4,
+                    (p.radius as i32 >> 4) + 1,
+                );
+                self.columns
+                    .retain(|&(x, z), _| (x - cx).abs() <= radius && (z - cz).abs() <= radius);
             }
             _ if self.columns.is_empty() => {}
             UpdateBlock::ID => {
@@ -148,7 +164,10 @@ impl BlockEntities {
 
     /// The text of one side of the sign at `pos` (lines joined by `\n`), if known.
     pub fn sign_text(&self, pos: [i32; 3], front: bool) -> Option<&str> {
-        let side = self.sign(pos)?.value.get(if front { "FrontText" } else { "BackText" })?;
+        let side = self
+            .sign(pos)?
+            .value
+            .get(if front { "FrontText" } else { "BackText" })?;
         match side.get("Text") {
             Some(Value::String(text)) => Some(text),
             _ => None,
@@ -156,7 +175,10 @@ impl BlockEntities {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&[i32; 3], &Nbt)> {
-        self.columns.values().flatten().filter_map(|(pos, kept)| Some((pos, kept.nbt()?)))
+        self.columns
+            .values()
+            .flatten()
+            .filter_map(|(pos, kept)| Some((pos, kept.nbt()?)))
     }
 
     pub fn len(&self) -> usize {
@@ -169,19 +191,30 @@ impl BlockEntities {
 
     /// A piston or hopper sends this every move: kept undecoded (see [`Kept`]). When only signs are kept, a
     /// document without "Sign" anywhere is skipped before its id is walked (every one has an `id`).
-    pub(crate) fn block_entity(&mut self, position: BlockCoordinates, nbt: &[u8]) -> Result<(), DecodeError> {
+    pub(crate) fn block_entity(
+        &mut self,
+        position: BlockCoordinates,
+        nbt: &[u8],
+    ) -> Result<(), DecodeError> {
         if self.tracking != BlockEntityTracking::All
-            && (memchr::memmem::find(nbt, b"Sign").is_none() || !self.keeps_id(root_string::<Network>(nbt, "id")?.as_deref()))
+            && (memchr::memmem::find(nbt, b"Sign").is_none()
+                || !self.keeps_id(root_string::<Network>(nbt, "id")?.as_deref()))
         {
             return Ok(());
         }
         let pos = coords(position);
-        self.columns.entry(column(pos)).or_default().insert(pos, Kept::raw(nbt));
+        self.columns
+            .entry(column(pos))
+            .or_default()
+            .insert(pos, Kept::raw(nbt));
         Ok(())
     }
 
     pub(crate) fn insert(&mut self, pos: [i32; 3], nbt: Nbt) {
-        self.columns.entry(column(pos)).or_default().insert(pos, Kept::decoded(nbt));
+        self.columns
+            .entry(column(pos))
+            .or_default()
+            .insert(pos, Kept::decoded(nbt));
     }
 
     fn keeps(&self, nbt: &Nbt) -> bool {

@@ -21,7 +21,10 @@ pub struct FakeSignIn {
 
 impl FakeSignIn {
     pub fn new(delay: Duration) -> Self {
-        Self { delay, signed_in: Arc::default() }
+        Self {
+            delay,
+            signed_in: Arc::default(),
+        }
     }
 }
 
@@ -31,7 +34,11 @@ impl SignIn for FakeSignIn {
         Box::pin(async move {
             if !signed_in.lock().contains(&account) {
                 let uri = "https://www.microsoft.com/link".to_owned();
-                prompt(DeviceCode { user_code: FAKE_USER_CODE.into(), verification_uri: uri, expires_in: 900 });
+                prompt(DeviceCode {
+                    user_code: FAKE_USER_CODE.into(),
+                    verification_uri: uri,
+                    expires_in: 900,
+                });
                 tokio::time::sleep(delay).await;
                 signed_in.lock().insert(account.clone());
             }
@@ -44,7 +51,10 @@ impl SignIn for FakeSignIn {
                 playfab_id: None,
                 expires_at: i64::MAX,
             };
-            Ok(OnlineLogin { key: SigningKey::from_slice(&[7; 48]).expect("a valid scalar"), credentials })
+            Ok(OnlineLogin {
+                key: SigningKey::from_slice(&[7; 48]).expect("a valid scalar"),
+                credentials,
+            })
         })
     }
 }

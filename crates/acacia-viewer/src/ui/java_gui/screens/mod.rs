@@ -95,7 +95,14 @@ pub struct Book {
 
 impl Default for Book {
     fn default() -> Book {
-        Book { visible: false, filtering: false, page: 0, overlay: None, focused: false, search: TextEdit::new("", 50) }
+        Book {
+            visible: false,
+            filtering: false,
+            page: 0,
+            overlay: None,
+            focused: false,
+            search: TextEdit::new("", 50),
+        }
     }
 }
 
@@ -104,7 +111,15 @@ impl State {
     /// whether it is open and filtering, as the game's recipe book settings do.
     pub fn open(&mut self, now: Instant) {
         let book = std::mem::take(&mut self.book);
-        *self = State { opened: Some(now), book: Book { visible: book.visible, filtering: book.filtering, ..Book::default() }, ..State::default() };
+        *self = State {
+            opened: Some(now),
+            book: Book {
+                visible: book.visible,
+                filtering: book.filtering,
+                ..Book::default()
+            },
+            ..State::default()
+        };
     }
 
     /// What a list shows changed: its choice and scroll start over.
@@ -119,13 +134,17 @@ impl State {
 
     /// A press of `button` now, and whether it is a double-click (`doubleClickTime`: 250 ms).
     pub fn press(&mut self, button: Button, now: Instant) -> bool {
-        let double = self.last_press.is_some_and(|(at, b)| b == button && now.saturating_duration_since(at).as_millis() < 250);
+        let double = self.last_press.is_some_and(|(at, b)| {
+            b == button && now.saturating_duration_since(at).as_millis() < 250
+        });
         self.last_press = Some((now, button));
         double
     }
 
     fn ticks(&self, now: Instant) -> i32 {
-        self.opened.map_or(0, |t| (now.saturating_duration_since(t).as_millis() / 50) as i32)
+        self.opened.map_or(0, |t| {
+            (now.saturating_duration_since(t).as_millis() / 50) as i32
+        })
     }
 }
 
@@ -211,7 +230,10 @@ pub(in crate::ui) fn draw(
     let gui = [(size[0] / scale) as f32, (size[1] / scale) as f32];
     if !java {
         crate::ui::screen::draw(list, skin, lang, screen, mouse, gui);
-        if let Some((request, quad)) = (screen.layout == acacia_ui::inventory::Layout::Player).then(|| crate::ui::figure::inventory_figure(gui, mouse, scale as f32)).flatten() {
+        if let Some((request, quad)) = (screen.layout == acacia_ui::inventory::Layout::Player)
+            .then(|| crate::ui::figure::inventory_figure(gui, mouse, scale as f32))
+            .flatten()
+        {
             pictures.push(request);
             list.quads.push(quad);
         }

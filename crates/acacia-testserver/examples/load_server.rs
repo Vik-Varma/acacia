@@ -6,19 +6,33 @@
 use std::path::Path;
 use std::time::Duration;
 
-use acacia_proto::packets::{AddEntity, AddPlayer, Animate, MobEquipment, MoveEntity, PlayerList, RemoveEntity, SetEntityData, UpdateAttributes};
+use acacia_proto::packets::{
+    AddEntity, AddPlayer, Animate, MobEquipment, MoveEntity, PlayerList, RemoveEntity,
+    SetEntityData, UpdateAttributes,
+};
 use acacia_proto::{Packet, RawPacket};
 use acacia_testserver::{Script, Step};
 use bytes::Bytes;
 
 /// What a hub sends a standing player: other entities' state. Nothing that moves or reconfigures the client.
-const STEADY: &[u32] =
-    &[MoveEntity::ID, SetEntityData::ID, UpdateAttributes::ID, MobEquipment::ID, AddPlayer::ID, AddEntity::ID, RemoveEntity::ID, PlayerList::ID, Animate::ID];
+const STEADY: &[u32] = &[
+    MoveEntity::ID,
+    SetEntityData::ID,
+    UpdateAttributes::ID,
+    MobEquipment::ID,
+    AddPlayer::ID,
+    AddEntity::ID,
+    RemoveEntity::ID,
+    PlayerList::ID,
+    Animate::ID,
+];
 const TICK: Duration = Duration::from_millis(50);
 
 /// The capture's steady packets (with headers), in order.
 fn steady_packets(dir: &Path) -> std::io::Result<Vec<Bytes>> {
-    let mut paths: Vec<_> = std::fs::read_dir(dir)?.filter_map(|e| Some(e.ok()?.path())).collect();
+    let mut paths: Vec<_> = std::fs::read_dir(dir)?
+        .filter_map(|e| Some(e.ok()?.path()))
+        .collect();
     paths.sort();
     let mut packets = Vec::new();
     for path in paths {
@@ -45,12 +59,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut script = Script::bds_spawn();
     for _ in 0..loops {
         for (i, packet) in packets.iter().enumerate() {
-            let delay = if i % per_tick == 0 { TICK } else { Duration::ZERO };
-            script.steps.push(Step::Send { delay, packet: packet.clone() });
+            let delay = if i % per_tick == 0 {
+                TICK
+            } else {
+                Duration::ZERO
+            };
+            script.steps.push(Step::Send {
+                delay,
+                packet: packet.clone(),
+            });
         }
     }
     let socket = tokio::net::UdpSocket::bind(("127.0.0.1", port.parse::<u16>()?)).await?;
-    println!("{} steady packets, {per_tick} per tick, {loops} loops, on {}", packets.len(), socket.local_addr()?);
+    println!(
+        "{} steady packets, {per_tick} per tick, {loops} loops, on {}",
+        packets.len(),
+        socket.local_addr()?
+    );
     acacia_testserver::load::serve(socket, script).await;
     Ok(())
 }

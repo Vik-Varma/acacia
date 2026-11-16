@@ -98,8 +98,19 @@ impl Bidi {
             } else if dir_prop == B && (i >= n || c != 13 || self.text[i] != 10) {
                 self.paras[last].0 = i;
                 if i < n {
-                    self.paras.push((0, if is_default { default_level } else { self.para_level }));
-                    state = if is_default { SEEKING_STRONG_FOR_PARA } else { NOT_SEEKING_STRONG };
+                    self.paras.push((
+                        0,
+                        if is_default {
+                            default_level
+                        } else {
+                            self.para_level
+                        },
+                    ));
+                    state = if is_default {
+                        SEEKING_STRONG_FOR_PARA
+                    } else {
+                        NOT_SEEKING_STRONG
+                    };
                     stack_last = -1;
                 }
             }
@@ -129,11 +140,14 @@ impl Bidi {
     /// The paragraphs' character ranges with their levels.
     fn para_ranges(&self) -> Vec<(usize, usize, i8)> {
         let mut start = 0;
-        self.paras.iter().map(|&(limit, level)| {
-            let r = (start, limit, level);
-            start = limit;
-            r
-        }).collect()
+        self.paras
+            .iter()
+            .map(|&(limit, level)| {
+                let r = (start, limit, level);
+                start = limit;
+                r
+            })
+            .collect()
     }
 
     fn breaks_paragraph(&self, i: usize) -> bool {
@@ -170,7 +184,8 @@ impl Bidi {
         let mut last_cc_pos = 0;
         let mut stack = [0i16; 127];
         let mut stack_last = 0usize;
-        let (mut overflow_isolates, mut overflow_embeddings, mut valid_isolates) = (0i32, 0i32, 0isize);
+        let (mut overflow_isolates, mut overflow_embeddings, mut valid_isolates) =
+            (0i32, 0i32, 0isize);
         stack[0] = i16::from(level);
         self.flags = 0;
         for i in 0..n {
@@ -180,7 +195,12 @@ impl Bidi {
                     self.flags |= flag(B);
                     self.levels[i] = self.para_level_at(i);
                     if self.breaks_paragraph(i) {
-                        (overflow_isolates, overflow_embeddings, valid_isolates, stack_last) = (0, 0, 0, 0);
+                        (
+                            overflow_isolates,
+                            overflow_embeddings,
+                            valid_isolates,
+                            stack_last,
+                        ) = (0, 0, 0, 0);
                         embedding = self.para_level_at(i + 1);
                         previous = embedding;
                         stack[0] = i16::from(embedding);
@@ -281,7 +301,11 @@ impl Bidi {
                     if no_override(embedding) != no_override(previous) {
                         self.bracket_process_boundary(&mut bd, last_cc_pos, previous, embedding);
                         self.flags |= MULTI_RUNS;
-                        self.flags |= if embedding < 0 { flag_o(embedding) } else { flag_e(embedding) };
+                        self.flags |= if embedding < 0 {
+                            flag_o(embedding)
+                        } else {
+                            flag_e(embedding)
+                        };
                     }
                     previous = embedding;
                     self.levels[i] = embedding;

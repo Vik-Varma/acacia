@@ -16,9 +16,9 @@ use acacia_world::neutral::prop;
 use acacia_world::neutral::value::SlabType;
 
 use super::hazard::Hazards;
-use super::{GotoOpts, Goal, PathNode};
-use crate::interact::Face;
+use super::{Goal, GotoOpts, PathNode};
 use crate::ActionError;
+use crate::interact::Face;
 
 pub use arbiter::{Arbiter, Decision};
 pub use backfill::{Backfill, substitutes};
@@ -48,22 +48,47 @@ pub enum Want {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Act {
     /// Place a block into `pos` (an air or liquid cell): the first of `blocks` the bot holds.
-    Fill { pos: BlockPos, blocks: Vec<acacia_world::neutral::Item> },
+    Fill {
+        pos: BlockPos,
+        blocks: Vec<acacia_world::neutral::Item>,
+    },
     /// Place `item` against `face` of `against`, clicked at `click` (relative to its minimum corner).
-    Place { item: String, against: BlockPos, face: Face, click: Vec3 },
+    Place {
+        item: String,
+        against: BlockPos,
+        face: Face,
+        click: Vec3,
+    },
     /// Break the block at `pos` with the best tool held.
     Break { pos: BlockPos },
     /// Open the container at `station` and take stacks of `items` (identifier, count wanted) while there is room.
-    Restock { station: BlockPos, items: Vec<(String, u32)> },
+    Restock {
+        station: BlockPos,
+        items: Vec<(String, u32)>,
+    },
     /// Use `item` on `face` of `against` (a bucket pouring); done once `cell` shows the block `expect`
     /// (unprefixed, a source).
     // TODO: fold into `Use` once it can watch a cell other than the one clicked (a pour fills the cell beyond it).
-    UseOn { item: String, against: BlockPos, face: Face, cell: BlockPos, expect: String },
+    UseOn {
+        item: String,
+        against: BlockPos,
+        face: Face,
+        cell: BlockPos,
+        expect: String,
+    },
     /// Right-click the block at `pos` once, holding `item` (`None`: whatever is held), on `face` when it shows:
     /// done once the server shows the cell changed (a trapdoor opened, a repeater's delay, dirt tilled).
-    Use { pos: BlockPos, item: Option<String>, face: Face },
+    Use {
+        pos: BlockPos,
+        item: Option<String>,
+        face: Face,
+    },
     /// Write `text` on one side of the sign at `pos` (the side the server opens: from where the bot stands).
-    Sign { pos: BlockPos, front: bool, text: String },
+    Sign {
+        pos: BlockPos,
+        front: bool,
+        text: String,
+    },
 }
 
 /// World changes every process hears about, whichever made them.
@@ -91,7 +116,14 @@ pub struct BlockView {
 
 impl BlockView {
     pub fn of(s: &acacia_world::BlockState) -> Self {
-        Self { name: s.name, props: s.properties, air: s.is_air(), liquid: s.is_liquid(), full: s.is_full_cube(), interactive: crate::interact::is_interactive(s) }
+        Self {
+            name: s.name,
+            props: s.properties,
+            air: s.is_air(),
+            liquid: s.is_liquid(),
+            full: s.is_full_cube(),
+            interactive: crate::interact::is_interactive(s),
+        }
     }
 
     pub fn solid(&self) -> bool {
@@ -99,7 +131,11 @@ impl BlockView {
     }
 
     pub fn prop(&self, key: &str) -> Option<&'static str> {
-        self.props.split(',').find_map(|kv| kv.split_once('=').filter(|(k, _)| *k == key).map(|(_, v)| v))
+        self.props.split(',').find_map(|kv| {
+            kv.split_once('=')
+                .filter(|(k, _)| *k == key)
+                .map(|(_, v)| v)
+        })
     }
 
     /// The edition-neutral state, by name in the vanilla registry; `None` for custom blocks.
@@ -110,7 +146,9 @@ impl BlockView {
 
     /// A half slab's half; `None` for anything else, double slabs included.
     pub fn half_slab(&self) -> Option<SlabType> {
-        self.neutral()?.get(prop::SlabType).filter(|t| *t != SlabType::Double)
+        self.neutral()?
+            .get(prop::SlabType)
+            .filter(|t| *t != SlabType::Double)
     }
 }
 
@@ -170,7 +208,11 @@ pub struct Ctx<'a> {
 
 impl Ctx<'_> {
     pub fn eye(&self) -> Vec3 {
-        [self.pos[0], self.pos[1] + crate::movement::EYE_HEIGHT, self.pos[2]]
+        [
+            self.pos[0],
+            self.pos[1] + crate::movement::EYE_HEIGHT,
+            self.pos[2],
+        ]
     }
 }
 

@@ -10,10 +10,13 @@ mod stations;
 mod trade;
 
 use acacia_client::proto::nbt::{Nbt, Raw};
-use acacia_client::proto::packets::{ItemRegistry as ItemRegistryPacket, ItemStackRequest as ItemStackRequestPacket};
+use acacia_client::proto::packets::{
+    ItemRegistry as ItemRegistryPacket, ItemStackRequest as ItemStackRequestPacket,
+};
 use acacia_client::proto::types::{
-    ContainerSlotType, FullContainerName, ItemStackRequest, ItemStackRequestActionsItemTypeId as TypeId, ItemstatesItem,
-    ItemstatesItemVersion, StackRequestSlotInfo, WindowType,
+    ContainerSlotType, FullContainerName, ItemStackRequest,
+    ItemStackRequestActionsItemTypeId as TypeId, ItemstatesItem, ItemstatesItemVersion,
+    StackRequestSlotInfo, WindowType,
 };
 
 use crate::items::craft::Craft;
@@ -62,7 +65,12 @@ pub(super) fn id(name: &str) -> i32 {
 }
 
 pub(super) fn stack(name: &str, count: u16, stack_id: i32) -> ItemStack {
-    ItemStack { network_id: id(name), count, stack_network_id: Some(stack_id), ..ItemStack::default() }
+    ItemStack {
+        network_id: id(name),
+        count,
+        stack_network_id: Some(stack_id),
+        ..ItemStack::default()
+    }
 }
 
 /// A state with the test registry and `main` as `(slot, stack)` in the main inventory.
@@ -78,7 +86,9 @@ pub(super) fn state(main: &[(usize, ItemStack)]) -> GameState {
             nbt: Raw::default(),
         })
         .collect();
-    state.apply(&raw(&ItemRegistryPacket { itemstates })).unwrap();
+    state
+        .apply(&raw(&ItemRegistryPacket { itemstates }))
+        .unwrap();
     for (slot, item) in main {
         state.inventory.main[*slot] = item.clone();
     }
@@ -86,13 +96,22 @@ pub(super) fn state(main: &[(usize, ItemStack)]) -> GameState {
 }
 
 pub(super) fn open(state: &mut GameState, window_type: WindowType) {
-    state.containers.open = Some(Container { window_id: 3, window_type, position: None, entity: None, title: None, slots: Vec::new() });
+    state.containers.open = Some(Container {
+        window_id: 3,
+        window_type,
+        position: None,
+        entity: None,
+        title: None,
+        slots: Vec::new(),
+    });
 }
 
 /// The encoded request (decoded back from its bytes) for a craft plan.
 pub(super) fn encode(state: &GameState, (craft, ops): &(Craft, Vec<Op>)) -> ItemStackRequest {
     let screen = Screen::of(state, BlockKind::Other);
-    let packet = Plan::craft(state, screen, craft, ops).unwrap().request(REQUEST);
+    let packet = Plan::craft(state, screen, craft, ops)
+        .unwrap()
+        .request(REQUEST);
     let decoded: ItemStackRequestPacket = raw(&packet).decode().unwrap();
     assert_eq!(decoded, packet);
     decoded.requests.into_iter().next().unwrap()
@@ -100,9 +119,20 @@ pub(super) fn encode(state: &GameState, (craft, ops): &(Craft, Vec<Op>)) -> Item
 
 /// `(variant, legacy id)` of every action.
 pub(super) fn kinds(request: &ItemStackRequest) -> Vec<(TypeId, u8)> {
-    request.actions.iter().map(|a| (a.type_id, a.legacy_type_id)).collect()
+    request
+        .actions
+        .iter()
+        .map(|a| (a.type_id, a.legacy_type_id))
+        .collect()
 }
 
 pub(super) fn info(kind: ContainerSlotType, slot: u8, stack_id: i32) -> StackRequestSlotInfo {
-    StackRequestSlotInfo { slot_type: FullContainerName { container_id: kind, dynamic_container_id: None }, slot, stack_id }
+    StackRequestSlotInfo {
+        slot_type: FullContainerName {
+            container_id: kind,
+            dynamic_container_id: None,
+        },
+        slot,
+        stack_id,
+    }
 }

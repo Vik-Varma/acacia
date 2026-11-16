@@ -14,7 +14,13 @@ pub struct HeaderFooter {
 impl HeaderFooter {
     /// `new HeaderAndFooterLayout(screen, headerHeight, footerHeight)`.
     pub fn new(header_h: i32, footer_h: i32) -> HeaderFooter {
-        HeaderFooter { header: Layout::frame(0, 0), contents: Layout::frame(0, 0), footer: Layout::frame(0, 0), header_h, footer_h }
+        HeaderFooter {
+            header: Layout::frame(0, 0),
+            contents: Layout::frame(0, 0),
+            footer: Layout::frame(0, 0),
+            header_h,
+            footer_h,
+        }
     }
 
     /// `getContentHeight`.
@@ -39,14 +45,23 @@ impl HeaderFooter {
 
     /// `arrangeElements` on a `width` x `height` screen.
     pub fn arrange(&mut self, ws: &mut Arena, width: i32, height: i32) {
-        self.header.kind = Kind::Frame { min_w: width, min_h: self.header_h };
+        self.header.kind = Kind::Frame {
+            min_w: width,
+            min_h: self.header_h,
+        };
         self.header.set_x(ws, 0);
         self.header.set_y(ws, 0);
         self.header.arrange(ws);
-        self.footer.kind = Kind::Frame { min_w: width, min_h: self.footer_h };
+        self.footer.kind = Kind::Frame {
+            min_w: width,
+            min_h: self.footer_h,
+        };
         self.footer.arrange(ws);
         self.footer.set_y(ws, height - self.footer_h);
-        self.contents.kind = Kind::Frame { min_w: width, min_h: 0 };
+        self.contents.kind = Kind::Frame {
+            min_w: width,
+            min_h: 0,
+        };
         self.contents.arrange(ws);
         let y = (self.header_h + 30).min(height - self.footer_h - self.contents.h);
         self.contents.set_x(ws, 0);

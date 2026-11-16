@@ -10,11 +10,11 @@ mod support;
 
 use std::path::PathBuf;
 
+use acacia_bot::Bot;
 use acacia_bot::movement::Controls;
 use acacia_bot::survival::{Destination, EquipMethod};
 use acacia_bot::world::SharedWorlds;
-use acacia_bot::Bot;
-use support::{corrections, Commander, Error, Fill, Pad, PAD_MIN};
+use support::{Commander, Error, Fill, PAD_MIN, Pad, corrections};
 use tokio::sync::mpsc;
 
 /// Pads of side-by-side bots are this far apart along x (a pad and its parking spot span 33 blocks).
@@ -28,10 +28,30 @@ const SETTLE_TICKS: u32 = 80;
 /// Random terrain stays inside this part of the pad (offsets), and so does the bot.
 const AREA_MIN: [i32; 2] = [0, -8];
 const AREA_MAX: [i32; 2] = [20, 8];
-const FLOORS: &[&str] = &["ice", "packed_ice", "blue_ice", "slime", "honey_block", "soul_sand"];
-const OBSTACLES: &[&str] = &["stone", "glass", "smooth_stone_slab", "oak_stairs", "oak_fence", "cobblestone_wall", "white_carpet"];
+const FLOORS: &[&str] = &[
+    "ice",
+    "packed_ice",
+    "blue_ice",
+    "slime",
+    "honey_block",
+    "soul_sand",
+];
+const OBSTACLES: &[&str] = &[
+    "stone",
+    "glass",
+    "smooth_stone_slab",
+    "oak_stairs",
+    "oak_fence",
+    "cobblestone_wall",
+    "white_carpet",
+];
 /// Climbables lean on a stone column on their -z side (ladders and vines need one to face).
-const CLIMBABLES: &[&str] = &["ladder [\"facing_direction\"=3]", "vine [\"vine_direction_bits\"=4]", "scaffolding", "twisting_vines"];
+const CLIMBABLES: &[&str] = &[
+    "ladder [\"facing_direction\"=3]",
+    "vine [\"vine_direction_bits\"=4]",
+    "scaffolding",
+    "twisting_vines",
+];
 const INSIDE: &[&str] = &["powder_snow", "sweet_berry_bush [\"growth\"=3]"];
 const SHAPES: &[&str] = &[
     "oak_fence_gate",
@@ -46,14 +66,18 @@ const COLUMN_BASES: &[&str] = &["soul_sand", "magma"];
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Error> {
-    let _ = tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
     let mut args = std::env::args().skip(1);
     let server = args.next().unwrap_or_else(|| "127.0.0.1:19140".into());
     let name = args.next().unwrap_or_else(|| "@default".into());
     let rounds: u32 = args.next().map_or(Ok(10), |a| a.parse())?;
     let seed: u64 = match args.next() {
         Some(a) => a.parse()?,
-        None => std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos() as u64,
+        None => std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos() as u64,
     };
     let ticks: u32 = args.next().map_or(Ok(300), |a| a.parse())?;
     // Several bots fuzz side by side (offline-mode server): bot i is "fuzz<i>" on its own pad, with its
@@ -77,14 +101,36 @@ async fn main() -> Result<(), Error> {
     });
     for i in 0..bots {
         let relay = relay.clone();
-        let name = if bots == 1 { name.clone() } else { format!("fuzz{i}") };
-        let record = record.as_ref().map(|r| if bots == 1 { r.into() } else { PathBuf::from(format!("{r}-{i}")) });
+        let name = if bots == 1 {
+            name.clone()
+        } else {
+            format!("fuzz{i}")
+        };
+        let record = record.as_ref().map(|r| {
+            if bots == 1 {
+                r.into()
+            } else {
+                PathBuf::from(format!("{r}-{i}"))
+            }
+        });
         let (server, worlds) = (server.clone(), worlds.clone());
         runs.spawn(async move {
             // RakNet refuses a second login from the same address within about a second.
             let slot = if bots == 1 { 0 } else { i as u64 + 1 };
             tokio::time::sleep(std::time::Duration::from_secs(2 * slot)).await;
-            fuzz_bot(&server, &name, record, worlds, relay, i, seed.wrapping_add(i as u64), rounds, ticks).await.map_err(|e| format!("bot {i}: {e}"))
+            fuzz_bot(
+                &server,
+                &name,
+                record,
+                worlds,
+                relay,
+                i,
+                seed.wrapping_add(i as u64),
+                rounds,
+                ticks,
+            )
+            .await
+            .map_err(|e| format!("bot {i}: {e}"))
         });
     }
     while let Some(done) = runs.join_next().await {
@@ -123,18 +169,31 @@ async fn fuzz_bot(
     }
     for round in 0..rounds {
         let terrain = terrain(&mut rng);
-        bot.bedrock_mut().expect("Bedrock bot").trace_mark(&format!("r{round} build"));
+        bot.bedrock_mut()
+            .expect("Bedrock bot")
+            .trace_mark(&format!("r{round} build"));
         pad.build(&mut bot, &terrain, SETTLE_TICKS).await?;
-        pad.teleport(&mut bot, [0.5, 0.0, 0.5], rng.range(-180, 180) as f32).await?;
-        bot.bedrock_mut().expect("Bedrock bot").trace_mark(&format!("r{round}"));
+        pad.teleport(&mut bot, [0.5, 0.0, 0.5], rng.range(-180, 180) as f32)
+            .await?;
+        bot.bedrock_mut()
+            .expect("Bedrock bot")
+            .trace_mark(&format!("r{round}"));
         let before = corrections(&bot);
         drive(&mut bot, &pad, &mut rng, ticks).await?;
-        println!("bot {index} round {round:3} corrections {}", corrections(&bot) - before);
+        println!(
+            "bot {index} round {round:3} corrections {}",
+            corrections(&bot) - before
+        );
         if std::env::var_os("FUZZ_GLIDE").is_some() {
-            bot.bedrock_mut().expect("Bedrock bot").trace_mark(&format!("r{round} glide"));
+            bot.bedrock_mut()
+                .expect("Bedrock bot")
+                .trace_mark(&format!("r{round} glide"));
             let before = corrections(&bot);
             glide(&mut bot, &pad, &mut rng).await?;
-            println!("bot {index} round {round:3} glide corrections {}", corrections(&bot) - before);
+            println!(
+                "bot {index} round {round:3} glide corrections {}",
+                corrections(&bot) - before
+            );
         }
     }
     pad.go_home(&mut bot).await?;
@@ -151,7 +210,9 @@ async fn wear(bot: &mut Bot, pad: &Pad, piece: &str) -> Result<(), Error> {
     pad.run(bot, &format!("/give @s {item}"));
     bot.wait_ticks(20).await?;
     if let (Some(enchantment), Some(level)) = (parts.next(), parts.next()) {
-        let given = bot.find_item_named(&name).ok_or_else(|| format!("{item} was not given"))?;
+        let given = bot
+            .find_item_named(&name)
+            .ok_or_else(|| format!("{item} was not given"))?;
         bot.equip(given, Destination::Hand).await?;
         bot.wait_ticks(10).await?;
         pad.run(bot, &format!("/enchant @s {enchantment} {level}"));
@@ -163,21 +224,40 @@ async fn wear(bot: &mut Bot, pad: &Pad, piece: &str) -> Result<(), Error> {
         i if i.ends_with("_boots") => Destination::Feet,
         _ => Destination::Chest,
     };
-    let from = bot.find_item_named(&name).ok_or_else(|| format!("{item} was not given"))?;
-    let method = if std::env::var_os("FUZZ_EQUIP_USE").is_some() { EquipMethod::Use } else { EquipMethod::Inventory };
+    let from = bot
+        .find_item_named(&name)
+        .ok_or_else(|| format!("{item} was not given"))?;
+    let method = if std::env::var_os("FUZZ_EQUIP_USE").is_some() {
+        EquipMethod::Use
+    } else {
+        EquipMethod::Inventory
+    };
     bot.equip_by(from, to, method).await?;
     bot.wait_ticks(20).await?;
-    println!("wearing {piece}: {:?}", bot.bedrock().and_then(|b| b.movement()).map(|m| m.equipment()));
+    println!(
+        "wearing {piece}: {:?}",
+        bot.bedrock()
+            .and_then(|b| b.movement())
+            .map(|m| m.equipment())
+    );
     if std::env::var_os("FUZZ_DEBUG").is_some() {
         let inv = &bot.state().inventory;
-        println!("  armor {:?}\n  hand {:?}", inv.armor, inv.main[usize::from(inv.selected_hotbar_slot)]);
+        println!(
+            "  armor {:?}\n  hand {:?}",
+            inv.armor,
+            inv.main[usize::from(inv.selected_hotbar_slot)]
+        );
     }
     Ok(())
 }
 
 /// Stays connected as the operator account `admin`, running each command sent on `commands` in order
 /// until every sender is gone.
-async fn run_commands(server: &str, admin: &str, mut commands: mpsc::UnboundedReceiver<String>) -> Result<(), Error> {
+async fn run_commands(
+    server: &str,
+    admin: &str,
+    mut commands: mpsc::UnboundedReceiver<String>,
+) -> Result<(), Error> {
     let (mut bot, _) = support::connect_with(server, admin, None, SharedWorlds::new()).await?;
     loop {
         match commands.try_recv() {
@@ -198,12 +278,32 @@ async fn run_commands(server: &str, admin: &str, mut commands: mpsc::UnboundedRe
 fn terrain(rng: &mut Rng) -> Vec<Fill<'static>> {
     let mut fills = Vec::new();
     for _ in 0..rng.range(10, 17) {
-        let (x, z) = (rng.range(AREA_MIN[0], AREA_MAX[0]), rng.range(AREA_MIN[1], AREA_MAX[1]));
+        let (x, z) = (
+            rng.range(AREA_MIN[0], AREA_MAX[0]),
+            rng.range(AREA_MIN[1], AREA_MAX[1]),
+        );
         let (w, d) = (rng.range(0, 4), rng.range(0, 4));
-        let (a, b) = ([x, 0, z], [(x + w).min(AREA_MAX[0]), 0, (z + d).min(AREA_MAX[1])]);
-        let (kind, floor, obstacle, top, depth) = (rng.range(0, 13), *rng.pick(FLOORS), *rng.pick(OBSTACLES), rng.range(0, 2), rng.range(1, 5));
-        let (climbable, inside, shape, base) = (*rng.pick(CLIMBABLES), *rng.pick(INSIDE), *rng.pick(SHAPES), *rng.pick(COLUMN_BASES));
-        let pool = ([a[0], -depth, a[2]], [(b[0] + 3).min(AREA_MAX[0]), -1, (b[2] + 3).min(AREA_MAX[1])]);
+        let (a, b) = (
+            [x, 0, z],
+            [(x + w).min(AREA_MAX[0]), 0, (z + d).min(AREA_MAX[1])],
+        );
+        let (kind, floor, obstacle, top, depth) = (
+            rng.range(0, 13),
+            *rng.pick(FLOORS),
+            *rng.pick(OBSTACLES),
+            rng.range(0, 2),
+            rng.range(1, 5),
+        );
+        let (climbable, inside, shape, base) = (
+            *rng.pick(CLIMBABLES),
+            *rng.pick(INSIDE),
+            *rng.pick(SHAPES),
+            *rng.pick(COLUMN_BASES),
+        );
+        let pool = (
+            [a[0], -depth, a[2]],
+            [(b[0] + 3).min(AREA_MAX[0]), -1, (b[2] + 3).min(AREA_MAX[1])],
+        );
         match kind {
             0 | 1 if on("floors") => fills.push(([a[0], -1, a[2]], [b[0], -1, b[2]], floor)),
             2 if on("obstacles") => fills.push((a, [b[0], top, b[2]], obstacle)),
@@ -211,21 +311,41 @@ fn terrain(rng: &mut Rng) -> Vec<Fill<'static>> {
             // Wide and up to 4 deep (the floor is 5), room for a sprint to dive into a swim.
             4 if on("pools") => fills.push((pool.0, pool.1, "water")),
             // A block placed and removed above a source: BDS `/fill` schedules no liquid update.
-            5 if on("flow") => fills.extend([(a, a, "water"), ([x, 1, z], [x, 1, z], "stone"), ([x, 1, z], [x, 1, z], "air")]),
-            6 if on("climb") => fills.extend([([x, 0, z - 1], [x, 2 + top, z - 1], "stone"), ([x, 0, z], [x, 2 + top, z], climbable)]),
+            5 if on("flow") => fills.extend([
+                (a, a, "water"),
+                ([x, 1, z], [x, 1, z], "stone"),
+                ([x, 1, z], [x, 1, z], "air"),
+            ]),
+            6 if on("climb") => fills.extend([
+                ([x, 0, z - 1], [x, 2 + top, z - 1], "stone"),
+                ([x, 0, z], [x, 2 + top, z], climbable),
+            ]),
             7 if on("honeywall") => fills.push((a, [b[0], 1 + top, a[2]], "honey_block")),
             8 if on("inside") => fills.push((a, b, inside)),
             // Fire resistance is given once per bot (see `fuzz_bot`).
             9 if on("lava") => fills.push((pool.0, pool.1, "lava")),
             // The base under the water makes the column; placing it after the water updates the cells above.
-            10 if on("bubbles") => fills.extend([(pool.0, pool.1, "water"), ([pool.0[0], -depth - 1, pool.0[2]], [pool.1[0], -depth - 1, pool.1[2]], base)]),
+            10 if on("bubbles") => fills.extend([
+                (pool.0, pool.1, "water"),
+                (
+                    [pool.0[0], -depth - 1, pool.0[2]],
+                    [pool.1[0], -depth - 1, pool.1[2]],
+                    base,
+                ),
+            ]),
             // 1.5 blocks of headroom over a slab: sneaking fits, standing does not.
-            11 if on("ceiling") => fills.extend([(a, b, "smooth_stone_slab"), ([a[0], 2, a[2]], [b[0], 2, b[2]], "stone")]),
+            11 if on("ceiling") => fills.extend([
+                (a, b, "smooth_stone_slab"),
+                ([a[0], 2, a[2]], [b[0], 2, b[2]], "stone"),
+            ]),
             12 if on("shapes") => fills.push((a, [b[0], top, b[2]], shape)),
             _ => {}
         }
     }
-    fills.extend([([0, 0, 0], [0, 1, 0], "air"), ([0, -1, 0], [0, -1, 0], "stone")]);
+    fills.extend([
+        ([0, 0, 0], [0, 1, 0], "air"),
+        ([0, -1, 0], [0, -1, 0], "stone"),
+    ]);
     fills
 }
 
@@ -235,8 +355,18 @@ async fn drive(bot: &mut Bot, pad: &Pad, rng: &mut Rng, ticks: u32) -> Result<()
     let (mut left, mut turn) = (0, 0.0);
     let mut c = Controls::default();
     for _ in 0..ticks {
-        let Some(feet) = bot.bedrock().and_then(|b| b.movement()).and_then(|m| m.position()) else { break };
-        let [x, y, z] = [feet[0] - origin[0], feet[1] - origin[1], feet[2] - origin[2]];
+        let Some(feet) = bot
+            .bedrock()
+            .and_then(|b| b.movement())
+            .and_then(|m| m.position())
+        else {
+            break;
+        };
+        let [x, y, z] = [
+            feet[0] - origin[0],
+            feet[1] - origin[1],
+            feet[2] - origin[2],
+        ];
         if y < PAD_MIN[1] as f32 {
             break;
         }
@@ -250,7 +380,9 @@ async fn drive(bot: &mut Bot, pad: &Pad, rng: &mut Rng, ticks: u32) -> Result<()
             c.sneak = rng.chance(10);
             c.pitch = rng.range(-40, 41) as f32;
             // Draws above happen regardless, so a seed builds the same terrain with features off.
-            (turn, c.forward, c.strafe, c.sprint, c.jump, c.sneak, c.pitch) = (
+            (
+                turn, c.forward, c.strafe, c.sprint, c.jump, c.sneak, c.pitch,
+            ) = (
                 if on("turn") { turn } else { 0.0 },
                 if on("walk") { c.forward } else { 0.0 },
                 if on("strafe") { c.strafe } else { 0.0 },
@@ -262,9 +394,15 @@ async fn drive(bot: &mut Bot, pad: &Pad, rng: &mut Rng, ticks: u32) -> Result<()
         }
         left -= 1;
         c.yaw += turn;
-        let outside = x < AREA_MIN[0] as f32 || x > (AREA_MAX[0] + 1) as f32 || z < AREA_MIN[1] as f32 || z > (AREA_MAX[1] + 1) as f32;
+        let outside = x < AREA_MIN[0] as f32
+            || x > (AREA_MAX[0] + 1) as f32
+            || z < AREA_MIN[1] as f32
+            || z > (AREA_MAX[1] + 1) as f32;
         if outside {
-            let centre = [(AREA_MIN[0] + AREA_MAX[0]) as f32 / 2.0, (AREA_MIN[1] + AREA_MAX[1]) as f32 / 2.0];
+            let centre = [
+                (AREA_MIN[0] + AREA_MAX[0]) as f32 / 2.0,
+                (AREA_MIN[1] + AREA_MAX[1]) as f32 / 2.0,
+            ];
             // Bedrock yaw 0 faces +Z.
             c.yaw = (-(centre[0] - x)).atan2(centre[1] - z).to_degrees();
             (c.forward, c.strafe) = (1.0, 0.0);
@@ -284,7 +422,8 @@ async fn drive(bot: &mut Bot, pad: &Pad, rng: &mut Rng, ticks: u32) -> Result<()
 /// Drops from high above the pad and glides down in a turning dive (needs `FUZZ_WEAR=elytra`): a steady
 /// turn keeps the bot near the pad's loaded chunks.
 async fn glide(bot: &mut Bot, pad: &Pad, rng: &mut Rng) -> Result<(), Error> {
-    pad.teleport(bot, [10.5, 60.0, 0.5], rng.range(-180, 180) as f32).await?;
+    pad.teleport(bot, [10.5, 60.0, 0.5], rng.range(-180, 180) as f32)
+        .await?;
     bot.wait_ticks(10).await?;
     if let Err(e) = bot.start_gliding().await {
         println!("glide not started: {e}");
@@ -292,7 +431,11 @@ async fn glide(bot: &mut Bot, pad: &Pad, rng: &mut Rng) -> Result<(), Error> {
     }
     let (mut left, mut turn) = (0, 0.0);
     for _ in 0..400 {
-        if bot.bedrock().and_then(|b| b.movement()).is_none_or(|m| m.on_ground()) {
+        if bot
+            .bedrock()
+            .and_then(|b| b.movement())
+            .is_none_or(|m| m.on_ground())
+        {
             break;
         }
         let Some(c) = bot.controls() else { break };

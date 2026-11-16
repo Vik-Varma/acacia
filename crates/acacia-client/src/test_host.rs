@@ -4,7 +4,7 @@
 
 use std::time::{Duration, Instant};
 
-use acacia_nethernet::{sign_answer, Signal, SignalKind};
+use acacia_nethernet::{Signal, SignalKind, sign_answer};
 use p384::ecdsa::SigningKey;
 use str0m::change::SdpOffer;
 use str0m::net::{Protocol, Receive};
@@ -20,7 +20,12 @@ pub(crate) struct RtcHost {
 
 impl RtcHost {
     pub async fn bind(signs: bool) -> Self {
-        Self { udp: UdpSocket::bind("127.0.0.1:0").await.unwrap(), rtc: None, buf: vec![0; 2048], signs }
+        Self {
+            udp: UdpSocket::bind("127.0.0.1:0").await.unwrap(),
+            rtc: None,
+            buf: vec![0; 2048],
+            signs,
+        }
     }
 
     /// Handles a signal from the client; returns the signals to send back.
@@ -39,21 +44,45 @@ impl RtcHost {
     fn answer(&mut self, offer: &Signal) -> Vec<Signal> {
         let mut rtc = Box::new(Rtc::builder().build(Instant::now()));
         rtc.add_local_candidate(Candidate::host(self.udp.local_addr().unwrap(), "udp").unwrap());
-        let stripped: String = offer.data.lines().filter(|l| !l.starts_with("a=identity")).flat_map(|l| [l, "\r\n"]).collect();
-        let answer = rtc.sdp_api().accept_offer(SdpOffer::from_sdp_string(&stripped).unwrap()).unwrap().to_sdp_string();
+        let stripped: String = offer
+            .data
+            .lines()
+            .filter(|l| !l.starts_with("a=identity"))
+            .flat_map(|l| [l, "\r\n"])
+            .collect();
+        let answer = rtc
+            .sdp_api()
+            .accept_offer(SdpOffer::from_sdp_string(&stripped).unwrap())
+            .unwrap()
+            .to_sdp_string();
         let signed = match self.signs {
             true => {
-                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64;
                 sign_answer(&answer, &SigningKey::from_slice(&[9; 48]).unwrap(), now)
             }
             false => answer,
         };
-        let (candidates, answer): (Vec<&str>, Vec<&str>) = signed.split_inclusive("\r\n").partition(|l| l.starts_with("a=candidate"));
+        let (candidates, answer): (Vec<&str>, Vec<&str>) = signed
+            .split_inclusive("\r\n")
+            .partition(|l| l.starts_with("a=candidate"));
         self.rtc = Some(rtc);
         let id = offer.connection_id;
-        std::iter::once(Signal::new(SignalKind::ConnectResponse, id, answer.concat()))
-            .chain(candidates.iter().map(|c| Signal::new(SignalKind::CandidateAdd, id, c.trim_end().trim_start_matches("a="))))
-            .collect()
+        std::iter::once(Signal::new(
+            SignalKind::ConnectResponse,
+            id,
+            answer.concat(),
+        ))
+        .chain(candidates.iter().map(|c| {
+            Signal::new(
+                SignalKind::CandidateAdd,
+                id,
+                c.trim_end().trim_start_matches("a="),
+            )
+        }))
+        .collect()
     }
 
     /// Sends str0m's output, then waits for one datagram or its next deadline.
@@ -76,7 +105,9 @@ impl RtcHost {
     }
 
     async fn flush(&mut self) -> Instant {
-        let Some(rtc) = self.rtc.as_mut() else { return Instant::now() + Duration::from_secs(1) };
+        let Some(rtc) = self.rtc.as_mut() else {
+            return Instant::now() + Duration::from_secs(1);
+        };
         loop {
             match rtc.poll_output().unwrap() {
                 Output::Timeout(t) => return t,

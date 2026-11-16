@@ -4,15 +4,15 @@
 use acacia_physics::{BlockPos, Vec3};
 
 use super::builder::Builder;
-use super::reach::{breaks_from, click_for, fills_from, stands, Keep, Stand};
+use super::reach::{Keep, Stand, breaks_from, click_for, fills_from, stands};
 use super::restock;
 use super::rules;
 use super::status::{HoldWhy, Phase};
 use super::survey::Need;
-use crate::interact::Face;
-use crate::pathfind::process::{Act, Ctx, Look};
-use crate::pathfind::Goal;
 use crate::ActionError;
+use crate::interact::Face;
+use crate::pathfind::Goal;
+use crate::pathfind::process::{Act, Ctx, Look};
 
 /// Candidates tried per tick, in rank order, before settling for a later rank.
 pub(super) const TRIES: usize = 24;
@@ -33,14 +33,20 @@ pub(super) enum Next {
 }
 
 pub(super) fn dist(from: Vec3, p: BlockPos) -> f32 {
-    let d = [p[0] as f32 + 0.5 - from[0], p[1] as f32 + 0.5 - from[1], p[2] as f32 + 0.5 - from[2]];
+    let d = [
+        p[0] as f32 + 0.5 - from[0],
+        p[1] as f32 + 0.5 - from[1],
+        p[2] as f32 + 0.5 - from[2],
+    ];
     (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
 }
 
 /// The bot's box (at feet `pos`) overlaps the cell.
 pub(super) fn in_body(pos: Vec3, p: BlockPos) -> bool {
     let overlap = |lo: f32, hi: f32, c: i32| lo < (c + 1) as f32 && hi > c as f32;
-    overlap(pos[0] - BODY, pos[0] + BODY, p[0]) && overlap(pos[1], pos[1] + 1.85, p[1]) && overlap(pos[2] - BODY, pos[2] + BODY, p[2])
+    overlap(pos[0] - BODY, pos[0] + BODY, p[0])
+        && overlap(pos[1], pos[1] + 1.85, p[1])
+        && overlap(pos[2] - BODY, pos[2] + BODY, p[2])
 }
 
 /// No bot's body is in the cell: a block can go there.
@@ -56,10 +62,18 @@ pub(super) fn go(phase: Phase, task: BlockPos, found: Vec<Stand>, b: &Builder) -
     {
         return Some(Next::Go(phase, task, goal.clone()));
     }
-    let goals: Vec<Goal> = found.into_iter().take(STANDS).map(|s| Goal::Block(s.feet)).collect();
+    let goals: Vec<Goal> = found
+        .into_iter()
+        .take(STANDS)
+        .map(|s| Goal::Block(s.feet))
+        .collect();
     match goals.len() {
         0 => None,
-        1 => Some(Next::Go(phase, task, goals.into_iter().next().expect("one"))),
+        1 => Some(Next::Go(
+            phase,
+            task,
+            goals.into_iter().next().expect("one"),
+        )),
         _ => Some(Next::Go(phase, task, Goal::Or(goals))),
     }
 }
@@ -73,15 +87,33 @@ pub(super) fn break_at(cx: &Ctx, pos: BlockPos, phase: Phase, b: &Builder) -> Op
     }
     let above = [pos[0], pos[1] + 1, pos[2]];
     let ok = |e: Vec3| breaks_from(e, pos, cx.look);
-    go(phase, pos, stands(pos, cx.pos, cx.look, &Keep { feet: &|f| f == above || no_stand(b, cx.look, f), pillar: &|c| unbuilt(b, cx.look, c) }, &ok, STANDS), b)
+    go(
+        phase,
+        pos,
+        stands(
+            pos,
+            cx.pos,
+            cx.look,
+            &Keep {
+                feet: &|f| f == above || no_stand(b, cx.look, f),
+                pillar: &|c| unbuilt(b, cx.look, c),
+            },
+            &ok,
+            STANDS,
+        ),
+        b,
+    )
 }
 
 /// A liquid next to `pos` that breaking it would let in (from above or the sides), not held back by a target.
 fn leak(b: &Builder, look: &dyn Look, pos: BlockPos) -> Option<BlockPos> {
-    [Face::Up, Face::North, Face::South, Face::West, Face::East].into_iter().map(|f| f.adjacent(pos)).find(|n| {
-        let target_solid = b.target(*n).is_some_and(|t| !t.is_air());
-        !target_solid && look.block(*n).is_some_and(|v| v.liquid)
-    })
+    [Face::Up, Face::North, Face::South, Face::West, Face::East]
+        .into_iter()
+        .map(|f| f.adjacent(pos))
+        .find(|n| {
+            let target_solid = b.target(*n).is_some_and(|t| !t.is_air());
+            !target_solid && look.block(*n).is_some_and(|v| v.liquid)
+        })
 }
 
 /// A cell the structure fills that is still empty.
@@ -99,12 +131,21 @@ pub(super) fn unbuilt(b: &Builder, look: &dyn Look, c: BlockPos) -> bool {
 /// of a ladder column on a narrow wall and could reach nothing from there), in a door's cell (walked through,
 /// never stood in: live, five vanilla houses wedged there), or shunned.
 pub(super) fn no_stand(b: &Builder, look: &dyn Look, f: BlockPos) -> bool {
-    let door = |c: BlockPos| b.target(c).is_some_and(|t| rules::twocell::kind(&t.name) == Some(rules::twocell::Kind::Door));
-    b.shunned(f) || door(f) || fills_later(b, look, f) || fills_later(b, look, [f[0], f[1] + 1, f[2]])
+    let door = |c: BlockPos| {
+        b.target(c)
+            .is_some_and(|t| rules::twocell::kind(&t.name) == Some(rules::twocell::Kind::Door))
+    };
+    b.shunned(f)
+        || door(f)
+        || fills_later(b, look, f)
+        || fills_later(b, look, [f[0], f[1] + 1, f[2]])
 }
 
 pub(super) fn fill(b: &Builder, pos: BlockPos) -> Act {
-    Act::Fill { pos, blocks: b.job.scaffold.clone() }
+    Act::Fill {
+        pos,
+        blocks: b.job.scaffold.clone(),
+    }
 }
 
 pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
@@ -112,19 +153,31 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     b.batch.clear();
     b.en_route = None;
     // A cell with a placement in flight shows the prediction, not the server's block: leave it until decided.
-    let open = |b: &Builder, i: usize, n: Need| needs[i] == n && !b.resting(b.cells[i].pos) && b.mine(b.cells[i].pos) && !cx.look.in_flight(b.cells[i].pos);
+    let open = |b: &Builder, i: usize, n: Need| {
+        needs[i] == n
+            && !b.resting(b.cells[i].pos)
+            && b.mine(b.cells[i].pos)
+            && !cx.look.in_flight(b.cells[i].pos)
+    };
     let mut order: Vec<usize> = (0..b.cells.len()).collect();
     // The committed task first while it is still open: switching goals restarts the pilot.
     let committed = b.commit.as_ref().map(|(p, _)| *p);
     order.sort_by(|&x, &y| {
         let (p, q) = (b.cells[x].pos, b.cells[y].pos);
-        (Some(q) == committed).cmp(&(Some(p) == committed)).then((dist(eye, p) + b.away_cost(p)).total_cmp(&(dist(eye, q) + b.away_cost(q))))
+        (Some(q) == committed)
+            .cmp(&(Some(p) == committed))
+            .then((dist(eye, p) + b.away_cost(p)).total_cmp(&(dist(eye, q) + b.away_cost(q))))
     });
 
     // Breaks and drains, top down: seal leaks first.
     // Scaffold standing where air belongs stays until the cleanup: the pilot may still be using it.
-    let held = |b: &Builder, i: usize| b.scaffold.contains(&b.cells[i].pos) && b.cells[i].target.is_air();
-    let mut breaks: Vec<usize> = order.iter().copied().filter(|&i| (open(b, i, Need::Break) && !held(b, i)) || open(b, i, Need::Drain)).collect();
+    let held =
+        |b: &Builder, i: usize| b.scaffold.contains(&b.cells[i].pos) && b.cells[i].target.is_air();
+    let mut breaks: Vec<usize> = order
+        .iter()
+        .copied()
+        .filter(|&i| (open(b, i, Need::Break) && !held(b, i)) || open(b, i, Need::Drain))
+        .collect();
     breaks.sort_by_key(|&i| (Some(b.cells[i].pos) != committed, -b.cells[i].pos[1]));
     for &i in breaks.iter().take(TRIES) {
         let pos = b.cells[i].pos;
@@ -145,7 +198,22 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
         let ok = |e: Vec3| fills_from(e, cell, cx.look);
         let next = match act {
             Some(act) if ok(eye) && free(b, cx, pos) => Some(Next::Act(Phase::Building, act)),
-            Some(_) => go(Phase::Building, pos, stands(pos, cx.pos, cx.look, &Keep { feet: &|f| no_stand(b, cx.look, f), pillar: &|c| unbuilt(b, cx.look, c) }, &ok, STANDS), b),
+            Some(_) => go(
+                Phase::Building,
+                pos,
+                stands(
+                    pos,
+                    cx.pos,
+                    cx.look,
+                    &Keep {
+                        feet: &|f| no_stand(b, cx.look, f),
+                        pillar: &|c| unbuilt(b, cx.look, c),
+                    },
+                    &ok,
+                    STANDS,
+                ),
+                b,
+            ),
             None => break_at(cx, pos, Phase::Building, b),
         };
         match next {
@@ -155,42 +223,91 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     }
 
     // Doors the walks opened are closed last: closed early, the next walk through opened them again.
-    let placing = needs.iter().enumerate().any(|(i, n)| *n == Need::Place && !b.given_up(b.cells[i].pos));
-    let door = |i: usize| rules::twocell::kind(&b.cells[i].target.name) == Some(rules::twocell::Kind::Door);
-    let adjusts: Vec<usize> = order.iter().copied().filter(|&i| open(b, i, Need::Adjust) && !(placing && door(i))).collect();
+    let placing = needs
+        .iter()
+        .enumerate()
+        .any(|(i, n)| *n == Need::Place && !b.given_up(b.cells[i].pos));
+    let door = |i: usize| {
+        rules::twocell::kind(&b.cells[i].target.name) == Some(rules::twocell::Kind::Door)
+    };
+    let adjusts: Vec<usize> = order
+        .iter()
+        .copied()
+        .filter(|&i| open(b, i, Need::Adjust) && !(placing && door(i)))
+        .collect();
     if let Some(next) = super::adjust::next(b, cx, &adjusts) {
         return next;
     }
 
     // Places, bottom up.
-    let mut places: Vec<usize> = order.iter().copied().filter(|&i| open(b, i, Need::Place)).collect();
+    let mut places: Vec<usize> = order
+        .iter()
+        .copied()
+        .filter(|&i| open(b, i, Need::Place))
+        .collect();
     places.sort_by_key(|&i| b.cells[i].pos[1]);
     let mut missing: Vec<String> = Vec::new();
     let (mut unsupported, mut unpropped) = (None, None);
     let mut ready: Vec<(usize, String)> = Vec::new();
     // Never cover an open cell: a block over it takes away the click on the face below (and the stand above). A
     // cell given up for want of a stand counts while it may be revived (live: a snowy house's pit, buried).
-    let covers = |b: &Builder, p: BlockPos| b.index.get(&[p[0], p[1] - 1, p[2]]).is_some_and(|&j| needs[j] == Need::Place && !b.lost(b.cells[j].pos) && rules::hangs(&b.cells[j].target).is_none());
+    let covers = |b: &Builder, p: BlockPos| {
+        b.index.get(&[p[0], p[1] - 1, p[2]]).is_some_and(|&j| {
+            needs[j] == Need::Place
+                && !b.lost(b.cells[j].pos)
+                && rules::hangs(&b.cells[j].target).is_none()
+        })
+    };
     // A pair's second half covers too (a bed's head), unless it stands on the first (a door's upper half).
-    let covers_pair = |b: &Builder, p: BlockPos| covers(b, p) || super::pairs::second(b, p).is_some_and(|o| [o[0], o[1] - 1, o[2]] != p && covers(b, o));
+    let covers_pair = |b: &Builder, p: BlockPos| {
+        covers(b, p)
+            || super::pairs::second(b, p)
+                .is_some_and(|o| [o[0], o[1] - 1, o[2]] != p && covers(b, o))
+    };
     let upright_open = |j: usize| open(b, j, Need::Place) && !b.given_up(b.cells[j].pos);
-    let candidates: Vec<usize> = places.iter().copied().filter(|&i| !covers_pair(b, b.cells[i].pos) && !super::ahead::waits_for_upright(b, upright_open, b.cells[i].pos)).take(TRIES * 2).collect();
+    let candidates: Vec<usize> = places
+        .iter()
+        .copied()
+        .filter(|&i| {
+            !covers_pair(b, b.cells[i].pos)
+                && !super::ahead::waits_for_upright(b, upright_open, b.cells[i].pos)
+        })
+        .take(TRIES * 2)
+        .collect();
     let held_back = super::pairs::held(b, cx.look, needs);
     for i in candidates {
         let (pos, target) = (b.cells[i].pos, &b.cells[i].target);
-        let Some(item) = rules::redstone::item_now(target, cx.look.block(pos), cx.look).or_else(|| rules::item(target)) else { continue };
+        let Some(item) = rules::redstone::item_now(target, cx.look.block(pos), cx.look)
+            .or_else(|| rules::item(target))
+        else {
+            continue;
+        };
         if held_back.contains(&pos) {
             b.rest(pos);
             continue;
         }
         let open_at = |dy: i32| cx.look.solid([pos[0], pos[1] + dy, pos[2]]) != Some(true);
-        let hangs_open = rules::hangs(target).is_some_and(|only| open_at(1) && (only || open_at(-1)));
-        if missing.contains(&item) || (rules::gravity(&target.name) && open_at(-1)) || hangs_open || !rules::redstone_order::ready(target, pos, cx.look, &|p| b.target(p).cloned()) {
+        let hangs_open =
+            rules::hangs(target).is_some_and(|only| open_at(1) && (only || open_at(-1)));
+        if missing.contains(&item)
+            || (rules::gravity(&target.name) && open_at(-1))
+            || hangs_open
+            || !rules::redstone_order::ready(target, pos, cx.look, &|p| b.target(p).cloned())
+        {
             continue;
         }
         let supported = Face::ALL.iter().any(|f| {
             let o = f.offset();
-            cx.look.block([pos[0] - o[0], pos[1] - o[1], pos[2] - o[2]]).is_some_and(|v| v.solid() && !v.interactive && (v.full || v.half_slab().is_some() || rules::post(&v) || rules::redstone::top(v.name).is_some()))
+            cx.look
+                .block([pos[0] - o[0], pos[1] - o[1], pos[2] - o[2]])
+                .is_some_and(|v| {
+                    v.solid()
+                        && !v.interactive
+                        && (v.full
+                            || v.half_slab().is_some()
+                            || rules::post(&v)
+                            || rules::redstone::top(v.name).is_some())
+                })
         });
         if !supported {
             unsupported.get_or_insert(pos);
@@ -217,17 +334,24 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     ready.sort_by_key(|(_, item)| Some(item.as_str()) != cx.look.held());
     // Whatever can be clicked from here first (still lowest first), then walk for the lowest. Walking, a click
     // whose state needs no particular look is placed on the way instead of stopping for it (`en_route`).
-    let (mut here, walking) = (None, b.commit.is_some() && super::en_route::enabled() && super::en_route::plain_step(cx));
+    let (mut here, walking) = (
+        None,
+        b.commit.is_some() && super::en_route::enabled() && super::en_route::plain_step(cx),
+    );
     for (i, item) in super::ahead::far_first(&ready, eye, |i| b.cells[i].pos, cx.look.held()) {
         let (pos, target) = (b.cells[*i].pos, &b.cells[*i].target);
         let slack = if walking { super::en_route::SLACK } else { 0.0 };
         if free(b, cx, pos)
             && super::pairs::second(b, pos).is_none_or(|o| free(b, cx, o))
-            && let Some(c) = super::sight_stats::at("from here", || click_for(pos, target, eye, cx.look, slack))
+            && let Some(c) =
+                super::sight_stats::at("from here", || click_for(pos, target, eye, cx.look, slack))
         {
             let act = rules::redstone::act(item.clone(), c.against, c.face, c.click, pos);
             // A bucket pours along the look, so a pour (or till) made on the move lands elsewhere (live 2026-10-28).
-            if walking && super::en_route::look_free(&target.name) && matches!(act, Act::Place { .. }) {
+            if walking
+                && super::en_route::look_free(&target.name)
+                && matches!(act, Act::Place { .. })
+            {
                 b.en_route.get_or_insert(act);
             } else {
                 here.get_or_insert(act);
@@ -240,7 +364,10 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     }
     // The committed task first: picking the nearest anew each tick switches goals as the bot moves, and the
     // pilot restarts on every switch.
-    if let Some(at) = ready.iter().position(|(i, _)| Some(b.cells[*i].pos) == committed) {
+    if let Some(at) = ready
+        .iter()
+        .position(|(i, _)| Some(b.cells[*i].pos) == committed)
+    {
         ready[..=at].rotate_right(1);
     }
     if let Some(next) = super::cover::walk(b, cx, &ready, committed) {
@@ -250,14 +377,30 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
         return Next::Act(Phase::Building, act);
     }
     // Nothing to click against: a scaffold column up to the lowest such cell, or a prop on a log's axis.
-    if let Some(next) = unsupported.and_then(|pos| super::support::column(b, cx, pos)).or_else(|| unpropped.and_then(|p| super::support::prop(b, cx, p))) {
+    if let Some(next) = unsupported
+        .and_then(|pos| super::support::column(b, cx, pos))
+        .or_else(|| unpropped.and_then(|p| super::support::prop(b, cx, p)))
+    {
         return next;
     }
 
-    if let Some(i) = order.iter().copied().find(|&i| needs[i] == Need::Unknown && b.mine(b.cells[i].pos)) {
-        return Next::Go(Phase::Surveying, b.cells[i].pos, Goal::Near(b.cells[i].pos, 3.0));
+    if let Some(i) = order
+        .iter()
+        .copied()
+        .find(|&i| needs[i] == Need::Unknown && b.mine(b.cells[i].pos))
+    {
+        return Next::Go(
+            Phase::Surveying,
+            b.cells[i].pos,
+            Goal::Near(b.cells[i].pos, 3.0),
+        );
     }
-    let pending = cx.look.any_in_flight() || needs.iter().enumerate().any(|(i, n)| matches!(n, Need::Place | Need::Break | Need::Drain | Need::Adjust) && !b.given_up(b.cells[i].pos) && !(*n == Need::Break && held(b, i)));
+    let pending = cx.look.any_in_flight()
+        || needs.iter().enumerate().any(|(i, n)| {
+            matches!(n, Need::Place | Need::Break | Need::Drain | Need::Adjust)
+                && !b.given_up(b.cells[i].pos)
+                && !(*n == Need::Break && held(b, i))
+        });
     if pending {
         b.revive();
         let why = match () {
@@ -265,7 +408,15 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
             _ if cx.look.any_in_flight() => HoldWhy::InFlight,
             _ => HoldWhy::Blocked,
         };
-        return Next::Hold(if missing.is_empty() { Phase::Building } else { Phase::Waiting }, missing, why);
+        return Next::Hold(
+            if missing.is_empty() {
+                Phase::Building
+            } else {
+                Phase::Waiting
+            },
+            missing,
+            why,
+        );
     }
 
     if let Some(next) = super::cleanup::next(b, cx, committed) {
@@ -274,6 +425,16 @@ pub(super) fn next(b: &mut Builder, cx: &Ctx, needs: &[Need]) -> Next {
     if b.revive() {
         return Next::Hold(Phase::Building, Vec::new(), HoldWhy::Revive);
     }
-    let failed = b.cells.iter().filter(|c| b.given_up(c.pos)).count() + b.scaffold.iter().filter(|p| b.given_up(**p) && cx.look.solid(**p) == Some(true)).count();
-    Next::Done(if failed == 0 { Ok(()) } else { Err(ActionError::NotPossible(format!("{failed} cells could not be built"))) })
+    let failed = b.cells.iter().filter(|c| b.given_up(c.pos)).count()
+        + b.scaffold
+            .iter()
+            .filter(|p| b.given_up(**p) && cx.look.solid(**p) == Some(true))
+            .count();
+    Next::Done(if failed == 0 {
+        Ok(())
+    } else {
+        Err(ActionError::NotPossible(format!(
+            "{failed} cells could not be built"
+        )))
+    })
 }

@@ -1,6 +1,9 @@
-use acacia_proto::packets::{InventoryTransaction, Text, TextCategory, TextContent, TextContentChat, TextContentWhisper, TextType};
-use acacia_proto::types::WindowType;
 use acacia_proto::Packet;
+use acacia_proto::packets::{
+    InventoryTransaction, Text, TextCategory, TextContent, TextContentChat, TextContentWhisper,
+    TextType,
+};
+use acacia_proto::types::WindowType;
 use acacia_testserver::{FakeServer, InventoryServer, Script};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -25,9 +28,16 @@ pub struct ContainerItem {
 impl TestServer {
     #[napi(factory)]
     pub fn start() -> Result<Self> {
-        let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build()?;
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()?;
         let server = runtime.block_on(FakeServer::start(Script::bds_spawn()))?;
-        Ok(Self { server: Some(server), runtime: Some(runtime), inventory: None })
+        Ok(Self {
+            server: Some(server),
+            runtime: Some(runtime),
+            inventory: None,
+        })
     }
 
     #[napi(getter)]
@@ -38,13 +48,25 @@ impl TestServer {
     /// Sends a player's chat line to the client, with the `§r` suffix BDS puts on sender names.
     #[napi]
     pub fn chat(&self, sender: String, message: String) -> Result<()> {
-        self.text(TextType::Chat, TextContent::Chat(TextContentChat { source_name: format!("{sender}§r"), message }))
+        self.text(
+            TextType::Chat,
+            TextContent::Chat(TextContentChat {
+                source_name: format!("{sender}§r"),
+                message,
+            }),
+        )
     }
 
     /// Sends a whisper (`/tell`) from `sender` to the client.
     #[napi]
     pub fn whisper(&self, sender: String, message: String) -> Result<()> {
-        self.text(TextType::Whisper, TextContent::Whisper(TextContentWhisper { source_name: format!("{sender}§r"), message }))
+        self.text(
+            TextType::Whisper,
+            TextContent::Whisper(TextContentWhisper {
+                source_name: format!("{sender}§r"),
+                message,
+            }),
+        )
     }
 
     fn text(&self, kind: TextType, content: TextContent) -> Result<()> {
@@ -64,14 +86,29 @@ impl TestServer {
     /// The chat lines the client has sent so far, in order.
     #[napi]
     pub fn received_chat(&self) -> Result<Vec<String>> {
-        let texts = self.server()?.received().into_iter().filter_map(|r| r.packet.decode::<Text>().ok());
-        Ok(texts.filter_map(|t| if let TextContent::Chat(c) = t.content { Some(c.message) } else { None }).collect())
+        let texts = self
+            .server()?
+            .received()
+            .into_iter()
+            .filter_map(|r| r.packet.decode::<Text>().ok());
+        Ok(texts
+            .filter_map(|t| {
+                if let TextContent::Chat(c) = t.content {
+                    Some(c.message)
+                } else {
+                    None
+                }
+            })
+            .collect())
     }
 
     /// The feet position the script spawns the player at, `[x, y, z]`.
     #[napi]
     pub fn spawn_feet(&self) -> Result<Vec<f64>> {
-        let feet = self.server()?.spawn_feet().ok_or_else(|| Error::from_reason("no StartGame sent yet"))?;
+        let feet = self
+            .server()?
+            .spawn_feet()
+            .ok_or_else(|| Error::from_reason("no StartGame sent yet"))?;
         Ok(feet.map(f64::from).to_vec())
     }
 
@@ -80,32 +117,44 @@ impl TestServer {
     #[napi]
     pub fn lay_floor(&self, half: i32) -> Result<()> {
         let server = self.server()?;
-        let [x, y, z] = server.spawn_feet().ok_or_else(|| Error::from_reason("no StartGame sent yet"))?;
+        let [x, y, z] = server
+            .spawn_feet()
+            .ok_or_else(|| Error::from_reason("no StartGame sent yet"))?;
         let feet = [x.floor() as i32, y.floor() as i32, z.floor() as i32];
-        let columns: Vec<_> = [-half, half].iter().flat_map(|dx| [-half, half].map(|dz| ((feet[0] + dx) >> 4, (feet[2] + dz) >> 4))).collect();
+        let columns: Vec<_> = [-half, half]
+            .iter()
+            .flat_map(|dx| [-half, half].map(|dz| ((feet[0] + dx) >> 4, (feet[2] + dz) >> 4)))
+            .collect();
         self.runtime()?.block_on(server.columns_sent(&columns))?;
-        server.lay_floor(feet, half, acacia_testserver::bds_block_id("minecraft:stone"));
+        server.lay_floor(
+            feet,
+            half,
+            acacia_testserver::bds_block_id("minecraft:stone"),
+        );
         Ok(())
     }
 
     /// Shows another player with its feet at `(x, y, z)`; `id` is both its runtime and unique id.
     #[napi]
     pub fn add_player(&self, name: String, id: u32, x: f64, y: f64, z: f64) -> Result<()> {
-        self.server()?.add_player(&name, id.into(), id.into(), [x as f32, y as f32, z as f32]);
+        self.server()?
+            .add_player(&name, id.into(), id.into(), [x as f32, y as f32, z as f32]);
         Ok(())
     }
 
     /// Shows an entity of `kind` with its feet at `(x, y, z)`; `id` is both its runtime and unique id.
     #[napi]
     pub fn add_entity(&self, kind: String, id: u32, x: f64, y: f64, z: f64) -> Result<()> {
-        self.server()?.add_entity(&kind, id.into(), id.into(), [x as f32, y as f32, z as f32]);
+        self.server()?
+            .add_entity(&kind, id.into(), id.into(), [x as f32, y as f32, z as f32]);
         Ok(())
     }
 
     /// Moves an entity from `add_entity` to feet at `(x, y, z)`.
     #[napi]
     pub fn move_entity(&self, id: u32, x: f64, y: f64, z: f64) -> Result<()> {
-        self.server()?.move_entity(id.into(), [x as f32, y as f32, z as f32]);
+        self.server()?
+            .move_entity(id.into(), [x as f32, y as f32, z as f32]);
         Ok(())
     }
 
@@ -118,14 +167,16 @@ impl TestServer {
     /// Puts `count` of item `name` in main-inventory slot `slot` (0-8: the hotbar).
     #[napi]
     pub fn give(&self, slot: u32, name: String, count: u32) -> Result<()> {
-        self.server()?.give(slot, &name, count as u16, 1000 + slot as i32);
+        self.server()?
+            .give(slot, &name, count as u16, 1000 + slot as i32);
         Ok(())
     }
 
     /// Sets one cell to block `name`'s default state, as BDS's block update would.
     #[napi]
     pub fn set_block(&self, x: i32, y: i32, z: i32, name: String) -> Result<()> {
-        self.server()?.set_blocks(&[[x, y, z]], acacia_testserver::bds_block_id(&name));
+        self.server()?
+            .set_blocks(&[[x, y, z]], acacia_testserver::bds_block_id(&name));
         Ok(())
     }
 
@@ -143,15 +194,32 @@ impl TestServer {
 
     /// Makes the block at `(x, y, z)` open as a `chest`, `furnace` or `craftingTable` window holding `items`.
     #[napi]
-    pub fn add_container(&self, x: i32, y: i32, z: i32, kind: String, items: Vec<ContainerItem>) -> Result<()> {
+    pub fn add_container(
+        &self,
+        x: i32,
+        y: i32,
+        z: i32,
+        kind: String,
+        items: Vec<ContainerItem>,
+    ) -> Result<()> {
         let kind = match kind.as_str() {
             "chest" => WindowType::Container,
             "furnace" => WindowType::Furnace,
             "craftingTable" => WindowType::Workbench,
-            other => return Err(Error::from_reason(format!("unknown container kind {other}"))),
+            other => {
+                return Err(Error::from_reason(format!(
+                    "unknown container kind {other}"
+                )));
+            }
         };
-        let inventory = self.inventory.as_ref().ok_or_else(|| Error::from_reason("call serveInventory first"))?;
-        let items: Vec<_> = items.iter().map(|i| (i.slot as usize, i.name.as_str(), i.count as u16)).collect();
+        let inventory = self
+            .inventory
+            .as_ref()
+            .ok_or_else(|| Error::from_reason("call serveInventory first"))?;
+        let items: Vec<_> = items
+            .iter()
+            .map(|i| (i.slot as usize, i.name.as_str(), i.count as u16))
+            .collect();
         inventory.add_container(self.server()?, [x, y, z], kind, &items);
         Ok(())
     }
@@ -159,7 +227,12 @@ impl TestServer {
     /// How many `InventoryTransaction` packets (item use on blocks and entities) the client has sent.
     #[napi]
     pub fn inventory_transactions(&self) -> Result<u32> {
-        Ok(self.server()?.received().iter().filter(|r| r.packet.id == InventoryTransaction::ID).count() as u32)
+        Ok(self
+            .server()?
+            .received()
+            .iter()
+            .filter(|r| r.packet.id == InventoryTransaction::ID)
+            .count() as u32)
     }
 
     #[napi]
@@ -179,10 +252,14 @@ impl TestServer {
     }
 
     fn server(&self) -> Result<&FakeServer> {
-        self.server.as_ref().ok_or_else(|| Error::from_reason("the test server has stopped"))
+        self.server
+            .as_ref()
+            .ok_or_else(|| Error::from_reason("the test server has stopped"))
     }
 
     fn runtime(&self) -> Result<&Runtime> {
-        self.runtime.as_ref().ok_or_else(|| Error::from_reason("the test server has stopped"))
+        self.runtime
+            .as_ref()
+            .ok_or_else(|| Error::from_reason("the test server has stopped"))
     }
 }

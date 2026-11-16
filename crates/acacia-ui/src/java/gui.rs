@@ -69,22 +69,73 @@ impl Blend {
 pub enum GuiDraw {
     /// `blitSprite(pipeline, sprite, x, y, w, h, color)`; `region` is `(spriteW, spriteH, u, v)`
     /// for the overload drawing part of a sprite.
-    Sprite { sprite: Cow<'static, str>, x: i32, y: i32, w: i32, h: i32, region: Option<[i32; 4]>, color: u32, blend: Blend },
+    Sprite {
+        sprite: Cow<'static, str>,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        region: Option<[i32; 4]>,
+        color: u32,
+        blend: Blend,
+    },
     /// `blitSprite` with a block atlas sprite (the nether portal overlay).
-    AtlasSprite { sprite: Cow<'static, str>, x: i32, y: i32, w: i32, h: i32, color: u32 },
+    AtlasSprite {
+        sprite: Cow<'static, str>,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        color: u32,
+    },
     /// `blit(pipeline, texture, x, y, u, v, w, h, srcW, srcH, texW, texH, color)`; `texture` is the
     /// path under `textures/` without `.png`.
-    Blit { texture: Cow<'static, str>, blend: Blend, x: i32, y: i32, w: i32, h: i32, uv: [f32; 2], src: [i32; 2], tex: [i32; 2], color: u32 },
+    Blit {
+        texture: Cow<'static, str>,
+        blend: Blend,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        uv: [f32; 2],
+        src: [i32; 2],
+        tex: [i32; 2],
+        color: u32,
+    },
     /// `fill(x0, y0, x1, y1, color)`, corners sorted.
-    Fill { x0: i32, y0: i32, x1: i32, y1: i32, color: u32 },
+    Fill {
+        x0: i32,
+        y0: i32,
+        x1: i32,
+        y1: i32,
+        color: u32,
+    },
     /// `fillGradient(x0, y0, x1, y1, top, bottom)`.
-    Gradient { x0: i32, y0: i32, x1: i32, y1: i32, top: u32, bottom: u32 },
+    Gradient {
+        x0: i32,
+        y0: i32,
+        x1: i32,
+        y1: i32,
+        top: u32,
+        bottom: u32,
+    },
     /// `text(font, text, x, y, color, shadow)`; legacy codes in `text` are resolved when drawn.
-    Text { text: Text, x: i32, y: i32, color: u32, shadow: bool },
+    Text {
+        text: Text,
+        x: i32,
+        y: i32,
+        color: u32,
+        shadow: bool,
+    },
     /// `item(stack, x, y, seed)`: `key` names the stack to the caller (a slot number).
     Item { key: i32, x: i32, y: i32, seed: i32 },
     /// `itemDecorations(font, stack, x, y, count)`, drawn by the caller with the item.
-    Decorations { key: i32, x: i32, y: i32, count: Option<String> },
+    Decorations {
+        key: i32,
+        x: i32,
+        y: i32,
+        count: Option<String>,
+    },
     /// `pose().pushMatrix()` followed by `ops`.
     Push(Vec<PoseOp>),
     /// `pose().popMatrix()`.
@@ -95,10 +146,24 @@ pub enum GuiDraw {
     Unscissor,
     /// `ActiveTextCollector.acceptScrolling(text, centerX, x0, x1, y0, y1)`: a label centred in
     /// the box, or scrolled to the clock when wider; `color` is `ARGB.white(opacity)`.
-    Scrolling { text: Text, center_x: i32, x0: i32, x1: i32, y0: i32, y1: i32, color: u32 },
+    Scrolling {
+        text: Text,
+        center_x: i32,
+        x0: i32,
+        x1: i32,
+        y0: i32,
+        y1: i32,
+        color: u32,
+    },
     /// `textHighlight(x0, y0, x1, y1, invert)`: a `GUI_INVERT` fill when `invert`, then a
     /// `GUI_TEXT_HIGHLIGHT` one.
-    Highlight { x0: i32, y0: i32, x1: i32, y1: i32, invert: bool },
+    Highlight {
+        x0: i32,
+        y0: i32,
+        x1: i32,
+        y1: i32,
+        invert: bool,
+    },
     /// `nextStratum()`: what follows draws over everything before, whatever its bounds.
     Stratum,
     /// `blurBeforeThisStratum()`: the strata before this one are blurred (a screen's background).
@@ -117,35 +182,93 @@ pub struct Gui {
 
 impl Gui {
     pub fn new(width: i32, height: i32) -> Gui {
-        Gui { draws: Vec::new(), width, height }
+        Gui {
+            draws: Vec::new(),
+            width,
+            height,
+        }
     }
 
     pub fn sprite(&mut self, sprite: impl Into<Cow<'static, str>>, x: i32, y: i32, w: i32, h: i32) {
         self.sprite_tinted(sprite, x, y, w, h, WHITE);
     }
 
-    pub fn sprite_tinted(&mut self, sprite: impl Into<Cow<'static, str>>, x: i32, y: i32, w: i32, h: i32, color: u32) {
-        self.draws.push(GuiDraw::Sprite { sprite: sprite.into(), x, y, w, h, region: None, color, blend: Blend::Textured });
+    pub fn sprite_tinted(
+        &mut self,
+        sprite: impl Into<Cow<'static, str>>,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        color: u32,
+    ) {
+        self.draws.push(GuiDraw::Sprite {
+            sprite: sprite.into(),
+            x,
+            y,
+            w,
+            h,
+            region: None,
+            color,
+            blend: Blend::Textured,
+        });
     }
 
     /// `blitSprite(sprite, spriteW, spriteH, u, v, x, y, w, h)`: part of a `size` sprite from `uv`.
     #[allow(clippy::too_many_arguments)]
-    pub fn region(&mut self, sprite: impl Into<Cow<'static, str>>, size: [i32; 2], uv: [i32; 2], x: i32, y: i32, w: i32, h: i32) {
-        self.draws.push(GuiDraw::Sprite { sprite: sprite.into(), x, y, w, h, region: Some([size[0], size[1], uv[0], uv[1]]), color: WHITE, blend: Blend::Textured });
+    pub fn region(
+        &mut self,
+        sprite: impl Into<Cow<'static, str>>,
+        size: [i32; 2],
+        uv: [i32; 2],
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+    ) {
+        self.draws.push(GuiDraw::Sprite {
+            sprite: sprite.into(),
+            x,
+            y,
+            w,
+            h,
+            region: Some([size[0], size[1], uv[0], uv[1]]),
+            color: WHITE,
+            blend: Blend::Textured,
+        });
     }
 
     pub fn fill(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, color: u32) {
-        self.draws.push(GuiDraw::Fill { x0: x0.min(x1), y0: y0.min(y1), x1: x0.max(x1), y1: y0.max(y1), color });
+        self.draws.push(GuiDraw::Fill {
+            x0: x0.min(x1),
+            y0: y0.min(y1),
+            x1: x0.max(x1),
+            y1: y0.max(y1),
+            color,
+        });
     }
 
     pub fn gradient(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, top: u32, bottom: u32) {
-        self.draws.push(GuiDraw::Gradient { x0, y0, x1, y1, top, bottom });
+        self.draws.push(GuiDraw::Gradient {
+            x0,
+            y0,
+            x1,
+            y1,
+            top,
+            bottom,
+        });
     }
 
     /// `text`; nothing when `color` is fully transparent, as the game skips it.
     pub fn text(&mut self, text: impl Into<Text>, x: i32, y: i32, color: u32, shadow: bool) {
         if color >> 24 != 0 {
-            self.draws.push(GuiDraw::Text { text: text.into(), x, y, color, shadow });
+            self.draws.push(GuiDraw::Text {
+                text: text.into(),
+                x,
+                y,
+                color,
+                shadow,
+            });
         }
     }
 
@@ -179,12 +302,35 @@ impl Gui {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn scrolling(&mut self, text: Text, center_x: i32, x0: i32, x1: i32, y0: i32, y1: i32, color: u32) {
-        self.draws.push(GuiDraw::Scrolling { text, center_x, x0, x1, y0, y1, color });
+    pub fn scrolling(
+        &mut self,
+        text: Text,
+        center_x: i32,
+        x0: i32,
+        x1: i32,
+        y0: i32,
+        y1: i32,
+        color: u32,
+    ) {
+        self.draws.push(GuiDraw::Scrolling {
+            text,
+            center_x,
+            x0,
+            x1,
+            y0,
+            y1,
+            color,
+        });
     }
 
     pub fn highlight(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, invert: bool) {
-        self.draws.push(GuiDraw::Highlight { x0: x0.min(x1), y0: y0.min(y1), x1: x0.max(x1), y1: y0.max(y1), invert });
+        self.draws.push(GuiDraw::Highlight {
+            x0: x0.min(x1),
+            y0: y0.min(y1),
+            x1: x0.max(x1),
+            y1: y0.max(y1),
+            invert,
+        });
     }
 
     pub fn next_stratum(&mut self) {
@@ -198,7 +344,6 @@ impl Gui {
     pub fn text_highlight(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, invert: bool) {
         self.highlight(x0, y0, x1, y1, invert);
     }
-
 }
 
 /// Measures text in the font the calls are drawn with.
@@ -217,17 +362,32 @@ pub trait Metrics {
     /// text as it is when `forward`): what a line from `Font.split` measures, shaped and mirrored.
     fn visual_width(&self, text: &Text) -> i32 {
         let chars = super::bidi::visual_order(text);
-        ceil(chars.iter().map(|v| self.advance(char::from_u32(v.codepoint).unwrap_or('\u{FFFD}'), &v.style)).sum())
+        ceil(
+            chars
+                .iter()
+                .map(|v| self.advance(char::from_u32(v.codepoint).unwrap_or('\u{FFFD}'), &v.style))
+                .sum(),
+        )
     }
 
     /// What hovering reads of `text` drawn at `(x, y)` in `color` (see [`super::active`]). Without
     /// glyph shapes every character's area is its advance by 9 pixels; fonts override this.
-    fn active_areas(&self, text: &Text, x: f32, y: f32, _color: u32, _shadow: bool) -> super::active::TextAreas {
+    fn active_areas(
+        &self,
+        text: &Text,
+        x: f32,
+        y: f32,
+        _color: u32,
+        _shadow: bool,
+    ) -> super::active::TextAreas {
         let mut pen = x;
         let mut areas = Vec::new();
         for v in super::bidi::visual_order(text) {
             let advance = self.advance(char::from_u32(v.codepoint).unwrap_or('\u{FFFD}'), &v.style);
-            areas.push(super::active::ActiveArea { rect: [pen, y, pen + advance, y + 9.0], style: v.style });
+            areas.push(super::active::ActiveArea {
+                rect: [pen, y, pen + advance, y + 9.0],
+                style: v.style,
+            });
             pen += advance;
         }
         let bounds = (pen > x).then_some([x, y, pen, y + 9.0]);

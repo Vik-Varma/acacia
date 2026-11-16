@@ -5,14 +5,35 @@ use acacia_render::blocks::Tint;
 
 use crate::mapping::JavaState;
 
-const GRASS: &[&str] =
-    &["grass_block", "short_grass", "fern", "tall_grass", "large_fern", "potted_fern", "bush", "sugar_cane", "pink_petals", "wildflowers"];
-const FOLIAGE: &[&str] = &["oak_leaves", "jungle_leaves", "acacia_leaves", "dark_oak_leaves", "mangrove_leaves", "vine"];
+const GRASS: &[&str] = &[
+    "grass_block",
+    "short_grass",
+    "fern",
+    "tall_grass",
+    "large_fern",
+    "potted_fern",
+    "bush",
+    "sugar_cane",
+    "pink_petals",
+    "wildflowers",
+];
+const FOLIAGE: &[&str] = &[
+    "oak_leaves",
+    "jungle_leaves",
+    "acacia_leaves",
+    "dark_oak_leaves",
+    "mangrove_leaves",
+    "vine",
+];
 const WATER: &[&str] = &["water", "bubble_column", "water_cauldron"];
 
 /// The colour of tint `index` of a block; all but the flower beds have only index 0.
 pub fn of(java: &JavaState, index: i32) -> Tint {
-    let number = |key| java.property(key).and_then(|v| v.parse::<u8>().ok()).unwrap_or(0);
+    let number = |key| {
+        java.property(key)
+            .and_then(|v| v.parse::<u8>().ok())
+            .unwrap_or(0)
+    };
     let flower_bed = matches!(java.name.as_str(), "pink_petals" | "wildflowers");
     match java.name.as_str() {
         // Index 0 is the petals, uncoloured; 1 the stems.
@@ -48,20 +69,38 @@ mod tests {
     use super::*;
 
     fn state(name: &str, properties: &[(&str, &str)]) -> JavaState {
-        JavaState { name: name.to_owned(), properties: properties.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect() }
+        JavaState {
+            name: name.to_owned(),
+            properties: properties
+                .iter()
+                .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+                .collect(),
+        }
     }
 
     #[test]
     fn blocks_tint_as_java_colours_them() {
         let flowers = |index| of(&state("pink_petals", &[]), index);
-        assert_eq!((flowers(0), flowers(1), flowers(2)), (Tint::None, Tint::Grass, Tint::None));
+        assert_eq!(
+            (flowers(0), flowers(1), flowers(2)),
+            (Tint::None, Tint::Grass, Tint::None)
+        );
         assert_eq!(of(&state("vine", &[]), 1), Tint::None);
         let of = |name: &str, properties: &[(&str, &str)]| of(&state(name, properties), 0);
         assert_eq!(of("vine", &[]), Tint::Foliage);
         assert_eq!(of("cherry_leaves", &[]), Tint::None);
         assert_eq!(of("leaf_litter", &[]), Tint::DryFoliage);
-        assert_eq!(of("melon_stem", &[("age", "7")]), Tint::Fixed([224, 199, 28]));
-        assert_eq!(of("redstone_wire", &[("power", "0")]), Tint::Fixed([76, 0, 0]));
-        assert_eq!(of("redstone_wire", &[("power", "15")]), Tint::Fixed([255, 50, 0]));
+        assert_eq!(
+            of("melon_stem", &[("age", "7")]),
+            Tint::Fixed([224, 199, 28])
+        );
+        assert_eq!(
+            of("redstone_wire", &[("power", "0")]),
+            Tint::Fixed([76, 0, 0])
+        );
+        assert_eq!(
+            of("redstone_wire", &[("power", "15")]),
+            Tint::Fixed([255, 50, 0])
+        );
     }
 }

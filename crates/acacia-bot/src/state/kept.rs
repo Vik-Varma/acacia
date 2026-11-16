@@ -20,5 +20,10 @@ pub(crate) fn keep(packet: &RawPacket) -> RawPacket {
             body
         }
     };
-    RawPacket { id: packet.id, sender_subclient: packet.sender_subclient, target_subclient: packet.target_subclient, body }
+    RawPacket {
+        id: packet.id,
+        sender_subclient: packet.sender_subclient,
+        target_subclient: packet.target_subclient,
+        body,
+    }
 }

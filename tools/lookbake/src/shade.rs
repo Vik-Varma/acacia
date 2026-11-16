@@ -15,7 +15,10 @@ const DARK: &[&str] = &["soul_sand", "mud"];
 pub fn darkens(java: &JavaState, full_collision: bool) -> bool {
     let name = java.name.as_str();
     let full_snow = name == "snow" && java.property("layers") == Some("8");
-    DARK.contains(&name) || full_snow || (self::full_collision(java, full_collision) && !BRIGHT.iter().any(|part| name.contains(part)))
+    DARK.contains(&name)
+        || full_snow
+        || (self::full_collision(java, full_collision)
+            && !BRIGHT.iter().any(|part| name.contains(part)))
 }
 
 /// Java's `isCollisionShapeFullBlock`, from the Bedrock state's.
@@ -25,7 +28,10 @@ pub fn full_collision(java: &JavaState, bedrock_full: bool) -> bool {
 
 #[test]
 fn full_blocks_darken_but_glass() {
-    let state = |name: &str| JavaState { name: name.to_owned(), properties: Vec::new() };
+    let state = |name: &str| JavaState {
+        name: name.to_owned(),
+        properties: Vec::new(),
+    };
     assert!(darkens(&state("oak_leaves"), true));
     assert!(!darkens(&state("oak_slab"), false));
     assert!(!darkens(&state("red_stained_glass"), true));

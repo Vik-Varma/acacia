@@ -33,7 +33,11 @@ pub struct Build {
 impl Build {
     /// `new HeaderAndFooterLayout(screen, header, footer)`.
     pub fn new(header_h: i32, footer_h: i32) -> Build {
-        Build { widgets: Vec::new(), layout: HeaderFooter::new(header_h, footer_h), list: None }
+        Build {
+            widgets: Vec::new(),
+            layout: HeaderFooter::new(header_h, footer_h),
+            list: None,
+        }
     }
 
     /// The widget pushed, as a layout element.
@@ -45,15 +49,30 @@ impl Build {
     /// `OptionsSubScreen.addContents`: the list fills the contents.
     pub fn add_list(&mut self, env: &Env) -> &mut OptionsList {
         let h = self.layout.content_height(env.height);
-        self.layout.add_contents(Elem::Spacer { x: 0, y: 0, w: env.width, h });
-        self.list.insert(OptionsList::new(env.width, h, self.layout.header_h, env.in_world))
+        self.layout.add_contents(Elem::Spacer {
+            x: 0,
+            y: 0,
+            w: env.width,
+            h,
+        });
+        self.list.insert(OptionsList::new(
+            env.width,
+            h,
+            self.layout.header_h,
+            env.in_world,
+        ))
     }
 
     /// `layout.visitWidgets(addRenderableWidget)` and `repositionElements`.
     pub fn finish(mut self, env: Env) -> OptionsScreen {
-        self.layout.arrange(&mut self.widgets, env.width, env.height);
+        self.layout
+            .arrange(&mut self.widgets, env.width, env.height);
         if let Some(list) = &mut self.list {
-            list.update_size(env.width, self.layout.content_height(env.height), self.layout.header_h);
+            list.update_size(
+                env.width,
+                self.layout.content_height(env.height),
+                self.layout.header_h,
+            );
         }
         let mut order = Vec::new();
         self.layout.header.visit_widgets(&mut order);
@@ -62,7 +81,12 @@ impl Build {
         self.layout.footer.visit_widgets(&mut order);
         let mut slots: Vec<Option<Box<dyn Widget>>> = self.widgets.into_iter().map(Some).collect();
         let widgets = order.into_iter().filter_map(|i| slots[i].take()).collect();
-        OptionsScreen { env, widgets, split, list: self.list }
+        OptionsScreen {
+            env,
+            widgets,
+            split,
+            list: self.list,
+        }
     }
 }
 
@@ -103,7 +127,11 @@ impl Screen for OptionsScreen {
 
     /// A click on the list's bar holds it (`updateScrolling`) and takes the focus off the widgets.
     fn mouse_clicked(&mut self, s: &mut Interaction, x: f64, y: f64, shift: bool) -> Option<Fired> {
-        if self.list.as_ref().is_some_and(|l| l.list.over(x, y) && l.list.over_scrollbar(x, y)) {
+        if self
+            .list
+            .as_ref()
+            .is_some_and(|l| l.list.over(x, y) && l.list.over_scrollbar(x, y))
+        {
             widget_input::focus(&mut self.children(), s, None, true);
             (s.scrolling, s.dragging) = (true, true);
             return None;
@@ -128,7 +156,9 @@ impl Screen for OptionsScreen {
     }
 
     fn mouse_scrolled(&mut self, s: &mut Interaction, x: f64, y: f64, amount: f64) -> bool {
-        let Some(l) = self.list.as_mut().filter(|l| l.list.over(x, y)) else { return false };
+        let Some(l) = self.list.as_mut().filter(|l| l.list.over(x, y)) else {
+            return false;
+        };
         l.list.set_scroll(l.list.scroll - amount * SCROLL_RATE);
         s.scroll = l.list.scroll;
         true
@@ -139,8 +169,10 @@ impl Screen for OptionsScreen {
         let before = s.focused;
         let fired = widget_input::key_pressed(&mut self.children(), s, key, shift);
         let split = self.split;
-        if let (Some(i), Some(l)) = (s.focused.filter(|&i| i >= split && s.focused != before), &mut self.list)
-            && let Some(row) = l.row_of(i - split)
+        if let (Some(i), Some(l)) = (
+            s.focused.filter(|&i| i >= split && s.focused != before),
+            &mut self.list,
+        ) && let Some(row) = l.row_of(i - split)
         {
             l.list.scroll_to_row(row);
             s.scroll = l.list.scroll;

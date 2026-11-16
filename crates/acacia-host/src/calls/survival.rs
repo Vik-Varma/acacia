@@ -1,4 +1,7 @@
-use acacia_api::{CraftableItemsResult, DigParams, EquipBestToolResult, ItemCount, SetAutoEatParams, WriteSignParams};
+use acacia_api::{
+    CraftableItemsResult, DigParams, EquipBestToolResult, ItemCount, SetAutoEatParams,
+    WriteSignParams,
+};
 use acacia_bot::items::SlotRef;
 use acacia_bot::signs::SignSide;
 use acacia_bot::{ActionError, Bot};
@@ -13,7 +16,10 @@ pub(super) async fn dig(bot: &mut Bot, p: DigParams) -> Result<(), ActionError> 
     bot.break_block(pos).await
 }
 
-pub(super) async fn equip_best_tool(bot: &mut Bot, pos: [i32; 3]) -> Result<EquipBestToolResult, ActionError> {
+pub(super) async fn equip_best_tool(
+    bot: &mut Bot,
+    pos: [i32; 3],
+) -> Result<EquipBestToolResult, ActionError> {
     let slot = match bot.equip_best_tool(pos).await? {
         Some(SlotRef::Main(slot)) => Some(slot),
         _ => None,
@@ -26,12 +32,22 @@ pub(super) fn set_auto_eat(bot: &mut Bot, p: &SetAutoEatParams) {
 }
 
 pub(super) async fn write_sign(bot: &mut Bot, p: WriteSignParams) -> Result<(), ActionError> {
-    let side = if p.back == Some(true) { SignSide::Back } else { SignSide::Front };
-    bot.write_sign([p.x, p.y, p.z], side, &p.lines.join("\n")).await
+    let side = if p.back == Some(true) {
+        SignSide::Back
+    } else {
+        SignSide::Front
+    };
+    bot.write_sign([p.x, p.y, p.z], side, &p.lines.join("\n"))
+        .await
 }
 
 pub(super) fn craftable_items(bot: &Bot, table: bool) -> CraftableItemsResult {
     let items = &bot.state().items;
-    let made = bot.craftable(table).into_iter().map(|s| ItemCount { item: convert::stack_name(items, &s), count: u32::from(s.count) });
-    CraftableItemsResult { items: made.collect() }
+    let made = bot.craftable(table).into_iter().map(|s| ItemCount {
+        item: convert::stack_name(items, &s),
+        count: u32::from(s.count),
+    });
+    CraftableItemsResult {
+        items: made.collect(),
+    }
 }

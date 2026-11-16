@@ -10,8 +10,12 @@ use acacia_testserver::{FakeServer, Script};
 
 async fn join(name: &str) -> (FakeServer, Bot) {
     let server = FakeServer::start(Script::bds_spawn()).await.unwrap();
-    let builder = Client::builder(server.addr().to_string()).offline(name).transport(TransportKind::RakNet);
-    let bot = Bot::connect(builder, BotConfig::default()).await.expect("bot joins the fake server");
+    let builder = Client::builder(server.addr().to_string())
+        .offline(name)
+        .transport(TransportKind::RakNet);
+    let bot = Bot::connect(builder, BotConfig::default())
+        .await
+        .expect("bot joins the fake server");
     server.spawned().await.expect("script reaches PlayerSpawn");
     (server, bot)
 }
@@ -20,11 +24,19 @@ async fn join(name: &str) -> (FakeServer, Bot) {
 async fn bot_answers_a_form_the_server_sends() {
     let (server, mut bot) = join("FormTester").await;
     let data = r#"{"type":"modal","title":"t","content":"accept?","button1":"yes","button2":"no"}"#;
-    server.send(&ModalFormRequest { form_id: 7, data: data.into() });
+    server.send(&ModalFormRequest {
+        form_id: 7,
+        data: data.into(),
+    });
 
-    let form = bot.wait_form(Duration::from_secs(5)).await.expect("form shown");
+    let form = bot
+        .wait_form(Duration::from_secs(5))
+        .await
+        .expect("form shown");
     assert_eq!(form.id, 7);
-    bot.answer_form(form.id, FormReply::Modal(true)).await.expect("form answered");
+    bot.answer_form(form.id, FormReply::Modal(true))
+        .await
+        .expect("form answered");
     let reply = tokio::select! {
         r = server.recv::<ModalFormResponse>() => r.expect("form response"),
         _ = async { while bot.next().await.is_some() {} } => panic!("bot left before answering"),
@@ -48,5 +60,8 @@ async fn bot_sees_the_kick_message() {
     })
     .await
     .expect("disconnect within 5 s");
-    assert!(matches!(&reason, DisconnectReason::Kicked { message, .. } if message == "bye"), "{reason:?}");
+    assert!(
+        matches!(&reason, DisconnectReason::Kicked { message, .. } if message == "bye"),
+        "{reason:?}"
+    );
 }

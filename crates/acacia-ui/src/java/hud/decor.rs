@@ -38,10 +38,19 @@ pub fn of_stack(stack: &ItemStack, game: &Game, count_text: Option<&str>) -> Ite
         bundle::bar(stack, game)
     } else {
         // isDamageableItem: max_damage and damage, not unbreakable; getDamageValue clamps.
-        let max = if stack.has("unbreakable") || !stack.has("damage") { 0 } else { stack.int("max_damage", 0) };
+        let max = if stack.has("unbreakable") || !stack.has("damage") {
+            0
+        } else {
+            stack.int("max_damage", 0)
+        };
         damage_bar(stack.int("damage", 0).min(max), max)
     };
-    ItemDecorations { count: stack.count, count_text: count_text.map(str::to_owned), bar, cooldown: 0.0 }
+    ItemDecorations {
+        count: stack.count,
+        count_text: count_text.map(str::to_owned),
+        bar,
+        cooldown: 0.0,
+    }
 }
 
 /// `ItemCooldowns.getCooldownPercent` for a cooldown `elapsed` whole ticks into `duration`; it is
@@ -50,7 +59,11 @@ pub fn cooldown_percent(duration: i32, elapsed: i32, partial: f32) -> f32 {
     if elapsed >= duration {
         return 0.0;
     }
-    clamp((duration as f32 - (elapsed as f32 + partial)) / duration as f32, 0.0, 1.0)
+    clamp(
+        (duration as f32 - (elapsed as f32 + partial)) / duration as f32,
+        0.0,
+        1.0,
+    )
 }
 
 /// `itemDecorations` over a stack drawn at (x, y).
@@ -88,18 +101,55 @@ mod tests {
 
     #[test]
     fn a_stack_shows_its_bundle_weight_or_its_damage() {
-        let game = Game::new(serde_json::json!({"item": {"minecraft:stone": {"components": {"minecraft:max_stack_size": 64}}}}));
-        let stack = |id: &str, components: serde_json::Value| ItemStack::from_json(&serde_json::json!({"id": id, "count": 1, "components": components})).unwrap();
-        let half = stack("minecraft:bundle", serde_json::json!({"minecraft:bundle_contents": [{"id": "minecraft:stone", "count": 32}]}));
+        let game = Game::new(
+            serde_json::json!({"item": {"minecraft:stone": {"components": {"minecraft:max_stack_size": 64}}}}),
+        );
+        let stack = |id: &str, components: serde_json::Value| {
+            ItemStack::from_json(
+                &serde_json::json!({"id": id, "count": 1, "components": components}),
+            )
+            .unwrap()
+        };
+        let half = stack(
+            "minecraft:bundle",
+            serde_json::json!({"minecraft:bundle_contents": [{"id": "minecraft:stone", "count": 32}]}),
+        );
         assert_eq!(of_stack(&half, &game, None).bar, Some((7, 0x7087FF)));
-        let full = stack("minecraft:red_bundle", serde_json::json!({"minecraft:bundle_contents": [{"id": "minecraft:stone", "count": 64}]}));
+        let full = stack(
+            "minecraft:red_bundle",
+            serde_json::json!({"minecraft:bundle_contents": [{"id": "minecraft:stone", "count": 64}]}),
+        );
         assert_eq!(of_stack(&full, &game, None).bar, Some((13, 0xFF5454)));
-        assert_eq!(of_stack(&stack("minecraft:bundle", serde_json::json!({"minecraft:bundle_contents": []})), &game, None).bar, None);
+        assert_eq!(
+            of_stack(
+                &stack(
+                    "minecraft:bundle",
+                    serde_json::json!({"minecraft:bundle_contents": []})
+                ),
+                &game,
+                None
+            )
+            .bar,
+            None
+        );
         let worn = serde_json::json!({"minecraft:max_damage": 100, "minecraft:damage": 50});
-        assert_eq!(of_stack(&stack("minecraft:iron_sword", worn.clone()), &game, None).bar.map(|b| b.0), Some(7));
+        assert_eq!(
+            of_stack(&stack("minecraft:iron_sword", worn.clone()), &game, None)
+                .bar
+                .map(|b| b.0),
+            Some(7)
+        );
         let mut unbreakable = worn;
         unbreakable["minecraft:unbreakable"] = serde_json::json!({});
-        assert_eq!(of_stack(&stack("minecraft:iron_sword", unbreakable), &game, Some("9")).bar, None);
+        assert_eq!(
+            of_stack(
+                &stack("minecraft:iron_sword", unbreakable),
+                &game,
+                Some("9")
+            )
+            .bar,
+            None
+        );
     }
 
     #[test]

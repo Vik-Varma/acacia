@@ -170,7 +170,9 @@ pub fn decode_chunk(bytes: &[u8]) -> Result<JavaColumn, DecodeError> {
     let mut idx = vec![0u16; VOLUME];
     let mut states = Box::new([0 as JavaState; VOLUME]);
     for s in root.list("sections")? {
-        let bs = s.get("block_states").ok_or(DecodeError("no block_states"))?;
+        let bs = s
+            .get("block_states")
+            .ok_or(DecodeError("no block_states"))?;
         let palette = bs
             .list("palette")?
             .iter()
@@ -201,7 +203,10 @@ pub fn decode_chunk(bytes: &[u8]) -> Result<JavaColumn, DecodeError> {
 }
 
 fn state(entry: &Tag) -> Result<JavaState, DecodeError> {
-    let name = entry.get("id").ok_or(DecodeError("state without id"))?.str()?;
+    let name = entry
+        .get("id")
+        .ok_or(DecodeError("state without id"))?
+        .str()?;
     let mut props = Vec::new();
     if let Some(Tag::Compound(fields)) = entry.get("properties") {
         for (k, v) in fields {

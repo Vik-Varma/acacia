@@ -10,7 +10,9 @@ use super::grid::Grid;
 use super::sim::perform;
 use crate::movement::{Movement, Rollout};
 use crate::pathfind::hazard::{self, Body, Threats, View};
-use crate::pathfind::{Blocks, Goal, GotoOpts, NavStatus, Path, Pilot, SearchJob, SearchOpts, Terrain, answered};
+use crate::pathfind::{
+    Blocks, Goal, GotoOpts, NavStatus, Path, Pilot, SearchJob, SearchOpts, Terrain, answered,
+};
 
 /// The entities around a flight: moved once a tick for the bot at `feet`, after the bot attacked the runtime id
 /// given, if any; returns them and the bot's health.
@@ -29,7 +31,10 @@ pub struct Horizon<'a> {
 
 impl Blocks for Horizon<'_> {
     fn ids(&self, p: BlockPos) -> Option<(u32, u32)> {
-        let far = |r: i32| (p[0] >> 4).abs_diff(self.centre.0) as i32 > r || (p[2] >> 4).abs_diff(self.centre.1) as i32 > r;
+        let far = |r: i32| {
+            (p[0] >> 4).abs_diff(self.centre.0) as i32 > r
+                || (p[2] >> 4).abs_diff(self.centre.1) as i32 > r
+        };
         if self.radius.is_some_and(far) {
             return None;
         }
@@ -68,53 +73,100 @@ impl Flight {
         let (a, b) = (self.track[0], self.end());
         let len = (b[0] - a[0]).hypot(b[2] - a[2]).max(1e-3);
         let (ux, uz) = ((b[0] - a[0]) / len, (b[2] - a[2]) / len);
-        let along = |t: usize| (self.track[t + 1][0] - self.track[t][0]) * ux + (self.track[t + 1][2] - self.track[t][2]) * uz;
-        (0..self.track.len() - 1).filter(|&t| along(t) < -speed).map(|t| (t, self.track[t])).collect()
+        let along = |t: usize| {
+            (self.track[t + 1][0] - self.track[t][0]) * ux
+                + (self.track[t + 1][2] - self.track[t][2]) * uz
+        };
+        (0..self.track.len() - 1)
+            .filter(|&t| along(t) < -speed)
+            .map(|t| (t, self.track[t]))
+            .collect()
     }
 
     /// Slowest horizontal speed (blocks/tick) within `window` ticks of passing each join.
     pub fn join_speeds(&self, window: usize) -> Vec<f32> {
-        let speed = |t: usize| (self.track[t + 1][0] - self.track[t][0]).hypot(self.track[t + 1][2] - self.track[t][2]);
-        self.joins.iter().map(|j| {
-            let d = |p: &Vec3| (p[0] - j[0] as f32 - 0.5).hypot(p[2] - j[2] as f32 - 0.5);
-            let at = (0..self.track.len()).min_by(|&a, &b| d(&self.track[a]).total_cmp(&d(&self.track[b]))).unwrap_or(0);
-            let range = at.saturating_sub(window)..(at + window).min(self.track.len() - 1);
-            range.map(speed).fold(f32::INFINITY, f32::min)
-        }).collect()
+        let speed = |t: usize| {
+            (self.track[t + 1][0] - self.track[t][0]).hypot(self.track[t + 1][2] - self.track[t][2])
+        };
+        self.joins
+            .iter()
+            .map(|j| {
+                let d = |p: &Vec3| (p[0] - j[0] as f32 - 0.5).hypot(p[2] - j[2] as f32 - 0.5);
+                let at = (0..self.track.len())
+                    .min_by(|&a, &b| d(&self.track[a]).total_cmp(&d(&self.track[b])))
+                    .unwrap_or(0);
+                let range = at.saturating_sub(window)..(at + window).min(self.track.len() - 1);
+                range.map(speed).fold(f32::INFINITY, f32::min)
+            })
+            .collect()
     }
 }
 
 /// Drives a [`Pilot`] from `m` to `goal` until it arrives, fails or `sky.max_ticks` pass.
 pub fn fly(g: &Grid, m: &mut Movement, goal: Goal, opts: GotoOpts, sky: Sky) -> Flight {
-    fly_with(g, m, goal, opts, sky, &mut |_, _, _| (Threats::default(), 20.0))
+    fly_with(g, m, goal, opts, sky, &mut |_, _, _| {
+        (Threats::default(), 20.0)
+    })
 }
 
 /// [`fly`] among entities, perceived as the profile does; the solid ones collide.
-pub fn fly_with(g: &Grid, m: &mut Movement, goal: Goal, opts: GotoOpts, sky: Sky, scene: &mut Scene) -> Flight {
+pub fn fly_with(
+    g: &Grid,
+    m: &mut Movement,
+    goal: Goal,
+    opts: GotoOpts,
+    sky: Sky,
+    scene: &mut Scene,
+) -> Flight {
     let world = g.physics();
     let mut pilot = Pilot::new(goal, opts);
     let mut late: Vec<(u32, oneshot::Sender<Path>, Path)> = Vec::new();
-    let (mut track, mut result) = (Vec::new(), Err(format!("not arrived after {} ticks", sky.max_ticks)));
+    let (mut track, mut result) = (
+        Vec::new(),
+        Err(format!("not arrived after {} ticks", sky.max_ticks)),
+    );
     let (mut searching, mut struck) = (Vec::new(), None);
     // PILOT_TRACE=from..to: per-tick state over those ticks.
-    let trace = std::env::var("PILOT_TRACE").ok().and_then(|r| r.split_once("..").and_then(|(a, b)| Some(a.parse::<u32>().ok()?..b.parse::<u32>().ok()?))).unwrap_or(0..0);
+    let trace = std::env::var("PILOT_TRACE")
+        .ok()
+        .and_then(|r| {
+            r.split_once("..")
+                .and_then(|(a, b)| Some(a.parse::<u32>().ok()?..b.parse::<u32>().ok()?))
+        })
+        .unwrap_or(0..0);
     for tick in 0..sky.max_ticks {
         let (due, waiting): (Vec<_>, Vec<_>) = late.drain(..).partition(|(t, ..)| *t <= tick);
         late = waiting;
         due.into_iter().for_each(|(_, tx, p)| _ = tx.send(p));
         let pos = m.position().expect("started");
         track.push(pos);
-        let blocks = Horizon { view: &g.view, centre: (pos[0].floor() as i32 >> 4, pos[2].floor() as i32 >> 4), radius: sky.horizon };
+        let blocks = Horizon {
+            view: &g.view,
+            centre: (pos[0].floor() as i32 >> 4, pos[2].floor() as i32 >> 4),
+            radius: sky.horizon,
+        };
         let (threats, health) = scene(tick, pos, struck.take());
         m.set_solids(hazard::solid_boxes(&threats));
         let sees = |a, b| hazard::clear_line(&g.terrain(), a, b);
         let eye = [pos[0], pos[1] + DEFAULT_PLAYER_HEIGHT_OFFSET, pos[2]];
         let yaw = m.state().map_or(0.0, |s| s.yaw);
-        let hazards = pilot.perceive(threats, &View { eye, yaw, health, sees: &sees });
+        let hazards = pilot.perceive(
+            threats,
+            &View {
+                eye,
+                yaw,
+                health,
+                sees: &sees,
+            },
+        );
         let terrain = Terrain::new(blocks, &g.registry).with_hazards(hazards.clone());
-        let opts = SearchOpts { hazards, ..pilot.search_opts(None, 20.0) };
+        let opts = SearchOpts {
+            hazards,
+            ..pilot.search_opts(None, 20.0)
+        };
         let mut spawn = |job: SearchJob<Rollout>| {
-            let path = job.run(&Terrain::new(blocks, &g.registry).with_hazards(job.opts.hazards.clone()));
+            let path =
+                job.run(&Terrain::new(blocks, &g.registry).with_hazards(job.opts.hazards.clone()));
             if sky.delay == 0 {
                 return answered(path);
             }
@@ -125,14 +177,29 @@ pub fn fly_with(g: &Grid, m: &mut Movement, goal: Goal, opts: GotoOpts, sky: Sky
         let diverged = pilot.divergences();
         let status = pilot.drive(&terrain, m, opts, &mut spawn);
         let vel = m.state().map_or([0.0; 3], |s| s.vel);
-        let body = Body { eye, feet: pos, vel, me: SIM_ME, tick: u64::from(tick), sees: &sees };
+        let body = Body {
+            eye,
+            feet: pos,
+            vel,
+            me: SIM_ME,
+            tick: u64::from(tick),
+            sees: &sees,
+        };
         struck = pilot.strike(&body, &mut m.controls);
         if pilot.divergences() > diverged {
             eprintln!("tick {tick}: diverged at {pos:?}");
         }
         if trace.contains(&tick) {
-            let next = pilot.follower().and_then(|f| f.ahead().first().map(|n| (f.index(), n.pos, n.kind, n.entry)));
-            eprintln!("TRACE {tick} {pos:.3?} vel {:.3?} {status:?} next {next:?} controls {:?}", m.state().map(|s| s.vel), m.controls);
+            let next = pilot.follower().and_then(|f| {
+                f.ahead()
+                    .first()
+                    .map(|n| (f.index(), n.pos, n.kind, n.entry))
+            });
+            eprintln!(
+                "TRACE {tick} {pos:.3?} vel {:.3?} {status:?} next {next:?} controls {:?}",
+                m.state().map(|s| s.vel),
+                m.controls
+            );
         }
         match status {
             Ok(NavStatus::Searching) if tick > 0 => searching.push(tick),
@@ -154,8 +221,24 @@ pub fn fly_with(g: &Grid, m: &mut Movement, goal: Goal, opts: GotoOpts, sky: Sky
         m.tick(&world);
     }
     let ticks = track.len() as u32;
-    let (joins, searches, replans, divergences) = (pilot.joins().to_vec(), pilot.searches(), pilot.replans(), pilot.divergences());
-    eprintln!("FLIGHT {result:?} after {ticks} ticks at {:?}: {searches} searches, {replans} re-plans, {divergences} diverged, joins {joins:?}", track.last());
+    let (joins, searches, replans, divergences) = (
+        pilot.joins().to_vec(),
+        pilot.searches(),
+        pilot.replans(),
+        pilot.divergences(),
+    );
+    eprintln!(
+        "FLIGHT {result:?} after {ticks} ticks at {:?}: {searches} searches, {replans} re-plans, {divergences} diverged, joins {joins:?}",
+        track.last()
+    );
     eprintln!("searching after the start at ticks {searching:?}");
-    Flight { result, ticks, track, joins, searches, replans, divergences }
+    Flight {
+        result,
+        ticks,
+        track,
+        joins,
+        searches,
+        replans,
+        divergences,
+    }
 }

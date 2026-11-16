@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use acacia_client::proto::manual::Uuid;
-use acacia_client::proto::packets::{PlayerList as PlayerListPacket, PlayerSkin as PlayerSkinPacket};
+use acacia_client::proto::packets::{
+    PlayerList as PlayerListPacket, PlayerSkin as PlayerSkinPacket,
+};
 use acacia_client::proto::types::{PlayerRecordContent, Skin, SkinArmSize, SkinImage};
 use acacia_client::proto::{DecodeError, Packet, RawPacket};
 
@@ -17,8 +19,15 @@ pub struct SkinTexture {
 impl SkinTexture {
     /// `None` when the image doesn't match its size (persona skins without a baked texture).
     fn from_wire(image: SkinImage) -> Option<Self> {
-        let (width, height) = (u32::try_from(image.width).ok()?, u32::try_from(image.height).ok()?);
-        (width > 0 && image.data.len() == (width * height * 4) as usize).then(|| Self { width, height, rgba: image.data.to_vec() })
+        let (width, height) = (
+            u32::try_from(image.width).ok()?,
+            u32::try_from(image.height).ok()?,
+        );
+        (width > 0 && image.data.len() == (width * height * 4) as usize).then(|| Self {
+            width,
+            height,
+            rgba: image.data.to_vec(),
+        })
     }
 }
 
@@ -43,7 +52,10 @@ const ANIMATION_FACE: u32 = 1;
 
 impl PlayerSkin {
     fn from_wire(skin: Skin) -> Option<Self> {
-        let face = skin.animations.into_iter().find(|a| a.animation_type == ANIMATION_FACE);
+        let face = skin
+            .animations
+            .into_iter()
+            .find(|a| a.animation_type == ANIMATION_FACE);
         Some(Self {
             texture: SkinTexture::from_wire(skin.skin_data)?,
             cape: SkinTexture::from_wire(skin.cape_data),
@@ -116,20 +128,46 @@ mod tests {
             .flat_map(|raw| raw.decode::<PlayerListPacket>().unwrap().records)
             .find(|r| matches!(r.content, PlayerRecordContent::Add(_)))
             .expect("add record in fixtures");
-        let PlayerRecordContent::Add(add) = &mut record.content else { unreachable!() };
+        let PlayerRecordContent::Add(add) = &mut record.content else {
+            unreachable!()
+        };
         add.uuid = Uuid([7; 16]);
-        (add.skin_data.skin_data.width, add.skin_data.skin_data.height) = (2, 1);
+        (
+            add.skin_data.skin_data.width,
+            add.skin_data.skin_data.height,
+        ) = (2, 1);
         add.skin_data.skin_data.data = vec![1, 2, 3, 4, 5, 6, 7, 8].into();
         add.skin_data.arm_size = SkinArmSize::Slim;
 
         let mut skins = Skins::default();
-        skins.apply(&raw(&PlayerListPacket { records: vec![record.clone()] })).unwrap();
+        skins
+            .apply(&raw(&PlayerListPacket {
+                records: vec![record.clone()],
+            }))
+            .unwrap();
         let skin = skins.get(&Uuid([7; 16])).unwrap();
-        assert_eq!((skin.texture.width, skin.texture.height, skin.slim, skin.texture.rgba.len()), (2, 1, true, 8));
+        assert_eq!(
+            (
+                skin.texture.width,
+                skin.texture.height,
+                skin.slim,
+                skin.texture.rgba.len()
+            ),
+            (2, 1, true, 8)
+        );
 
-        let PlayerRecordContent::Add(add) = &mut record.content else { unreachable!() };
+        let PlayerRecordContent::Add(add) = &mut record.content else {
+            unreachable!()
+        };
         add.skin_data.skin_data.width = 64;
-        skins.apply(&raw(&PlayerListPacket { records: vec![record] })).unwrap();
-        assert!(skins.is_empty(), "an image that doesn't match its size is dropped");
+        skins
+            .apply(&raw(&PlayerListPacket {
+                records: vec![record],
+            }))
+            .unwrap();
+        assert!(
+            skins.is_empty(),
+            "an image that doesn't match its size is dropped"
+        );
     }
 }

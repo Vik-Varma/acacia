@@ -35,7 +35,10 @@ fn write_payload<F: Flavor>(w: &mut BytesMut, v: &Value) {
         }
         Value::String(s) => write_str::<F>(w, s),
         Value::List(l) => {
-            debug_assert!(l.items.iter().all(|i| i.tag() == l.tag && l.tag != 0), "list items must match its tag");
+            debug_assert!(
+                l.items.iter().all(|i| i.tag() == l.tag && l.tag != 0),
+                "list items must match its tag"
+            );
             put(w, [l.tag]);
             F::write_int(w, l.items.len() as i32);
             for item in &l.items {
@@ -44,7 +47,10 @@ fn write_payload<F: Flavor>(w: &mut BytesMut, v: &Value) {
         }
         Value::Compound(entries) => {
             for (name, value) in entries {
-                debug_assert!(value.tag() != 0, "an End entry would end the compound early");
+                debug_assert!(
+                    value.tag() != 0,
+                    "an End entry would end the compound early"
+                );
                 put(w, [value.tag()]);
                 write_str::<F>(w, name);
                 write_payload::<F>(w, value);

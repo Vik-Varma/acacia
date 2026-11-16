@@ -40,13 +40,22 @@ unsafe impl GlobalAlloc for Counting {
 static GLOBAL: Counting = Counting;
 
 fn run<F: Flavor>(op: &str, docs: &[Vec<u8>], seconds: f64) -> Result<(), String> {
-    let trees: Vec<Nbt> = docs.iter().map(|d| read::<F>(&mut &d[..]).unwrap()).collect();
+    let trees: Vec<Nbt> = docs
+        .iter()
+        .map(|d| read::<F>(&mut &d[..]).unwrap())
+        .collect();
     let bytes: usize = docs.iter().map(Vec::len).sum();
     let mut out = BytesMut::with_capacity(bytes);
     let mut pass = || match op {
-        "read" => docs.iter().for_each(|d| drop(black_box(read::<F>(&mut &d[..]).unwrap()))),
-        "skip" => docs.iter().for_each(|d| skip::<F>(&mut black_box(&d[..])).unwrap()),
-        "raw" => docs.iter().for_each(|d| drop(black_box(Raw::<F>::read(&mut &d[..]).unwrap()))),
+        "read" => docs
+            .iter()
+            .for_each(|d| drop(black_box(read::<F>(&mut &d[..]).unwrap()))),
+        "skip" => docs
+            .iter()
+            .for_each(|d| skip::<F>(&mut black_box(&d[..])).unwrap()),
+        "raw" => docs
+            .iter()
+            .for_each(|d| drop(black_box(Raw::<F>::read(&mut &d[..]).unwrap()))),
         _ => {
             out.clear();
             trees.iter().for_each(|t| write::<F>(&mut out, t));
@@ -75,11 +84,21 @@ fn run<F: Flavor>(op: &str, docs: &[Vec<u8>], seconds: f64) -> Result<(), String
 
 fn main() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let (Some(op @ ("read" | "skip" | "raw" | "write")), Some(flavour)) = (args.first().map(String::as_str), args.get(1)) else {
-        return Err("usage: profile <read|skip|raw|write> <network|le> [seconds, default 5]".into());
+    let (Some(op @ ("read" | "skip" | "raw" | "write")), Some(flavour)) =
+        (args.first().map(String::as_str), args.get(1))
+    else {
+        return Err(
+            "usage: profile <read|skip|raw|write> <network|le> [seconds, default 5]".into(),
+        );
     };
-    let seconds = args.get(2).map_or(Ok(5.0), |s| s.parse::<f64>()).map_err(|e| e.to_string())?;
-    let docs: Vec<Vec<u8>> = corpus::load(flavour).into_iter().map(|(_, bytes)| bytes).collect();
+    let seconds = args
+        .get(2)
+        .map_or(Ok(5.0), |s| s.parse::<f64>())
+        .map_err(|e| e.to_string())?;
+    let docs: Vec<Vec<u8>> = corpus::load(flavour)
+        .into_iter()
+        .map(|(_, bytes)| bytes)
+        .collect();
     match flavour.as_str() {
         "network" => run::<Network>(op, &docs, seconds),
         "le" => run::<LittleEndian>(op, &docs, seconds),

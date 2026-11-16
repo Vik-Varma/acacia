@@ -22,8 +22,15 @@ pub(crate) fn build_login(
     mouse_input: bool,
 ) -> (SigningKey, Vec<u8>, Identity) {
     let dressed = |client: ClientData| {
-        let current_input_mode = if mouse_input { acacia_auth::login::INPUT_MODE_MOUSE } else { client.current_input_mode };
-        let client = ClientData { current_input_mode, ..client };
+        let current_input_mode = if mouse_input {
+            acacia_auth::login::INPUT_MODE_MOUSE
+        } else {
+            client.current_input_mode
+        };
+        let client = ClientData {
+            current_input_mode,
+            ..client
+        };
         match skin {
             Some(skin) => ClientData { skin, ..client },
             None => client,
@@ -32,14 +39,30 @@ pub(crate) fn build_login(
     match login {
         Login::Offline { name } => {
             let key = offline_key;
-            let client = dressed(ClientData { nonce, ..ClientData::default_for(&name, server, GAME_VERSION) });
+            let client = dressed(ClientData {
+                nonce,
+                ..ClientData::default_for(&name, server, GAME_VERSION)
+            });
             let request = acacia_auth::build_offline_connection_request(&name, &key, &client);
-            (key, request, Identity { display_name: name, xuid: String::new() })
+            (
+                key,
+                request,
+                Identity {
+                    display_name: name,
+                    xuid: String::new(),
+                },
+            )
         }
         Login::Online { credentials, key } => {
-            let client = dressed(ClientData { nonce, ..ClientData::default_for(&credentials.display_name, server, GAME_VERSION) });
+            let client = dressed(ClientData {
+                nonce,
+                ..ClientData::default_for(&credentials.display_name, server, GAME_VERSION)
+            });
             let request = acacia_auth::build_connection_request(&credentials, &key, &client);
-            let identity = Identity { display_name: credentials.display_name, xuid: credentials.xuid };
+            let identity = Identity {
+                display_name: credentials.display_name,
+                xuid: credentials.xuid,
+            };
             (key, request, identity)
         }
     }

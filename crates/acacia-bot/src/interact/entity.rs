@@ -1,6 +1,6 @@
 use tokio::time::Instant;
 
-use super::geometry::{entity_aims, entity_distance, ENTITY_REACH};
+use super::geometry::{ENTITY_REACH, entity_aims, entity_distance};
 use super::wire::{self, SwingSource};
 use crate::human::{ATTACK_GAP, ENTITY_HOVER, ENTITY_SWING};
 use crate::reflex::Reflex;
@@ -12,7 +12,11 @@ impl Bot {
     /// `NotPossible` beyond [`ENTITY_REACH`] from the eye, `NotVisible` when blocks hide it.
     pub async fn attack(&mut self, runtime_id: u64) -> Result<(), ActionError> {
         self.stop_mining();
-        if let Some(wait) = self.reflexes.attack_ready.and_then(|t| t.checked_duration_since(Instant::now())) {
+        if let Some(wait) = self
+            .reflexes
+            .attack_ready
+            .and_then(|t| t.checked_duration_since(Instant::now()))
+        {
             self.pause(wait).await?;
         }
         self.use_on_entity(runtime_id, true).await
@@ -72,15 +76,23 @@ impl Bot {
     /// tracked and within reach.
     fn entity_in_reach(&self, runtime_id: u64) -> Result<([f32; 3], [f32; 3]), ActionError> {
         let entity = self.state.entities.get(runtime_id).ok_or_else(|| {
-            ActionError::NotPossible(format!("entity {runtime_id} is not tracked (is Trackers::entities on?)"))
+            ActionError::NotPossible(format!(
+                "entity {runtime_id} is not tracked (is Trackers::entities on?)"
+            ))
         })?;
         let eye = self.eye_position();
         let distance = entity_distance(eye, entity);
         if distance > ENTITY_REACH {
-            return Err(ActionError::NotPossible(format!("entity {runtime_id} is {distance:.2} blocks away")));
+            return Err(ActionError::NotPossible(format!(
+                "entity {runtime_id} is {distance:.2} blocks away"
+            )));
         }
         let mut aims = entity_aims(eye, entity);
-        let Some(sight) = self.sight() else { return aims.next().ok_or_else(|| ActionError::NotPossible("no aim".into())) };
+        let Some(sight) = self.sight() else {
+            return aims
+                .next()
+                .ok_or_else(|| ActionError::NotPossible("no aim".into()));
+        };
         aims.find(|&(_, hit)| sight.clear(eye, hit))
             .ok_or_else(|| ActionError::NotVisible(format!("entity {runtime_id} is behind blocks")))
     }

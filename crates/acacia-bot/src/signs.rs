@@ -4,9 +4,9 @@
 
 use std::time::Duration;
 
+use acacia_client::proto::RawPacket;
 use acacia_client::proto::nbt::{Nbt, Str, Value};
 use acacia_client::proto::packets::BlockEntityData;
-use acacia_client::proto::RawPacket;
 use acacia_physics::BlockPos;
 
 use crate::human::CLICK;
@@ -34,12 +34,26 @@ impl Bot {
     /// not dye, ink or honeycomb) and waits for one. The server picks the side from where the
     /// player stands: if it opens the other side, that editor is closed unchanged and the result
     /// is `NotPossible`.
-    pub async fn write_sign(&mut self, pos: BlockPos, side: SignSide, text: &str) -> Result<(), ActionError> {
+    pub async fn write_sign(
+        &mut self,
+        pos: BlockPos,
+        side: SignSide,
+        text: &str,
+    ) -> Result<(), ActionError> {
         if text.len() > MAX_TEXT_BYTES || text.split('\n').count() > MAX_LINES {
-            return Err(ActionError::NotPossible(format!("sign text is over {MAX_LINES} lines or {MAX_TEXT_BYTES} bytes")));
+            return Err(ActionError::NotPossible(format!(
+                "sign text is over {MAX_LINES} lines or {MAX_TEXT_BYTES} bytes"
+            )));
         }
-        if self.state.block_entities.sign(pos).is_some_and(|n| matches!(n.value.get("IsWaxed"), Some(Value::Byte(1)))) {
-            return Err(ActionError::NotPossible(format!("the sign at {pos:?} is waxed")));
+        if self
+            .state
+            .block_entities
+            .sign(pos)
+            .is_some_and(|n| matches!(n.value.get("IsWaxed"), Some(Value::Byte(1))))
+        {
+            return Err(ActionError::NotPossible(format!(
+                "the sign at {pos:?} is waxed"
+            )));
         }
         let editor = match self.state.signs.editor.filter(|e| e.position == pos) {
             Some(editor) => editor,
@@ -49,10 +63,17 @@ impl Bot {
         if editor.front != front {
             let pause = self.human.between(CLICK);
             self.pause(pause).await?;
-            let current = self.state.block_entities.sign_text(pos, editor.front).unwrap_or_default().to_owned();
+            let current = self
+                .state
+                .block_entities
+                .sign_text(pos, editor.front)
+                .unwrap_or_default()
+                .to_owned();
             self.close_sign_editor(pos, editor.front, &current);
             let opened = if editor.front { "front" } else { "back" };
-            return Err(ActionError::NotPossible(format!("the server opened the {opened} side of the sign at {pos:?}")));
+            return Err(ActionError::NotPossible(format!(
+                "the server opened the {opened} side of the sign at {pos:?}"
+            )));
         }
         let typing = self.human.typing(text.chars().count());
         self.pause(typing).await?;
@@ -63,7 +84,11 @@ impl Bot {
     /// Closes the editor the server opened with `text` on its side, at once: for a player who
     /// typed it, where [`Self::write_sign`] takes a person's time.
     pub fn write_open_sign(&mut self, text: &str) -> Result<(), ActionError> {
-        let editor = self.state.signs.editor.ok_or_else(|| ActionError::NotPossible("no sign editor is open".into()))?;
+        let editor = self
+            .state
+            .signs
+            .editor
+            .ok_or_else(|| ActionError::NotPossible("no sign editor is open".into()))?;
         self.close_sign_editor(editor.position, editor.front, text);
         Ok(())
     }
@@ -72,19 +97,33 @@ impl Bot {
         self.state.signs.editor = None;
         let face = facing_face(self.eye_position(), pos);
         self.use_item_on_block(pos, face).await?;
-        let opened = |bot: &Bot, _: &RawPacket| bot.state.signs.editor.filter(|e| e.position == pos);
+        let opened =
+            |bot: &Bot, _: &RawPacket| bot.state.signs.editor.filter(|e| e.position == pos);
         match self.wait_until(EDITOR_TIMEOUT, opened).await {
-            Err(ActionError::Timeout) => Err(ActionError::Rejected(format!("no sign editor opened for {pos:?}"))),
+            Err(ActionError::Timeout) => Err(ActionError::Rejected(format!(
+                "no sign editor opened for {pos:?}"
+            ))),
             other => other,
         }
     }
 
     /// Sends the sign with `text` on the editor's side.
     fn close_sign_editor(&mut self, pos: BlockPos, front: bool, text: &str) {
-        let hanging = self.block_at(pos).is_some_and(|(_, s)| s.name.contains("hanging_sign"));
+        let hanging = self
+            .block_at(pos)
+            .is_some_and(|(_, s)| s.name.contains("hanging_sign"));
         let edit = SideEdit { front, text };
-        let nbt = sign_nbt(self.state.block_entities.sign(pos), pos, hanging, &edit, self.state.player.unique_entity_id);
-        self.send_bedrock(&BlockEntityData { position: block_coordinates(pos), nbt: (&nbt).into() });
+        let nbt = sign_nbt(
+            self.state.block_entities.sign(pos),
+            pos,
+            hanging,
+            &edit,
+            self.state.player.unique_entity_id,
+        );
+        self.send_bedrock(&BlockEntityData {
+            position: block_coordinates(pos),
+            nbt: (&nbt).into(),
+        });
         self.reflexes.next_legacy_id();
         self.state.signs.editor = None;
         self.state.block_entities.insert(pos, nbt);
@@ -101,14 +140,23 @@ pub(crate) struct SideEdit<'a> {
 /// see [`crate::state::BlockEntityTracking`]) with only the edited side's `Text` changed (vanilla
 /// leaves `TextOwner` and `LockedForEditingBy` as the server sent them), or a fresh sign shaped
 /// like BDS's, keys in byte order. `editor`: the unique id written to `LockedForEditingBy` on a fresh sign.
-pub(crate) fn sign_nbt(base: Option<&Nbt>, pos: BlockPos, hanging: bool, edit: &SideEdit, editor: i64) -> Nbt {
+pub(crate) fn sign_nbt(
+    base: Option<&Nbt>,
+    pos: BlockPos,
+    hanging: bool,
+    edit: &SideEdit,
+    editor: i64,
+) -> Nbt {
     let mut root = match base.map(|n| &n.value) {
         Some(Value::Compound(entries)) => entries.clone(),
         _ => fresh_sign(pos, hanging, editor),
     };
     let side = side_mut(&mut root, if edit.front { "FrontText" } else { "BackText" });
     set(side, "Text", Value::String(edit.text.into()));
-    Nbt { name: String::new(), value: sorted(Value::Compound(root)) }
+    Nbt {
+        name: String::new(),
+        value: sorted(Value::Compound(root)),
+    }
 }
 
 fn fresh_side() -> Value {
@@ -139,7 +187,10 @@ fn fresh_sign([x, y, z]: BlockPos, hanging: bool, editor: i64) -> Vec<(Str, Valu
 }
 
 fn side_mut<'a>(root: &'a mut Vec<(Str, Value)>, key: &str) -> &'a mut Vec<(Str, Value)> {
-    let index = match root.iter().position(|(k, v)| k == key && matches!(v, Value::Compound(_))) {
+    let index = match root
+        .iter()
+        .position(|(k, v)| k == key && matches!(v, Value::Compound(_)))
+    {
         Some(i) => i,
         None => {
             root.retain(|(k, _)| k != key);
@@ -147,7 +198,9 @@ fn side_mut<'a>(root: &'a mut Vec<(Str, Value)>, key: &str) -> &'a mut Vec<(Str,
             root.len() - 1
         }
     };
-    let Value::Compound(side) = &mut root[index].1 else { unreachable!("found or inserted as a compound") };
+    let Value::Compound(side) = &mut root[index].1 else {
+        unreachable!("found or inserted as a compound")
+    };
     side
 }
 

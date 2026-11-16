@@ -9,9 +9,9 @@ use p384::ecdsa::{Signature, SigningKey, VerifyingKey};
 use p384::pkcs8::EncodePublicKey;
 use serde_json::json;
 
-use crate::assertion::{self, parse_cpk, split_jwt, verify_es384, verify_fingerprints, Reason};
-use crate::identity::{identity_line, insert_session_line, Identity};
 use crate::Error;
+use crate::assertion::{self, Reason, parse_cpk, split_jwt, verify_es384, verify_fingerprints};
+use crate::identity::{Identity, identity_line, insert_session_line};
 
 /// Checks the answer's assertion and returns the server's key (`cpk`).
 pub(crate) fn verify_answer(sdp: &str, now_unix: i64) -> Result<VerifyingKey, Error> {
@@ -37,7 +37,9 @@ fn check(sdp: &str, now_unix: i64) -> Result<VerifyingKey, Reason> {
 const TOKEN_LIFETIME: i64 = 60;
 
 pub(crate) fn unix_now() -> i64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64)
 }
 
 /// The identity BDS answers with: domain `self`, and a token self-signed by `key` carrying its
@@ -45,17 +47,28 @@ pub(crate) fn unix_now() -> i64 {
 pub(crate) fn server_identity(key: &SigningKey, now_unix: i64) -> Identity {
     let point = key.verifying_key().to_encoded_point(false);
     let coord = |c: Option<&_>| URL_SAFE_NO_PAD.encode(c.expect("uncompressed point"));
-    let spki = key.verifying_key().to_public_key_der().expect("P-384 key encodes as SPKI");
+    let spki = key
+        .verifying_key()
+        .to_public_key_der()
+        .expect("P-384 key encodes as SPKI");
     let header = json!({ "alg": "ES384", "x5u": STANDARD.encode(spki.as_bytes()) });
     let claims = json!({
         "cpk": { "kty": "EC", "crv": "P-384", "x": coord(point.x()), "y": coord(point.y()) },
         "exp": now_unix + TOKEN_LIFETIME,
         "iat": now_unix,
     });
-    let input = format!("{}.{}", URL_SAFE_NO_PAD.encode(header.to_string()), URL_SAFE_NO_PAD.encode(claims.to_string()));
+    let input = format!(
+        "{}.{}",
+        URL_SAFE_NO_PAD.encode(header.to_string()),
+        URL_SAFE_NO_PAD.encode(claims.to_string())
+    );
     let sig: Signature = key.sign(input.as_bytes());
     let token = format!("{input}.{}", URL_SAFE_NO_PAD.encode(sig.to_bytes()));
-    Identity { key: key.clone(), token, domain: "self".into() }
+    Identity {
+        key: key.clone(),
+        token,
+        domain: "self".into(),
+    }
 }
 
 impl Identity {
@@ -97,6 +110,9 @@ mod tests {
         let header = assertion::b64url(identity.token.split('.').next().unwrap()).unwrap();
         let header: serde_json::Value = serde_json::from_slice(&header).unwrap();
         let spki = STANDARD.decode(header["x5u"].as_str().unwrap()).unwrap();
-        assert_eq!(<VerifyingKey as p384::pkcs8::DecodePublicKey>::from_public_key_der(&spki).unwrap(), *key.verifying_key());
+        assert_eq!(
+            <VerifyingKey as p384::pkcs8::DecodePublicKey>::from_public_key_der(&spki).unwrap(),
+            *key.verifying_key()
+        );
     }
 }

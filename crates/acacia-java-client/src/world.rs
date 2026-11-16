@@ -3,12 +3,12 @@
 use std::collections::HashMap;
 
 use crate::chunks::Chunks;
-use crate::mount_data::Synced;
-use crate::entity::{MOB_AGGRESSIVE, has_mob_flags, is_rocket, read_mob_flags, read_rocket_target};
 pub use crate::entity::{Entity, Mover};
+use crate::entity::{MOB_AGGRESSIVE, has_mob_flags, is_rocket, read_mob_flags, read_rocket_target};
+use crate::mount_data::Synced;
 
-use acacia_java_physics::{Aabb, Placement};
 use crate::movement::placement;
+use acacia_java_physics::{Aabb, Placement};
 use acacia_java_proto::actions::BlockPos;
 use acacia_java_proto::chunk::{read_chunk_header, read_sections};
 use acacia_java_proto::entity::{PositionPath, read_lp_vec3, read_move, read_path, skip_lp_vec3};
@@ -64,7 +64,11 @@ impl World {
 
     /// Boxes of the entities that block `mover`, minus `skip` (the mover and whoever rides with it).
     pub fn collision_boxes(&self, mover: Mover, skip: &[i32]) -> Vec<Aabb> {
-        self.entities.iter().filter(|(id, _)| !skip.contains(id)).filter_map(|(_, e)| e.collision_box(mover)).collect()
+        self.entities
+            .iter()
+            .filter(|(id, _)| !skip.contains(id))
+            .filter_map(|(_, e)| e.collision_box(mover))
+            .collect()
     }
 
     /// Writes a block ahead of the server, as vanilla's prediction does; the server's update overwrites it.
@@ -114,7 +118,11 @@ impl World {
                 for _ in 0..read_varint(input)? {
                     let change = read_varlong(input)? as u64;
                     let p = (change & 0xfff) as i32;
-                    let pos = [sx * 16 + (p >> 8 & 15), sy * 16 + (p & 15), sz * 16 + (p >> 4 & 15)];
+                    let pos = [
+                        sx * 16 + (p >> 8 & 15),
+                        sy * 16 + (p & 15),
+                        sz * 16 + (p >> 4 & 15),
+                    ];
                     self.set_block(pos, (change >> 12) as u32);
                 }
             }
@@ -126,7 +134,8 @@ impl World {
             from::ENTITY_POSITION_SYNC => {
                 let id = read_varint(input)?;
                 let path = read_path(input)?;
-                let (y_rot, x_rot, on_ground) = (f32::read(input)?, f32::read(input)?, bool::read(input)?);
+                let (y_rot, x_rot, on_ground) =
+                    (f32::read(input)?, f32::read(input)?, bool::read(input)?);
                 let driven = self.driven == Some(id);
                 if let Some(e) = self.entities.get_mut(&id) {
                     e.base = path.end();
@@ -139,9 +148,15 @@ impl World {
             from::MOVE_ENTITY_POS | from::MOVE_ENTITY_POS_ROT => {
                 let id2 = read_varint(input)?;
                 let driven = self.driven == Some(id2);
-                let Some(e) = self.entities.get_mut(&id2) else { return Ok(()) };
+                let Some(e) = self.entities.get_mut(&id2) else {
+                    return Ok(());
+                };
                 let (on_ground, path) = read_move(input, e.base)?;
-                let rot = if id == from::MOVE_ENTITY_POS_ROT { Some((degrees(i8::read(input)?), degrees(i8::read(input)?))) } else { None };
+                let rot = if id == from::MOVE_ENTITY_POS_ROT {
+                    Some((degrees(i8::read(input)?), degrees(i8::read(input)?)))
+                } else {
+                    None
+                };
                 e.base = path.end();
                 if !driven {
                     e.move_to(Some(path), rot, false);
@@ -155,20 +170,26 @@ impl World {
                 }
             }
             from::SET_PASSENGERS => {
-                let SetPassengers { vehicle, passengers } = SetPassengers::read(input)?;
+                let SetPassengers {
+                    vehicle,
+                    passengers,
+                } = SetPassengers::read(input)?;
                 if let Some(e) = self.entities.get_mut(&vehicle.0) {
                     e.passengers = passengers.iter().map(|p| p.0).collect();
                 }
             }
             from::SET_ENTITY_DATA => {
                 let id = read_varint(input)?;
-                let Some(e) = self.entities.get_mut(&id) else { return Ok(()) };
+                let Some(e) = self.entities.get_mut(&id) else {
+                    return Ok(());
+                };
                 e.read_body_data(input)?;
                 e.mount.apply(Synced::read(e.kind, input)?);
                 if is_rocket(e.kind) {
                     read_rocket_target(input)?.inspect(|&target| e.attached_to = target);
                 } else if has_mob_flags(e.kind) {
-                    read_mob_flags(input)?.inspect(|flags| e.aggressive = flags & MOB_AGGRESSIVE != 0);
+                    read_mob_flags(input)?
+                        .inspect(|flags| e.aggressive = flags & MOB_AGGRESSIVE != 0);
                 }
             }
             from::SET_EQUIPMENT | from::UPDATE_ATTRIBUTES => self.apply_mount_packet(id, input)?,
@@ -177,7 +198,11 @@ impl World {
                 let entity = read_varint(input)?;
                 let on_ground = bool::read(input)?;
                 let (y_rot, x_rot) = (degrees(i8::read(input)?), degrees(i8::read(input)?));
-                if let Some(e) = self.entities.get_mut(&entity).filter(|_| self.driven != Some(entity)) {
+                if let Some(e) = self
+                    .entities
+                    .get_mut(&entity)
+                    .filter(|_| self.driven != Some(entity))
+                {
                     e.move_to(None, Some((y_rot, x_rot)), false);
                     e.on_ground = on_ground;
                 }
@@ -209,7 +234,8 @@ impl World {
         let position = [f64::read(input)?, f64::read(input)?, f64::read(input)?];
         skip_lp_vec3(input)?;
         let (x_rot, y_rot) = (degrees(i8::read(input)?), degrees(i8::read(input)?));
-        self.entities.insert(id, Entity::new(uuid, kind, position, y_rot, x_rot));
+        self.entities
+            .insert(id, Entity::new(uuid, kind, position, y_rot, x_rot));
         Ok(())
     }
 
@@ -219,11 +245,26 @@ impl World {
         let relatives = i32::read(input)?;
         let on_ground = bool::read(input)?;
         // The driven vehicle's teleport goes through `Client::vehicle_teleported`.
-        let Some(e) = self.entities.get_mut(&id).filter(|_| self.driven != Some(id)) else { return Ok(()) };
-        let source = Placement { pos: e.position, delta: e.motion, y_rot: e.y_rot, x_rot: e.x_rot };
+        let Some(e) = self
+            .entities
+            .get_mut(&id)
+            .filter(|_| self.driven != Some(id))
+        else {
+            return Ok(());
+        };
+        let source = Placement {
+            pos: e.position,
+            delta: e.motion,
+            y_rot: e.y_rot,
+            x_rot: e.x_rot,
+        };
         let to = source.teleported(&change, relatives);
         e.motion = to.delta;
-        e.move_to(Some(PositionPath::Linear(to.pos)), Some((to.y_rot, to.x_rot)), true);
+        e.move_to(
+            Some(PositionPath::Linear(to.pos)),
+            Some((to.y_rot, to.x_rot)),
+            true,
+        );
         e.on_ground = on_ground;
         Ok(())
     }
@@ -231,7 +272,11 @@ impl World {
 
 /// `SectionPos.asLong`: x 22 bits, z 22, y 20.
 fn unpack_section_pos(v: i64) -> [i32; 3] {
-    [(v >> 42) as i32, (v << 44 >> 44) as i32, (v << 22 >> 42) as i32]
+    [
+        (v >> 42) as i32,
+        (v << 44 >> 44) as i32,
+        (v << 22 >> 42) as i32,
+    ]
 }
 
 #[cfg(test)]
@@ -240,7 +285,8 @@ mod tests {
 
     #[test]
     fn packed_sections_keep_their_sign() {
-        let section = |x: i64, y: i64, z: i64| (x & 0x3f_ffff) << 42 | (z & 0x3f_ffff) << 20 | (y & 0xf_ffff);
+        let section =
+            |x: i64, y: i64, z: i64| (x & 0x3f_ffff) << 42 | (z & 0x3f_ffff) << 20 | (y & 0xf_ffff);
         assert_eq!(unpack_section_pos(section(-3, -4, 9)), [-3, -4, 9]);
     }
 }

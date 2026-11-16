@@ -96,12 +96,21 @@ impl Sim for JavaSim {
         p.on_ground = m.on_ground;
         p.sprinting = m.sprinting;
         p.set_crouching(m.sneaking);
-        p.keys = Keys { jump: m.pressing_jump, shift: m.sneaking, ..Keys::default() };
+        p.keys = Keys {
+            jump: m.pressing_jump,
+            shift: m.sneaking,
+            ..Keys::default()
+        };
         p.set_jump_delay(i32::from(m.jump_delay));
         p.effects = base.effects.clone();
         p.speed_add = base.speed_add;
         (p.may_fly, p.flying, p.flying_speed) = (base.may_fly, base.flying, base.flying_speed);
-        (p.has_glider, p.snow_boots, p.has_food, p.fast_lava) = (base.has_glider, base.snow_boots, base.has_food, base.fast_lava);
+        (p.has_glider, p.snow_boots, p.has_food, p.fast_lava) = (
+            base.has_glider,
+            base.snow_boots,
+            base.has_food,
+            base.fast_lava,
+        );
         JavaSim(p)
     }
 
@@ -114,7 +123,11 @@ impl Sim for JavaSim {
         let level = |amp: Option<u8>| amp.map_or(0.0, |a| f32::from(a) + 1.0);
         let multiplier = 1.0 + 0.2 * level(e.speed) - 0.15 * level(e.slowness);
         let speed = (JAVA.movement_speed + self.0.speed_add as f32) * multiplier;
-        Traits { speed, jump_boost: e.jump_boost.is_some(), altered_fall: e.levitation.is_some() || e.slow_falling }
+        Traits {
+            speed,
+            jump_boost: e.jump_boost.is_some(),
+            altered_fall: e.levitation.is_some() || e.slow_falling,
+        }
     }
 }
 
@@ -139,7 +152,8 @@ impl<B: Blocks + ?Sized> JavaView<'_, B> {
 
 impl<B: Blocks + ?Sized> SimWorld for JavaView<'_, B> {
     fn hazard(&self, p: BlockPos) -> bool {
-        self.neutral(p).is_some_and(|s| matches!(s.block(), Block::Lava | Block::Cobweb))
+        self.neutral(p)
+            .is_some_and(|s| matches!(s.block(), Block::Lava | Block::Cobweb))
     }
 
     fn collides(&self, area: &Aabb) -> bool {
@@ -149,17 +163,25 @@ impl<B: Blocks + ?Sized> SimWorld for JavaView<'_, B> {
         (lo[0]..=hi[0]).any(|x| {
             (lo[1] - 1..=hi[1]).any(|y| {
                 (lo[2]..=hi[2]).any(|z| {
-                    let Some((id, _)) = self.0.ids([x, y, z]) else { return false };
+                    let Some((id, _)) = self.0.ids([x, y, z]) else {
+                        return false;
+                    };
                     let boxes = registry.get(id).map_or(&[][..], |s| s.boxes);
                     let at = [x as f32, y as f32, z as f32];
-                    boxes.iter().any(|b| (0..3).all(|i| at[i] + b.min[i] < area.max[i] && at[i] + b.max[i] > area.min[i]))
+                    boxes.iter().any(|b| {
+                        (0..3).all(|i| {
+                            at[i] + b.min[i] < area.max[i] && at[i] + b.max[i] > area.min[i]
+                        })
+                    })
                 })
             })
         })
     }
 
     fn friction(&self, p: BlockPos) -> f32 {
-        BlockRegistry::java().get(self.0.ids(p).map_or(0, |(id, _)| id)).map_or(JAVA.friction, |s| s.friction)
+        BlockRegistry::java()
+            .get(self.0.ids(p).map_or(0, |(id, _)| id))
+            .map_or(JAVA.friction, |s| s.friction)
     }
 }
 

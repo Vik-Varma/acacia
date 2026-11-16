@@ -45,7 +45,10 @@ impl Parser<'_> {
             // evaluates, logging "isn't a direct-variable reference"; `->` it could not be asked about.
             let direct = match self.node(left) {
                 Node::Var { path, .. } | Node::Temp { path, .. } => path.len == 0,
-                Node::Context(_) | Node::Query { .. } | Node::Member { .. } | Node::Arrow { .. } => true,
+                Node::Context(_)
+                | Node::Query { .. }
+                | Node::Member { .. }
+                | Node::Arrow { .. } => true,
                 _ => false,
             };
             if !direct {
@@ -78,7 +81,9 @@ impl Parser<'_> {
     /// One side of a conditional: also `break`, `continue`, `return x` and assignments.
     fn branch(&mut self) -> Result<u32, Error> {
         match self.peek() {
-            Some(Token::Name(name)) if matches!(name.as_str(), "return" | "break" | "continue") => self.statement(),
+            Some(Token::Name(name)) if matches!(name.as_str(), "return" | "break" | "continue") => {
+                self.statement()
+            }
             _ if self.assigns() => self.expr(),
             _ if self.rules.conditionals_chain_left => self.binary(0),
             _ => self.nested(Self::ternary),
@@ -86,7 +91,9 @@ impl Parser<'_> {
     }
 
     fn binary(&mut self, level: usize) -> Result<u32, Error> {
-        let Some(ops) = self.rules.levels.get(level) else { return self.unary() };
+        let Some(ops) = self.rules.levels.get(level) else {
+            return self.unary();
+        };
         let mut left = self.binary(level + 1)?;
         while let Some(&(_, op)) = ops.iter().find(|(symbol, _)| self.eat(symbol)) {
             let right = self.binary(level + 1)?;
@@ -125,11 +132,20 @@ impl Parser<'_> {
             // BDS multiplies by the reciprocal of a constant divisor, 0 for one below `f32::EPSILON`:
             // the last bit differs from a division, and a not-a-number over 0 stays one.
             (None, Some(divisor)) => {
-                let reciprocal = self.push(Node::Const(Value::Num(if divisor.abs() >= f32::EPSILON { 1.0 / divisor } else { 0.0 })));
+                let reciprocal =
+                    self.push(Node::Const(Value::Num(if divisor.abs() >= f32::EPSILON {
+                        1.0 / divisor
+                    } else {
+                        0.0
+                    })));
                 self.push(Node::Binary(Op::Mul, left, reciprocal))
             }
             _ => {
-                let op = if self.rules.divides_by_magnitude { Op::DivByMagnitude } else { Op::Div };
+                let op = if self.rules.divides_by_magnitude {
+                    Op::DivByMagnitude
+                } else {
+                    Op::Div
+                };
                 let division = self.push(Node::Binary(op, left, right));
                 if self.rules.statements_divide_by_magnitude {
                     self.statement_divisions.push(division);
@@ -144,7 +160,9 @@ impl Parser<'_> {
         for &operand in operands {
             match self.node(operand) {
                 Node::Const(Value::Str(_)) => return Err(self.fail_last(ErrorKind::StringOperand)),
-                Node::Assign { .. } if !self.rules.assignments_are_operands => return Err(self.fail_last(ErrorKind::AssignmentOperand)),
+                Node::Assign { .. } if !self.rules.assignments_are_operands => {
+                    return Err(self.fail_last(ErrorKind::AssignmentOperand));
+                }
                 _ => {}
             }
         }
@@ -203,7 +221,9 @@ impl Parser<'_> {
                 let list = self.list(&statements);
                 Ok(self.push(Node::Block(list)))
             }
-            Token::Symbol(symbol) => Err(self.fail_last(ErrorKind::UnexpectedToken(symbol.to_owned()))),
+            Token::Symbol(symbol) => {
+                Err(self.fail_last(ErrorKind::UnexpectedToken(symbol.to_owned())))
+            }
             Token::Name(name) => self.name(&name),
         }
     }

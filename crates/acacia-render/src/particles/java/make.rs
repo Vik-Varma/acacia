@@ -4,10 +4,10 @@
 use glam::DVec3;
 
 use super::Engine;
+use super::JavaRandom;
 use super::behaviour::{Behaviour, DripStage, Options};
 use super::level::Fluid;
 use super::particle::{Glow, Particle, Size};
-use super::JavaRandom;
 use super::types::Type;
 
 fn f(v: f32) -> f64 {
@@ -27,7 +27,15 @@ impl Engine {
                 let xa = f(pr.next_float()) * -1.9 * f(pr.next_float()) * 0.1;
                 let ya = f(pr.next_float()) * -0.5 * f(pr.next_float()) * 0.1 * 5.0;
                 let za = f(pr.next_float()) * -1.9 * f(pr.next_float()) * 0.1;
-                ([0.1, -0.1, 0.1], 1.0, 0.0, 20, 0.0125, false, DVec3::new(xa, ya, za))
+                (
+                    [0.1, -0.1, 0.1],
+                    1.0,
+                    0.0,
+                    20,
+                    0.0125,
+                    false,
+                    DVec3::new(xa, ya, za),
+                )
             }
         };
         let mut q = Particle::moving(r, ty, p, DVec3::ZERO);
@@ -38,7 +46,8 @@ impl Engine {
         let col = r.next_float() * color_random;
         q.set_color(col, col, col);
         q.size *= 0.75 * scale;
-        q.lifetime = ((f64::from(max_lifetime) / (f(r.next_float()) * 0.8 + 0.2) * f(scale)) as i32).max(1);
+        q.lifetime =
+            ((f64::from(max_lifetime) / (f(r.next_float()) * 0.8 + 0.2) * f(scale)) as i32).max(1);
         q.has_physics = physics;
         if matches!(ty, Type::WhiteSmoke | Type::WhiteAsh) {
             q.set_color(186.0 / 255.0, 177.0 / 255.0, 194.0 / 255.0);
@@ -54,7 +63,11 @@ impl Engine {
         let mut q = Particle::moving(r, ty, p, v);
         q.friction = 0.96;
         q.velocity = q.velocity * f(0.01) + v;
-        let jitter = DVec3::new(f((r.next_float() - r.next_float()) * 0.05), f((r.next_float() - r.next_float()) * 0.05), f((r.next_float() - r.next_float()) * 0.05));
+        let jitter = DVec3::new(
+            f((r.next_float() - r.next_float()) * 0.05),
+            f((r.next_float() - r.next_float()) * 0.05),
+            f((r.next_float() - r.next_float()) * 0.05),
+        );
         // The constructor moves x, y, z but not the box, which the first move snaps back to.
         q.position += jitter;
         q.lifetime = (8.0 / (f(r.next_float()) * 0.8 + 0.2)) as i32 + 4;
@@ -93,23 +106,113 @@ impl Engine {
         const LAVA: [f32; 3] = [1.0, 0.285_714_3, 0.083_333_336];
         const TEAR: [f32; 3] = [0.511_718_75, 0.031_25, 0.890_625];
         let (fluid, stage, next, color, sound) = match ty {
-            T::DrippingWater => (Fluid::Water, DripStage::Hang, Some(T::FallingWater), Some(WATER), false),
-            T::FallingWater => (Fluid::Water, DripStage::FallAndLand, Some(T::Splash), Some(WATER), false),
-            T::DrippingLava => (Fluid::Lava, DripStage::CoolingHang, Some(T::FallingLava), None, false),
-            T::FallingLava => (Fluid::Lava, DripStage::FallAndLand, Some(T::LandingLava), Some(LAVA), false),
+            T::DrippingWater => (
+                Fluid::Water,
+                DripStage::Hang,
+                Some(T::FallingWater),
+                Some(WATER),
+                false,
+            ),
+            T::FallingWater => (
+                Fluid::Water,
+                DripStage::FallAndLand,
+                Some(T::Splash),
+                Some(WATER),
+                false,
+            ),
+            T::DrippingLava => (
+                Fluid::Lava,
+                DripStage::CoolingHang,
+                Some(T::FallingLava),
+                None,
+                false,
+            ),
+            T::FallingLava => (
+                Fluid::Lava,
+                DripStage::FallAndLand,
+                Some(T::LandingLava),
+                Some(LAVA),
+                false,
+            ),
             T::LandingLava => (Fluid::Lava, DripStage::Land, None, Some(LAVA), false),
-            T::DrippingHoney => (Fluid::None, DripStage::Hang, Some(T::FallingHoney), Some([0.622, 0.508, 0.082]), false),
-            T::FallingHoney => (Fluid::None, DripStage::FallAndLand, Some(T::LandingHoney), Some([0.582, 0.448, 0.082]), true),
-            T::LandingHoney => (Fluid::None, DripStage::Land, None, Some([0.522, 0.408, 0.082]), false),
-            T::FallingNectar => (Fluid::None, DripStage::Fall, None, Some([0.92, 0.782, 0.72]), false),
-            T::FallingSporeBlossom => (Fluid::None, DripStage::Fall, None, Some([0.32, 0.5, 0.22]), false),
-            T::DrippingObsidianTear => (Fluid::None, DripStage::Hang, Some(T::FallingObsidianTear), Some(TEAR), false),
-            T::FallingObsidianTear => (Fluid::None, DripStage::FallAndLand, Some(T::LandingObsidianTear), Some(TEAR), false),
+            T::DrippingHoney => (
+                Fluid::None,
+                DripStage::Hang,
+                Some(T::FallingHoney),
+                Some([0.622, 0.508, 0.082]),
+                false,
+            ),
+            T::FallingHoney => (
+                Fluid::None,
+                DripStage::FallAndLand,
+                Some(T::LandingHoney),
+                Some([0.582, 0.448, 0.082]),
+                true,
+            ),
+            T::LandingHoney => (
+                Fluid::None,
+                DripStage::Land,
+                None,
+                Some([0.522, 0.408, 0.082]),
+                false,
+            ),
+            T::FallingNectar => (
+                Fluid::None,
+                DripStage::Fall,
+                None,
+                Some([0.92, 0.782, 0.72]),
+                false,
+            ),
+            T::FallingSporeBlossom => (
+                Fluid::None,
+                DripStage::Fall,
+                None,
+                Some([0.32, 0.5, 0.22]),
+                false,
+            ),
+            T::DrippingObsidianTear => (
+                Fluid::None,
+                DripStage::Hang,
+                Some(T::FallingObsidianTear),
+                Some(TEAR),
+                false,
+            ),
+            T::FallingObsidianTear => (
+                Fluid::None,
+                DripStage::FallAndLand,
+                Some(T::LandingObsidianTear),
+                Some(TEAR),
+                false,
+            ),
             T::LandingObsidianTear => (Fluid::None, DripStage::Land, None, Some(TEAR), false),
-            T::DrippingDripstoneWater => (Fluid::Water, DripStage::Hang, Some(T::FallingDripstoneWater), Some(WATER), false),
-            T::FallingDripstoneWater => (Fluid::Water, DripStage::FallAndLand, Some(T::Splash), Some(WATER), true),
-            T::DrippingDripstoneLava => (Fluid::Lava, DripStage::CoolingHang, Some(T::FallingDripstoneLava), None, false),
-            _ => (Fluid::Lava, DripStage::FallAndLand, Some(T::LandingLava), Some(LAVA), true),
+            T::DrippingDripstoneWater => (
+                Fluid::Water,
+                DripStage::Hang,
+                Some(T::FallingDripstoneWater),
+                Some(WATER),
+                false,
+            ),
+            T::FallingDripstoneWater => (
+                Fluid::Water,
+                DripStage::FallAndLand,
+                Some(T::Splash),
+                Some(WATER),
+                true,
+            ),
+            T::DrippingDripstoneLava => (
+                Fluid::Lava,
+                DripStage::CoolingHang,
+                Some(T::FallingDripstoneLava),
+                None,
+                false,
+            ),
+            _ => (
+                Fluid::Lava,
+                DripStage::FallAndLand,
+                Some(T::LandingLava),
+                Some(LAVA),
+                true,
+            ),
         };
         match stage {
             DripStage::Hang | DripStage::CoolingHang => {
@@ -126,8 +229,12 @@ impl Engine {
                 q.gravity *= 0.01;
                 q.lifetime = 100;
             }
-            T::LandingHoney => q.lifetime = (128.0 / (f(self.provider.next_float()) * 0.8 + 0.2)) as i32,
-            T::LandingObsidianTear => q.lifetime = (28.0 / (f(self.provider.next_float()) * 0.8 + 0.2)) as i32,
+            T::LandingHoney => {
+                q.lifetime = (128.0 / (f(self.provider.next_float()) * 0.8 + 0.2)) as i32
+            }
+            T::LandingObsidianTear => {
+                q.lifetime = (28.0 / (f(self.provider.next_float()) * 0.8 + 0.2)) as i32
+            }
             T::FallingNectar => {
                 q.lifetime = (16.0 / (f(self.provider.next_float()) * 0.8 + 0.2)) as i32;
                 q.gravity = 0.007;
@@ -138,13 +245,21 @@ impl Engine {
             }
             _ => {}
         }
-        if matches!(ty, T::DrippingObsidianTear | T::FallingObsidianTear | T::LandingObsidianTear) {
+        if matches!(
+            ty,
+            T::DrippingObsidianTear | T::FallingObsidianTear | T::LandingObsidianTear
+        ) {
             q.glow = Glow::Block15;
         }
         if let Some([cr, cg, cb]) = color {
             q.set_color(cr, cg, cb);
         }
-        q.behaviour = Behaviour::Drip { fluid, stage, next, sound };
+        q.behaviour = Behaviour::Drip {
+            fluid,
+            stage,
+            next,
+            sound,
+        };
         q
     }
 
@@ -179,7 +294,12 @@ impl Engine {
             let size_start = 0.02 + 0.02 * r.next_float();
             q.size = size_start;
             q.lifetime = i32::MAX;
-            q.behaviour = Behaviour::SulfurBubble { y_start: p.y, y_end: p.y + 4.0 - 1.0, size_start, y_prev: p.y };
+            q.behaviour = Behaviour::SulfurBubble {
+                y_start: p.y,
+                y_end: p.y + 4.0 - 1.0,
+                size_start,
+                y_prev: p.y,
+            };
             return q;
         }
         q.set_size(0.02, 0.02);
@@ -218,8 +338,16 @@ impl Engine {
         let below = p - DVec3::new(0.0, 0.125, 0.0);
         let pr = &mut self.provider;
         let vel = match ty {
-            Type::CrimsonSpore => DVec3::new(pr.next_gaussian() * f(1.0e-6), pr.next_gaussian() * f(1.0e-4), pr.next_gaussian() * f(1.0e-6)),
-            Type::WarpedSpore => DVec3::new(0.0, f(pr.next_float()) * -1.9 * f(pr.next_float()) * 0.1, 0.0),
+            Type::CrimsonSpore => DVec3::new(
+                pr.next_gaussian() * f(1.0e-6),
+                pr.next_gaussian() * f(1.0e-4),
+                pr.next_gaussian() * f(1.0e-6),
+            ),
+            Type::WarpedSpore => DVec3::new(
+                0.0,
+                f(pr.next_float()) * -1.9 * f(pr.next_float()) * 0.1,
+                0.0,
+            ),
             _ => DVec3::new(0.0, f(-0.8), 0.0),
         };
         let sprite = self.sprite_from_set(ty);

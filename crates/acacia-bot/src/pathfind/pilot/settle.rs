@@ -10,5 +10,15 @@ pub(super) fn nodes(nodes: Vec<PathNode>, settle: bool, pos: Vec3) -> Vec<PathNo
         return nodes;
     }
     let at = pos.map(|v| v.floor() as i32);
-    vec![PathNode { pos: at, feet: pos[1], kind: MoveKind::Walk, wet: false, work: Work::default(), entry: Entry::Rest, mom: Momentum::rest(pos[1], at), mac: None, cost: 0.0 }]
+    vec![PathNode {
+        pos: at,
+        feet: pos[1],
+        kind: MoveKind::Walk,
+        wet: false,
+        work: Work::default(),
+        entry: Entry::Rest,
+        mom: Momentum::rest(pos[1], at),
+        mac: None,
+        cost: 0.0,
+    }]
 }

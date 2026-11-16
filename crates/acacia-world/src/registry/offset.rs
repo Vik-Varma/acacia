@@ -31,7 +31,8 @@ impl SelectionOffset {
             Self::Xz => (0.0, 0.0),
             Self::Xyz => (-0.2, 0.0),
         };
-        let seed = (i64::from(x).wrapping_mul(0x2f_c20f) ^ i64::from(z).wrapping_mul(0x6eb_fff5)) as u64;
+        let seed =
+            (i64::from(x).wrapping_mul(0x2f_c20f) ^ i64::from(z).wrapping_mul(0x6eb_fff5)) as u64;
         let s = (seed.wrapping_mul(0x285_b825).wrapping_add(0xb)).wrapping_mul(seed) >> 16;
         let lo = (s as u32 as i32 as i64 as u64) ^ SILVER;
         let (mut s0, mut s1) = (mix13(lo), mix13(lo.wrapping_add(GOLDEN)));
@@ -39,11 +40,16 @@ impl SelectionOffset {
             (s0, s1) = (GOLDEN, SILVER);
         }
         let mut axis = |(lo, hi): (f32, f32)| {
-            let r = (s0.wrapping_add(s1).rotate_left(17).wrapping_add(s0) >> 40) as f32 * (1.0 / (1u32 << 24) as f32);
+            let r = (s0.wrapping_add(s1).rotate_left(17).wrapping_add(s0) >> 40) as f32
+                * (1.0 / (1u32 << 24) as f32);
             s1 ^= s0;
             s0 = s0.rotate_left(49) ^ s1 ^ (s1 << 21);
             s1 = s1.rotate_left(28);
-            if lo < hi { lo + (r * 16.0).floor() * ((hi - lo) / 15.0) } else { lo }
+            if lo < hi {
+                lo + (r * 16.0).floor() * ((hi - lo) / 15.0)
+            } else {
+                lo
+            }
         };
         let dx = axis((-0.25, 0.25));
         let dy = axis(y);
@@ -74,7 +80,10 @@ mod tests {
         ];
         for ((x, z), want) in cases {
             let got = SelectionOffset::Xyz.at(x, z);
-            assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-6), "({x}, {z}): {got:?} vs {want:?}");
+            assert!(
+                got.iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-6),
+                "({x}, {z}): {got:?} vs {want:?}"
+            );
             let xz = SelectionOffset::Xz.at(x, z);
             assert_eq!((xz[0], xz[1], xz[2]), (got[0], 0.0, got[2]));
         }

@@ -14,8 +14,8 @@ pub mod strict;
 mod xxh64;
 
 pub use error::DecodeError;
-pub use xxh64::xxh64;
 pub use generated::{GAME_VERSION, PROTOCOL_VERSION, packets, types};
+pub use xxh64::xxh64;
 
 macro_rules! name_table {
     ($($t:ident),* $(,)?) => {

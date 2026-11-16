@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use acacia_client::auth::{Account, AuthClient, AuthConfig, Error as AuthError, TokenCache};
-use acacia_client::{realm_builder, Client, ClientBuilder, ConnectError, RealmJoinError, Socks5Proxy};
+use acacia_client::{
+    Client, ClientBuilder, ConnectError, RealmJoinError, Socks5Proxy, realm_builder,
+};
 
 use super::policy::Ended;
 use super::spec::{Login, Target};
@@ -43,7 +45,11 @@ impl From<RealmJoinError> for Failure {
 
 impl NodeAuth {
     pub fn new(config: AuthConfig, cache: Arc<dyn TokenCache>) -> Self {
-        Self { config, cache, clients: Mutex::new(HashMap::new()) }
+        Self {
+            config,
+            cache,
+            clients: Mutex::new(HashMap::new()),
+        }
     }
 
     fn auth_client(&self, proxy: Option<&Socks5Proxy>) -> Result<Arc<AuthClient>, Failure> {
@@ -52,14 +58,21 @@ impl NodeAuth {
         if let Some(c) = clients.get(&url) {
             return Ok(c.clone());
         }
-        let config = AuthConfig { proxy: url.clone(), ..self.config.clone() };
+        let config = AuthConfig {
+            proxy: url.clone(),
+            ..self.config.clone()
+        };
         // Only a bad proxy URL (e.g. socks5 without the `socks` feature) fails here.
         let c = Arc::new(AuthClient::new(config).map_err(|e| Failure::Invalid(e.to_string()))?);
         clients.insert(url, c.clone());
         Ok(c)
     }
 
-    async fn account(&self, id: &str, proxy: Option<&Socks5Proxy>) -> Result<(Arc<AuthClient>, Account), Failure> {
+    async fn account(
+        &self,
+        id: &str,
+        proxy: Option<&Socks5Proxy>,
+    ) -> Result<(Arc<AuthClient>, Account), Failure> {
         let client = self.auth_client(proxy)?;
         let account = Account::new(client.clone(), self.cache.clone(), id);
         if !account.is_signed_in().await.map_err(Failure::Auth)? {
@@ -79,14 +92,19 @@ pub(crate) async fn client_builder(
     let builder = match login {
         Login::Offline { name } => match target {
             Target::Server { address } => Client::builder(address).offline(name),
-            Target::Realm { .. } => return Err(Failure::Invalid("realms need an online login".into())),
+            Target::Realm { .. } => {
+                return Err(Failure::Invalid("realms need an online login".into()));
+            }
         },
         Login::Online { account } => {
-            let auth = auth.ok_or_else(|| Failure::Invalid("online login but the swarm has no token cache".into()))?;
+            let auth = auth.ok_or_else(|| {
+                Failure::Invalid("online login but the swarm has no token cache".into())
+            })?;
             let (client, account) = auth.account(account, proxy).await?;
             match target {
                 Target::Server { address } => {
-                    let (key, credentials) = account.login_credentials().await.map_err(Failure::Auth)?;
+                    let (key, credentials) =
+                        account.login_credentials().await.map_err(Failure::Auth)?;
                     Client::builder(address).online(credentials, key)
                 }
                 Target::Realm { id } => realm_builder(&client, &account, *id, proxy).await?,

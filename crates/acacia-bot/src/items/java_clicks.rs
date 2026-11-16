@@ -7,21 +7,24 @@
 //! clicks and, in the own inventory, closes it (Grim treats clicks in window 0 as an open inventory until the close).
 //! A container screen stays open for [`Bot::close_container`].
 
-use acacia_java_client::{Client, Error as ClientError, Inventory};
 use acacia_java_client::clicks::{Click, OFFHAND_BUTTON, OUTSIDE};
 use acacia_java_client::inventory::{ARMOUR_HEAD, HOTBAR_START, OFFHAND};
+use acacia_java_client::{Client, Error as ClientError, Inventory};
 
 /// The player's slots below a container's: 27 main, then 9 hotbar.
 const MAIN_ROWS: u8 = 27;
 
 use super::{Op, SlotRef, ui};
-use crate::state::java_inventory::{station_slots, CRAFTING_MENU, GRID_START};
 use crate::bot::Backend;
+use crate::state::java_inventory::{CRAFTING_MENU, GRID_START, station_slots};
 use crate::{ActionError, Bot};
 
 /// Clicks that carry out `ops` in order, starting from `inventory`.
 pub(crate) fn plan(inventory: &Inventory, ops: &[Op]) -> Result<Vec<Click>, ActionError> {
-    let mut plan = Planner { inv: inventory.clone(), clicks: Vec::new() };
+    let mut plan = Planner {
+        inv: inventory.clone(),
+        clicks: Vec::new(),
+    };
     for &op in ops {
         plan.op(op)?;
     }
@@ -30,7 +33,11 @@ pub(crate) fn plan(inventory: &Inventory, ops: &[Op]) -> Result<Vec<Click>, Acti
 
 /// `slot`'s index in the open menu: window 0, or a container of `own` slots followed by the player's.
 fn window(inv: &Inventory, slot: SlotRef) -> Result<i16, ActionError> {
-    let station = inv.window.as_ref().and_then(|w| station_slots(w.menu).iter().position(|&s| SlotRef::Ui(s) == slot));
+    let station = inv.window.as_ref().and_then(|w| {
+        station_slots(w.menu)
+            .iter()
+            .position(|&s| SlotRef::Ui(s) == slot)
+    });
     if let Some(i) = station {
         return i16::try_from(i).map_err(|_| not_possible("slot out of range"));
     }
@@ -42,11 +49,19 @@ fn window(inv: &Inventory, slot: SlotRef) -> Result<i16, ActionError> {
         (Some(own), SlotRef::Main(i @ 0..9)) => own + usize::from(MAIN_ROWS + i),
         (Some(own), SlotRef::Main(i @ 9..36)) => own + usize::from(i - 9),
         (Some(own), SlotRef::Container(i)) if usize::from(i) < own => usize::from(i),
-        (None, SlotRef::Ui(i @ ui::CRAFTING_2X2..ui::CRAFTING_3X3)) => GRID_START + usize::from(i - ui::CRAFTING_2X2),
-        (Some(_), SlotRef::Ui(i @ ui::CRAFTING_3X3..=ui::CRAFTING_3X3_LAST)) if inv.window.as_ref().is_some_and(|w| w.menu == CRAFTING_MENU) => {
+        (None, SlotRef::Ui(i @ ui::CRAFTING_2X2..ui::CRAFTING_3X3)) => {
+            GRID_START + usize::from(i - ui::CRAFTING_2X2)
+        }
+        (Some(_), SlotRef::Ui(i @ ui::CRAFTING_3X3..=ui::CRAFTING_3X3_LAST))
+            if inv.window.as_ref().is_some_and(|w| w.menu == CRAFTING_MENU) =>
+        {
             GRID_START + usize::from(i - ui::CRAFTING_3X3)
         }
-        (_, other) => return Err(not_possible(&format!("{other:?} is not in the open Java menu"))),
+        (_, other) => {
+            return Err(not_possible(&format!(
+                "{other:?} is not in the open Java menu"
+            )));
+        }
     };
     i16::try_from(i).map_err(|_| not_possible("slot out of range"))
 }
@@ -92,13 +107,21 @@ impl Planner {
     }
 
     fn need_empty_cursor(&self) -> Result<(), ActionError> {
-        if self.cursor() == 0 { Ok(()) } else { Err(not_possible("the cursor holds a stack")) }
+        if self.cursor() == 0 {
+            Ok(())
+        } else {
+            Err(not_possible("the cursor holds a stack"))
+        }
     }
 
     /// `to` must be empty or hold the cursor's item.
     fn need_fits(&self, to: i16) -> Result<(), ActionError> {
         match (self.inv.menu_slot(to as usize), &self.inv.cursor) {
-            (Some(here), Some(held)) if (here.item, &here.components) != (held.item, &held.components) => Err(not_possible("the target holds another item")),
+            (Some(here), Some(held))
+                if (here.item, &here.components) != (held.item, &held.components) =>
+            {
+                Err(not_possible("the target holds another item"))
+            }
             _ => Ok(()),
         }
     }
@@ -108,21 +131,33 @@ impl Planner {
             Op::Transfer { from, to, count } => self.transfer(from, to, i32::from(count)),
             Op::Swap { a, b } => self.swap(a, b),
             Op::Drop { from, count } => self.drop(from, i32::from(count)),
-            Op::Destroy { .. } | Op::Consume { .. } | Op::Create { .. } => Err(ActionError::Unsupported("destroying and crafting on Java")),
+            Op::Destroy { .. } | Op::Consume { .. } | Op::Create { .. } => {
+                Err(ActionError::Unsupported("destroying and crafting on Java"))
+            }
         }
     }
 
     fn transfer(&mut self, from: SlotRef, to: SlotRef, n: i32) -> Result<(), ActionError> {
         match (from, to) {
-            (SlotRef::Cursor, SlotRef::Cursor) => Err(not_possible("moving the cursor onto itself")),
+            (SlotRef::Cursor, SlotRef::Cursor) => {
+                Err(not_possible("moving the cursor onto itself"))
+            }
             (SlotRef::Cursor, to) => {
                 let (t, held) = (self.window(to)?, self.cursor());
                 if n > held {
                     return Err(not_possible("the cursor holds fewer items"));
                 }
                 self.need_fits(t)?;
-                if n == held { self.push(Click::left(t)) } else { self.repeat(Click::right(t), n) }
-                if self.cursor() != held - n { Err(not_possible("no room in the target")) } else { Ok(()) }
+                if n == held {
+                    self.push(Click::left(t))
+                } else {
+                    self.repeat(Click::right(t), n)
+                }
+                if self.cursor() != held - n {
+                    Err(not_possible("no room in the target"))
+                } else {
+                    Ok(())
+                }
             }
             (from, SlotRef::Cursor) => {
                 let f = self.window(from)?;
@@ -148,11 +183,19 @@ impl Planner {
                 }
                 self.push(Click::left(f));
                 self.need_fits(t)?;
-                if n == has { self.push(Click::left(t)) } else { self.repeat(Click::right(t), n) }
+                if n == has {
+                    self.push(Click::left(t))
+                } else {
+                    self.repeat(Click::right(t), n)
+                }
                 if self.cursor() > 0 {
                     self.push(Click::left(f));
                 }
-                if self.count(t) != before + n { Err(not_possible("no room in the target")) } else { Ok(()) }
+                if self.count(t) != before + n {
+                    Err(not_possible("no room in the target"))
+                } else {
+                    Ok(())
+                }
             }
         }
     }
@@ -165,14 +208,19 @@ impl Planner {
                 Ok(())
             }
             (a, b) if button(&self.inv, b).is_some() && !armour(a) => {
-                self.push(Click::swap(self.window(a)?, button(&self.inv, b).unwrap_or_default()));
+                self.push(Click::swap(
+                    self.window(a)?,
+                    button(&self.inv, b).unwrap_or_default(),
+                ));
                 Ok(())
             }
             (a, b) if button(&self.inv, a).is_some() && !armour(b) => self.swap(b, a),
             (a, b) => {
                 self.need_empty_cursor()?;
                 let (a, b) = (self.window(a)?, self.window(b)?);
-                [a, b, a].into_iter().for_each(|s| self.push(Click::left(s)));
+                [a, b, a]
+                    .into_iter()
+                    .for_each(|s| self.push(Click::left(s)));
                 Ok(())
             }
         }
@@ -184,7 +232,11 @@ impl Planner {
                 return Err(not_possible("the cursor holds fewer items"));
             }
             let all = Click::left(OUTSIDE);
-            if n == self.cursor() { self.push(all) } else { self.repeat(Click::right(OUTSIDE), n) }
+            if n == self.cursor() {
+                self.push(all)
+            } else {
+                self.repeat(Click::right(OUTSIDE), n)
+            }
             return Ok(());
         }
         let f = self.window(from)?;
@@ -192,7 +244,11 @@ impl Planner {
         if n > self.count(f) {
             return Err(not_possible("the slot holds fewer items"));
         }
-        if n == self.count(f) { self.push(Click::throw(f, true)) } else { self.repeat(Click::throw(f, false), n) }
+        if n == self.count(f) {
+            self.push(Click::throw(f, true))
+        } else {
+            self.repeat(Click::throw(f, false), n)
+        }
         Ok(())
     }
 }
@@ -201,34 +257,57 @@ impl Bot {
     /// [`Bot::item_stack_request`] on Java. Clicks are predicted, not answered: the server only writes back slots
     /// it disagrees with.
     pub(crate) async fn java_item_ops(&mut self, ops: &[Op]) -> Result<(), ActionError> {
-        let Backend::Java(java) = &self.backend else { return Err(ActionError::Unsupported("Java item moves")) };
+        let Backend::Java(java) = &self.backend else {
+            return Err(ActionError::Unsupported("Java item moves"));
+        };
         let clicks = plan(&java.client.inventory, ops)?;
-        self.java_clicks(|client| clicks.into_iter().try_for_each(|c| client.click(c))).await
+        self.java_clicks(|client| clicks.into_iter().try_for_each(|c| client.click(c)))
+            .await
     }
 
     /// Shift-clicks the open menu's result `slot` (crafting, stations). Only the server knows what that makes, so the click
     /// predicts nothing and the server sends back every slot it changed.
     pub(crate) async fn java_take_result(&mut self, slot: usize) -> Result<(), ActionError> {
         let slot = i16::try_from(slot).map_err(|_| not_possible("slot out of range"))?;
-        self.java_clicks(|client| client.click_unpredicted(Click::quick_move(slot))).await
+        self.java_clicks(|client| client.click_unpredicted(Click::quick_move(slot)))
+            .await
     }
 
     /// Left-clicks the result `slot` once, taking one result onto the cursor; unpredicted like [`Bot::java_take_result`].
     pub(crate) async fn java_pick_result(&mut self, slot: usize) -> Result<(), ActionError> {
         let slot = i16::try_from(slot).map_err(|_| not_possible("slot out of range"))?;
-        self.java_clicks(|client| client.click_unpredicted(Click::left(slot))).await
+        self.java_clicks(|client| client.click_unpredicted(Click::left(slot)))
+            .await
     }
 
     /// Stands for a tick with no input, then sends what `send` queues and, in the own inventory unless crafting holds
     /// it open ([`crate::bot::Java::inventory_held`]), closes it.
-    async fn java_clicks(&mut self, send: impl FnOnce(&mut Client) -> Result<(), ClientError>) -> Result<(), ActionError> {
-        let held = self.backend.controls_mut().map(std::mem::take).unwrap_or_default();
+    async fn java_clicks(
+        &mut self,
+        send: impl FnOnce(&mut Client) -> Result<(), ClientError>,
+    ) -> Result<(), ActionError> {
+        let held = self
+            .backend
+            .controls_mut()
+            .map(std::mem::take)
+            .unwrap_or_default();
         self.next_tick(|_, _| false).await?;
-        let Backend::Java(java) = &mut self.backend else { return Err(ActionError::Disconnected) };
+        let Backend::Java(java) = &mut self.backend else {
+            return Err(ActionError::Disconnected);
+        };
         let close = java.client.inventory.window.is_none() && !java.inventory_held;
-        let sent = send(&mut java.client).and_then(|()| if close { java.client.close_screen() } else { Ok(()) });
+        let sent = send(&mut java.client).and_then(|()| {
+            if close {
+                java.client.close_screen()
+            } else {
+                Ok(())
+            }
+        });
         crate::state::java_inventory::mirror(&mut self.state.inventory, &java.client.inventory);
-        crate::state::java_inventory::mirror_window(&mut self.state.containers, &java.client.inventory);
+        crate::state::java_inventory::mirror_window(
+            &mut self.state.containers,
+            &java.client.inventory,
+        );
         sent.map_err(|_| ActionError::Disconnected)?;
         let ticked = self.next_tick(|_, _| false).await;
         if let Some(controls) = self.backend.controls_mut() {

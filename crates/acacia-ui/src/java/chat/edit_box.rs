@@ -41,7 +41,20 @@ pub fn allowed_chat_character(c: char) -> bool {
 
 impl EditBox {
     pub fn new(x: i32, y: i32, width: i32, height: i32) -> EditBox {
-        EditBox { value: Vec::new(), x, y, width, height, max_length: 32, bordered: true, focused: false, cursor: 0, highlight: 0, display: 0, suggestion: None }
+        EditBox {
+            value: Vec::new(),
+            x,
+            y,
+            width,
+            height,
+            max_length: 32,
+            bordered: true,
+            focused: false,
+            cursor: 0,
+            highlight: 0,
+            display: 0,
+            suggestion: None,
+        }
     }
 
     pub fn value(&self) -> String {
@@ -62,7 +75,11 @@ impl EditBox {
     }
 
     pub fn inner_width(&self) -> i32 {
-        if self.bordered { self.width - 8 } else { self.width }
+        if self.bordered {
+            self.width - 8
+        } else {
+            self.width
+        }
     }
 
     pub(super) fn text_x(&self) -> i32 {
@@ -70,7 +87,11 @@ impl EditBox {
     }
 
     pub(super) fn text_y(&self) -> i32 {
-        if self.bordered { self.y + (self.height - 8) / 2 } else { self.y }
+        if self.bordered {
+            self.y + (self.height - 8) / 2
+        } else {
+            self.y
+        }
     }
 
     /// `setValue`; the responder runs after it (it always does).
@@ -82,7 +103,10 @@ impl EditBox {
 
     /// `insertText`: replaces the selection; true when the responder runs (room was left).
     pub fn insert_text(&mut self, m: &dyn Metrics, input: &str) -> bool {
-        let (start, end) = (self.cursor.min(self.highlight), self.cursor.max(self.highlight));
+        let (start, end) = (
+            self.cursor.min(self.highlight),
+            self.cursor.max(self.highlight),
+        );
         let room = self.max_length as isize - self.value.len() as isize + (end - start) as isize;
         if room <= 0 {
             return false;
@@ -171,7 +195,11 @@ impl EditBox {
         let mut result = from;
         for _ in 0..dir.unsigned_abs() {
             if dir > 0 {
-                result = v.iter().skip(result).position(|&u| u == space).map_or(v.len(), |i| i + result);
+                result = v
+                    .iter()
+                    .skip(result)
+                    .position(|&u| u == space)
+                    .map_or(v.len(), |i| i + result);
                 while strip_spaces && result < v.len() && v[result] == space {
                     result += 1;
                 }
@@ -243,7 +271,11 @@ impl EditBox {
             }
             Key::Left | Key::Right => {
                 let dir = if key == Key::Right { 1 } else { -1 };
-                let to = if ctrl { self.word_position(dir, self.cursor, true) } else { self.offset_by_codepoints(self.cursor, dir) };
+                let to = if ctrl {
+                    self.word_position(dir, self.cursor, true)
+                } else {
+                    self.offset_by_codepoints(self.cursor, dir)
+                };
                 self.move_cursor_to(m, to, shift);
                 false
             }
@@ -263,7 +295,10 @@ impl EditBox {
 
     /// `isMouseOver` (`areCoordinatesInRectangle`).
     pub fn contains(&self, x: f64, y: f64) -> bool {
-        x >= f64::from(self.x) && y >= f64::from(self.y) && x < f64::from(self.x + self.width) && y < f64::from(self.y + self.height)
+        x >= f64::from(self.x)
+            && y >= f64::from(self.y)
+            && x < f64::from(self.x + self.width)
+            && y < f64::from(self.y + self.height)
     }
 
     /// `onClick`: the caret to the character under `x`.
@@ -276,6 +311,10 @@ impl EditBox {
 
     /// `getScreenX`.
     pub fn screen_x(&self, m: &dyn Metrics, index: usize) -> i32 {
-        if index > self.value.len() { self.x } else { self.x + m.width(&Text::literal(self.slice(0, index))) }
+        if index > self.value.len() {
+            self.x
+        } else {
+            self.x + m.width(&Text::literal(self.slice(0, index)))
+        }
     }
 }

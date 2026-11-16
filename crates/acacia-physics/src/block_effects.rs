@@ -65,8 +65,13 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
     pub(crate) fn update_freeze(&self, st: &mut PlayerState) {
         // Leather boots protect.
         let in_snow = !st.equipment.leather_boots
-            && inside_cells(&st.bounding_box()).any(|pos| self.w.block(pos).inside == InsideMovement::PowderSnow);
-        let stepped = if in_snow { (st.freeze + FREEZE_GAIN).min(1.0) } else { (st.freeze - FREEZE_LOSS).max(0.0) };
+            && inside_cells(&st.bounding_box())
+                .any(|pos| self.w.block(pos).inside == InsideMovement::PowderSnow);
+        let stepped = if in_snow {
+            (st.freeze + FREEZE_GAIN).min(1.0)
+        } else {
+            (st.freeze - FREEZE_LOSS).max(0.0)
+        };
         let freeze = st.server_freeze.take().unwrap_or(stepped);
         if freeze != st.freeze {
             st.freeze = freeze;
@@ -84,7 +89,9 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
                 queue_stuck_speed_multiplier(st, [0.25, 0.05, 0.25]);
             }
             match b.inside {
-                InsideMovement::SweetBerryBush => queue_stuck_speed_multiplier(st, [0.8, 0.75, 0.8]),
+                InsideMovement::SweetBerryBush => {
+                    queue_stuck_speed_multiplier(st, [0.8, 0.75, 0.8])
+                }
                 InsideMovement::PowderSnow => queue_stuck_speed_multiplier(st, [0.9, 1.5, 0.9]),
                 InsideMovement::None => {}
             }
@@ -96,9 +103,15 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
         // An inside-block effect: honey's box is inset 1/16, so a box against it is in its cell, while one
         // flush against a full block beside it is not. (Contact with the inset box itself is too strict: a
         // box walking along a honey wall is slowed by each cell it is in.)
-        let honey: Vec<BlockPos> = inside_cells(&st.bounding_box()).filter(|pos| self.w.block(*pos).honey).collect();
+        let honey: Vec<BlockPos> = inside_cells(&st.bounding_box())
+            .filter(|pos| self.w.block(*pos).honey)
+            .collect();
         // Honey first: it is rare, and the water scan is a tick's most repeated lookup.
-        if honey.is_empty() || !self.liquid_blocks_touching(st.bounding_box(), LiquidKind::Water).is_empty() {
+        if honey.is_empty()
+            || !self
+                .liquid_blocks_touching(st.bounding_box(), LiquidKind::Water)
+                .is_empty()
+        {
             return;
         }
         for pos in honey {
@@ -121,7 +134,9 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
     pub(crate) fn apply_bubble_columns(&self, st: &mut PlayerState) {
         let mut found = false;
         for pos in inside_cells(&st.bounding_box()) {
-            let Some(col) = self.w.block(pos).bubble_column else { continue };
+            let Some(col) = self.w.block(pos).bubble_column else {
+                continue;
+            };
             found = true;
             let surface = col.surface.unwrap_or_else(|| {
                 let above = self.w.block([pos[0], pos[1] + 1, pos[2]]);

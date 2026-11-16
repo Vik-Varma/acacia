@@ -15,20 +15,32 @@ use acacia_bot::client::proto::Packet;
 use acacia_bot::client::proto::packets::MovePlayer;
 use acacia_bot::client::{Client, PacketFilter};
 use acacia_bot::{Bot, BotConfig, BotEvent};
-use support::{corrections, Error};
+use support::{Error, corrections};
 
 type Log = Rc<RefCell<std::io::BufWriter<std::fs::File>>>;
 
 /// Connects the spectator that logs every `MovePlayer` it is sent.
-async fn observer(server: &str, name: &str, log: Log) -> Result<tokio::task::JoinHandle<()>, Error> {
-    let config = BotConfig { subscribe: PacketFilter::none().with(MovePlayer::ID), ..BotConfig::default() };
+async fn observer(
+    server: &str,
+    name: &str,
+    log: Log,
+) -> Result<tokio::task::JoinHandle<()>, Error> {
+    let config = BotConfig {
+        subscribe: PacketFilter::none().with(MovePlayer::ID),
+        ..BotConfig::default()
+    };
     let mut b = Bot::connect(Client::builder(server).offline(name), config).await?;
     Ok(tokio::task::spawn_local(async move {
         while let Some(e) = b.next().await {
             match e {
                 BotEvent::Packet(p) => {
                     if let Ok(m) = p.decode::<MovePlayer>() {
-                        let _ = writeln!(log.borrow_mut(), "mp {} {:?}", m.tick, [m.position.x, m.position.y, m.position.z]);
+                        let _ = writeln!(
+                            log.borrow_mut(),
+                            "mp {} {:?}",
+                            m.tick,
+                            [m.position.x, m.position.y, m.position.z]
+                        );
                     }
                 }
                 BotEvent::Disconnected(_) => break,
@@ -48,8 +60,22 @@ struct Phase {
     ticks: u32,
 }
 
-const fn phase(name: &'static str, yaw: f32, pitch: f32, turn: f32, rocket: bool, ticks: u32) -> Phase {
-    Phase { name, yaw, pitch, turn, rocket, ticks }
+const fn phase(
+    name: &'static str,
+    yaw: f32,
+    pitch: f32,
+    turn: f32,
+    rocket: bool,
+    ticks: u32,
+) -> Phase {
+    Phase {
+        name,
+        yaw,
+        pitch,
+        turn,
+        rocket,
+        ticks,
+    }
 }
 
 const PHASES: &[Phase] = &[
@@ -84,14 +110,24 @@ async fn main() -> Result<(), Error> {
 }
 
 async fn run() -> Result<(), Error> {
-    let _ = tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
     support::watchdog(600);
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let server = args.first().cloned().unwrap_or_else(|| "127.0.0.1:19184".into());
+    let server = args
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "127.0.0.1:19184".into());
     let name = args.get(1).cloned().unwrap_or_else(|| "Glider".into());
     let only: Option<Vec<&str>> = args.get(2).map(|s| s.split(',').collect());
     let (mut bot, _pad) = support::connect(&server, &name).await?;
-    for cmd in ["/gamemode survival @s", "/clear @s", "/give @s elytra", "/give @s firework_rocket 16"] {
+    for cmd in [
+        "/gamemode survival @s",
+        "/clear @s",
+        "/give @s elytra",
+        "/give @s firework_rocket 16",
+    ] {
         bot.command(cmd);
         bot.wait_ticks(4).await?;
     }
@@ -99,9 +135,9 @@ async fn run() -> Result<(), Error> {
     bot.equip_elytra().await?;
     bot.hold_fireworks().await?;
     let home = bot.block_position().ok_or("no position")?;
-    let log: Log = Rc::new(RefCell::new(std::io::BufWriter::new(std::fs::File::create(
-        std::env::var("GLIDE_LOG").unwrap_or_else(|_| "glide.log".into()),
-    )?)));
+    let log: Log = Rc::new(RefCell::new(std::io::BufWriter::new(
+        std::fs::File::create(std::env::var("GLIDE_LOG").unwrap_or_else(|_| "glide.log".into()))?,
+    )));
     let watcher = match std::env::var("GLIDE_OBSERVE") {
         Ok(obs) => {
             let w = observer(&server, &obs, log.clone()).await?;
@@ -111,16 +147,30 @@ async fn run() -> Result<(), Error> {
         }
         Err(_) => None,
     };
-    for p in PHASES.iter().filter(|p| only.as_ref().is_none_or(|o| o.contains(&p.name))) {
+    for p in PHASES
+        .iter()
+        .filter(|p| only.as_ref().is_none_or(|o| o.contains(&p.name)))
+    {
         if let Some((obs, _)) = &watcher {
             // Mid-path and close, so the server sends every tick's move (it paces by watcher distance).
             let (s, c) = (p.yaw.to_radians().sin(), p.yaw.to_radians().cos());
-            bot.command(&format!("/tp {obs} {} {} {}", home[0] as f32 - 25.0 * s, home[1] + 40, home[2] as f32 + 25.0 * c));
+            bot.command(&format!(
+                "/tp {obs} {} {} {}",
+                home[0] as f32 - 25.0 * s,
+                home[1] + 40,
+                home[2] as f32 + 25.0 * c
+            ));
         }
         if bot.is_gliding() {
             bot.stop_gliding().await?;
         }
-        bot.command(&format!("/tp @s {} {} {} {} 0", home[0], home[1] + 60, home[2], p.yaw));
+        bot.command(&format!(
+            "/tp @s {} {} {} {} 0",
+            home[0],
+            home[1] + 60,
+            home[2],
+            p.yaw
+        ));
         bot.wait_ticks(20).await?;
         bot.start_gliding().await?;
         let _ = writeln!(log.borrow_mut(), "phase {}", p.name);
@@ -138,7 +188,11 @@ async fn run() -> Result<(), Error> {
                 c.yaw = yaw;
             }
             bot.wait_ticks(1).await?;
-            if let Some(st) = bot.bedrock().and_then(|b| b.movement()).and_then(|m| m.state()) {
+            if let Some(st) = bot
+                .bedrock()
+                .and_then(|b| b.movement())
+                .and_then(|m| m.state())
+            {
                 let _ = writeln!(log.borrow_mut(), "us {:?} {:?}", st.pos, st.vel);
             }
         }

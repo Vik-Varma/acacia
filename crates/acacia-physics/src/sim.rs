@@ -48,7 +48,9 @@ pub struct TickOutput {
 
 /// Whether the player's box touches water where it stands now (before the next tick).
 pub fn touching_water<W: WorldView + ?Sized>(st: &PlayerState, world: &W) -> bool {
-    !Sim { w: world }.touching_liquid_blocks(st, LiquidKind::Water).is_empty()
+    !Sim { w: world }
+        .touching_liquid_blocks(st, LiquidKind::Water)
+        .is_empty()
 }
 
 /// Adds one tick of liquid current to the velocity without moving: BDS keeps pushing a player it
@@ -70,7 +72,8 @@ pub fn tick<W: WorldView + ?Sized>(st: &mut PlayerState, input: &Input, world: &
     let world = &TickCache::new(world, &probe_area(st.bounding_box().extend(st.vel)));
     let sim = Sim { w: world };
     st.jumped = false;
-    let stand_fits = !st.swimming || sim.can_fit_height_known(st, st.standing_height) != (false, true);
+    let stand_fits =
+        !st.swimming || sim.can_fit_height_known(st, st.standing_height) != (false, true);
     let env = Surroundings {
         in_water: touching_water(st, world),
         swim_start_submerged: sim.swim_start_submerged(st),
@@ -165,7 +168,11 @@ pub(crate) fn land_teleport(st: &mut PlayerState, pos: Vec3) {
 }
 
 pub(crate) fn effective_air_speed(st: &PlayerState) -> f32 {
-    st.fixed_air_speed.unwrap_or(if st.sprinting { SPRINT_AIR_SPEED } else { WALK_AIR_SPEED })
+    st.fixed_air_speed.unwrap_or(if st.sprinting {
+        SPRINT_AIR_SPEED
+    } else {
+        WALK_AIR_SPEED
+    })
 }
 
 fn tick_state(st: &mut PlayerState) {
@@ -213,7 +220,8 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
     fn simulate_core(&self, st: &mut PlayerState) -> Outcome {
         // Only a block that began under a sprint outlasts standing still in liquid (see README).
         let sprint_blocked = st.sprinting || st.was_sprint_movement_blocked;
-        st.was_sprint_movement_blocked = std::mem::take(&mut st.sprint_movement_blocked) && sprint_blocked;
+        st.was_sprint_movement_blocked =
+            std::mem::take(&mut st.sprint_movement_blocked) && sprint_blocked;
         st.ensure_pose_heights();
         if let Some(pos) = st.pending_teleport.take() {
             land_teleport(st, pos);

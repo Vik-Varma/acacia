@@ -25,9 +25,13 @@ pub(super) fn others(ctx: &Ctx, out: &mut SectionMesh) {
                 }
                 if let Some(Random::Parts(parts)) = b.random.as_deref() {
                     let draw = ctx.draw(p).again();
-                    parts.iter().filter_map(|part| part.pick(draw)).for_each(|faces| emit_model(ctx, p, faces, b, out));
+                    parts
+                        .iter()
+                        .filter_map(|part| part.pick(draw))
+                        .for_each(|faces| emit_model(ctx, p, faces, b, out));
                 }
-                out.models.extend(base.model.iter().map(|m| (p.map(|c| c as u8), m.clone())));
+                out.models
+                    .extend(base.model.iter().map(|m| (p.map(|c| c as u8), m.clone())));
                 liquid(ctx, p, out);
             }
         }
@@ -35,7 +39,11 @@ pub(super) fn others(ctx: &Ctx, out: &mut SectionMesh) {
 }
 
 pub(super) fn push(out: &mut SectionMesh, b: &RenderBlock, quad: Quad) {
-    if b.layer == Layer::Translucent { out.translucent.push(quad) } else { out.solid.push(quad) }
+    if b.layer == Layer::Translucent {
+        out.translucent.push(quad)
+    } else {
+        out.solid.push(quad)
+    }
 }
 
 pub(super) fn neighbour(p: [i32; 3], face: usize) -> [i32; 3] {
@@ -51,7 +59,11 @@ fn emit_box(ctx: &Ctx, p: [i32; 3], bx: &Box16, b: &RenderBlock, out: &mut Secti
         if size.contains(&0) {
             continue;
         }
-        let on_edge = if positive { max[axis] == 16 } else { min[axis] == 0 };
+        let on_edge = if positive {
+            max[axis] == 16
+        } else {
+            min[axis] == 0
+        };
         if on_edge && !ctx.shows(p, face) {
             continue;
         }
@@ -59,7 +71,13 @@ fn emit_box(ctx: &Ctx, p: [i32; 3], bx: &Box16, b: &RenderBlock, out: &mut Secti
         pos[axis] = (p[axis] * 16) as u32 + u32::from(if positive { max[axis] } else { min[axis] });
         pos[ua] = (p[ua] * 16) as u32 + u32::from(min[ua]);
         pos[va] = (p[va] * 16) as u32 + u32::from(min[va]);
-        let mut quad = Quad::new(pos, face as u8, [u32::from(size[0]), u32::from(size[1])], ctx.surface(p, b, face), NO_AO);
+        let mut quad = Quad::new(
+            pos,
+            face as u8,
+            [u32::from(size[0]), u32::from(size[1])],
+            ctx.surface(p, b, face),
+            NO_AO,
+        );
         if let Some(l) = &ctx.lighter() {
             quad = quad.lit(box_face(l, p, face as u8, min, max));
         }
@@ -75,19 +93,38 @@ fn emit_model(ctx: &Ctx, p: [i32; 3], faces: &[ModelFace], b: &RenderBlock, out:
         if f.cull.is_some_and(|side| !ctx.shows(p, usize::from(side))) {
             continue;
         }
-        let corners = f.corners.map(|c| [c[0] + origin[0], c[1] + origin[1], c[2] + origin[2]]);
-        let surface =
-            Surface { texture: f.texture, tint_kind: f.tint.shader_kind(), material: f.material, color: quantize(ctx.tint(p, f.tint)), turn: 0 };
+        let corners = f
+            .corners
+            .map(|c| [c[0] + origin[0], c[1] + origin[1], c[2] + origin[2]]);
+        let surface = Surface {
+            texture: f.texture,
+            tint_kind: f.tint.shader_kind(),
+            material: f.material,
+            color: quantize(ctx.tint(p, f.tint)),
+            turn: 0,
+        };
         let lighter = ctx.lighter();
         let ao = match f.shade {
-            Some(side) if f.ambient_occlusion && b.layer == Layer::Solid && lighter.is_none() => model_ao(ctx, p, f, side),
+            Some(side) if f.ambient_occlusion && b.layer == Layer::Solid && lighter.is_none() => {
+                model_ao(ctx, p, f, side)
+            }
             _ => NO_AO,
         };
-        let mut records = model::records(corners, f.uv, f.shade.unwrap_or(model::UNSHADED), surface, ao);
+        let mut records = model::records(
+            corners,
+            f.uv,
+            f.shade.unwrap_or(model::UNSHADED),
+            surface,
+            ao,
+        );
         if let Some(l) = &lighter {
             records[0] = records[0].lit(model_face(l, p, f));
         }
-        if b.layer == Layer::Translucent { out.translucent.extend(records) } else { out.solid.extend(records) }
+        if b.layer == Layer::Translucent {
+            out.translucent.extend(records)
+        } else {
+            out.solid.extend(records)
+        }
     }
 }
 
@@ -98,10 +135,17 @@ fn model_ao(ctx: &Ctx, p: [i32; 3], f: &ModelFace, side: u8) -> [u8; 4] {
     let [c0, c1, c3] = f.corners;
     let c2 = [0, 1, 2].map(|i| c1[i] + c3[i] - c0[i]);
     let edge = if side.is_multiple_of(2) { 16.0 } else { 0.0 };
-    let cell = if (c0[axis] - edge).abs() < 0.01 { neighbour(p, usize::from(side)) } else { p };
+    let cell = if (c0[axis] - edge).abs() < 0.01 {
+        neighbour(p, usize::from(side))
+    } else {
+        p
+    };
     let at = corner_ao(ctx, cell, side).map(f32::from);
     [c0, c1, c2, c3].map(|c| {
-        let (u, v) = ((c[ua] / 16.0).clamp(0.0, 1.0), (c[va] / 16.0).clamp(0.0, 1.0));
+        let (u, v) = (
+            (c[ua] / 16.0).clamp(0.0, 1.0),
+            (c[va] / 16.0).clamp(0.0, 1.0),
+        );
         let (low, high) = (at[0] + (at[1] - at[0]) * u, at[3] + (at[2] - at[3]) * u);
         (low + (high - low) * v).round() as u8
     })
@@ -109,7 +153,10 @@ fn model_ao(ctx: &Ctx, p: [i32; 3], f: &ModelFace, side: u8) -> [u8; 4] {
 
 fn emit_cross(ctx: &Ctx, p: [i32; 3], b: &RenderBlock, out: &mut SectionMesh) {
     let pos = p.map(|c| (c * 16) as u32);
-    let surface = Surface { material: Material::Cutout, ..ctx.surface(p, b, 0) };
+    let surface = Surface {
+        material: Material::Cutout,
+        ..ctx.surface(p, b, 0)
+    };
     let light = ctx.lighter().map(|l| cross(&l, p));
     for face in 6..10 {
         let quad = Quad::new(pos, face, [16, 16], surface, NO_AO);
@@ -137,14 +184,34 @@ mod tests {
             ambient_occlusion: true,
             cull: None,
         };
-        let air = RenderBlock { shape: Shape::None, occludes: false, shades: false, ..BlockTable::cube(0) };
-        let slab = RenderBlock { shape: Shape::Model([face].into()), occludes: false, shades: false, ..BlockTable::cube(0) };
+        let air = RenderBlock {
+            shape: Shape::None,
+            occludes: false,
+            shades: false,
+            ..BlockTable::cube(0)
+        };
+        let slab = RenderBlock {
+            shape: Shape::Model([face].into()),
+            occludes: false,
+            shades: false,
+            ..BlockTable::cube(0)
+        };
         let table = BlockTable::from_blocks(vec![air, BlockTable::cube(0), slab]);
         let mut v = Volume::filled(0);
         v.blocks[cell(5, 5, 5)] = 2;
-        stone.iter().for_each(|&[x, y, z]| v.blocks[cell(x, y, z)] = 1);
+        stone
+            .iter()
+            .for_each(|&[x, y, z]| v.blocks[cell(x, y, z)] = 1);
         let mut out = SectionMesh::default();
-        others(&Ctx { v: &v, table: &table, biomes: &BiomeColors::default(), cells: None }, &mut out);
+        others(
+            &Ctx {
+                v: &v,
+                table: &table,
+                biomes: &BiomeColors::default(),
+                cells: None,
+            },
+            &mut out,
+        );
         out.solid[0].0[0] >> 4 & 0xff
     }
 
@@ -159,4 +226,3 @@ mod tests {
         assert_eq!(slab_top_ao(true, &[[6, 5, 5], [5, 5, 4]]), 0b11_11_01_10);
     }
 }
-

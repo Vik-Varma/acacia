@@ -65,7 +65,11 @@ impl Bot {
     }
 
     pub(crate) fn keep_for_caller(&mut self, packet: RawPacket) {
-        if self.backend.bedrock().is_some_and(|b| b.subscribe.allows(packet.id)) {
+        if self
+            .backend
+            .bedrock()
+            .is_some_and(|b| b.subscribe.allows(packet.id))
+        {
             self.out.push(BotEvent::Packet(packet));
         }
     }
@@ -80,7 +84,9 @@ impl Bot {
     ) -> Result<T, ActionError> {
         let deadline = tokio::time::Instant::now() + timeout;
         loop {
-            let progress = tokio::time::timeout_at(deadline, self.progress()).await.map_err(|_| ActionError::Timeout)??;
+            let progress = tokio::time::timeout_at(deadline, self.progress())
+                .await
+                .map_err(|_| ActionError::Timeout)??;
             let hit = match progress {
                 Progress::Packet(packet) => {
                     let hit = check(self, &packet);
@@ -98,7 +104,10 @@ impl Bot {
 
     /// Processes packets up to and including the next movement tick; true if `check` matched any
     /// packet on the way. Bedrock physics bots only (others never tick).
-    pub(crate) async fn next_tick(&mut self, mut check: impl FnMut(&Bot, &RawPacket) -> bool) -> Result<bool, ActionError> {
+    pub(crate) async fn next_tick(
+        &mut self,
+        mut check: impl FnMut(&Bot, &RawPacket) -> bool,
+    ) -> Result<bool, ActionError> {
         let mut hit = false;
         loop {
             match self.progress().await? {
@@ -113,7 +122,10 @@ impl Bot {
 
     /// Lets `ticks` movement ticks (50 ms each, `cadence::scaled`) pass while processing packets.
     pub async fn wait_ticks(&mut self, ticks: u32) -> Result<(), ActionError> {
-        self.pause(crate::cadence::scaled(Duration::from_millis(50 * u64::from(ticks)))).await
+        self.pause(crate::cadence::scaled(Duration::from_millis(
+            50 * u64::from(ticks),
+        )))
+        .await
     }
 
     /// Lets `duration` pass while processing packets.
@@ -132,5 +144,10 @@ impl Bot {
 
 /// What [`Bot::wait_until`]'s check sees on Java: an id no Bedrock packet has.
 fn no_packet() -> RawPacket {
-    RawPacket { id: u32::MAX, sender_subclient: 0, target_subclient: 0, body: Default::default() }
+    RawPacket {
+        id: u32::MAX,
+        sender_subclient: 0,
+        target_subclient: 0,
+        body: Default::default(),
+    }
 }

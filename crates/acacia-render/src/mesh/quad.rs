@@ -28,9 +28,23 @@ pub const LIQUID: Face = 10;
 /// A liquid corner height that reaches the top of the block.
 pub const FULL_HEIGHT: u8 = 15;
 
-pub const DIRS: [[i32; 3]; 6] = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+pub const DIRS: [[i32; 3]; 6] = [
+    [1, 0, 0],
+    [-1, 0, 0],
+    [0, 1, 0],
+    [0, -1, 0],
+    [0, 0, 1],
+    [0, 0, -1],
+];
 /// (normal axis, u axis, v axis) per axis face; quads span `width` along u and `height` along v.
-pub const AXES: [(usize, usize, usize); 6] = [(0, 2, 1), (0, 2, 1), (1, 0, 2), (1, 0, 2), (2, 0, 1), (2, 0, 1)];
+pub const AXES: [(usize, usize, usize); 6] = [
+    (0, 2, 1),
+    (0, 2, 1),
+    (1, 0, 2),
+    (1, 0, 2),
+    (2, 0, 1),
+    (2, 0, 1),
+];
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, bytemuck::Pod, bytemuck::Zeroable)]
@@ -83,24 +97,51 @@ fn a_quad_holds_its_size_and_how_its_texture_lies() {
     assert_eq!(turned(1, [1.0, 2.0]), [2.0, 15.0]);
     assert_eq!(turned(4, [1.0, 2.0]), [15.0, 2.0]);
     assert_eq!(turned(5, [1.0, 2.0]), [2.0, 1.0]);
-    let surface = Surface { texture: 5, tint_kind: 0, material: Material::Opaque, color: [0; 3], turn: 0b110 };
+    let surface = Surface {
+        texture: 5,
+        tint_kind: 0,
+        material: Material::Opaque,
+        color: [0; 3],
+        turn: 0b110,
+    };
     let [_, w1, w2] = Quad::new([0, 16, 32], 2, [256, 16], surface, [3; 4]).0;
-    assert_eq!((w1 & 255, w1 >> 8 & 255, w1 >> 16 & 3, w1 >> 18 & 4095), (255, 15, 2, 5));
+    assert_eq!(
+        (w1 & 255, w1 >> 8 & 255, w1 >> 16 & 3, w1 >> 18 & 4095),
+        (255, 15, 2, 5)
+    );
     assert_eq!(w2 >> 8 & 1, 1);
 }
 
 impl Quad {
     /// `ao` per corner in u/v order (0,0), (1,0), (1,1), (0,1); `size` is 1..=256.
     pub fn new(pos: [u32; 3], face: Face, size: [u32; 2], surface: Surface, ao: [u8; 4]) -> Quad {
-        debug_assert!(pos.iter().all(|&v| v < 512) && size.iter().all(|s| (1..=256).contains(s)), "{pos:?} {size:?}");
-        let ao_bits = ao.iter().enumerate().fold(0, |a, (i, &v)| a | (u32::from(v) << (i * 2)));
+        debug_assert!(
+            pos.iter().all(|&v| v < 512) && size.iter().all(|s| (1..=256).contains(s)),
+            "{pos:?} {size:?}"
+        );
+        let ao_bits = ao
+            .iter()
+            .enumerate()
+            .fold(0, |a, (i, &v)| a | (u32::from(v) << (i * 2)));
         let [r, g, b] = surface.color.map(u32::from);
         let turn = u32::from(surface.turn);
-        Quad([
-            pos[0] | pos[1] << 9 | pos[2] << 18 | u32::from(face) << 27,
-            (size[0] - 1) | (size[1] - 1) << 8 | (turn & 3) << 16 | u32::from(surface.texture) << 18 | surface.tint_kind << 30,
-            ao_bits | (turn >> 2 & 1) << 8 | (surface.material as u32) << 9 | r << 11 | g << 18 | b << 25,
-        ], [0; 4])
+        Quad(
+            [
+                pos[0] | pos[1] << 9 | pos[2] << 18 | u32::from(face) << 27,
+                (size[0] - 1)
+                    | (size[1] - 1) << 8
+                    | (turn & 3) << 16
+                    | u32::from(surface.texture) << 18
+                    | surface.tint_kind << 30,
+                ao_bits
+                    | (turn >> 2 & 1) << 8
+                    | (surface.material as u32) << 9
+                    | r << 11
+                    | g << 18
+                    | b << 25,
+            ],
+            [0; 4],
+        )
     }
 
     pub fn lit(self, light: VertexLight) -> Quad {
@@ -112,13 +153,19 @@ impl Quad {
     /// an unturned texture, else 1 + the angle in 1/255 turn.
     pub fn liquid(pos: [u32; 3], face: Face, heights: [u8; 4], turn: u8, surface: Surface) -> Quad {
         debug_assert!(face >= LIQUID && heights.iter().all(|&h| h <= FULL_HEIGHT));
-        let heights = heights.iter().enumerate().fold(0, |a, (i, &h)| a | (u32::from(h) << (i * 4)));
+        let heights = heights
+            .iter()
+            .enumerate()
+            .fold(0, |a, (i, &h)| a | (u32::from(h) << (i * 4)));
         let [r, g, b] = surface.color.map(u32::from);
-        Quad([
-            pos[0] | pos[1] << 9 | pos[2] << 18 | u32::from(face) << 27,
-            heights | u32::from(surface.texture) << 18 | surface.tint_kind << 30,
-            u32::from(turn) | (surface.material as u32) << 9 | r << 11 | g << 18 | b << 25,
-        ], [0; 4])
+        Quad(
+            [
+                pos[0] | pos[1] << 9 | pos[2] << 18 | u32::from(face) << 27,
+                heights | u32::from(surface.texture) << 18 | surface.tint_kind << 30,
+                u32::from(turn) | (surface.material as u32) << 9 | r << 11 | g << 18 | b << 25,
+            ],
+            [0; 4],
+        )
     }
 
     /// The axis face or cross plane this quad faces like: liquid faces map to their axis face.
@@ -127,7 +174,11 @@ impl Quad {
             return self.0[0] & 15;
         }
         let face = (self.0[0] >> 27) & 15;
-        if face >= u32::from(LIQUID) { face - u32::from(LIQUID) } else { face }
+        if face >= u32::from(LIQUID) {
+            face - u32::from(LIQUID)
+        } else {
+            face
+        }
     }
 
     /// Sort key for a section's translucent quads: per face direction, far plane first as seen
@@ -135,8 +186,21 @@ impl Quad {
     /// blends back to front; quads of different directions still blend in key order.
     pub fn blend_order(&self) -> (u32, u32) {
         let face = self.face();
-        let Some(&(axis, ..)) = AXES.get(face as usize) else { return (face, 0) };
-        let plane = if self.0[0] & MODEL != 0 { model::plane(self, axis) } else { (self.0[0] >> (axis * 9)) & 511 };
-        (face, if face.is_multiple_of(2) { plane } else { 511 - plane })
+        let Some(&(axis, ..)) = AXES.get(face as usize) else {
+            return (face, 0);
+        };
+        let plane = if self.0[0] & MODEL != 0 {
+            model::plane(self, axis)
+        } else {
+            (self.0[0] >> (axis * 9)) & 511
+        };
+        (
+            face,
+            if face.is_multiple_of(2) {
+                plane
+            } else {
+                511 - plane
+            },
+        )
     }
 }

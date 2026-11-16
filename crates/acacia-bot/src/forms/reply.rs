@@ -1,7 +1,9 @@
 //! Form replies encoded as the vanilla client sends them (docs/research/forms.md): the JSON value
 //! plus a trailing newline, `null` in custom-form slots of labels, headers and dividers.
 
-use acacia_client::proto::packets::{ModalFormResponse, ModalFormResponseContent, ModalFormResponseContentCancelReason};
+use acacia_client::proto::packets::{
+    ModalFormResponse, ModalFormResponseContent, ModalFormResponseContentCancelReason,
+};
 use serde_json::Value;
 
 use super::{Element, Form, FormKind};
@@ -16,7 +18,10 @@ pub enum FormReply {
     /// Custom form: one value per input element, in order (labels, headers and dividers are skipped).
     Custom(Vec<FormValue>),
     /// Java dialog with inputs ([`super::FormKind::Dialog`]): which button, and one value per input.
-    Dialog { button: usize, values: Vec<FormValue> },
+    Dialog {
+        button: usize,
+        values: Vec<FormValue>,
+    },
     /// The X button.
     Close,
 }
@@ -33,14 +38,18 @@ pub enum FormValue {
 impl Form {
     /// The custom form's (or Java dialog's) default values, ready to edit and send as [`FormReply::Custom`].
     pub fn defaults(&self) -> Vec<FormValue> {
-        let (FormKind::Custom { elements } | FormKind::Dialog { elements, .. }) = &self.kind else { return Vec::new() };
+        let (FormKind::Custom { elements } | FormKind::Dialog { elements, .. }) = &self.kind else {
+            return Vec::new();
+        };
         elements
             .iter()
             .filter_map(|e| match e {
                 Element::Input { default, .. } => Some(FormValue::Text(default.clone())),
                 Element::Toggle { default, .. } => Some(FormValue::Toggle(*default)),
                 Element::Slider { default, .. } => Some(FormValue::Slider(*default)),
-                Element::StepSlider { default, .. } | Element::Dropdown { default, .. } => Some(FormValue::Choice(*default)),
+                Element::StepSlider { default, .. } | Element::Dropdown { default, .. } => {
+                    Some(FormValue::Choice(*default))
+                }
                 Element::Label { .. } | Element::Header { .. } | Element::Divider => None,
             })
             .collect()
@@ -49,12 +58,25 @@ impl Form {
 
 pub(super) fn response(form: &Form, reply: &FormReply) -> Result<ModalFormResponse, ActionError> {
     let data = match (&form.kind, reply) {
-        (FormKind::Simple { buttons, .. }, FormReply::Button(i)) if *i < buttons.len() => i.to_string(),
+        (FormKind::Simple { buttons, .. }, FormReply::Button(i)) if *i < buttons.len() => {
+            i.to_string()
+        }
         (FormKind::Modal { .. }, FormReply::Modal(yes)) => yes.to_string(),
         (FormKind::Custom { elements }, FormReply::Custom(values)) => custom(elements, values)?,
-        _ => return Err(ActionError::NotPossible(format!("{reply:?} does not fit form {}", form.id))),
+        _ => {
+            return Err(ActionError::NotPossible(format!(
+                "{reply:?} does not fit form {}",
+                form.id
+            )));
+        }
     };
-    Ok(ModalFormResponse { form_id: form.id, has_response_data: true, data: Some(data + "\n"), has_cancel_reason: false, content: None })
+    Ok(ModalFormResponse {
+        form_id: form.id,
+        has_response_data: true,
+        data: Some(data + "\n"),
+        has_cancel_reason: false,
+        content: None,
+    })
 }
 
 pub(super) fn cancel(id: u32) -> ModalFormResponse {
@@ -63,7 +85,9 @@ pub(super) fn cancel(id: u32) -> ModalFormResponse {
         has_response_data: false,
         data: None,
         has_cancel_reason: true,
-        content: Some(ModalFormResponseContent { cancel_reason: ModalFormResponseContentCancelReason::Closed }),
+        content: Some(ModalFormResponseContent {
+            cancel_reason: ModalFormResponseContentCancelReason::Closed,
+        }),
     }
 }
 
@@ -80,10 +104,15 @@ fn custom(elements: &[Element], values: &[FormValue]) -> Result<String, ActionEr
         slots.push(match (element, value) {
             (Element::Input { .. }, FormValue::Text(s)) => Value::String(s.clone()),
             (Element::Toggle { .. }, FormValue::Toggle(b)) => Value::Bool(*b),
-            (Element::Slider { min, max, .. }, FormValue::Slider(x)) if (*min..=*max).contains(x) => slider(*x),
-            (Element::StepSlider { steps: o, .. } | Element::Dropdown { options: o, .. }, FormValue::Choice(i)) if *i < o.len() => {
-                Value::from(*i)
+            (Element::Slider { min, max, .. }, FormValue::Slider(x))
+                if (*min..=*max).contains(x) =>
+            {
+                slider(*x)
             }
+            (
+                Element::StepSlider { steps: o, .. } | Element::Dropdown { options: o, .. },
+                FormValue::Choice(i),
+            ) if *i < o.len() => Value::from(*i),
             _ => return Err(mismatch(&format!("{value:?} does not fit {element:?}"))),
         });
     }

@@ -67,7 +67,11 @@ const LAVA: [f32; 3] = rgb(0x991900);
 const POWDER_SNOW: [f32; 3] = rgb(0x9FBBCC);
 
 const fn rgb(c: u32) -> [f32; 3] {
-    [(c >> 16 & 255) as f32 / 255.0, (c >> 8 & 255) as f32 / 255.0, (c & 255) as f32 / 255.0]
+    [
+        (c >> 16 & 255) as f32 / 255.0,
+        (c >> 8 & 255) as f32 / 255.0,
+        (c & 255) as f32 / 255.0,
+    ]
 }
 
 /// `LocalPlayer.getWaterVision` after `ticks` with the eye in water (`waterVisionTime`, 0..600).
@@ -76,7 +80,11 @@ pub fn water_vision(ticks: i32) -> f32 {
         return 1.0;
     }
     let t = ticks as f32;
-    let late = if t < 100.0 { 0.0 } else { ((t - 100.0) / 500.0).clamp(0.0, 1.0) };
+    let late = if t < 100.0 {
+        0.0
+    } else {
+        ((t - 100.0) / 500.0).clamp(0.0, 1.0)
+    };
     (t / 100.0).clamp(0.0, 1.0) * 0.6 + late * 0.399_999_98
 }
 
@@ -85,7 +93,9 @@ pub fn night_vision_scale(ticks: i32, partial: f32) -> f32 {
     if ticks == -1 || ticks > 200 {
         return 1.0;
     }
-    0.7 + crate::java_mth::sin(f64::from((ticks as f32 - partial) * std::f32::consts::PI * 0.2)) * 0.3
+    0.7 + crate::java_mth::sin(f64::from(
+        (ticks as f32 - partial) * std::f32::consts::PI * 0.2,
+    )) * 0.3
 }
 
 /// What the fog carries from frame to frame, and what the caller tells it of the player.
@@ -124,9 +134,14 @@ pub fn setup_fog(a: &Attributes, input: &FogInputs) -> FogData {
         FogType::Atmospheric => atmospheric_color(a, input),
     };
     let range = input.void_onset;
-    let mut darkness = ((range + input.min_y as f32 - input.camera_y as f32) / range).clamp(0.0, 1.0);
+    let mut darkness =
+        ((range + input.min_y as f32 - input.camera_y as f32) / range).clamp(0.0, 1.0);
     if let Some((ticks, infinite)) = input.player.blindness {
-        darkness = if !infinite && ticks < 20 { darkness.max(ticks as f32 / 20.0) } else { 1.0 };
+        darkness = if !infinite && ticks < 20 {
+            darkness.max(ticks as f32 / 20.0)
+        } else {
+            1.0
+        };
     } else if let Some(blend) = input.player.darkness {
         darkness = darkness.max(blend);
     }
@@ -136,7 +151,9 @@ pub fn setup_fog(a: &Attributes, input: &FogInputs) -> FogData {
     }
     if input.player.darken_world > 0.0 {
         let scale = [0.7, 0.6, 0.6];
-        color = std::array::from_fn(|i| color[i] + (color[i] * scale[i] - color[i]) * input.player.darken_world);
+        color = std::array::from_fn(|i| {
+            color[i] + (color[i] * scale[i] - color[i]) * input.player.darken_world
+        });
     }
     let brighten = match input.player.night_vision {
         _ if input.fog_type == FogType::Water => input.water_vision,
@@ -164,7 +181,14 @@ pub fn setup_fog(a: &Attributes, input: &FogInputs) -> FogData {
 fn atmospheric_color(a: &Attributes, input: &FogInputs) -> [f32; 3] {
     let mut fog = a.rgb(Attr::FogColor);
     if input.render_distance_chunks >= 4 {
-        let sun_side = if crate::java_mth::sin(f64::from(super::geometry::radians(a.number(Attr::SunAngle)))) > 0.0 { -1.0 } else { 1.0 };
+        let sun_side = if crate::java_mth::sin(f64::from(super::geometry::radians(
+            a.number(Attr::SunAngle),
+        ))) > 0.0
+        {
+            -1.0
+        } else {
+            1.0
+        };
         let looking = input.forward[0] * sun_side;
         let sunrise = a.get(Attr::SunriseSunsetColor);
         if looking > 0.0 && sunrise[3] > 0.0 {
@@ -181,20 +205,30 @@ fn atmospheric_color(a: &Attributes, input: &FogInputs) -> [f32; 3] {
         sky = sky.map(|c| c * (1.0 - input.thunder * 0.5));
     }
     let sky_fog_end = (a.number(Attr::SkyFogEnd) / 16.0).min(input.render_distance_chunks as f32);
-    let mix = 1.0 - (sky_fog_end / 32.0).clamp(0.0, 1.0).mul_add(0.75, 0.25).powf(0.25);
+    let mix = 1.0
+        - (sky_fog_end / 32.0)
+            .clamp(0.0, 1.0)
+            .mul_add(0.75, 0.25)
+            .powf(0.25);
     std::array::from_fn(|i| fog[i] + (sky[i] - fog[i]) * mix)
 }
 
 /// (environmental start, end, sky end, cloud end) of the environment that applies.
 fn distances(a: &Attributes, input: &FogInputs, rd: f32) -> (f32, f32, f32, f32) {
     match input.fog_type {
-        FogType::Lava | FogType::PowderSnow if input.player.spectator => (-8.0, rd * 0.5, rd * 0.5, rd * 0.5),
+        FogType::Lava | FogType::PowderSnow if input.player.spectator => {
+            (-8.0, rd * 0.5, rd * 0.5, rd * 0.5)
+        }
         FogType::Lava if input.player.fire_resistance => (0.0, 5.0, 5.0, 5.0),
         FogType::Lava => (0.25, 1.0, 1.0, 1.0),
         FogType::PowderSnow => (0.0, 2.0, 2.0, 2.0),
         _ if input.player.blindness.is_some() => {
             let (ticks, infinite) = input.player.blindness.unwrap_or((0, true));
-            let d = if infinite { 5.0 } else { rd + (5.0 - rd) * (ticks as f32 / 20.0).min(1.0) };
+            let d = if infinite {
+                5.0
+            } else {
+                rd + (5.0 - rd) * (ticks as f32 / 20.0).min(1.0)
+            };
             (d * 0.25, d, d * 0.8, d * 0.8)
         }
         _ if input.player.darkness.is_some() => {
@@ -209,7 +243,8 @@ fn distances(a: &Attributes, input: &FogInputs, rd: f32) -> (f32, f32, f32, f32)
             let (fog_start, fog_end) = (a.number(Attr::FogStart), a.number(Attr::FogEnd));
             let start = fog_start - 160.0 * input.rain_fog;
             let end = fog_end.min(96.0).max(fog_end - 256.0 * input.rain_fog);
-            let cloud_end = ((input.cloud_range_chunks * 16) as f32).min(a.number(Attr::CloudFogEnd));
+            let cloud_end =
+                ((input.cloud_range_chunks * 16) as f32).min(a.number(Attr::CloudFogEnd));
             if input.player.boss_world_fog {
                 let end = end.min(96.0);
                 (start.min(10.0), end, end, end)

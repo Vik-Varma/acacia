@@ -4,18 +4,18 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use acacia_client::auth::{AuthConfig, TokenCache};
 use acacia_client::ClientBuilder;
+use acacia_client::auth::{AuthConfig, TokenCache};
 use tokio::sync::broadcast;
 
-use super::join_queue::{noise, JoinQueue};
+use super::join_queue::{JoinQueue, noise};
 use super::lease::{AccountLease, LocalLeases};
 use super::login::NodeAuth;
 use super::policy::Policy;
 use super::registry::Registry;
 use super::shard::{Job, OnPanic, Shard};
 use super::spec::BotSpec;
-use super::supervisor::{supervise, ClientFn, ConfigFn, Ctx};
+use super::supervisor::{ClientFn, ConfigFn, Ctx, supervise};
 use super::{Inner, Swarm};
 use crate::world::SharedWorlds;
 use crate::{Bot, BotConfig};
@@ -116,13 +116,19 @@ impl<S: Send + 'static> SwarmBuilder<S> {
     }
 
     /// The bot config for each connection; `shared_worlds` is always the swarm's own.
-    pub fn bot_config(mut self, f: impl Fn(&BotSpec<S>) -> BotConfig + Send + Sync + 'static) -> Self {
+    pub fn bot_config(
+        mut self,
+        f: impl Fn(&BotSpec<S>) -> BotConfig + Send + Sync + 'static,
+    ) -> Self {
         self.bot_config = Arc::new(f);
         self
     }
 
     /// Adjusts each connection's client after sign-in (blob cache, transport, chunk radius...).
-    pub fn client(mut self, f: impl Fn(&BotSpec<S>, ClientBuilder) -> ClientBuilder + Send + Sync + 'static) -> Self {
+    pub fn client(
+        mut self,
+        f: impl Fn(&BotSpec<S>, ClientBuilder) -> ClientBuilder + Send + Sync + 'static,
+    ) -> Self {
         self.client = Arc::new(f);
         self
     }
@@ -148,7 +154,9 @@ impl<S: Send + 'static> SwarmBuilder<S> {
         let ctx = Arc::new(Ctx {
             policy: self.policy,
             joins: JoinQueue::new(self.join_delay, self.join_jitter),
-            auth: self.token_cache.map(|cache| NodeAuth::new(self.auth_config, cache)),
+            auth: self
+                .token_cache
+                .map(|cache| NodeAuth::new(self.auth_config, cache)),
             leases: self.leases,
             node_id: self.node_id,
             lease_ttl: self.lease_ttl,
@@ -163,14 +171,26 @@ impl<S: Send + 'static> SwarmBuilder<S> {
             let ctx = ctx.clone();
             Arc::new(move |id, error| ctx.fail(id, format!("panicked: {error}"), None))
         };
-        let shards = (0..self.shards).map(|i| Shard::start(i, on_panic.clone())).collect::<std::io::Result<Vec<_>>>()?;
+        let shards = (0..self.shards)
+            .map(|i| Shard::start(i, on_panic.clone()))
+            .collect::<std::io::Result<Vec<_>>>()?;
         let task = Arc::new(task);
         let spawn_ctx = ctx.clone();
         let spawn = Box::new(move |spec, cancel| -> Job {
             let (ctx, task) = (spawn_ctx.clone(), task.clone());
-            Box::new(move || Box::pin(supervise(ctx, task, spec, cancel)) as Pin<Box<dyn Future<Output = ()>>>)
+            Box::new(move || {
+                Box::pin(supervise(ctx, task, spec, cancel)) as Pin<Box<dyn Future<Output = ()>>>
+            })
         });
         let shard_count = shards.len();
-        Ok(Swarm { inner: Arc::new(Inner { ctx, spawn, shards: Mutex::new(shards), shard_count, shard_fill: self.shard_fill }) })
+        Ok(Swarm {
+            inner: Arc::new(Inner {
+                ctx,
+                spawn,
+                shards: Mutex::new(shards),
+                shard_count,
+                shard_fill: self.shard_fill,
+            }),
+        })
     }
 }

@@ -54,7 +54,11 @@ pub struct SkyPass {
 }
 
 fn fan(out: &mut Vec<Vertex>, kind: u32, points: &[[f32; 3]]) {
-    let at = |p: [f32; 3], u: f32| Vertex { position: p, kind, uv: [u, 0.0] };
+    let at = |p: [f32; 3], u: f32| Vertex {
+        position: p,
+        kind,
+        uv: [u, 0.0],
+    };
     for pair in points[1..].windows(2) {
         out.extend([at(points[0], 1.0), at(pair[0], 0.0), at(pair[1], 0.0)]);
     }
@@ -83,17 +87,42 @@ fn vertices() -> (Vec<Vertex>, [std::ops::Range<u32>; 4]) {
         quad(&mut out, KIND_END, face);
     }
     ends[3] = out.len() as u32;
-    (out, [0..ends[0], ends[0]..ends[1], ends[1]..ends[2], ends[2]..ends[3]])
+    (
+        out,
+        [
+            0..ends[0],
+            ends[0]..ends[1],
+            ends[1]..ends[2],
+            ends[2]..ends[3],
+        ],
+    )
 }
 
 impl SkyPass {
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, color: wgpu::TextureFormat, globals: &wgpu::Buffer, textures: &SkyTextures) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        color: wgpu::TextureFormat,
+        globals: &wgpu::Buffer,
+        textures: &SkyTextures,
+    ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("sky"),
-            source: wgpu::ShaderSource::Wgsl(concat!(include_str!("globals.wgsl"), include_str!("sky.wgsl")).into()),
+            source: wgpu::ShaderSource::Wgsl(
+                concat!(include_str!("globals.wgsl"), include_str!("sky.wgsl")).into(),
+            ),
         });
-        let entry = |binding, ty| wgpu::BindGroupLayoutEntry { binding, visibility: wgpu::ShaderStages::VERTEX_FRAGMENT, ty, count: None };
-        let uniform_type = wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None };
+        let entry = |binding, ty| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty,
+            count: None,
+        };
+        let uniform_type = wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        };
         let texture_type = wgpu::BindingType::Texture {
             sample_type: wgpu::TextureSampleType::Float { filterable: true },
             view_dimension: wgpu::TextureViewDimension::D2,
@@ -106,14 +135,25 @@ impl SkyPass {
                 entry(1, uniform_type),
                 entry(2, texture_type),
                 entry(3, texture_type),
-                entry(4, wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering)),
+                entry(
+                    4,
+                    wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                ),
                 entry(5, texture_type),
             ],
         });
-        let pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("sky"), bind_group_layouts: &[Some(&layout)], immediate_size: 0 });
-        let additive = wgpu::BlendComponent { src_factor: wgpu::BlendFactor::SrcAlpha, dst_factor: wgpu::BlendFactor::One, operation: wgpu::BlendOperation::Add };
-        let pipeline = |blend| device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("sky"),
+            bind_group_layouts: &[Some(&layout)],
+            immediate_size: 0,
+        });
+        let additive = wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::SrcAlpha,
+            dst_factor: wgpu::BlendFactor::One,
+            operation: wgpu::BlendOperation::Add,
+        };
+        let pipeline = |blend| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("sky"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
@@ -144,8 +184,15 @@ impl SkyPass {
             }),
             multiview_mask: None,
             cache: None,
-        });
-        let (blended, added) = (pipeline(wgpu::BlendState::ALPHA_BLENDING), pipeline(wgpu::BlendState { color: additive, alpha: additive }));
+        })
+        };
+        let (blended, added) = (
+            pipeline(wgpu::BlendState::ALPHA_BLENDING),
+            pipeline(wgpu::BlendState {
+                color: additive,
+                alpha: additive,
+            }),
+        );
         let (vertices, ranges) = vertices();
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("sky"),
@@ -158,27 +205,69 @@ impl SkyPass {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let view = |image: &image::RgbaImage| entity_textures::upload(device, queue, image.width(), image.height(), image);
+        let view = |image: &image::RgbaImage| {
+            entity_textures::upload(device, queue, image.width(), image.height(), image)
+        };
         let (sun, moon) = (view(&textures.sun), view(&textures.moon));
-        let end = view(textures.end.as_ref().unwrap_or(&image::RgbaImage::from_pixel(1, 1, image::Rgba([255; 4]))));
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor { label: Some("sky"), ..Default::default() });
+        let end = view(
+            textures
+                .end
+                .as_ref()
+                .unwrap_or(&image::RgbaImage::from_pixel(1, 1, image::Rgba([255; 4]))),
+        );
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("sky"),
+            ..Default::default()
+        });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("sky"),
             layout: &layout,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: globals.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: uniform.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&sun) },
-                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&moon) },
-                wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::Sampler(&sampler) },
-                wgpu::BindGroupEntry { binding: 5, resource: wgpu::BindingResource::TextureView(&end) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: globals.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: uniform.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&sun),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&moon),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::TextureView(&end),
+                },
             ],
         });
-        SkyPass { blended, added, uniform, bind_group, vertices: vertex_buffer, ranges }
+        SkyPass {
+            blended,
+            added,
+            uniform,
+            bind_group,
+            vertices: vertex_buffer,
+            ranges,
+        }
     }
 
     /// `sky_end` is `FogData.skyEnd`; `eye_y` and `underwater` decide the dark disc.
-    pub fn prepare(&self, queue: &wgpu::Queue, sky: &Sky, sky_end: f32, eye_y: f64, underwater: bool) {
+    pub fn prepare(
+        &self,
+        queue: &wgpu::Queue,
+        sky: &Sky,
+        sky_end: f32,
+        eye_y: f64,
+        underwater: bool,
+    ) {
         let dark_disc = geometry::dark_disc_shown(eye_y, HORIZON, underwater);
         let a = &sky.attributes;
         let sun = a.number(Attr::SunAngle);
@@ -195,7 +284,12 @@ impl SkyPass {
         let [zr, zg, zb] = super::globals::srgb_to_linear(sky.color());
         let celestial = Celestial {
             frames,
-            params: [a.number(Attr::StarBrightness), f32::from(a.moon_phase()), sky.celestial, sky_end],
+            params: [
+                a.number(Attr::StarBrightness),
+                f32::from(a.moon_phase()),
+                sky.celestial,
+                sky_end,
+            ],
             glow: [r, g, b, alpha],
             zenith: [zr, zg, zb, f32::from(u8::from(dark_disc))],
         };

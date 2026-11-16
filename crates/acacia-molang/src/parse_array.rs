@@ -21,11 +21,24 @@ impl Parser<'_> {
 
     /// Compiles an array's elements into `out`. An element that names an array stands for all of
     /// that array's elements.
-    fn elements(&mut self, array: &str, unknown: &Error, depth: u8, out: &mut Vec<u32>) -> Result<(), Error> {
-        let sources = self.arrays.and_then(|arrays| arrays.get(array)).filter(|_| depth < 8).ok_or_else(|| unknown.clone())?;
+    fn elements(
+        &mut self,
+        array: &str,
+        unknown: &Error,
+        depth: u8,
+        out: &mut Vec<u32>,
+    ) -> Result<(), Error> {
+        let sources = self
+            .arrays
+            .and_then(|arrays| arrays.get(array))
+            .filter(|_| depth < 8)
+            .ok_or_else(|| unknown.clone())?;
         for source in sources {
             let lower = source.trim().to_ascii_lowercase();
-            match lower.strip_prefix("array.").filter(|name| !name.contains('[')) {
+            match lower
+                .strip_prefix("array.")
+                .filter(|name| !name.contains('['))
+            {
                 Some(included) => self.elements(included, unknown, depth + 1, out)?,
                 None => out.push(self.inline(source)?),
             }

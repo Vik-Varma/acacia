@@ -3,7 +3,7 @@ use acacia_registry::{Block, BlockTag};
 use crate::aabb::Aabb;
 use crate::block_factors::bounce;
 use crate::collide::Blocks;
-use crate::mth::{cos, length_sqr, sin, DEG_TO_RAD};
+use crate::mth::{DEG_TO_RAD, cos, length_sqr, sin};
 use crate::player::{Player, STEP_HEIGHT};
 use crate::support::LEGACY_ON_POS;
 use crate::travel::modified_friction;
@@ -18,7 +18,11 @@ impl Player {
     fn can_fall(&self, world: &impl Blocks, dx: f64, dz: f64, height: f64) -> bool {
         let b = self.bounding_box();
         self.colliders(world).no_collision(&Aabb {
-            min: [b.min[0] + 1.0E-7 + dx, b.min[1] - height - 1.0E-7, b.min[2] + 1.0E-7 + dz],
+            min: [
+                b.min[0] + 1.0E-7 + dx,
+                b.min[1] - height - 1.0E-7,
+                b.min[2] + 1.0E-7 + dz,
+            ],
             max: [b.max[0] - 1.0E-7 + dx, b.min[1], b.max[2] - 1.0E-7 + dz],
         })
     }
@@ -28,12 +32,21 @@ impl Player {
         if self.flying || delta[1] > 0.0 || !self.keys.shift {
             return delta;
         }
-        if !self.on_ground && !(self.fall_distance < step && !self.can_fall(world, 0.0, 0.0, step - self.fall_distance)) {
+        if !self.on_ground
+            && !(self.fall_distance < step
+                && !self.can_fall(world, 0.0, 0.0, step - self.fall_distance))
+        {
             return delta;
         }
         let (mut dx, mut dz) = (delta[0], delta[2]);
         let (step_x, step_z) = (signum(dx) * BACK_OFF_STEP, signum(dz) * BACK_OFF_STEP);
-        let reduce = |v: &mut f64, by: f64| *v = if v.abs() <= BACK_OFF_STEP { 0.0 } else { *v - by };
+        let reduce = |v: &mut f64, by: f64| {
+            *v = if v.abs() <= BACK_OFF_STEP {
+                0.0
+            } else {
+                *v - by
+            }
+        };
         while dx != 0.0 && self.can_fall(world, dx, 0.0, step) {
             if dx.abs() <= BACK_OFF_STEP {
                 dx = 0.0;
@@ -57,7 +70,13 @@ impl Player {
 
     fn update_support(&mut self, world: &impl Blocks, movement: [f64; 3]) {
         let mut support = self.support;
-        support.update(&self.colliders(world), self.bounding_box(), self.pos, self.on_ground, movement);
+        support.update(
+            &self.colliders(world),
+            self.bounding_box(),
+            self.pos,
+            self.on_ground,
+            movement,
+        );
         self.support = support;
     }
 
@@ -71,7 +90,8 @@ impl Player {
         if wanted < 1.0E-5_f32 as f64 || moved < 1.0E-5_f32 as f64 {
             return false;
         }
-        ((ax * movement[0] + az * movement[2]) / (wanted * moved).sqrt()).acos() < 0.13962634_f32 as f64
+        ((ax * movement[0] + az * movement[2]) / (wanted * moved).sqrt()).acos()
+            < 0.13962634_f32 as f64
     }
 
     fn update_fall_distance(&mut self, world: &impl Blocks, ya: f64) {
@@ -86,7 +106,14 @@ impl Player {
         }
     }
 
-    fn restitute(&mut self, block: Block, x_hit: bool, z_hit: bool, below: bool, movement: [f64; 3]) {
+    fn restitute(
+        &mut self,
+        block: Block,
+        x_hit: bool,
+        z_hit: bool,
+        below: bool,
+        movement: [f64; 3],
+    ) {
         let current = self.delta;
         let mut restitution = 0.0;
         if x_hit {
@@ -99,7 +126,9 @@ impl Player {
             return;
         }
         if below {
-            let bounces = !(-current[1] <= self.gravity()) && !self.keys.shift && !block.is(BlockTag::SuppressesBounce);
+            let bounces = !(-current[1] <= self.gravity())
+                && !self.keys.shift
+                && !block.is(BlockTag::SuppressesBounce);
             restitution = if bounces { bounce(block) as f64 } else { 0.0 };
         }
         let (gravity, drag) = if restitution > 0.0 {
@@ -130,7 +159,12 @@ impl Player {
             self.delta = [0.0; 3];
         }
         let delta = self.back_off_from_edge(world, delta);
-        let movement = self.colliders(world).collide(self.bounding_box(), delta, self.on_ground, self.step_height());
+        let movement = self.colliders(world).collide(
+            self.bounding_box(),
+            delta,
+            self.on_ground,
+            self.step_height(),
+        );
         let moved = length_sqr(movement);
         if moved > 1.0E-7 || length_sqr(delta) - moved < 1.0E-7 {
             let from = self.pos;
@@ -147,7 +181,8 @@ impl Player {
         let below = self.vertical_collision && delta[1] < 0.0;
         self.on_ground = below;
         self.update_support(world, movement);
-        self.minor_horizontal_collision = self.horizontal_collision && self.is_minor_collision(movement);
+        self.minor_horizontal_collision =
+            self.horizontal_collision && self.is_minor_collision(movement);
         let effect_block = world.block_state(self.on_pos(world, LEGACY_ON_POS)).block();
         self.update_fall_distance(world, movement[1]);
         if (moved_vertically && self.vertical_collision) || self.horizontal_collision {

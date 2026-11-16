@@ -48,16 +48,28 @@ pub struct Liquid {
 
 impl Liquid {
     pub fn source(kind: LiquidKind) -> Self {
-        Self { kind, depth: 8, falling: false }
+        Self {
+            kind,
+            depth: 8,
+            falling: false,
+        }
     }
 
     /// Surface height inside the cell.
     pub fn height(&self) -> f32 {
-        if self.falling { 1.0 } else { (self.depth as f32 + 1.0) / 9.0 }
+        if self.falling {
+            1.0
+        } else {
+            (self.depth as f32 + 1.0) / 9.0
+        }
     }
 
     pub(crate) fn decay(&self) -> i32 {
-        if self.falling { 0 } else { 8 - self.depth as i32 }
+        if self.falling {
+            0
+        } else {
+            8 - self.depth as i32
+        }
     }
 }
 
@@ -115,12 +127,19 @@ impl BlockPhysics {
 
     /// A generic non-air block with default friction and no faces marked solid.
     pub const fn block() -> Self {
-        Self { air: false, ..Self::AIR }
+        Self {
+            air: false,
+            ..Self::AIR
+        }
     }
 
     /// A full solid cube (all faces solid) with the given friction.
     pub const fn solid(friction: f32) -> Self {
-        Self { friction, solid_faces: 0x3f, ..Self::block() }
+        Self {
+            friction,
+            solid_faces: 0x3f,
+            ..Self::block()
+        }
     }
 
     pub const fn soul_sand() -> Self {
@@ -132,7 +151,10 @@ impl BlockPhysics {
     }
 
     pub const fn liquid(liquid: Liquid) -> Self {
-        Self { liquid: Some(liquid), ..Self::block() }
+        Self {
+            liquid: Some(liquid),
+            ..Self::block()
+        }
     }
 }
 
@@ -153,7 +175,12 @@ pub trait WorldView {
                     local.clear();
                     self.block_collisions([x, y, z], &mut local);
                     let offset: Vec3 = [x as f32, y as f32, z as f32];
-                    out.extend(local.iter().map(|b| b.translate(offset)).filter(|b| b.intersects(area)));
+                    out.extend(
+                        local
+                            .iter()
+                            .map(|b| b.translate(offset))
+                            .filter(|b| b.intersects(area)),
+                    );
                 }
             }
         }

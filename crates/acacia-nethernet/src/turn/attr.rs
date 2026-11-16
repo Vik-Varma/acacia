@@ -2,8 +2,8 @@
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
-use super::stun::{TransactionId, MAGIC_COOKIE};
 use super::TurnError;
+use super::stun::{MAGIC_COOKIE, TransactionId};
 
 const MAPPED_ADDRESS: u16 = 0x0001;
 const USERNAME: u16 = 0x0006;
@@ -33,7 +33,10 @@ pub enum Attr {
     Username(String),
     Realm(String),
     Nonce(String),
-    ErrorCode { code: u16, reason: String },
+    ErrorCode {
+        code: u16,
+        reason: String,
+    },
     Lifetime(u32),
     /// IANA protocol number; 17 is UDP.
     RequestedTransport(u8),
@@ -41,7 +44,10 @@ pub enum Attr {
     Data(Vec<u8>),
     Software(String),
     /// Encoded verbatim; the decoder skips unknown types instead of producing this.
-    Other { kind: u16, value: Vec<u8> },
+    Other {
+        kind: u16,
+        value: Vec<u8>,
+    },
 }
 
 pub(super) fn push_attr(buf: &mut Vec<u8>, kind: u16, value: &[u8]) {
@@ -69,16 +75,28 @@ pub(super) fn encode_attr(attr: &Attr, tid: &TransactionId, buf: &mut Vec<u8>) {
         }
         Attr::Lifetime(s) => push_attr(buf, LIFETIME, &s.to_be_bytes()),
         Attr::RequestedTransport(p) => push_attr(buf, REQUESTED_TRANSPORT, &[*p, 0, 0, 0]),
-        Attr::ChannelNumber(n) => push_attr(buf, CHANNEL_NUMBER, &(u32::from(*n) << 16).to_be_bytes()),
+        Attr::ChannelNumber(n) => {
+            push_attr(buf, CHANNEL_NUMBER, &(u32::from(*n) << 16).to_be_bytes())
+        }
         Attr::Data(d) => push_attr(buf, DATA, d),
         Attr::Other { kind, value } => push_attr(buf, *kind, value),
     }
 }
 
 /// `Ok(None)` for attribute types this codec doesn't know.
-pub(super) fn decode_attr(kind: u16, v: &[u8], tid: &TransactionId) -> Result<Option<Attr>, TurnError> {
-    let text = |v: &[u8]| String::from_utf8(v.to_vec()).map_err(|_| TurnError::Stun("attribute is not UTF-8"));
-    let word = |v: &[u8]| v.try_into().map(u32::from_be_bytes).map_err(|_| TurnError::Stun("bad 32-bit attribute"));
+pub(super) fn decode_attr(
+    kind: u16,
+    v: &[u8],
+    tid: &TransactionId,
+) -> Result<Option<Attr>, TurnError> {
+    let text = |v: &[u8]| {
+        String::from_utf8(v.to_vec()).map_err(|_| TurnError::Stun("attribute is not UTF-8"))
+    };
+    let word = |v: &[u8]| {
+        v.try_into()
+            .map(u32::from_be_bytes)
+            .map_err(|_| TurnError::Stun("bad 32-bit attribute"))
+    };
     Ok(Some(match kind {
         MAPPED_ADDRESS => Attr::MappedAddress(parse_address(v, None)?),
         XOR_MAPPED_ADDRESS => Attr::XorMappedAddress(parse_address(v, Some(tid))?),
@@ -90,9 +108,14 @@ pub(super) fn decode_attr(kind: u16, v: &[u8], tid: &TransactionId) -> Result<Op
         NONCE => Attr::Nonce(text(v)?),
         SOFTWARE => Attr::Software(text(v)?),
         ERROR_CODE => {
-            let [_, _, class, number, reason @ ..] = v else { return Err(TurnError::Stun("short ERROR-CODE")) };
+            let [_, _, class, number, reason @ ..] = v else {
+                return Err(TurnError::Stun("short ERROR-CODE"));
+            };
             let code = u16::from(class & 0x7) * 100 + u16::from(*number);
-            Attr::ErrorCode { code, reason: String::from_utf8_lossy(reason).into_owned() }
+            Attr::ErrorCode {
+                code,
+                reason: String::from_utf8_lossy(reason).into_owned(),
+            }
         }
         LIFETIME => Attr::Lifetime(word(v)?),
         REQUESTED_TRANSPORT => Attr::RequestedTransport((word(v)? >> 24) as u8),
@@ -125,7 +148,9 @@ fn address(addr: SocketAddr, xor: Option<&TransactionId>) -> Vec<u8> {
 
 fn parse_address(v: &[u8], xor: Option<&TransactionId>) -> Result<SocketAddr, TurnError> {
     let m = xor.map_or([0; 16], mask);
-    let [_, family, p0, p1, ip @ ..] = v else { return Err(TurnError::Stun("short address")) };
+    let [_, family, p0, p1, ip @ ..] = v else {
+        return Err(TurnError::Stun("short address"));
+    };
     let port = u16::from_be_bytes([*p0, *p1]) ^ u16::from_be_bytes([m[0], m[1]]);
     let mut octets = [0u8; 16];
     for (o, (b, k)) in octets.iter_mut().zip(ip.iter().zip(m)) {

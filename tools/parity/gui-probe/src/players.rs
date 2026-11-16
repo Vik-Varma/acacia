@@ -7,7 +7,9 @@ use serde_json::{Map, Value};
 
 use acacia_ui::java::gui::{Gui, GuiDraw};
 use acacia_ui::java::hud::sidebar::{NumberFormat, Team};
-use acacia_ui::java::hud::tab_list::{ListObjective, TabInputs, TabList, TabPlayer, default_skin, row_background};
+use acacia_ui::java::hud::tab_list::{
+    ListObjective, TabInputs, TabList, TabPlayer, default_skin, row_background,
+};
 use acacia_ui::java::text::named_color;
 
 use crate::Assets;
@@ -30,16 +32,21 @@ pub fn replay(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<Gui
             member_of.insert(m.to_owned(), i);
         }
     }
-    let objective = (!c["objective"].is_null())
-        .then(|| ListObjective { hearts: c["objective"]["renderType"] == "hearts", format: number_format(assets, &c["objective"]["numberFormat"]) });
+    let objective = (!c["objective"].is_null()).then(|| ListObjective {
+        hearts: c["objective"]["renderType"] == "hearts",
+        format: number_format(assets, &c["objective"]["numberFormat"]),
+    });
     let players: Vec<TabPlayer> = list(&c["players"])
         .iter()
         .map(|p| {
-            let uuid = u128::from_str_radix(&p["uuid"].as_str().unwrap_or("0").replace('-', ""), 16).unwrap_or(0);
+            let uuid =
+                u128::from_str_radix(&p["uuid"].as_str().unwrap_or("0").replace('-', ""), 16)
+                    .unwrap_or(0);
             let name = p["name"].as_str().unwrap_or_default().to_owned();
             TabPlayer {
                 uuid,
-                upside_down: p["inLevel"].as_bool().unwrap_or(false) && (name == "Dinnerbone" || name == "Grumm"),
+                upside_down: p["inLevel"].as_bool().unwrap_or(false)
+                    && (name == "Dinnerbone" || name == "Grumm"),
                 name,
                 game_mode: p["gameMode"].as_i64().unwrap_or(0) as i32,
                 latency: p["latency"].as_i64().unwrap_or(0) as i32,
@@ -61,7 +68,13 @@ pub fn replay(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<Gui
     for f in list(&c["frames"]) {
         if objective.is_some() {
             for (holder, v) in f["scores"].as_object().into_iter().flatten() {
-                scores.insert(holder.clone(), (v["value"].as_i64().unwrap_or(0) as i32, number_format(assets, &v["format"])));
+                scores.insert(
+                    holder.clone(),
+                    (
+                        v["value"].as_i64().unwrap_or(0) as i32,
+                        number_format(assets, &v["format"]),
+                    ),
+                );
             }
             for r in list(&f["reset"]).iter().filter_map(Value::as_str) {
                 scores.remove(r);
@@ -81,7 +94,10 @@ pub fn replay(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<Gui
                 objective: objective.as_ref(),
                 online_mode: c["onlineMode"].as_bool().unwrap_or(false),
                 tick: f["tick"].as_i64().unwrap_or(0),
-                background: row_background(c["chatOnly"].as_bool().unwrap_or(true), c["opacity"].as_f64().unwrap_or(0.5) as f32),
+                background: row_background(
+                    c["chatOnly"].as_bool().unwrap_or(true),
+                    c["opacity"].as_f64().unwrap_or(0.5) as f32,
+                ),
                 lang: &lang,
             };
             tab.extract(&mut gui, assets.font.as_ref(), &inputs, width);

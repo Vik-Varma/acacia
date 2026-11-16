@@ -7,15 +7,23 @@ use bytes::{Bytes, BytesMut};
 use crate::conn::{Conn, ConnConfig};
 use crate::reliability::RecvLimits;
 use crate::types::{Config, DisconnectReason, Event};
-use crate::wire::datagram::{Reliability, FLAG_VALID};
-use crate::wire::{connected as c, offline as o, WireError};
+use crate::wire::datagram::{FLAG_VALID, Reliability};
+use crate::wire::{WireError, connected as c, offline as o};
 
 const OFFLINE_RETRY: Duration = Duration::from_millis(500);
 const ATTEMPTS_PER_MTU: u8 = 4;
 
 enum State {
-    Open1 { mtu_idx: usize, attempts: u8, next: Instant },
-    Open2 { cookie: Option<u32>, attempts: u8, next: Instant },
+    Open1 {
+        mtu_idx: usize,
+        attempts: u8,
+        next: Instant,
+    },
+    Open2 {
+        cookie: Option<u32>,
+        attempts: u8,
+        next: Instant,
+    },
     Handshaking(Conn),
     Connected(Conn),
     Closed,
@@ -41,7 +49,11 @@ impl Client {
             server,
             epoch: now,
             started: now,
-            state: State::Open1 { mtu_idx: 0, attempts: 0, next: now },
+            state: State::Open1 {
+                mtu_idx: 0,
+                attempts: 0,
+                next: now,
+            },
             mtu,
             outbox: VecDeque::new(),
             events: VecDeque::new(),
@@ -130,11 +142,18 @@ impl Client {
     }
 
     pub fn handle_timeout(&mut self, now: Instant) {
-        if !self.is_closed() && now >= self.started + self.cfg.connect_timeout && !self.is_connected() {
+        if !self.is_closed()
+            && now >= self.started + self.cfg.connect_timeout
+            && !self.is_connected()
+        {
             return self.fail(DisconnectReason::ConnectTimeout);
         }
         match &mut self.state {
-            State::Open1 { mtu_idx, attempts, next } if now >= *next => {
+            State::Open1 {
+                mtu_idx,
+                attempts,
+                next,
+            } if now >= *next => {
                 if *attempts >= ATTEMPTS_PER_MTU && *mtu_idx + 1 < self.cfg.mtu_sizes.len() {
                     *mtu_idx += 1;
                     *attempts = 0;
@@ -146,11 +165,21 @@ impl Client {
                 o::open_connection_request_1(&mut buf, self.cfg.protocol_version, self.mtu);
                 self.outbox.push_back(buf.freeze());
             }
-            State::Open2 { cookie, attempts, next } if now >= *next => {
+            State::Open2 {
+                cookie,
+                attempts,
+                next,
+            } if now >= *next => {
                 *attempts += 1;
                 *next = now + OFFLINE_RETRY;
                 let mut buf = BytesMut::with_capacity(64);
-                o::open_connection_request_2(&mut buf, *cookie, self.server, self.mtu, self.cfg.guid);
+                o::open_connection_request_2(
+                    &mut buf,
+                    *cookie,
+                    self.server,
+                    self.mtu,
+                    self.cfg.guid,
+                );
                 self.outbox.push_back(buf.freeze());
             }
             State::Handshaking(conn) | State::Connected(conn) => {
@@ -168,9 +197,13 @@ impl Client {
             return;
         }
         let result = match self.conn_mut() {
-            Some(conn) if id & FLAG_VALID != 0 => conn.handle_datagram(now, &data).and_then(|()| self.handle_messages(now)),
+            Some(conn) if id & FLAG_VALID != 0 => conn
+                .handle_datagram(now, &data)
+                .and_then(|()| self.handle_messages(now)),
             Some(_) => Ok(()),
-            None => self.handle_offline(now, id, &data).map_err(|e| DisconnectReason::Protocol(e.to_string())),
+            None => self
+                .handle_offline(now, id, &data)
+                .map_err(|e| DisconnectReason::Protocol(e.to_string())),
         };
         if let Err(reason) = result {
             self.fail(reason);
@@ -187,7 +220,11 @@ impl Client {
             o::ID_OPEN_CONNECTION_REPLY_1 if matches!(self.state, State::Open1 { .. }) => {
                 let reply = o::parse_reply_1(data)?;
                 self.mtu = self.mtu.min(reply.mtu);
-                self.state = State::Open2 { cookie: reply.cookie, attempts: 0, next: now };
+                self.state = State::Open2 {
+                    cookie: reply.cookie,
+                    attempts: 0,
+                    next: now,
+                };
                 self.handle_timeout(now);
                 return Ok(());
             }
@@ -202,7 +239,10 @@ impl Client {
                     congestion_window: false,
                 };
                 let mut conn = Conn::new(self.epoch, cfg, now);
-                conn.queue(c::connection_request(self.cfg.guid, conn.time(now)), Reliability::Reliable);
+                conn.queue(
+                    c::connection_request(self.cfg.guid, conn.time(now)),
+                    Reliability::Reliable,
+                );
                 self.state = State::Handshaking(conn);
                 return Ok(());
             }
@@ -216,11 +256,18 @@ impl Client {
         while let Some(msg) = self.conn_mut().and_then(|conn| conn.pop_message(now)) {
             match msg[0] {
                 c::ID_CONNECTION_REQUEST_ACCEPTED => {
-                    let State::Handshaking(conn) = &mut self.state else { continue };
-                    let server_time = c::parse_request_accepted(&msg).map_err(|e| DisconnectReason::Protocol(e.to_string()))?;
+                    let State::Handshaking(conn) = &mut self.state else {
+                        continue;
+                    };
+                    let server_time = c::parse_request_accepted(&msg)
+                        .map_err(|e| DisconnectReason::Protocol(e.to_string()))?;
                     let nic = c::new_incoming_connection(self.server, server_time, conn.time(now));
                     conn.queue(nic, Reliability::ReliableOrdered);
-                    let State::Handshaking(conn) = std::mem::replace(&mut self.state, State::Closed) else { unreachable!() };
+                    let State::Handshaking(conn) =
+                        std::mem::replace(&mut self.state, State::Closed)
+                    else {
+                        unreachable!()
+                    };
                     self.state = State::Connected(conn);
                     self.events.push_back(Event::Connected { mtu: self.mtu });
                 }

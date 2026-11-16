@@ -29,11 +29,25 @@ pub fn sweep(blocks: &impl Blocks, min: DVec3, max: DVec3, delta: DVec3) -> DVec
         for y in lo.y..=hi.y {
             for z in lo.z..=hi.z {
                 let cell = IVec3::new(x, y, z);
-                let Some(state) = blocks.block(cell) else { continue };
+                let Some(state) = blocks.block(cell) else {
+                    continue;
+                };
                 let base = cell.as_dvec3();
-                let shape: Vec<_> = state.boxes.iter().map(|b| (base + DVec3::from(b.min.map(f64::from)), base + DVec3::from(b.max.map(f64::from)))).collect();
+                let shape: Vec<_> = state
+                    .boxes
+                    .iter()
+                    .map(|b| {
+                        (
+                            base + DVec3::from(b.min.map(f64::from)),
+                            base + DVec3::from(b.max.map(f64::from)),
+                        )
+                    })
+                    .collect();
                 // BlockCollisions only yields shapes overlapping the swept box.
-                if shape.iter().any(|(bmin, bmax)| bmin.cmplt(reach_max).all() && bmax.cmpgt(reach_min).all()) {
+                if shape
+                    .iter()
+                    .any(|(bmin, bmax)| bmin.cmplt(reach_max).all() && bmax.cmpgt(reach_min).all())
+                {
                     shapes.push(shape);
                 }
             }
@@ -44,7 +58,11 @@ pub fn sweep(blocks: &impl Blocks, min: DVec3, max: DVec3, delta: DVec3) -> DVec
     }
     let (mut min, mut max) = (min, max);
     let mut out = DVec3::ZERO;
-    let order = if delta.x.abs() < delta.z.abs() { [1, 2, 0] } else { [1, 0, 2] };
+    let order = if delta.x.abs() < delta.z.abs() {
+        [1, 2, 0]
+    } else {
+        [1, 0, 2]
+    };
     for axis in order {
         if delta[axis] == 0.0 {
             continue;
@@ -69,7 +87,15 @@ fn clip(shapes: &[Vec<(DVec3, DVec3)>], axis: usize, min: DVec3, max: DVec3, mut
     d
 }
 
-fn clip_shape(boxes: &[(DVec3, DVec3)], axis: usize, a: usize, b: usize, min: DVec3, max: DVec3, mut d: f64) -> f64 {
+fn clip_shape(
+    boxes: &[(DVec3, DVec3)],
+    axis: usize,
+    a: usize,
+    b: usize,
+    min: DVec3,
+    max: DVec3,
+    mut d: f64,
+) -> f64 {
     for (bmin, bmax) in boxes {
         let overlaps = |i: usize| bmin[i] < max[i] - EPSILON && bmax[i] > min[i] + EPSILON;
         if !overlaps(a) || !overlaps(b) {
@@ -99,8 +125,13 @@ pub(crate) mod tests {
     impl Floor {
         pub fn new() -> Floor {
             let registry = BlockRegistry::vanilla();
-            let ids = ["minecraft:stone", "minecraft:air"].map(|n| registry.find(n, "").expect("vanilla block"));
-            Floor { registry, ids, placed: Vec::new() }
+            let ids = ["minecraft:stone", "minecraft:air"]
+                .map(|n| registry.find(n, "").expect("vanilla block"));
+            Floor {
+                registry,
+                ids,
+                placed: Vec::new(),
+            }
         }
 
         pub fn place(&mut self, cell: IVec3, name: &str, properties: &str) {
@@ -111,8 +142,16 @@ pub(crate) mod tests {
 
     impl Blocks for Floor {
         fn block(&self, cell: IVec3) -> Option<&BlockState> {
-            let placed = self.placed.iter().find(|(c, _)| *c == cell).map(|(_, id)| *id);
-            self.registry.get(placed.unwrap_or(if cell.y < 64 { self.ids[0] } else { self.ids[1] }))
+            let placed = self
+                .placed
+                .iter()
+                .find(|(c, _)| *c == cell)
+                .map(|(_, id)| *id);
+            self.registry.get(placed.unwrap_or(if cell.y < 64 {
+                self.ids[0]
+            } else {
+                self.ids[1]
+            }))
         }
 
         fn liquid(&self, _: IVec3) -> Option<&BlockState> {
@@ -123,7 +162,12 @@ pub(crate) mod tests {
     #[test]
     fn a_falling_box_lands_on_the_floor_and_slides_on() {
         let floor = Floor::new();
-        let d = sweep(&floor, DVec3::new(0.4, 64.5, 0.4), DVec3::new(0.6, 64.7, 0.6), DVec3::new(0.3, -1.0, 0.0));
+        let d = sweep(
+            &floor,
+            DVec3::new(0.4, 64.5, 0.4),
+            DVec3::new(0.6, 64.7, 0.6),
+            DVec3::new(0.3, -1.0, 0.0),
+        );
         assert!((d.y + 0.5).abs() < 1e-9 && (d.x - 0.3).abs() < 1e-9, "{d}");
     }
 }

@@ -6,7 +6,11 @@ use acacia_physics::{BoatState, Liquid, LiquidKind, boat_tick, wave_phases};
 
 fn pool() -> TestWorld {
     let mut world = TestWorld::new();
-    world.fill(Some(TestBlock::Liquid(Liquid::source(LiquidKind::Water))), [200, -61, 210], [240, -61, 220]);
+    world.fill(
+        Some(TestBlock::Liquid(Liquid::source(LiquidKind::Water))),
+        [200, -61, 210],
+        [240, -61, 220],
+    );
     world
 }
 
@@ -23,14 +27,24 @@ fn paddling_straight_follows_the_servers_positions() {
     let world = pool();
     let mut boat = at_rest();
     // (ticks paddled, x, y) as the server reported them; the second stroke starts on the 11th tick.
-    let server = [(1, 215.574_25, -60.035_725), (2, 215.706_16, -60.038_567), (10, 217.874_42, -60.047_165), (11, 218.217_76, -60.041_09), (14, 219.282_29, -60.032_394)];
+    let server = [
+        (1, 215.574_25, -60.035_725),
+        (2, 215.706_16, -60.038_567),
+        (10, 217.874_42, -60.047_165),
+        (11, 218.217_76, -60.041_09),
+        (14, 219.282_29, -60.032_394),
+    ];
     let mut ticks = 0;
     for (at, x, y) in server {
         while ticks < at {
             boat_tick(&mut boat, [0.0, 1.0], &world);
             ticks += 1;
         }
-        assert!((boat.pos[0] - x).abs() < 2e-5 && (boat.pos[1] - y).abs() < 2e-5, "tick {at}: {:?}, server ({x}, {y})", boat.pos);
+        assert!(
+            (boat.pos[0] - x).abs() < 2e-5 && (boat.pos[1] - y).abs() < 2e-5,
+            "tick {at}: {:?}, server ({x}, {y})",
+            boat.pos
+        );
     }
     assert_eq!(boat.pos[2], 215.5);
 }
@@ -44,7 +58,13 @@ fn the_wave_reads_back_from_the_motion() {
     }
     let phases = wave_phases(&boat).expect("floating");
     let turn = std::f64::consts::TAU;
-    assert!(phases.iter().any(|p| ((p - boat.wave).rem_euclid(turn)).min((boat.wave - p).rem_euclid(turn)) < 1e-2), "{phases:?} {}", boat.wave);
+    assert!(
+        phases.iter().any(|p| ((p - boat.wave).rem_euclid(turn))
+            .min((boat.wave - p).rem_euclid(turn))
+            < 1e-2),
+        "{phases:?} {}",
+        boat.wave
+    );
 }
 
 #[test]

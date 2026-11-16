@@ -24,14 +24,31 @@ impl Smoother {
         let t = self.progress();
         let mut out = Vec::new();
         for (e, to) in &self.to {
-            let Some(name) = e.name.as_deref() else { continue };
+            let Some(name) = e.name.as_deref() else {
+                continue;
+            };
             let flag = |name: &str| e.facts.query(name).truthy();
-            let pose = if flag("is_sneaking") { "crouching" } else if flag("is_sitting") { "sitting" } else { "standing" };
+            let pose = if flag("is_sneaking") {
+                "crouching"
+            } else if flag("is_sitting") {
+                "sitting"
+            } else {
+                "standing"
+            };
             let tag = types::name_tag(&e.kind, flag("is_baby"), pose);
             let height = tag.map_or_else(|| e.hitbox.map_or(1.8, |(_, h)| h), |tag| tag.height);
-            let reach = if flag("is_sneaking") { 32.0 } else { tag.map_or(64.0, |tag| f64::from(tag.distance)) };
+            let reach = if flag("is_sneaking") {
+                32.0
+            } else {
+                tag.map_or(64.0, |tag| f64::from(tag.distance))
+            };
             let feet = self.blend(e.runtime_id, *to, t).position;
-            out.push(NameTag { text: name, feet, anchor: feet + DVec3::Y * f64::from(height + 0.5), reach });
+            out.push(NameTag {
+                text: name,
+                feet,
+                anchor: feet + DVec3::Y * f64::from(height + 0.5),
+                reach,
+            });
         }
         out
     }
@@ -41,16 +58,29 @@ impl Smoother {
     pub fn shadows(&self, camera: DVec3) -> Vec<Shadow> {
         let t = self.progress();
         let cast = |(e, to): &(Tracked, Motion)| {
-            if e.own_eyes.is_some_and(|eyes| eyes.distance(camera) <= OWN_HEAD_RADIUS) {
+            if e.own_eyes
+                .is_some_and(|eyes| eyes.distance(camera) <= OWN_HEAD_RADIUS)
+            {
                 return None;
             }
-            let kind = if e.dropped.is_some() { "minecraft:item" } else { e.kind.as_str() };
+            let kind = if e.dropped.is_some() {
+                "minecraft:item"
+            } else {
+                e.kind.as_str()
+            };
             let baby = e.facts.query("is_baby").truthy();
             let size = e.hitbox.map_or(1.0, |(width, _)| (width / 0.52).round());
-            let (radius, strength) = shadows::radius(kind, baby, size, e.facts.query("variant").num())?;
+            let (radius, strength) =
+                shadows::radius(kind, baby, size, e.facts.query("variant").num())?;
             let m = self.blend(e.runtime_id, *to, t);
-            let feet = self.seated(e, m, t).map_or(m.position, |(seat, _)| seat.position);
-            (radius > 0.0).then_some(Shadow { feet, radius, strength })
+            let feet = self
+                .seated(e, m, t)
+                .map_or(m.position, |(seat, _)| seat.position);
+            (radius > 0.0).then_some(Shadow {
+                feet,
+                radius,
+                strength,
+            })
         };
         self.to.iter().filter_map(cast).collect()
     }

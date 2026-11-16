@@ -1,13 +1,15 @@
 //! The host's bots: where each runs, its call channel, and what it still owes the stream.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use acacia_api::{ApiError, BotId, CallId, CallResult, EndReason, ErrorCode, Event, Method, Out, Reply};
+use acacia_api::{
+    ApiError, BotId, CallId, CallResult, EndReason, ErrorCode, Event, Method, Out, Reply,
+};
 use acacia_bot::snapshot::SnapshotReader;
 use parking_lot::Mutex;
-use tokio::sync::{mpsc, Notify};
+use tokio::sync::{Notify, mpsc};
 
 use crate::outbound::ShardBuf;
 use crate::sign_in::DeviceCode;
@@ -30,18 +32,31 @@ pub(crate) struct BotOut {
 
 impl BotOut {
     pub(crate) fn new(id: BotId, buf: Arc<ShardBuf>) -> Arc<Self> {
-        Arc::new(Self { id, seq: AtomicU64::new(0), open: Mutex::new(HashSet::new()), buf })
+        Arc::new(Self {
+            id,
+            seq: AtomicU64::new(0),
+            open: Mutex::new(HashSet::new()),
+            buf,
+        })
     }
 
     pub(crate) fn event(&self, event: Event) {
         let seq = self.seq.fetch_add(1, Ordering::Relaxed) + 1;
-        self.buf.push(Out::Event { bot: self.id.clone(), seq, event });
+        self.buf.push(Out::Event {
+            bot: self.id.clone(),
+            seq,
+            event,
+        });
     }
 
     pub(crate) fn done(&self, call: CallId, result: Result<Reply, ApiError>) {
         self.open.lock().remove(&call);
         let result = result.map_or_else(CallResult::Err, |r| CallResult::ok(&r));
-        self.buf.push(Out::Done { bot: Some(self.id.clone()), call, result });
+        self.buf.push(Out::Done {
+            bot: Some(self.id.clone()),
+            call,
+            result,
+        });
     }
 
     /// A sign-in for this bot's `createBot` waits on a person.
@@ -60,11 +75,16 @@ impl BotOut {
     /// The task died: answer everything it owed and end the bot.
     fn abandon(&self, message: &str) {
         let calls: Vec<_> = self.open.lock().drain().collect();
-        self.event(Event::Error { message: message.to_owned() });
+        self.event(Event::Error {
+            message: message.to_owned(),
+        });
         for call in calls {
             self.fail(call, ErrorCode::Internal, message);
         }
-        self.event(Event::End { reason: EndReason::Lost, message: message.to_owned() });
+        self.event(Event::End {
+            reason: EndReason::Lost,
+            message: message.to_owned(),
+        });
     }
 }
 
@@ -90,43 +110,83 @@ pub(crate) struct Registry {
 
 impl Registry {
     pub(crate) fn new(shards: usize, max_open: usize) -> Self {
-        Self { bots: HashMap::new(), loads: vec![0; shards], next: 0, closing: false, max_open, emptied: Arc::new(Notify::new()) }
+        Self {
+            bots: HashMap::new(),
+            loads: vec![0; shards],
+            next: 0,
+            closing: false,
+            max_open,
+            emptied: Arc::new(Notify::new()),
+        }
     }
 
     /// Names a new bot on the least loaded shard and registers it with its first call open.
-    pub(crate) fn add(&mut self, call: CallId, bufs: &[Arc<ShardBuf>]) -> Result<(usize, Arc<BotOut>, mpsc::UnboundedReceiver<Msg>), ApiError> {
+    pub(crate) fn add(
+        &mut self,
+        call: CallId,
+        bufs: &[Arc<ShardBuf>],
+    ) -> Result<(usize, Arc<BotOut>, mpsc::UnboundedReceiver<Msg>), ApiError> {
         if self.closing {
-            return Err(ApiError::new(ErrorCode::Closed, "the host is shutting down"));
+            return Err(ApiError::new(
+                ErrorCode::Closed,
+                "the host is shutting down",
+            ));
         }
-        let shard = (0..self.loads.len()).min_by_key(|&i| self.loads[i]).expect("at least one shard");
+        let shard = (0..self.loads.len())
+            .min_by_key(|&i| self.loads[i])
+            .expect("at least one shard");
         self.next += 1;
         let id = BotId(format!("bot-{}", self.next));
         let out = BotOut::new(id.clone(), bufs[shard].clone());
         out.open.lock().insert(call);
         let (tx, rx) = mpsc::unbounded_channel();
         self.loads[shard] += 1;
-        self.bots.insert(id, Entry { tx, out: out.clone(), shard, created_by: call, reader: None });
+        self.bots.insert(
+            id,
+            Entry {
+                tx,
+                out: out.clone(),
+                shard,
+                created_by: call,
+                reader: None,
+            },
+        );
         Ok((shard, out, rx))
     }
 
     /// The bot that `createBot` call `call` made, still registered.
     pub(crate) fn created_by(&self, call: CallId) -> Option<BotId> {
-        self.bots.iter().find(|(_, e)| e.created_by == call).map(|(id, _)| id.clone())
+        self.bots
+            .iter()
+            .find(|(_, e)| e.created_by == call)
+            .map(|(id, _)| id.clone())
     }
 
     /// Hands a call to its bot's task.
     pub(crate) fn send(&self, bot: &BotId, call: CallId, method: Method) -> Result<(), ApiError> {
         if self.closing {
-            return Err(ApiError::new(ErrorCode::Closed, "the host is shutting down"));
+            return Err(ApiError::new(
+                ErrorCode::Closed,
+                "the host is shutting down",
+            ));
         }
-        let entry = self.bots.get(bot).ok_or_else(|| ApiError::new(ErrorCode::UnknownBot, format!("no bot {bot}")))?;
+        let entry = self
+            .bots
+            .get(bot)
+            .ok_or_else(|| ApiError::new(ErrorCode::UnknownBot, format!("no bot {bot}")))?;
         if entry.out.open() >= self.max_open {
-            return Err(ApiError::new(ErrorCode::Busy, format!("{bot} has {} calls open", self.max_open)));
+            return Err(ApiError::new(
+                ErrorCode::Busy,
+                format!("{bot} has {} calls open", self.max_open),
+            ));
         }
         entry.out.open.lock().insert(call);
         if entry.tx.send(Msg::Call(call, method)).is_err() {
             entry.out.open.lock().remove(&call);
-            return Err(ApiError::new(ErrorCode::UnknownBot, format!("{bot} has ended")));
+            return Err(ApiError::new(
+                ErrorCode::UnknownBot,
+                format!("{bot} has ended"),
+            ));
         }
         Ok(())
     }
@@ -163,7 +223,9 @@ impl Registry {
     /// The bot's task panicked.
     pub(crate) fn panicked(&mut self, bot: &BotId, message: &str) {
         if let Some(entry) = self.bots.get(bot) {
-            entry.out.abandon(&format!("the bot's task panicked: {message}"));
+            entry
+                .out
+                .abandon(&format!("the bot's task panicked: {message}"));
         }
         self.remove(bot);
     }

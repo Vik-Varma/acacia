@@ -164,7 +164,10 @@ fn build_palette(s: &mut EncodeScratch, blocks: &Blocks, state_count: usize) {
             slot_of(*st);
         }
         // Mapped per small index, so a section's own palette (even with repeats) costs one lookup each.
-        Blocks::Small { palette: small, idx } => {
+        Blocks::Small {
+            palette: small,
+            idx,
+        } => {
             let mut map = [u16::MAX; 256];
             for (o, &i) in s.indices.iter_mut().zip(idx.iter()) {
                 let m = &mut map[i as usize];

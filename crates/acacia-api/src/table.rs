@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use schemars::{generate::SchemaSettings, JsonSchema, Schema};
+use schemars::{JsonSchema, Schema, generate::SchemaSettings};
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -49,7 +49,12 @@ pub struct TypeInfo {
 
 impl TypeInfo {
     pub const fn of<T: JsonSchema + TS + 'static>() -> Self {
-        Self { schema: schema::<T>, ts_name: T::name, ts_path: T::output_path, ts_export: export::<T> }
+        Self {
+            schema: schema::<T>,
+            ts_name: T::name,
+            ts_path: T::output_path,
+            ts_export: export::<T>,
+        }
     }
 }
 
@@ -58,7 +63,11 @@ fn schema<T: JsonSchema>(settings: SchemaSettings) -> Schema {
 }
 
 fn export<T: TS + 'static>(cfg: &ts_rs::Config) -> Result<(), ts_rs::ExportError> {
-    if T::output_path().is_none() { Ok(()) } else { T::export_all(cfg) }
+    if T::output_path().is_none() {
+        Ok(())
+    } else {
+        T::export_all(cfg)
+    }
 }
 
 /// The bot a method's params address: every params type but a host method's has a `bot` field.

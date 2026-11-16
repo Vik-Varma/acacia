@@ -25,13 +25,22 @@ impl<'a, W: WorldView + ?Sized> TickCache<'a, W> {
         let size = [0, 1, 2].map(|a| (max[a] - min[a] + 1).clamp(0, MAX_CELLS));
         let volume = size.iter().product::<i32>();
         let size = if volume > MAX_CELLS { [0; 3] } else { size };
-        let cells = (0..size.iter().product::<i32>()).map(|_| Cell::new(None)).collect();
-        Self { inner, min, size, cells }
+        let cells = (0..size.iter().product::<i32>())
+            .map(|_| Cell::new(None))
+            .collect();
+        Self {
+            inner,
+            min,
+            size,
+            cells,
+        }
     }
 
     fn index(&self, p: BlockPos) -> Option<usize> {
         let d = [0, 1, 2].map(|a| p[a].wrapping_sub(self.min[a]));
-        (0..3).all(|a| (0..self.size[a]).contains(&d[a])).then(|| ((d[0] * self.size[1] + d[1]) * self.size[2] + d[2]) as usize)
+        (0..3)
+            .all(|a| (0..self.size[a]).contains(&d[a]))
+            .then(|| ((d[0] * self.size[1] + d[1]) * self.size[2] + d[2]) as usize)
     }
 }
 
@@ -41,7 +50,9 @@ impl<W: WorldView + ?Sized> WorldView for TickCache<'_, W> {
     }
 
     fn block(&self, pos: BlockPos) -> BlockPhysics {
-        let Some(cell) = self.index(pos).map(|i| &self.cells[i]) else { return self.inner.block(pos) };
+        let Some(cell) = self.index(pos).map(|i| &self.cells[i]) else {
+            return self.inner.block(pos);
+        };
         cell.get().unwrap_or_else(|| {
             let b = self.inner.block(pos);
             cell.set(Some(b));

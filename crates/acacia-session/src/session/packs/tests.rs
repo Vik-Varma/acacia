@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use acacia_proto::packets::{ResourcePackDataInfoPackType, ResourcePacksInfoWorldTemplate};
 use acacia_proto::types::TexturePackInfosItem;
-use acacia_proto::{encode_packet, Packet};
+use acacia_proto::{Packet, encode_packet};
 use bytes::BytesMut;
 use p384::ecdsa::SigningKey;
 
@@ -44,9 +44,14 @@ fn sent(s: &mut Session, at: Instant) -> Vec<RawPacket> {
     s.handle_timeout(at);
     let mut packets = Vec::new();
     while let Some(msg) = s.poll_transmit(at) {
-        BatchCodec::without_header().decode(&msg, &mut packets).unwrap();
+        BatchCodec::without_header()
+            .decode(&msg, &mut packets)
+            .unwrap();
     }
-    packets.into_iter().map(|p| RawPacket::parse(p).unwrap()).collect()
+    packets
+        .into_iter()
+        .map(|p| RawPacket::parse(p).unwrap())
+        .collect()
 }
 
 fn packs_info(cdn_url: &str) -> ResourcePacksInfo {
@@ -67,13 +72,19 @@ fn packs_info(cdn_url: &str) -> ResourcePacksInfo {
         has_addons: false,
         has_scripts: false,
         disable_vibrant_visuals: false,
-        world_template: ResourcePacksInfoWorldTemplate { uuid: UUID.parse().unwrap(), version: String::new() },
+        world_template: ResourcePacksInfoWorldTemplate {
+            uuid: UUID.parse().unwrap(),
+            version: String::new(),
+        },
         texture_packs: vec![pack],
     }
 }
 
 fn response(packets: &[RawPacket]) -> Option<ResourcePackClientResponse> {
-    packets.iter().find(|p| p.id == ResourcePackClientResponse::ID).map(|p| p.decode().unwrap())
+    packets
+        .iter()
+        .find(|p| p.id == ResourcePackClientResponse::ID)
+        .map(|p| p.decode().unwrap())
 }
 
 fn have_all(packets: &[RawPacket]) -> bool {
@@ -98,7 +109,10 @@ fn downloads_a_pack_the_server_names(pack_id: &str) {
     feed(&mut s, now, &packs_info(""));
     now += STEP;
     let asked = response(&sent(&mut s, now)).unwrap();
-    assert_eq!((asked.response_status, asked.resourcepackids), (Status::SendPacks, Some(vec![ID.to_owned()])));
+    assert_eq!(
+        (asked.response_status, asked.resourcepackids),
+        (Status::SendPacks, Some(vec![ID.to_owned()]))
+    );
 
     let payload = [b"abcd".as_slice(), b"ef"];
     let hash = Sha256::digest(payload.concat());
@@ -112,12 +126,24 @@ fn downloads_a_pack_the_server_names(pack_id: &str) {
         pack_type: ResourcePackDataInfoPackType::Resources,
     };
     feed(&mut s, now, &info);
-    let requests: Vec<u32> = sent(&mut s, now).iter().map(|p| p.decode::<ResourcePackChunkRequest>().unwrap().chunk_index).collect();
+    let requests: Vec<u32> = sent(&mut s, now)
+        .iter()
+        .map(|p| p.decode::<ResourcePackChunkRequest>().unwrap().chunk_index)
+        .collect();
     assert_eq!(requests, [0, 1]);
 
     for (index, progress) in [(1u32, 4u64), (0, 0)] {
         let data = Bytes::from_static(payload[index as usize]);
-        feed(&mut s, now, &ResourcePackChunkData { pack_id: pack_id.into(), chunk_index: index, progress, payload: data });
+        feed(
+            &mut s,
+            now,
+            &ResourcePackChunkData {
+                pack_id: pack_id.into(),
+                chunk_index: index,
+                progress,
+                payload: data,
+            },
+        );
     }
     now += STEP;
     assert!(have_all(&sent(&mut s, now)));
@@ -125,7 +151,10 @@ fn downloads_a_pack_the_server_names(pack_id: &str) {
 
     let mut again = session(store, now);
     feed(&mut again, now, &packs_info(""));
-    assert!(have_all(&sent(&mut again, now + STEP)), "a returning account has it");
+    assert!(
+        have_all(&sent(&mut again, now + STEP)),
+        "a returning account has it"
+    );
 }
 
 #[test]
@@ -136,14 +165,30 @@ fn url_packs_are_fetched_over_http_not_requested() {
     let url = "https://cdn.example/pack.zip";
 
     feed(&mut s, now, &packs_info(url));
-    assert_eq!(s.poll_pack_fetch(), Some(PackFetch { id: ID.into(), url: url.into() }));
+    assert_eq!(
+        s.poll_pack_fetch(),
+        Some(PackFetch {
+            id: ID.into(),
+            url: url.into()
+        })
+    );
     assert_eq!(s.poll_pack_fetch(), None);
     now += Duration::from_secs(10);
-    assert_eq!(response(&sent(&mut s, now)), None, "nothing until the download is done");
+    assert_eq!(
+        response(&sent(&mut s, now)),
+        None,
+        "nothing until the download is done"
+    );
 
     s.pack_fetched(now, ID, true);
-    assert!(!have_all(&sent(&mut s, now + Duration::from_millis(delay::PACKS_FETCHED.0 - 1))));
-    assert!(have_all(&sent(&mut s, now + Duration::from_millis(delay::PACKS_FETCHED.1))));
+    assert!(!have_all(&sent(
+        &mut s,
+        now + Duration::from_millis(delay::PACKS_FETCHED.0 - 1)
+    )));
+    assert!(have_all(&sent(
+        &mut s,
+        now + Duration::from_millis(delay::PACKS_FETCHED.1)
+    )));
     assert!(store.has(ID));
 
     let mut again = session(store, now);

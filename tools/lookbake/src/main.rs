@@ -60,19 +60,37 @@ fn main() -> Result<(), Error> {
     let mut dir = |default: fn() -> PathBuf| args.next().map_or_else(default, PathBuf::from);
     match command.as_deref() {
         Some("bedrock") => {
-            let (pack, out) = (Pack::load(&dir(Pack::default_dir))?, dir(|| LookPack::default_dir("bedrock")));
+            let (pack, out) = (
+                Pack::load(&dir(Pack::default_dir))?,
+                dir(|| LookPack::default_dir("bedrock")),
+            );
             let (look, report) = LookPack::bake_bedrock(&pack, Look::BEDROCK);
             look.save(&out)?;
-            println!("{}; {} blocks without textures, {} images missing", summary(&look, &out), report.blocks_without_textures.len(), report.missing_images.len());
+            println!(
+                "{}; {} blocks without textures, {} images missing",
+                summary(&look, &out),
+                report.blocks_without_textures.len(),
+                report.missing_images.len()
+            );
         }
         Some("java") => {
-            let (pack, java, out) = (Pack::load(&dir(Pack::default_dir))?, dir(jar::default_dir), dir(|| LookPack::default_dir("java")));
+            let (pack, java, out) = (
+                Pack::load(&dir(Pack::default_dir))?,
+                dir(jar::default_dir),
+                dir(|| LookPack::default_dir("java")),
+            );
             let (jar, mapping) = (jar::fetch(&java)?, mapping::Mapping::fetch(&java)?);
             let (look, report) = bake_java(&pack, &java, &jar, &mapping)?;
             look.save(&out)?;
-            biomes::write(&biomes::java(&jar.biomes, &biomes::Colormaps::load(&jar.assets)?)?, &out)?;
+            biomes::write(
+                &biomes::java(&jar.biomes, &biomes::Colormaps::load(&jar.assets)?)?,
+                &out,
+            )?;
             ui::copy(&jar.assets, &out)?;
-            println!("  Java fonts from the asset index: {} files", ui::fetch_fonts(&out)?);
+            println!(
+                "  Java fonts from the asset index: {} files",
+                ui::fetch_fonts(&out)?
+            );
             environment::copy(&jar.assets, &out)?;
             environment::write(&jar.data, &out)?;
             particles::copy(&jar.assets, &out)?;
@@ -80,8 +98,14 @@ fn main() -> Result<(), Error> {
             exported(&java, &jar, &out)?;
             println!("  Java sounds: {} files", sounds::fetch(&out)?);
             println!("{}", summary(&look, &out));
-            println!("  Java: {} states as cubes, {} as models, {} liquids; kept from Bedrock: {:?}", report.cubes, report.models, report.liquids, report.kept);
-            println!("  textures missing: {:?}; models invalid: {:?}", report.missing_textures, report.invalid_models);
+            println!(
+                "  Java: {} states as cubes, {} as models, {} liquids; kept from Bedrock: {:?}",
+                report.cubes, report.models, report.liquids, report.kept
+            );
+            println!(
+                "  textures missing: {:?}; models invalid: {:?}",
+                report.missing_textures, report.invalid_models
+            );
         }
         Some("java-exported") => {
             let (java, out) = (dir(jar::default_dir), dir(|| LookPack::default_dir("java")));
@@ -98,13 +122,22 @@ fn main() -> Result<(), Error> {
             }
         }
         Some("java-check") => {
-            let truth = Some(dir(PathBuf::new)).filter(|p| !p.as_os_str().is_empty()).ok_or(USAGE)?;
+            let truth = Some(dir(PathBuf::new))
+                .filter(|p| !p.as_os_str().is_empty())
+                .ok_or(USAGE)?;
             let java = dir(jar::default_dir);
             let (jar, mapping) = (jar::fetch(&java)?, mapping::Mapping::fetch(&java)?);
-            let outcome = check::print(&jar.assets, &biomes::java(&jar.biomes, &biomes::Colormaps::load(&jar.assets)?)?, &mapping, &truth)?;
+            let outcome = check::print(
+                &jar.assets,
+                &biomes::java(&jar.biomes, &biomes::Colormaps::load(&jar.assets)?)?,
+                &mapping,
+                &truth,
+            )?;
             outcome.print_for_parity();
             if !outcome.divergences.is_empty() {
-                return Err(format!("{} divergences from the game", outcome.divergences.len()).into());
+                return Err(
+                    format!("{} divergences from the game", outcome.divergences.len()).into(),
+                );
             }
         }
         Some("java-environment") => {
@@ -114,7 +147,9 @@ fn main() -> Result<(), Error> {
             environment::write(&jar.data, &out)?;
         }
         Some("java-light-check") => {
-            let truth = Some(dir(PathBuf::new)).filter(|p| !p.as_os_str().is_empty()).ok_or(USAGE)?;
+            let truth = Some(dir(PathBuf::new))
+                .filter(|p| !p.as_os_str().is_empty())
+                .ok_or(USAGE)?;
             let (pack, java) = (Pack::load(&dir(Pack::default_dir))?, dir(jar::default_dir));
             let (jar, mapping) = (jar::fetch(&java)?, mapping::Mapping::fetch(&java)?);
             let (look, _) = bake_java(&pack, &java, &jar, &mapping)?;
@@ -133,12 +168,23 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn bake_java(pack: &Pack, java: &std::path::Path, jar: &jar::Jar, mapping: &mapping::Mapping) -> Result<(LookPack, java::Report), Error> {
+fn bake_java(
+    pack: &Pack,
+    java: &std::path::Path,
+    jar: &jar::Jar,
+    mapping: &mapping::Mapping,
+) -> Result<(LookPack, java::Report), Error> {
     let shapes = occlusion::Shapes::export(java)?;
     if shapes.is_none() {
         println!("  Java face culling: no JDK 25 (JAVA_HOME or PATH), the renderer's own kept");
     }
-    Ok(java::bake_look(pack, &jar.assets, mapping, &fluid::Tags::load(&jar.block_tags)?, shapes.as_ref()))
+    Ok(java::bake_look(
+        pack,
+        &jar.assets,
+        mapping,
+        &fluid::Tags::load(&jar.block_tags)?,
+        shapes.as_ref(),
+    ))
 }
 
 /// The exporters' entity and item models into the look; false (and the Bedrock ones kept) without a JDK 25.
@@ -147,14 +193,28 @@ fn exported(java: &std::path::Path, jar: &jar::Jar, out: &std::path::Path) -> Re
         println!("  Java entity and item models: no JDK 25 (JAVA_HOME or PATH), Bedrock's kept");
         return Ok(false);
     };
-    println!("  Java entity models: {} layers", entities::bake(&exporter, jar, out)?);
-    println!("  Java armour trims: {} images", trims::bake(&jar.assets, out)?);
+    println!(
+        "  Java entity models: {} layers",
+        entities::bake(&exporter, jar, out)?
+    );
+    println!(
+        "  Java armour trims: {} images",
+        trims::bake(&jar.assets, out)?
+    );
     let items = items::bake(&exporter, java, &jar.assets, out)?;
-    println!("  Java item models: {} items, {} images, {} Bedrock names", items.items, items.images, items.names);
+    println!(
+        "  Java item models: {} items, {} images, {} Bedrock names",
+        items.items, items.images, items.names
+    );
     Ok(true)
 }
 
 fn summary(look: &LookPack, out: &std::path::Path) -> String {
     let (states, blocks) = look.counts();
-    format!("{}: {states} states, {blocks} distinct blocks, {} textures ({} animated)", out.display(), look.atlas.layers.len(), look.atlas.animations.len())
+    format!(
+        "{}: {states} states, {blocks} distinct blocks, {} textures ({} animated)",
+        out.display(),
+        look.atlas.layers.len(),
+        look.atlas.animations.len()
+    )
 }

@@ -10,17 +10,25 @@ use acacia_bot::{Bot, BotConfig};
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let [host, port] = &args[..2] else { return Err("usage: java_eat <host> <port> [name]".into()) };
+    let [host, port] = &args[..2] else {
+        return Err("usage: java_eat <host> <port> [name]".into());
+    };
     let name = args.get(2).map_or("Eater", String::as_str);
 
-    let mut bot = Bot::connect_java_offline(host, port.parse()?, name, BotConfig::default()).await?;
+    let mut bot =
+        Bot::connect_java_offline(host, port.parse()?, name, BotConfig::default()).await?;
     let started = tokio::time::Instant::now();
     while bot.state().player.hunger >= 18.0 && started.elapsed() < Duration::from_secs(5) {
         bot.wait_ticks(10).await?;
     }
     let vitals = |bot: &Bot| {
         let p = &bot.state().player;
-        (p.health, p.hunger, p.saturation, bot.state().inventory.held().count)
+        (
+            p.health,
+            p.hunger,
+            p.saturation,
+            bot.state().inventory.held().count,
+        )
     };
     println!("before (health, food, saturation, held) {:?}", vitals(&bot));
     if let Some(controls) = bot.controls() {

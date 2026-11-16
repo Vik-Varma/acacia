@@ -19,23 +19,51 @@ pub const MAX_STACK: i32 = 64;
 
 /// `DyeColor`s by id, white first (as `Banner`'s dyes count).
 pub const DYES: [&str; 16] = [
-    "white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray", "light_gray", "cyan", "purple", "blue", "brown", "green", "red",
+    "white",
+    "orange",
+    "magenta",
+    "light_blue",
+    "yellow",
+    "lime",
+    "pink",
+    "gray",
+    "light_gray",
+    "cyan",
+    "purple",
+    "blue",
+    "brown",
+    "green",
+    "red",
     "black",
 ];
 
 /// The Java item a stack is: `minecraft:apple`.
 pub fn java_id(stack: &Stack, items: Option<&JavaItems>) -> String {
-    items.map_or_else(|| stack.name.clone(), |items| items.java_name(&stack.name, stack.aux).to_owned())
+    items.map_or_else(
+        || stack.name.clone(),
+        |items| items.java_name(&stack.name, stack.aux).to_owned(),
+    )
 }
 
 /// `stack` as the screens read it, drawn under `key`.
-pub fn item_stack(stack: &Stack, items: Option<&JavaItems>, lang: &JavaLang, key: i32) -> ItemStack {
+pub fn item_stack(
+    stack: &Stack,
+    items: Option<&JavaItems>,
+    lang: &JavaLang,
+    key: i32,
+) -> ItemStack {
     let id = java_id(stack, items);
     let path = id.strip_prefix("minecraft:").unwrap_or(&id);
     let mut c = Map::new();
     // Blocks' items are named by their block's key.
-    let name = ["item", "block"].map(|kind| format!("{kind}.minecraft.{path}")).into_iter().find(|k| lang.contains_key(k));
-    c.insert("minecraft:item_name".into(), json!({"translate": name.unwrap_or_else(|| format!("item.minecraft.{path}"))}));
+    let name = ["item", "block"]
+        .map(|kind| format!("{kind}.minecraft.{path}"))
+        .into_iter()
+        .find(|k| lang.contains_key(k));
+    c.insert(
+        "minecraft:item_name".into(),
+        json!({"translate": name.unwrap_or_else(|| format!("item.minecraft.{path}"))}),
+    );
     c.insert("minecraft:max_stack_size".into(), json!(MAX_STACK));
     if let Some(title) = &stack.title {
         c.insert("minecraft:custom_name".into(), json!(title));
@@ -43,21 +71,39 @@ pub fn item_stack(stack: &Stack, items: Option<&JavaItems>, lang: &JavaLang, key
     let enchantments: Map<String, Value> = stack
         .enchantments
         .iter()
-        .filter_map(|&(id, level)| Some((format!("minecraft:{}", ENCHANTMENTS.get(usize::try_from(id).ok()?)?.0), json!(level))))
+        .filter_map(|&(id, level)| {
+            Some((
+                format!(
+                    "minecraft:{}",
+                    ENCHANTMENTS.get(usize::try_from(id).ok()?)?.0
+                ),
+                json!(level),
+            ))
+        })
         .collect();
     if !enchantments.is_empty() {
-        let component = if path == "enchanted_book" { "minecraft:stored_enchantments" } else { "minecraft:enchantments" };
+        let component = if path == "enchanted_book" {
+            "minecraft:stored_enchantments"
+        } else {
+            "minecraft:enchantments"
+        };
         c.insert(component.into(), Value::Object(enchantments));
     }
     if !stack.lore.is_empty() {
         c.insert("minecraft:lore".into(), json!(stack.lore));
     }
     if let Some([r, g, b]) = stack.dye {
-        c.insert("minecraft:dyed_color".into(), json!(i32::from(r) << 16 | i32::from(g) << 8 | i32::from(b)));
+        c.insert(
+            "minecraft:dyed_color".into(),
+            json!(i32::from(r) << 16 | i32::from(g) << 8 | i32::from(b)),
+        );
     }
     if let Some(banner) = &stack.banner {
         let layer = |&(pattern, dye): &(&str, u8)| json!({"pattern": format!("minecraft:{pattern}"), "color": DYES[usize::from(dye) % 16]});
-        c.insert("minecraft:banner_patterns".into(), Value::Array(banner.layers.iter().map(layer).collect()));
+        c.insert(
+            "minecraft:banner_patterns".into(),
+            Value::Array(banner.layers.iter().map(layer).collect()),
+        );
     }
     if let Some((damage, max)) = stack.durability {
         c.insert("minecraft:damage".into(), json!(damage));
@@ -66,7 +112,13 @@ pub fn item_stack(stack: &Stack, items: Option<&JavaItems>, lang: &JavaLang, key
     if let Some(color) = path.strip_suffix("_dye").filter(|c| DYES.contains(c)) {
         c.insert("minecraft:dye".into(), json!(color));
     }
-    ItemStack { id, count: i32::from(stack.count), size: c.len(), components: c, key: Some(key) }
+    ItemStack {
+        id,
+        count: i32::from(stack.count),
+        size: c.len(),
+        components: c,
+        key: Some(key),
+    }
 }
 
 /// The registry facts tooltips read that the viewer has: the enchantments' names, maximum levels
@@ -74,7 +126,10 @@ pub fn item_stack(stack: &Stack, items: Option<&JavaItems>, lang: &JavaLang, key
 pub fn facts() -> Game {
     let entry = |&(id, max): &(&str, i32)| {
         let curse = id.ends_with("_curse");
-        (format!("minecraft:{id}"), json!({"description": {"translate": format!("enchantment.minecraft.{id}")}, "max_level": max, "curse": curse}))
+        (
+            format!("minecraft:{id}"),
+            json!({"description": {"translate": format!("enchantment.minecraft.{id}")}, "max_level": max, "curse": curse}),
+        )
     };
     Game::new(json!({ "enchantment": Value::Object(ENCHANTMENTS.iter().map(entry).collect()) }))
 }
@@ -82,12 +137,30 @@ pub fn facts() -> Game {
 /// What `itemDecorations` draws over `stack`: its count and damage bar. Bundle contents aren't
 /// in a Bedrock stack, so a bundle shows no weight bar.
 pub fn decorations(stack: &Stack, key: i32, count: Option<&str>) -> ItemDecorations {
-    decor::of_stack(&item_stack(stack, None, &JavaLang::new(), key), &Game::new(Value::Null), count)
+    decor::of_stack(
+        &item_stack(stack, None, &JavaLang::new(), key),
+        &Game::new(Value::Null),
+        count,
+    )
 }
 
 /// A stack of one plain item (the beacon's payment icons, tab icons).
 pub fn plain(name: &str) -> Stack {
-    Stack { name: name.to_owned(), aux: 0, count: 1, block: 0, enchanted: false, dye: None, banner: None, map: None, title: None, enchantments: Vec::new(), lore: Vec::new(), trim: None, durability: None }
+    Stack {
+        name: name.to_owned(),
+        aux: 0,
+        count: 1,
+        block: 0,
+        enchanted: false,
+        dye: None,
+        banner: None,
+        map: None,
+        title: None,
+        enchantments: Vec::new(),
+        lore: Vec::new(),
+        trim: None,
+        durability: None,
+    }
 }
 
 #[cfg(test)]
@@ -96,11 +169,32 @@ mod tests {
 
     #[test]
     fn a_worn_tool_shows_its_bar_and_a_pile_its_count() {
-        let worn = Stack { durability: Some((125, 250)), ..plain("minecraft:iron_pickaxe") };
+        let worn = Stack {
+            durability: Some((125, 250)),
+            ..plain("minecraft:iron_pickaxe")
+        };
         let d = decorations(&worn, 0, None);
         assert_eq!((d.count, d.bar.map(|b| b.0)), (1, Some(7)));
-        assert_eq!(decorations(&Stack { durability: Some((0, 250)), ..worn }, 0, None).bar, None);
-        let pile = decorations(&Stack { count: 12, ..plain("minecraft:apple") }, 0, None);
+        assert_eq!(
+            decorations(
+                &Stack {
+                    durability: Some((0, 250)),
+                    ..worn
+                },
+                0,
+                None
+            )
+            .bar,
+            None
+        );
+        let pile = decorations(
+            &Stack {
+                count: 12,
+                ..plain("minecraft:apple")
+            },
+            0,
+            None,
+        );
         assert_eq!((pile.count, pile.bar), (12, None));
     }
 }

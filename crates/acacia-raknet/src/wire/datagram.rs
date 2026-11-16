@@ -1,6 +1,6 @@
 use bytes::{BufMut, Bytes, BytesMut};
 
-use super::{Reader, Result, WireError, WriteExt, U24_MASK};
+use super::{Reader, Result, U24_MASK, WireError, WriteExt};
 
 pub const FLAG_VALID: u8 = 0x80;
 pub const FLAG_ACK: u8 = 0x40;
@@ -38,7 +38,14 @@ impl Reliability {
     }
 
     pub fn is_reliable(self) -> bool {
-        matches!(self, Self::Reliable | Self::ReliableOrdered | Self::ReliableSequenced | Self::ReliableWithAck | Self::ReliableOrderedWithAck)
+        matches!(
+            self,
+            Self::Reliable
+                | Self::ReliableOrdered
+                | Self::ReliableSequenced
+                | Self::ReliableWithAck
+                | Self::ReliableOrderedWithAck
+        )
     }
 
     pub fn is_sequenced(self) -> bool {
@@ -123,12 +130,27 @@ impl Frame {
         let flags = r.u8()?;
         let reliability = Reliability::from_bits(flags >> 5);
         let len = usize::from(r.u16_be()?).div_ceil(8);
-        let reliable_index = if reliability.is_reliable() { r.u24_le()? } else { 0 };
-        let sequence_index = if reliability.is_sequenced() { r.u24_le()? } else { 0 };
-        let (order_index, order_channel) =
-            if reliability.has_order_info() { (r.u24_le()?, r.u8()?) } else { (0, 0) };
+        let reliable_index = if reliability.is_reliable() {
+            r.u24_le()?
+        } else {
+            0
+        };
+        let sequence_index = if reliability.is_sequenced() {
+            r.u24_le()?
+        } else {
+            0
+        };
+        let (order_index, order_channel) = if reliability.has_order_info() {
+            (r.u24_le()?, r.u8()?)
+        } else {
+            (0, 0)
+        };
         let split = if flags & FLAG_SPLIT != 0 {
-            Some(Split { count: r.u32_be()?, id: r.u16_be()?, index: r.u32_be()? })
+            Some(Split {
+                count: r.u32_be()?,
+                id: r.u16_be()?,
+                index: r.u32_be()?,
+            })
         } else {
             None
         };
@@ -137,7 +159,15 @@ impl Frame {
         }
         let start = r.pos();
         r.take(len)?;
-        Ok(Self { reliability, reliable_index, sequence_index, order_index, order_channel, split, body: src.slice(start..start + len) })
+        Ok(Self {
+            reliability,
+            reliable_index,
+            sequence_index,
+            order_index,
+            order_channel,
+            split,
+            body: src.slice(start..start + len),
+        })
     }
 }
 
@@ -194,17 +224,39 @@ mod tests {
     use super::*;
 
     fn frame(reliability: Reliability, split: Option<Split>) -> Frame {
-        Frame { reliability, reliable_index: 7, sequence_index: 3, order_index: 9, order_channel: 2, split, body: Bytes::from_static(b"hello") }
+        Frame {
+            reliability,
+            reliable_index: 7,
+            sequence_index: 3,
+            order_index: 9,
+            order_channel: 2,
+            split,
+            body: Bytes::from_static(b"hello"),
+        }
     }
 
     #[test]
     fn frame_roundtrip_all_reliabilities() {
         for bits in 0..8 {
-            for split in [None, Some(Split { count: 3, id: 5, index: 1 })] {
+            for split in [
+                None,
+                Some(Split {
+                    count: 3,
+                    id: 5,
+                    index: 1,
+                }),
+            ] {
                 let mut f = frame(Reliability::from_bits(bits), split);
-                if !f.reliability.is_reliable() { f.reliable_index = 0; }
-                if !f.reliability.is_sequenced() { f.sequence_index = 0; }
-                if !f.reliability.has_order_info() { f.order_index = 0; f.order_channel = 0; }
+                if !f.reliability.is_reliable() {
+                    f.reliable_index = 0;
+                }
+                if !f.reliability.is_sequenced() {
+                    f.sequence_index = 0;
+                }
+                if !f.reliability.has_order_info() {
+                    f.order_index = 0;
+                    f.order_channel = 0;
+                }
                 let mut buf = BytesMut::new();
                 f.encode(&mut buf);
                 assert_eq!(buf.len(), f.encoded_len());

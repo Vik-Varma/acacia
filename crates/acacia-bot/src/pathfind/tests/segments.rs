@@ -31,7 +31,11 @@ fn lane(len: i32) -> Grid {
 }
 
 fn opts(profile: MovementProfile) -> GotoOpts {
-    GotoOpts { search: macro_opts(profile), seed: Some(1), ..GotoOpts::default() }
+    GotoOpts {
+        search: macro_opts(profile),
+        seed: Some(1),
+        ..GotoOpts::default()
+    }
 }
 
 #[test]
@@ -41,15 +45,40 @@ fn long_goto_runs_through_the_joins() {
     let goal = Goal::Block([500, 1, 0]);
     let mut bad = Vec::new();
     for profile in PROFILES {
-        let sky = Sky { horizon: Some(5), delay: 0, max_ticks: 4000 };
-        let f = fly(&g, &mut standing([0.5, 1.0, 0.5]), goal.clone(), opts(profile), sky);
+        let sky = Sky {
+            horizon: Some(5),
+            delay: 0,
+            max_ticks: 4000,
+        };
+        let f = fly(
+            &g,
+            &mut standing([0.5, 1.0, 0.5]),
+            goal.clone(),
+            opts(profile),
+            sky,
+        );
         let speeds = f.join_speeds(JOIN_WINDOW);
-        eprintln!("JOINS {profile:?}: {} ticks, {} joins, {} searches, {} diverged, slowest near each join {speeds:.3?}", f.ticks, f.joins.len(), f.searches, f.divergences);
+        eprintln!(
+            "JOINS {profile:?}: {} ticks, {} joins, {} searches, {} diverged, slowest near each join {speeds:.3?}",
+            f.ticks,
+            f.joins.len(),
+            f.searches,
+            f.divergences
+        );
         let back = turned_back(&f, goal_x(&goal));
         eprintln!("BACKWARDS {profile:?}: {back:.2?}");
-        let ok = f.result.is_ok() && f.joins.len() >= 3 && f.replans == 0 && speeds.iter().all(|&s| s > MIN_JOIN_SPEED) && back.is_empty();
+        let ok = f.result.is_ok()
+            && f.joins.len() >= 3
+            && f.replans == 0
+            && speeds.iter().all(|&s| s > MIN_JOIN_SPEED)
+            && back.is_empty();
         if !ok {
-            bad.push(format!("{profile:?}: {:?}, {} joins, {} re-plans, speeds {speeds:?}", f.result, f.joins.len(), f.replans));
+            bad.push(format!(
+                "{profile:?}: {:?}, {} joins, {} re-plans, speeds {speeds:?}",
+                f.result,
+                f.joins.len(),
+                f.replans
+            ));
         }
     }
     assert!(bad.is_empty(), "{bad:#?}");
@@ -64,7 +93,10 @@ fn goal_x(goal: &Goal) -> f32 {
 
 /// Ticks moving back (-x) on the lane, away from the goal's last block (settling there may step back).
 fn turned_back(f: &Flight, goal_x: f32) -> Vec<(usize, Vec3)> {
-    f.backwards(BACK_SPEED).into_iter().filter(|(_, p)| goal_x - p[0] > 1.5).collect()
+    f.backwards(BACK_SPEED)
+        .into_iter()
+        .filter(|(_, p)| goal_x - p[0] > 1.5)
+        .collect()
 }
 
 /// `Human` seed 1 sprint-jumped past a shortcut's target at x 146 and turned round to stand in it (fixed: a
@@ -74,8 +106,18 @@ fn turned_back(f: &Flight, goal_x: f32) -> Vec<(usize, Vec3)> {
 fn human_runs_on_past_a_shortcut_target() {
     let g = lane(200);
     let goal = Goal::Block([190, 1, 0]);
-    let sky = Sky { horizon: Some(5), delay: 0, max_ticks: 2000 };
-    let f = fly(&g, &mut standing([0.5, 1.0, 0.5]), goal.clone(), opts(MovementProfile::Human), sky);
+    let sky = Sky {
+        horizon: Some(5),
+        delay: 0,
+        max_ticks: 2000,
+    };
+    let f = fly(
+        &g,
+        &mut standing([0.5, 1.0, 0.5]),
+        goal.clone(),
+        opts(MovementProfile::Human),
+        sky,
+    );
     assert_eq!(f.result, Ok(()));
     assert_eq!(turned_back(&f, goal_x(&goal)), Vec::new());
 }
@@ -85,9 +127,24 @@ fn human_runs_on_past_a_shortcut_target() {
 #[ignore = "slow in debug; run in release"]
 fn late_splice_waits_at_the_join() {
     let g = lane(150);
-    let sky = Sky { horizon: Some(3), delay: 140, max_ticks: 3000 };
-    let f = fly(&g, &mut standing([0.5, 1.0, 0.5]), Goal::Block([145, 1, 0]), opts(MovementProfile::Optimal), sky);
-    eprintln!("LATE {} ticks, joins {:?}, speeds {:.3?}", f.ticks, f.joins, f.join_speeds(JOIN_WINDOW));
+    let sky = Sky {
+        horizon: Some(3),
+        delay: 140,
+        max_ticks: 3000,
+    };
+    let f = fly(
+        &g,
+        &mut standing([0.5, 1.0, 0.5]),
+        Goal::Block([145, 1, 0]),
+        opts(MovementProfile::Optimal),
+        sky,
+    );
+    eprintln!(
+        "LATE {} ticks, joins {:?}, speeds {:.3?}",
+        f.ticks,
+        f.joins,
+        f.join_speeds(JOIN_WINDOW)
+    );
     assert_eq!(f.result, Ok(()));
     assert!(!f.joins.is_empty() && f.replans == 0);
 }
@@ -97,7 +154,17 @@ fn late_splice_waits_at_the_join() {
 #[ignore = "slow in debug; run in release"]
 fn short_goto_has_no_joins() {
     let g = lane(60);
-    let sky = Sky { horizon: None, delay: 0, max_ticks: 600 };
-    let f = fly(&g, &mut standing([0.5, 1.0, 0.5]), Goal::Block([55, 1, 0]), opts(MovementProfile::Optimal), sky);
+    let sky = Sky {
+        horizon: None,
+        delay: 0,
+        max_ticks: 600,
+    };
+    let f = fly(
+        &g,
+        &mut standing([0.5, 1.0, 0.5]),
+        Goal::Block([55, 1, 0]),
+        opts(MovementProfile::Optimal),
+        sky,
+    );
     assert_eq!((f.result, f.joins.len()), (Ok(()), 0));
 }

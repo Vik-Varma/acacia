@@ -21,7 +21,11 @@ pub struct Perturbation {
 }
 
 impl Perturbation {
-    pub const NOMINAL: Perturbation = Perturbation { jump: 0, yaw: 0.0, start: 0.0 };
+    pub const NOMINAL: Perturbation = Perturbation {
+        jump: 0,
+        yaw: 0.0,
+        start: 0.0,
+    };
 }
 
 /// `Optimal` plans from quantized momentum (`node::Momentum`, ≤ 0.0013 blocks off over 30 ticks): a macro
@@ -30,18 +34,42 @@ const QUANTUM_SLOP: f32 = 0.01;
 
 const OPTIMAL_PERTURBATIONS: [Perturbation; 3] = [
     Perturbation::NOMINAL,
-    Perturbation { start: QUANTUM_SLOP, ..Perturbation::NOMINAL },
-    Perturbation { start: -QUANTUM_SLOP, ..Perturbation::NOMINAL },
+    Perturbation {
+        start: QUANTUM_SLOP,
+        ..Perturbation::NOMINAL
+    },
+    Perturbation {
+        start: -QUANTUM_SLOP,
+        ..Perturbation::NOMINAL
+    },
 ];
 
 const HUMAN_PERTURBATIONS: [Perturbation; 7] = [
     Perturbation::NOMINAL,
-    Perturbation { jump: 1, ..Perturbation::NOMINAL },
-    Perturbation { jump: -1, ..Perturbation::NOMINAL },
-    Perturbation { yaw: human::AIM_JITTER_DEG, ..Perturbation::NOMINAL },
-    Perturbation { yaw: -human::AIM_JITTER_DEG, ..Perturbation::NOMINAL },
-    Perturbation { start: human::START_SLOP, ..Perturbation::NOMINAL },
-    Perturbation { start: -human::START_SLOP, ..Perturbation::NOMINAL },
+    Perturbation {
+        jump: 1,
+        ..Perturbation::NOMINAL
+    },
+    Perturbation {
+        jump: -1,
+        ..Perturbation::NOMINAL
+    },
+    Perturbation {
+        yaw: human::AIM_JITTER_DEG,
+        ..Perturbation::NOMINAL
+    },
+    Perturbation {
+        yaw: -human::AIM_JITTER_DEG,
+        ..Perturbation::NOMINAL
+    },
+    Perturbation {
+        start: human::START_SLOP,
+        ..Perturbation::NOMINAL
+    },
+    Perturbation {
+        start: -human::START_SLOP,
+        ..Perturbation::NOMINAL
+    },
 ];
 
 impl MovementProfile {
@@ -93,7 +121,11 @@ pub struct Aim {
 
 impl Aim {
     pub fn new(profile: MovementProfile, seed: u64) -> Self {
-        Self { profile, bias: 0.0, rng: seed }
+        Self {
+            profile,
+            bias: 0.0,
+            rng: seed,
+        }
     }
 
     /// The same aim on another jitter stream: a live execution's, not the plan's.
@@ -109,7 +141,8 @@ impl Aim {
             return to;
         }
         let diff = (to - from + 180.0).rem_euclid(360.0) - 180.0;
-        let step = (diff * human::AIM_EASE).clamp(-human::AIM_MAX_TURN_DEG, human::AIM_MAX_TURN_DEG);
+        let step =
+            (diff * human::AIM_EASE).clamp(-human::AIM_MAX_TURN_DEG, human::AIM_MAX_TURN_DEG);
         let unit = (splitmix(&mut self.rng) >> 40) as f32 / (1u64 << 24) as f32;
         from + step + (unit * 2.0 - 1.0) * human::AIM_JITTER_DEG
     }

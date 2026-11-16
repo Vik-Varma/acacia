@@ -18,8 +18,18 @@ impl<W: ?Sized> Solver<'_, W> {
     /// (earliest reaching one first, by bisection) and coast. The landing arriving nearest the planned
     /// horizontal velocity `want` (if any) wins, then the fastest, so the moves after it still start as
     /// planned. Within the budget only: the best landing found before it ran out.
-    pub fn retry<S: StepIn<W>>(&mut self, ctl: &LeapCtl, live: &S, shape: Shape, want: Option<Vec3>) -> Option<(LeapCtl, Vec<Body>)> {
-        let off = |v: Vec3| want.map_or(0, |w| ((v[0] - w[0]).hypot(v[2] - w[2]) * 100.0).round() as u32);
+    pub fn retry<S: StepIn<W>>(
+        &mut self,
+        ctl: &LeapCtl,
+        live: &S,
+        shape: Shape,
+        want: Option<Vec3>,
+    ) -> Option<(LeapCtl, Vec<Body>)> {
+        let off = |v: Vec3| {
+            want.map_or(0, |w| {
+                ((v[0] - w[0]).hypot(v[2] - w[2]) * 100.0).round() as u32
+            })
+        };
         let mut best: Option<((u32, u32), LeapCtl, Vec<Body>)> = None;
         let mut keep = |a: Attempt| {
             let key = (off(a.end.vel), a.ticks());
@@ -54,7 +64,9 @@ impl<W: ?Sized> Solver<'_, W> {
                 break;
             }
             // Even the edge jump short (a narrow stone with momentum): an early takeoff may still land.
-            let first = self.first_reaching(live, fresh(yaw, JumpAt::Never)).map_or(0, |(k, _)| k);
+            let first = self
+                .first_reaching(live, fresh(yaw, JumpAt::Never))
+                .map_or(0, |(k, _)| k);
             let mut jumps: Vec<JumpAt> = (first..=MAX_TAKEOFF).map(JumpAt::Tick).collect();
             if shape.drop || ctl.jump == JumpAt::Never {
                 jumps.push(JumpAt::Never);

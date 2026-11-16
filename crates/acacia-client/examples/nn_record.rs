@@ -24,11 +24,19 @@ type Target = Arc<Mutex<Option<SocketAddr>>>;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let port: u16 = args.next().map_or(19170, |p| p.parse().expect("port"));
-    let bds: SocketAddr = args.next().unwrap_or_else(|| "127.0.0.1:19160".into()).parse()?;
-    let out = args.next().unwrap_or_else(|| ".testserver/nn-capture".into());
+    let bds: SocketAddr = args
+        .next()
+        .unwrap_or_else(|| "127.0.0.1:19160".into())
+        .parse()?;
+    let out = args
+        .next()
+        .unwrap_or_else(|| ".testserver/nn-capture".into());
     let ip: std::net::IpAddr = args.next().unwrap_or_else(|| "127.0.0.1".into()).parse()?;
     tokio::fs::create_dir_all(&out).await?;
-    let (tcp_log, udp_log) = (open_log(&out, "tcp.log").await?, open_log(&out, "udp.log").await?);
+    let (tcp_log, udp_log) = (
+        open_log(&out, "tcp.log").await?,
+        open_log(&out, "udp.log").await?,
+    );
     let start = Instant::now();
 
     let relay = Arc::new(UdpSocket::bind((ip, port + 1)).await?);
@@ -36,10 +44,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client: Arc<Mutex<Option<SocketAddr>>> = Arc::default();
     // BDS's WebRTC listens per interface, not on loopback: relay to the candidate it advertised.
     let target: Target = Arc::default();
-    tokio::spawn(pump_udp(relay.clone(), upstream.clone(), client.clone(), target.clone(), udp_log.clone(), start));
+    tokio::spawn(pump_udp(
+        relay.clone(),
+        upstream.clone(),
+        client.clone(),
+        target.clone(),
+        udp_log.clone(),
+        start,
+    ));
 
     let listener = TcpListener::bind((ip, port)).await?;
-    println!("signaling on {ip}:{port}, UDP relay on {}, logging to {out}", relay.local_addr()?);
+    println!(
+        "signaling on {ip}:{port}, UDP relay on {}, logging to {out}",
+        relay.local_addr()?
+    );
     loop {
         let (stream, from) = listener.accept().await?;
         let relay_addr = relay.local_addr()?;
@@ -53,7 +71,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn open_log(dir: &str, name: &str) -> std::io::Result<Log> {
-    let file = OpenOptions::new().create(true).append(true).open(format!("{dir}/{name}")).await?;
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(format!("{dir}/{name}"))
+        .await?;
     Ok(Arc::new(Mutex::new(file)))
 }
 
@@ -65,10 +87,27 @@ async fn record(log: &Log, start: Instant, line: String) {
 
 /// One signaling connection: read the client's bytes until it pauses for a reply, forward them, then
 /// relay the server's response until close. Servers close after each response.
-async fn proxy_tcp(mut client: TcpStream, from: SocketAddr, bds: SocketAddr, relay: SocketAddr, target: &Target, log: &Log, start: Instant) -> std::io::Result<()> {
+async fn proxy_tcp(
+    mut client: TcpStream,
+    from: SocketAddr,
+    bds: SocketAddr,
+    relay: SocketAddr,
+    target: &Target,
+    log: &Log,
+    start: Instant,
+) -> std::io::Result<()> {
     let mut server = TcpStream::connect(bds).await?;
     let mut request = read_request(&mut client).await?;
-    record(log, start, format!("TCP {from} -> server {} bytes\n{}", request.len(), render(&request))).await;
+    record(
+        log,
+        start,
+        format!(
+            "TCP {from} -> server {} bytes\n{}",
+            request.len(),
+            render(&request)
+        ),
+    )
+    .await;
     if request.starts_with(b"POST /v1/join/") {
         // An unreachable client candidate (TEST-NET-1) leaves the server only the relayed path,
         // so the whole DTLS handshake passes through the UDP log.
@@ -83,7 +122,21 @@ async fn proxy_tcp(mut client: TcpStream, from: SocketAddr, bds: SocketAddr, rel
         response = rewritten;
         *target.lock().await = advertised;
     }
-    record(log, start, format!("TCP server -> {from} {} bytes{}\n{}", response.len(), if is_join_post { " (candidates rewritten)" } else { "" }, render(&response))).await;
+    record(
+        log,
+        start,
+        format!(
+            "TCP server -> {from} {} bytes{}\n{}",
+            response.len(),
+            if is_join_post {
+                " (candidates rewritten)"
+            } else {
+                ""
+            },
+            render(&response)
+        ),
+    )
+    .await;
     client.write_all(&response).await?;
     client.shutdown().await
 }
@@ -100,7 +153,10 @@ async fn read_request(stream: &mut TcpStream) -> std::io::Result<Vec<u8>> {
         }
         if let Some(end) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
             let head = String::from_utf8_lossy(&buf[..end]).to_ascii_lowercase();
-            let len: usize = head.lines().find_map(|l| l.strip_prefix("content-length:")).map_or(0, |v| v.trim().parse().unwrap_or(0));
+            let len: usize = head
+                .lines()
+                .find_map(|l| l.strip_prefix("content-length:"))
+                .map_or(0, |v| v.trim().parse().unwrap_or(0));
             if buf.len() >= end + 4 + len {
                 return Ok(buf);
             }
@@ -111,7 +167,9 @@ async fn read_request(stream: &mut TcpStream) -> std::io::Result<Vec<u8>> {
 /// Replaces an offer's or answer's candidates (and m=/c= defaults) with `relay`, fixing
 /// Content-Length. Also returns the first IPv4 candidate it replaced.
 fn rewrite_candidates(response: &[u8], relay: SocketAddr) -> (Vec<u8>, Option<SocketAddr>) {
-    let Some(split) = response.windows(4).position(|w| w == b"\r\n\r\n") else { return (response.to_vec(), None) };
+    let Some(split) = response.windows(4).position(|w| w == b"\r\n\r\n") else {
+        return (response.to_vec(), None);
+    };
     let head = String::from_utf8_lossy(&response[..split]);
     let body = String::from_utf8_lossy(&response[split + 4..]);
     let mut out_body = String::new();
@@ -122,15 +180,26 @@ fn rewrite_candidates(response: &[u8], relay: SocketAddr) -> (Vec<u8>, Option<So
             // `candidate:<foundation> <component> udp <priority> <ip> <port> typ ...`
             let fields: Vec<&str> = line.split(' ').collect();
             if let (None, Some(ip), Some(port)) = (advertised, fields.get(4), fields.get(5)) {
-                advertised = format!("{ip}:{port}").parse::<SocketAddr>().ok().filter(SocketAddr::is_ipv4);
+                advertised = format!("{ip}:{port}")
+                    .parse::<SocketAddr>()
+                    .ok()
+                    .filter(SocketAddr::is_ipv4);
             }
             if replaced {
                 continue;
             }
             replaced = true;
-            format!("a=candidate:1 1 udp 2122260223 {} {} typ host generation 0 network-id 1 network-cost 10", relay.ip(), relay.port())
+            format!(
+                "a=candidate:1 1 udp 2122260223 {} {} typ host generation 0 network-id 1 network-cost 10",
+                relay.ip(),
+                relay.port()
+            )
         } else if let Some(rest) = line.strip_prefix("m=application ") {
-            format!("m=application {} {}", relay.port(), rest.split_once(' ').map_or(rest, |(_, r)| r))
+            format!(
+                "m=application {} {}",
+                relay.port(),
+                rest.split_once(' ').map_or(rest, |(_, r)| r)
+            )
         } else if line.starts_with("c=IN ") {
             format!("c=IN IP4 {}", relay.ip())
         } else {
@@ -141,13 +210,26 @@ fn rewrite_candidates(response: &[u8], relay: SocketAddr) -> (Vec<u8>, Option<So
     }
     let head: String = head
         .lines()
-        .map(|l| if l.to_ascii_lowercase().starts_with("content-length:") { format!("Content-Length: {}", out_body.len()) } else { l.to_owned() })
+        .map(|l| {
+            if l.to_ascii_lowercase().starts_with("content-length:") {
+                format!("Content-Length: {}", out_body.len())
+            } else {
+                l.to_owned()
+            }
+        })
         .collect::<Vec<_>>()
         .join("\r\n");
     (format!("{head}\r\n\r\n{out_body}").into_bytes(), advertised)
 }
 
-async fn pump_udp(relay: Arc<UdpSocket>, upstream: Arc<UdpSocket>, client: Target, target: Target, log: Log, start: Instant) {
+async fn pump_udp(
+    relay: Arc<UdpSocket>,
+    upstream: Arc<UdpSocket>,
+    client: Target,
+    target: Target,
+    log: Log,
+    start: Instant,
+) {
     let (mut a, mut b) = (vec![0u8; 65536], vec![0u8; 65536]);
     let mut seen = 0usize;
     // Full hex for the handshake; afterwards only a prefix, to keep the log readable.

@@ -15,7 +15,10 @@ const BANNER: &str = "minecraft:banner";
 /// shield was crafted with. `None` for other items.
 pub fn banner(name: &str, stack: &ItemStack) -> Option<Arc<Banner>> {
     match name {
-        BANNER => Some(crate::block_data::item_banner(stack.metadata, stack.nbt.as_ref())),
+        BANNER => Some(crate::block_data::item_banner(
+            stack.metadata,
+            stack.nbt.as_ref(),
+        )),
         SHIELD => crate::block_data::shield_banner(stack.nbt.as_ref()?),
         _ => None,
     }
@@ -24,9 +27,20 @@ pub fn banner(name: &str, stack: &ItemStack) -> Option<Arc<Banner>> {
 
 /// The item model's key; `None` for an empty stack.
 pub fn key(bot: &Bot, stack: &ItemStack) -> Option<ItemKey> {
-    let name = bot.state().item_name(stack).filter(|_| !stack.is_empty())?.to_owned();
+    let name = bot
+        .state()
+        .item_name(stack)
+        .filter(|_| !stack.is_empty())?
+        .to_owned();
     let banner = banner(&name, stack);
-    Some(ItemKey { name, aux: stack.metadata, block: crate::control::block_of(bot, stack), dye: stack.custom_color(), banner, trim: stack.trim().map(|(material, _)| material) })
+    Some(ItemKey {
+        name,
+        aux: stack.metadata,
+        block: crate::control::block_of(bot, stack),
+        dye: stack.custom_color(),
+        banner,
+        trim: stack.trim().map(|(material, _)| material),
+    })
 }
 
 /// Names the look in a cache key; empty for a stack that looks like any other of its kind.
@@ -53,6 +67,10 @@ mod tests {
         // A shield's plain banner still differs from no banner.
         assert!(variant(None, None).is_empty() && !variant(None, Some(&plain)).is_empty());
         assert_eq!(variant(Some([255, 0, 16]), None), "ff0010");
-        assert!(!variant(None, Some(&striped)).is_empty() && variant(None, Some(&striped)) != variant(None, Some(&Banner::from_bedrock(1, [("ts", 0)], 0))));
+        assert!(
+            !variant(None, Some(&striped)).is_empty()
+                && variant(None, Some(&striped))
+                    != variant(None, Some(&Banner::from_bedrock(1, [("ts", 0)], 0)))
+        );
     }
 }

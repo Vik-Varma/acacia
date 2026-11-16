@@ -60,8 +60,16 @@ impl Connection {
     pub fn new(stream: TcpStream) -> Self {
         let (read, write) = stream.into_split();
         Self {
-            reader: FrameReader { stream: BufReader::new(read), threshold: None, cipher: None },
-            writer: FrameWriter { stream: write, threshold: None, cipher: None },
+            reader: FrameReader {
+                stream: BufReader::new(read),
+                threshold: None,
+                cipher: None,
+            },
+            writer: FrameWriter {
+                stream: write,
+                threshold: None,
+                cipher: None,
+            },
         }
     }
 
@@ -126,7 +134,11 @@ impl FrameReader {
         }
         let mut frame = vec![0; len];
         self.read_bytes(&mut frame).await?;
-        let mut data = if self.threshold.is_some() { inflate(&frame)? } else { frame };
+        let mut data = if self.threshold.is_some() {
+            inflate(&frame)?
+        } else {
+            frame
+        };
         let mut body = &data[..];
         let id = read_varint(&mut body)?;
         let start = data.len() - body.len();
@@ -164,7 +176,9 @@ fn inflate(frame: &[u8]) -> Result<Vec<u8>, Error> {
         return Err(Error::BadFrame(inflated));
     }
     let mut out = Vec::with_capacity(inflated);
-    ZlibDecoder::new(input).take(inflated as u64 + 1).read_to_end(&mut out)?;
+    ZlibDecoder::new(input)
+        .take(inflated as u64 + 1)
+        .read_to_end(&mut out)?;
     if out.len() != inflated {
         return Err(Error::BadFrame(out.len()));
     }
@@ -192,7 +206,10 @@ mod tests {
     fn compressed_frames_round_trip() {
         for size in [1, 255, 256, 70_000] {
             let packet = vec![7u8; size];
-            assert_eq!(inflate(&compress(packet.clone(), 256).unwrap()).unwrap(), packet);
+            assert_eq!(
+                inflate(&compress(packet.clone(), 256).unwrap()).unwrap(),
+                packet
+            );
         }
     }
 

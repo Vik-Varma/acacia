@@ -24,7 +24,11 @@ impl Station {
 
 /// A station menu's slots: its own at `own`, then the player's inventory from `inventory`.
 pub fn slots(own: &[(i32, i32)], inventory: (i32, i32)) -> Vec<Slot> {
-    let mut slots: Vec<Slot> = own.iter().enumerate().map(|(i, &(x, y))| Slot::new(i, x, y)).collect();
+    let mut slots: Vec<Slot> = own
+        .iter()
+        .enumerate()
+        .map(|(i, &(x, y))| Slot::new(i, x, y))
+        .collect();
     menus::standard_inventory(&mut slots, inventory.0, inventory.1);
     slots
 }
@@ -32,7 +36,15 @@ pub fn slots(own: &[(i32, i32)], inventory: (i32, i32)) -> Vec<Slot> {
 /// `ItemCombinerScreen.extractBackground` up to the error icon: the darkening and `texture`.
 pub fn background(gui: &mut Gui, b: &Base, texture: &'static str) {
     transparent_background(gui);
-    blit(gui, texture, b.left, b.top, [0.0, 0.0], b.image_width, b.image_height);
+    blit(
+        gui,
+        texture,
+        b.left,
+        b.top,
+        [0.0, 0.0],
+        b.image_width,
+        b.image_height,
+    );
 }
 
 /// Slot `i` holds a stack.

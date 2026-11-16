@@ -46,13 +46,27 @@ pub enum Blend {
 impl Quad {
     /// A flat-coloured, upright, alpha-blended quad.
     pub fn plain(rect: [f32; 4], uv: [f32; 4], color: [u8; 4]) -> Quad {
-        Quad { rect, uv, color, bottom: color, skew: [0.0; 2], blend: Blend::Alpha, glint: false, picture: false, wrap: None }
+        Quad {
+            rect,
+            uv,
+            color,
+            bottom: color,
+            skew: [0.0; 2],
+            blend: Blend::Alpha,
+            glint: false,
+            picture: false,
+            wrap: None,
+        }
     }
 
     /// The part `rect` (window pixels) of the picture-in-picture texture, drawn where it was
     /// rendered: premultiplied, untinted.
     pub fn picture(rect: [f32; 4]) -> Quad {
-        Quad { blend: Blend::Premultiplied, picture: true, ..Quad::plain(rect, rect, WHITE) }
+        Quad {
+            blend: Blend::Premultiplied,
+            picture: true,
+            ..Quad::plain(rect, rect, WHITE)
+        }
     }
 }
 
@@ -72,7 +86,12 @@ pub struct DrawList {
 
 impl DrawList {
     pub fn new(scale: f32) -> DrawList {
-        DrawList { quads: Vec::new(), scale, clip: None, blur: None }
+        DrawList {
+            quads: Vec::new(),
+            scale,
+            clip: None,
+            blur: None,
+        }
     }
 
     /// The menu blur, of `radius`, under the quads added from now on.
@@ -83,7 +102,13 @@ impl DrawList {
 
     /// `sprite` at its own size with its top-left at (`x`, `y`) GUI pixels.
     pub fn sprite(&mut self, sprite: Sprite, x: f32, y: f32, color: [u8; 4]) {
-        self.sprite_part(sprite, x, y, [0.0, 0.0, sprite.width as f32, sprite.height as f32], color);
+        self.sprite_part(
+            sprite,
+            x,
+            y,
+            [0.0, 0.0, sprite.width as f32, sprite.height as f32],
+            color,
+        );
     }
 
     /// The part `[left, top, right, bottom]` (texels within the sprite) of `sprite`, placed at
@@ -91,13 +116,21 @@ impl DrawList {
     pub fn sprite_part(&mut self, sprite: Sprite, x: f32, y: f32, part: [f32; 4], color: [u8; 4]) {
         let [l, t, r, b] = part;
         let (u, v) = (sprite.x as f32, sprite.y as f32);
-        self.quad([x, y, x + r - l, y + b - t], [u + l, v + t, u + r, v + b], color);
+        self.quad(
+            [x, y, x + r - l, y + b - t],
+            [u + l, v + t, u + r, v + b],
+            color,
+        );
     }
 
     /// `sprite` stretched over `rect` (GUI pixels).
     pub fn sprite_stretched(&mut self, sprite: Sprite, rect: [f32; 4], color: [u8; 4]) {
         let (u, v) = (sprite.x as f32, sprite.y as f32);
-        self.quad(rect, [u, v, u + sprite.width as f32, v + sprite.height as f32], color);
+        self.quad(
+            rect,
+            [u, v, u + sprite.width as f32, v + sprite.height as f32],
+            color,
+        );
     }
 
     /// A flat colour over `rect` (GUI pixels); `white` is an opaque white texel in the atlas.
@@ -109,7 +142,12 @@ impl DrawList {
     /// An item's icon stretched over `rect` (GUI pixels), shimmering when `glint`.
     pub fn icon(&mut self, sprite: Sprite, rect: [f32; 4], glint: bool) {
         let (u, v) = (sprite.x as f32, sprite.y as f32);
-        self.push(rect, [u, v, u + sprite.width as f32, v + sprite.height as f32], WHITE, glint);
+        self.push(
+            rect,
+            [u, v, u + sprite.width as f32, v + sprite.height as f32],
+            WHITE,
+            glint,
+        );
     }
 
     pub(crate) fn quad(&mut self, rect: [f32; 4], uv: [f32; 4], color: [u8; 4]) {
@@ -117,24 +155,45 @@ impl DrawList {
     }
 
     fn push(&mut self, rect: [f32; 4], uv: [f32; 4], color: [u8; 4], glint: bool) {
-        let Some((cut, uv)) = clipped(rect, uv, self.clip) else { return };
+        let Some((cut, uv)) = clipped(rect, uv, self.clip) else {
+            return;
+        };
         let s = self.scale;
         // A cut icon does not shimmer: the renderer lays the glint over a whole quad.
-        self.quads.push(Quad { glint: glint && cut == rect, ..Quad::plain(cut.map(|v| v * s), uv, color) });
+        self.quads.push(Quad {
+            glint: glint && cut == rect,
+            ..Quad::plain(cut.map(|v| v * s), uv, color)
+        });
     }
 }
 
 /// `rect` cut to `clip`, its UVs cut in proportion; `None` when nothing is left.
 fn clipped(rect: [f32; 4], uv: [f32; 4], clip: Option<[f32; 4]>) -> Option<([f32; 4], [f32; 4])> {
-    let Some([cl, ct, cr, cb]) = clip else { return Some((rect, uv)) };
+    let Some([cl, ct, cr, cb]) = clip else {
+        return Some((rect, uv));
+    };
     let [l, t, r, b] = rect;
     let (nl, nt, nr, nb) = (l.max(cl), t.max(ct), r.min(cr), b.min(cb));
     if nl >= nr || nt >= nb {
         return None;
     }
-    let lerp = |a: f32, b: f32, from: f32, to: f32, at: f32| if to == from { a } else { a + (b - a) * (at - from) / (to - from) };
+    let lerp = |a: f32, b: f32, from: f32, to: f32, at: f32| {
+        if to == from {
+            a
+        } else {
+            a + (b - a) * (at - from) / (to - from)
+        }
+    };
     let [ul, ut, ur, ub] = uv;
-    Some(([nl, nt, nr, nb], [lerp(ul, ur, l, r, nl), lerp(ut, ub, t, b, nt), lerp(ul, ur, l, r, nr), lerp(ut, ub, t, b, nb)]))
+    Some((
+        [nl, nt, nr, nb],
+        [
+            lerp(ul, ur, l, r, nl),
+            lerp(ut, ub, t, b, nt),
+            lerp(ul, ur, l, r, nr),
+            lerp(ut, ub, t, b, nb),
+        ],
+    ))
 }
 
 #[cfg(test)]
@@ -143,7 +202,12 @@ mod tests {
 
     #[test]
     fn parts_scale_with_the_gui() {
-        let sprite = Sprite { x: 10, y: 20, width: 9, height: 9 };
+        let sprite = Sprite {
+            x: 10,
+            y: 20,
+            width: 9,
+            height: 9,
+        };
         let mut list = DrawList::new(2.0);
         list.sprite_part(sprite, 5.0, 6.0, [0.0, 0.0, 5.0, 9.0], WHITE);
         assert_eq!(list.quads[0].rect, [10.0, 12.0, 20.0, 30.0]);
@@ -152,19 +216,33 @@ mod tests {
 
     #[test]
     fn only_a_whole_enchanted_icon_shimmers() {
-        let sprite = Sprite { x: 0, y: 0, width: 16, height: 16 };
+        let sprite = Sprite {
+            x: 0,
+            y: 0,
+            width: 16,
+            height: 16,
+        };
         let mut list = DrawList::new(2.0);
         list.icon(sprite, [0.0, 0.0, 16.0, 16.0], false);
         list.icon(sprite, [20.0, 0.0, 36.0, 16.0], true);
         list.clip = Some([0.0, 0.0, 48.0, 16.0]);
         list.icon(sprite, [40.0, 0.0, 56.0, 16.0], true);
         list.icon(sprite, [60.0, 0.0, 76.0, 16.0], true);
-        assert_eq!(list.quads.iter().map(|q| q.glint).collect::<Vec<_>>(), [false, true, false], "the last is clipped away");
+        assert_eq!(
+            list.quads.iter().map(|q| q.glint).collect::<Vec<_>>(),
+            [false, true, false],
+            "the last is clipped away"
+        );
     }
 
     #[test]
     fn clipping_cuts_uvs_in_proportion() {
-        let sprite = Sprite { x: 0, y: 0, width: 10, height: 10 };
+        let sprite = Sprite {
+            x: 0,
+            y: 0,
+            width: 10,
+            height: 10,
+        };
         let mut list = DrawList::new(1.0);
         list.clip = Some([5.0, 0.0, 100.0, 100.0]);
         list.sprite_stretched(sprite, [0.0, 0.0, 20.0, 20.0], WHITE);

@@ -1,22 +1,22 @@
 //! Server packets the session reacts to, and the replies it sends.
 
 use acacia_proto::packets::{
-    ClientCacheStatus, ClientCameraAimAssist, ClientCameraAimAssistAction, ClientToServerHandshake, Disconnect, ItemRegistry, Login, NetworkSettings, NetworkStackLatency,
-    PacketViolationWarning,
-    PlayStatus, PlayStatusStatus, PlayerAction, RequestChunkRadius,
-    ResourcePackChunkData, ResourcePackDataInfo, ResourcePackStack, ResourcePacksInfo,
-    Respawn, ServerToClientHandshake, SetLocalPlayerAsInitialized, StartGame, Transfer,
+    ClientCacheStatus, ClientCameraAimAssist, ClientCameraAimAssistAction, ClientToServerHandshake,
+    Disconnect, ItemRegistry, Login, NetworkSettings, NetworkStackLatency, PacketViolationWarning,
+    PlayStatus, PlayStatusStatus, PlayerAction, RequestChunkRadius, ResourcePackChunkData,
+    ResourcePackDataInfo, ResourcePackStack, ResourcePacksInfo, Respawn, ServerToClientHandshake,
+    SetLocalPlayerAsInitialized, StartGame, Transfer,
 };
 use acacia_proto::types::{Action, BlockCoordinates, Vec3f};
-use acacia_proto::{codec, Packet, RawPacket, PROTOCOL_VERSION};
+use acacia_proto::{PROTOCOL_VERSION, Packet, RawPacket, codec};
 use bytes::BytesMut;
 
 use super::blob_cache::BlobStatus;
 use super::deferred::delay;
 use super::{DisconnectReason, Event, Session, Stage};
+use crate::Error;
 use crate::compression::Algorithm;
 use crate::crypto::derive_key;
-use crate::Error;
 
 /// Respawn states: the server is searching for a spawn point / has one / the client is ready.
 const RESPAWN_SEARCHING: u8 = 0;
@@ -28,7 +28,10 @@ const RESPAWN_CLIENT_READY: u8 = 2;
 const LATENCY_MAGNITUDE: u64 = 1_000_000;
 
 impl Session {
-    pub(super) fn handle_packet(&mut self, raw: RawPacket) -> Result<Option<DisconnectReason>, Error> {
+    pub(super) fn handle_packet(
+        &mut self,
+        raw: RawPacket,
+    ) -> Result<Option<DisconnectReason>, Error> {
         tracing::trace!(id = raw.id, len = raw.body.len(), stage = ?self.stage, "packet");
         self.audit(&raw);
         if let Some(blobs) = &mut self.blobs
@@ -42,7 +45,8 @@ impl Session {
                 let settings: NetworkSettings = raw.decode()?;
                 let alg = Algorithm::from_settings(settings.compression_algorithm)?;
                 self.flush();
-                self.codec.enable_compression(alg, settings.compression_threshold.into());
+                self.codec
+                    .enable_compression(alg, settings.compression_threshold.into());
                 self.send_login();
             }
             ServerToClientHandshake::ID => {
@@ -52,7 +56,8 @@ impl Session {
                 self.flush();
                 // BDS still sends the handshake over NetherNet but expects plaintext; DTLS encrypts.
                 if !self.link.is_message() {
-                    self.codec.enable_encryption(derive_key(&self.key, &server_key, &salt));
+                    self.codec
+                        .enable_encryption(derive_key(&self.key, &server_key, &salt));
                 }
                 self.send_later(delay::HANDSHAKE, &ClientToServerHandshake {});
             }
@@ -75,14 +80,23 @@ impl Session {
                 }
                 // Vanilla asks for its view distance after the item registry, with its device maximum.
                 let max_radius = acacia_auth::MAX_VIEW_DISTANCE as u8;
-                self.send_later(delay::CHUNK_RADIUS, &RequestChunkRadius { chunk_radius: self.chunk_radius, max_radius });
+                self.send_later(
+                    delay::CHUNK_RADIUS,
+                    &RequestChunkRadius {
+                        chunk_radius: self.chunk_radius,
+                        max_radius,
+                    },
+                );
             }
             // Anticheats (e.g. Boar: max-latency-wait 15s) kick clients that leave these unanswered.
             NetworkStackLatency::ID => {
                 let ping: NetworkStackLatency = raw.decode()?;
                 if ping.needs_response != 0 {
                     let timestamp = ping.timestamp.wrapping_mul(LATENCY_MAGNITUDE);
-                    self.send(&NetworkStackLatency { timestamp, needs_response: 0 });
+                    self.send(&NetworkStackLatency {
+                        timestamp,
+                        needs_response: 0,
+                    });
                 }
             }
             // Joining, BDS sends "searching" twice and then "ready" without a death; vanilla answers no
@@ -99,7 +113,10 @@ impl Session {
             },
             Transfer::ID => {
                 let t: Transfer = raw.decode()?;
-                return Ok(Some(DisconnectReason::Transfer { address: t.server_address, port: t.port }));
+                return Ok(Some(DisconnectReason::Transfer {
+                    address: t.server_address,
+                    port: t.port,
+                }));
             }
             // BDS answers a packet it cannot parse with this and then drops the connection without a Disconnect.
             PacketViolationWarning::ID => {
@@ -110,7 +127,10 @@ impl Session {
             Disconnect::ID => {
                 let d: Disconnect = raw.decode()?;
                 let message = d.content.map(|c| c.message).unwrap_or_default();
-                return Ok(Some(DisconnectReason::Kicked { reason: format!("{:?}", d.reason), message }));
+                return Ok(Some(DisconnectReason::Kicked {
+                    reason: format!("{:?}", d.reason),
+                    message,
+                }));
             }
             _ => {}
         }
@@ -121,18 +141,40 @@ impl Session {
     /// Presses "respawn" on the death screen, as the vanilla client does: `Respawn(client ready)`
     /// now, the rest once the server answers (`send_respawn_done`). No-op before StartGame.
     pub fn respawn(&mut self) {
-        let Some(runtime_entity_id) = self.runtime_entity_id else { return };
+        let Some(runtime_entity_id) = self.runtime_entity_id else {
+            return;
+        };
         self.respawn_requested = true;
-        self.send(&Respawn { position: Vec3f { x: 0.0, y: 0.0, z: 0.0 }, state: RESPAWN_CLIENT_READY, runtime_entity_id });
+        self.send(&Respawn {
+            position: Vec3f {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            state: RESPAWN_CLIENT_READY,
+            runtime_entity_id,
+        });
     }
 
     /// What vanilla sends when it is back in the world after a respawn: `PlayerAction(Respawn)` and a
     /// cleared camera aim assist. Not for the first spawn: The Hive kicks for a `PlayerAction(Respawn)` there.
     pub fn send_respawn_done(&mut self) {
-        let Some(runtime_entity_id) = self.runtime_entity_id else { return };
+        let Some(runtime_entity_id) = self.runtime_entity_id else {
+            return;
+        };
         let origin = BlockCoordinates { x: 0, y: 0, z: 0 };
-        self.send(&PlayerAction { runtime_entity_id, action: Action::Respawn, position: origin.clone(), result_position: origin, face: -1 });
-        self.send(&ClientCameraAimAssist { preset_id: String::new(), action: ClientCameraAimAssistAction::Clear, allow_aim_assist: false });
+        self.send(&PlayerAction {
+            runtime_entity_id,
+            action: Action::Respawn,
+            position: origin.clone(),
+            result_position: origin,
+            face: -1,
+        });
+        self.send(&ClientCameraAimAssist {
+            preset_id: String::new(),
+            action: ClientCameraAimAssistAction::Clear,
+            allow_aim_assist: false,
+        });
     }
 
     /// Written by hand: `Login.tokens` is an opaque length-prefixed blob that acacia-auth builds whole.

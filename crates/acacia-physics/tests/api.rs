@@ -25,7 +25,10 @@ fn jump_fires_once_and_reports_it() {
     let w = flat();
     let mut st = PlayerState::new([0.5, 0.0, 0.5]);
     st.on_ground = true;
-    let jump = Input { jump: true, ..Input::default() };
+    let jump = Input {
+        jump: true,
+        ..Input::default()
+    };
     assert!(tick(&mut st, &jump, &w).jumped);
     assert!(!tick(&mut st, &jump, &w).jumped);
 }

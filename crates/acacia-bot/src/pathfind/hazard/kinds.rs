@@ -36,10 +36,18 @@ pub struct Kind {
 }
 
 const fn kind(class: Class, speed: f32, w: f32, h: f32) -> Kind {
-    Kind { class, speed, size: (w, h), lift: 0.0 }
+    Kind {
+        class,
+        speed,
+        size: (w, h),
+        lift: 0.0,
+    }
 }
 
-const BOAT: Kind = Kind { lift: 0.375, ..kind(Solid, 0.0, 1.4, 0.455) };
+const BOAT: Kind = Kind {
+    lift: 0.375,
+    ..kind(Solid, 0.0, 1.4, 0.455)
+};
 
 use Class::*;
 

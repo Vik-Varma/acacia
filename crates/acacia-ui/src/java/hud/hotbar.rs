@@ -23,7 +23,13 @@ pub const OFFHAND_KEY: i32 = 40;
 pub fn hotbar(gui: &mut Gui, i: &Hotbar) {
     let (center, h) = (gui.width / 2, gui.height);
     gui.sprite("hud/hotbar", center - 91, h - 22, 182, 22);
-    gui.sprite("hud/hotbar_selection", center - 91 - 1 + i.selected * 20, h - 22 - 1, 24, 23);
+    gui.sprite(
+        "hud/hotbar_selection",
+        center - 91 - 1 + i.selected * 20,
+        h - 22 - 1,
+        24,
+        23,
+    );
     let offhand_left = i.right_handed;
     if i.offhand.is_some() {
         if offhand_left {
@@ -35,20 +41,43 @@ pub fn hotbar(gui: &mut Gui, i: &Hotbar) {
     let mut seed = 1;
     for (n, pop) in i.slots.iter().enumerate() {
         if let Some(pop) = pop {
-            slot(gui, n as i32, center - 90 + n as i32 * 20 + 2, h - 16 - 3, seed, *pop);
+            slot(
+                gui,
+                n as i32,
+                center - 90 + n as i32 * 20 + 2,
+                h - 16 - 3,
+                seed,
+                *pop,
+            );
         }
         seed += 1;
     }
     if let Some(pop) = i.offhand {
-        let x = if offhand_left { center - 91 - 26 } else { center + 91 + 10 };
+        let x = if offhand_left {
+            center - 91 - 26
+        } else {
+            center + 91 + 10
+        };
         slot(gui, OFFHAND_KEY, x, h - 16 - 3, seed, pop);
     }
     if let Some(scale) = i.attack.filter(|&s| s < 1.0) {
         let y = h - 20;
-        let x = if offhand_left { center + 91 + 6 } else { center - 91 - 22 };
+        let x = if offhand_left {
+            center + 91 + 6
+        } else {
+            center - 91 - 22
+        };
         let progress = (scale * 19.0) as i32;
         gui.sprite("hud/hotbar_attack_indicator_background", x, y, 18, 18);
-        gui.region("hud/hotbar_attack_indicator_progress", [18, 18], [0, 18 - progress], x, y + 18 - progress, 18, progress);
+        gui.region(
+            "hud/hotbar_attack_indicator_progress",
+            [18, 18],
+            [0, 18 - progress],
+            x,
+            y + 18 - progress,
+            18,
+            progress,
+        );
     }
 }
 
@@ -57,7 +86,11 @@ fn slot(gui: &mut Gui, key: i32, x: i32, y: i32, seed: i32, pop: f32) {
     if pop > 0.0 {
         let squeeze = 1.0 + pop / 5.0;
         let (px, py) = ((x + 8) as f32, (y + 12) as f32);
-        gui.push(vec![PoseOp::Translate(px, py), PoseOp::Scale(1.0 / squeeze, (squeeze + 1.0) / 2.0), PoseOp::Translate(-px, -py)]);
+        gui.push(vec![
+            PoseOp::Translate(px, py),
+            PoseOp::Scale(1.0 / squeeze, (squeeze + 1.0) / 2.0),
+            PoseOp::Translate(-px, -py),
+        ]);
         gui.item(key, x, y, seed);
         gui.pop();
     } else {
@@ -87,7 +120,15 @@ pub fn crosshair(gui: &mut Gui, attack: Option<f32>, full: bool) {
         } else if scale < 1.0 {
             let progress = (scale * 17.0) as i32;
             gui.sprite("hud/crosshair_attack_indicator_background", x, y, 16, 4);
-            gui.region("hud/crosshair_attack_indicator_progress", [16, 4], [0, 0], x, y, progress, 4);
+            gui.region(
+                "hud/crosshair_attack_indicator_progress",
+                [16, 4],
+                [0, 0],
+                x,
+                y,
+                progress,
+                4,
+            );
         }
     }
     for d in &mut gui.draws[start..] {
@@ -105,7 +146,15 @@ pub fn experience(gui: &mut Gui, font: &dyn Metrics, progress: f32, level: i32, 
         let filled = (progress * 183.0) as i32;
         gui.sprite("hud/experience_bar_background", left, top, 182, 5);
         if filled > 0 {
-            gui.region("hud/experience_bar_progress", [182, 5], [0, 0], left, top, filled, 5);
+            gui.region(
+                "hud/experience_bar_progress",
+                [182, 5],
+                [0, 0],
+                left,
+                top,
+                filled,
+                5,
+            );
         }
     }
     if level > 0 {

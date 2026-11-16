@@ -114,10 +114,18 @@ fn bench(name: &str, c: &mut Ctx, iters: u64) -> Option<f64> {
         "build_cold_ids" => time(iters, |_| _ = black_box(build_cold(black_box(s), false))),
         "build_cold_names" => time(iters, |_| _ = black_box(build_cold(black_box(s), true))),
         "build_full" => time(iters, |i| _ = black_box(build_full(black_box(s), m, i))),
-        "full_arcswap" => time(iters, |i| c.full_swap.store(Arc::new(build_full(black_box(s), m, i)))),
-        "full_plmutex" => time(iters, |i| swap_pl(&c.full_pl, Arc::new(build_full(black_box(s), m, i)))),
-        "full_stdmutex" => time(iters, |i| swap_std(&c.full_std, Arc::new(build_full(black_box(s), m, i)))),
-        "hot_arcswap" => time(iters, |i| c.hot_swap.store(Arc::new(build_hot(black_box(s), m, i)))),
+        "full_arcswap" => time(iters, |i| {
+            c.full_swap.store(Arc::new(build_full(black_box(s), m, i)))
+        }),
+        "full_plmutex" => time(iters, |i| {
+            swap_pl(&c.full_pl, Arc::new(build_full(black_box(s), m, i)))
+        }),
+        "full_stdmutex" => time(iters, |i| {
+            swap_std(&c.full_std, Arc::new(build_full(black_box(s), m, i)))
+        }),
+        "hot_arcswap" => time(iters, |i| {
+            c.hot_swap.store(Arc::new(build_hot(black_box(s), m, i)))
+        }),
         "hot_plmutex_copy" => time(iters, |i| *c.hot_pl.lock() = build_hot(black_box(s), m, i)),
         "split_arcswap" => time(iters, |i| {
             c.hot_swap.store(Arc::new(build_hot(black_box(s), m, i)));
@@ -159,7 +167,10 @@ fn allocations(name: &str, c: &mut Ctx) -> (f64, f64) {
     COUNTING.store(true, Relaxed);
     bench(name, c, N);
     COUNTING.store(false, Relaxed);
-    ((ALLOCATIONS.load(Relaxed) - a) as f64 / N as f64, (ALLOCATED.load(Relaxed) - b) as f64 / N as f64)
+    (
+        (ALLOCATIONS.load(Relaxed) - a) as f64 / N as f64,
+        (ALLOCATED.load(Relaxed) - b) as f64 / N as f64,
+    )
 }
 
 fn median(mut v: Vec<f64>) -> f64 {
@@ -179,7 +190,11 @@ fn context() -> Ctx {
         state.player.effects.iter().count(),
         state.items.len()
     );
-    let motion = Motion { velocity: [0.1, -0.0784, 0.2], on_ground: true, gliding: false };
+    let motion = Motion {
+        velocity: [0.1, -0.0784, 0.2],
+        on_ground: true,
+        gliding: false,
+    };
     let full = Arc::new(build_full(&state, &motion, 0));
     let cold = Arc::new(full.cold.clone());
     Ctx {
@@ -212,7 +227,10 @@ fn sizes(c: &Ctx) {
         json(&hot),
         json(&ids),
         json(&names),
-        json(&BotSnapshot { hot, cold: ids.clone() })
+        json(&BotSnapshot {
+            hot,
+            cold: ids.clone()
+        })
     );
 }
 
@@ -222,8 +240,14 @@ fn json<T: serde::Serialize>(v: &T) -> usize {
 
 fn table(c: &mut Ctx) {
     sizes(c);
-    println!("{} runs x {ITERS} iterations; split = hot every tick + cold 1 tick in {COLD_EVERY}", RUNS);
-    println!("{:<18} {:>9} {:>9} {:>8} {:>10} {:>8} {:>8} {:>8}", "bench", "median ns", "min ns", "allocs", "alloc B", "100 bots", "300", "1000");
+    println!(
+        "{} runs x {ITERS} iterations; split = hot every tick + cold 1 tick in {COLD_EVERY}",
+        RUNS
+    );
+    println!(
+        "{:<18} {:>9} {:>9} {:>8} {:>10} {:>8} {:>8} {:>8}",
+        "bench", "median ns", "min ns", "allocs", "alloc B", "100 bots", "300", "1000"
+    );
     for name in BENCHES {
         let runs: Vec<f64> = (0..RUNS).map(|_| bench(name, c, ITERS).unwrap()).collect();
         let min = runs.iter().copied().fold(f64::INFINITY, f64::min);
@@ -245,8 +269,11 @@ fn main() {
     match args.first().map(String::as_str) {
         Some("run") => {
             let name = args.get(1).map_or("none", String::as_str);
-            let iters = args.get(2).map_or(ITERS, |n| n.parse().expect("iterations"));
-            let ns = bench(name, &mut c, iters).unwrap_or_else(|| panic!("unknown bench {name}; one of {BENCHES:?} or none"));
+            let iters = args
+                .get(2)
+                .map_or(ITERS, |n| n.parse().expect("iterations"));
+            let ns = bench(name, &mut c, iters)
+                .unwrap_or_else(|| panic!("unknown bench {name}; one of {BENCHES:?} or none"));
             println!("{name}: {iters} iterations, {ns:.1} ns each");
         }
         _ => table(&mut c),

@@ -32,7 +32,11 @@ pub(crate) enum BlobCache {
 impl BlobCache {
     pub fn open(&self, account: &str, payloads: bool) -> Option<Arc<dyn BlobStore>> {
         let memory = || -> Arc<dyn BlobStore> {
-            Arc::new(if payloads { MemoryBlobStore::with_payloads() } else { MemoryBlobStore::hashes_only() })
+            Arc::new(if payloads {
+                MemoryBlobStore::with_payloads()
+            } else {
+                MemoryBlobStore::hashes_only()
+            })
         };
         match self {
             Self::Off => None,
@@ -95,9 +99,23 @@ impl DiskBlobStore {
             records = parse(&compact);
             data = compact;
         }
-        let file = OpenOptions::new().create(true).read(true).append(true).open(path)?;
-        let index = records.into_iter().map(|(id, start, len)| (id, (start as u64, len))).collect();
-        Ok(Self { payloads, inner: Mutex::new(Inner { file, index, end: data.len() as u64 }) })
+        let file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .append(true)
+            .open(path)?;
+        let index = records
+            .into_iter()
+            .map(|(id, start, len)| (id, (start as u64, len)))
+            .collect();
+        Ok(Self {
+            payloads,
+            inner: Mutex::new(Inner {
+                file,
+                index,
+                end: data.len() as u64,
+            }),
+        })
     }
 
     fn inner(&self) -> std::sync::MutexGuard<'_, Inner> {
@@ -107,7 +125,10 @@ impl DiskBlobStore {
 
 impl BlobStore for DiskBlobStore {
     fn has(&self, id: u64) -> bool {
-        self.inner().index.get(&id).is_some_and(|&(_, len)| !self.payloads || len > 0)
+        self.inner()
+            .index
+            .get(&id)
+            .is_some_and(|&(_, len)| !self.payloads || len > 0)
     }
 
     fn get(&self, id: u64) -> Option<Bytes> {
@@ -117,8 +138,12 @@ impl BlobStore for DiskBlobStore {
         let mut inner = self.inner();
         let (offset, len) = *inner.index.get(&id).filter(|(_, len)| *len > 0)?;
         let mut buf = vec![0; len as usize];
-        let read = inner.file.seek(SeekFrom::Start(offset)).and_then(|_| inner.file.read_exact(&mut buf));
-        read.inspect_err(|e| tracing::warn!(error = %e, "blob cache read failed")).ok()?;
+        let read = inner
+            .file
+            .seek(SeekFrom::Start(offset))
+            .and_then(|_| inner.file.read_exact(&mut buf));
+        read.inspect_err(|e| tracing::warn!(error = %e, "blob cache read failed"))
+            .ok()?;
         Some(buf.into())
     }
 
@@ -189,7 +214,8 @@ mod tests {
     use super::*;
 
     fn temp(name: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!("bedrock-blobs-{}-{name}", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("bedrock-blobs-{}-{name}", std::process::id()));
         let _ = std::fs::remove_file(&path);
         path
     }
@@ -220,10 +246,15 @@ mod tests {
     #[test]
     fn hash_only_records_do_not_count_for_payload_stores() {
         let path = temp("lean");
-        DiskBlobStore::open(&path, false, 1 << 20).unwrap().insert(5, &Bytes::from_static(b"x"));
+        DiskBlobStore::open(&path, false, 1 << 20)
+            .unwrap()
+            .insert(5, &Bytes::from_static(b"x"));
         assert!(DiskBlobStore::open(&path, false, 1 << 20).unwrap().has(5));
         let full = DiskBlobStore::open(&path, true, 1 << 20).unwrap();
-        assert!(!full.has(5), "a physics bot must still ask for blobs an idle run only saw");
+        assert!(
+            !full.has(5),
+            "a physics bot must still ask for blobs an idle run only saw"
+        );
         full.insert(5, &Bytes::from_static(b"x"));
         assert_eq!(full.get(5).as_deref(), Some(&b"x"[..]));
         std::fs::remove_file(&path).unwrap();

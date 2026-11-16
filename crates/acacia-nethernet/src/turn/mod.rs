@@ -48,7 +48,10 @@ pub enum Step {
 
 impl Retransmit {
     pub fn start(now: Instant) -> Self {
-        Self { sends: 1, next: now + INITIAL_RTO }
+        Self {
+            sends: 1,
+            next: now + INITIAL_RTO,
+        }
     }
 
     pub fn deadline(&self) -> Instant {
@@ -71,13 +74,17 @@ impl Retransmit {
 /// A Binding request for srflx discovery; bare like libwebrtc's (stun_port.cc `StunBindingRequest`).
 pub fn stun_binding_request() -> (TransactionId, Vec<u8>) {
     let tid = stun::transaction_id();
-    (tid, Message::new(Class::Request, Method::Binding, tid).encode(None, false))
+    (
+        tid,
+        Message::new(Class::Request, Method::Binding, tid).encode(None, false),
+    )
 }
 
 /// The server-reflexive address in a Binding success answering `tid`.
 pub fn parse_binding_response(tid: &TransactionId, data: &[u8]) -> Option<SocketAddr> {
     let msg = Message::decode(data).ok()?;
-    let ours = msg.class == Class::Success && msg.method == Method::Binding && msg.transaction_id == *tid;
+    let ours =
+        msg.class == Class::Success && msg.method == Method::Binding && msg.transaction_id == *tid;
     ours.then(|| msg.mapped()).flatten()
 }
 
@@ -108,8 +115,15 @@ mod tests {
         let (tid, req) = stun_binding_request();
         assert_eq!(req.len(), 20);
         let addr: SocketAddr = "203.0.113.7:50000".parse().unwrap();
-        let resp = Message::new(Class::Success, Method::Binding, tid).with(stun::Attr::XorMappedAddress(addr));
-        assert_eq!(parse_binding_response(&tid, &resp.encode(None, true)), Some(addr));
-        assert_eq!(parse_binding_response(&[0; 12], &resp.encode(None, false)), None);
+        let resp = Message::new(Class::Success, Method::Binding, tid)
+            .with(stun::Attr::XorMappedAddress(addr));
+        assert_eq!(
+            parse_binding_response(&tid, &resp.encode(None, true)),
+            Some(addr)
+        );
+        assert_eq!(
+            parse_binding_response(&[0; 12], &resp.encode(None, false)),
+            None
+        );
     }
 }

@@ -1,8 +1,9 @@
 //! Routing the entity packets to the tracked entities.
 
 use acacia_client::proto::packets::{
-    AddEntity, AddItemEntity, AddPlayer, ChangeDimension, MobArmorEquipment, MobEffect, MobEquipment, MoveEntity,
-    MoveEntityDelta, MovePlayer, RemoveEntity, SetEntityData, SetEntityMotion, SyncEntityProperty, UpdateAttributes,
+    AddEntity, AddItemEntity, AddPlayer, ChangeDimension, MobArmorEquipment, MobEffect,
+    MobEquipment, MoveEntity, MoveEntityDelta, MovePlayer, RemoveEntity, SetEntityData,
+    SetEntityMotion, SyncEntityProperty, UpdateAttributes,
 };
 use acacia_client::proto::{DecodeError, Packet, RawPacket};
 
@@ -58,7 +59,9 @@ impl Entities {
             }
             SetEntityData::ID => {
                 // Peek the leading runtime id: most metadata is for entities out of view.
-                if let Some(e) = crate::state::leading_entity(packet).and_then(|id| self.by_runtime.get_mut(&id)) {
+                if let Some(e) =
+                    crate::state::leading_entity(packet).and_then(|id| self.by_runtime.get_mut(&id))
+                {
                     let p = packet.decode::<SetEntityData>()?;
                     if self.lean {
                         e.metadata.merge_lean(p.metadata);
@@ -70,8 +73,16 @@ impl Entities {
             }
             SyncEntityProperty::ID if !self.lean => self.property_defs.apply(&packet.decode()?)?,
             UpdateAttributes::ID if !self.lean => {
-                if let Some(e) = crate::state::leading_entity(packet).and_then(|id| self.by_runtime.get_mut(&id)) {
-                    e.attributes.extend(packet.decode::<UpdateAttributes>()?.attributes.into_iter().map(|a| (a.name, a.current)));
+                if let Some(e) =
+                    crate::state::leading_entity(packet).and_then(|id| self.by_runtime.get_mut(&id))
+                {
+                    e.attributes.extend(
+                        packet
+                            .decode::<UpdateAttributes>()?
+                            .attributes
+                            .into_iter()
+                            .map(|a| (a.name, a.current)),
+                    );
                     self.stamps.touch(e);
                 }
             }
@@ -95,7 +106,13 @@ impl Entities {
             }
             AddPlayer::ID => {
                 let p: AddPlayer = packet.decode()?;
-                let mut e = Entity::spawned(p.runtime_id, p.unique_id, PLAYER_KIND.to_owned(), p.position, p.velocity);
+                let mut e = Entity::spawned(
+                    p.runtime_id,
+                    p.unique_id,
+                    PLAYER_KIND.to_owned(),
+                    p.position,
+                    p.velocity,
+                );
                 (e.yaw, e.pitch, e.head_yaw, e.moved_at) = (p.yaw, p.pitch, p.head_yaw, now);
                 e.username = Some(p.username);
                 e.uuid = Some(p.uuid);
@@ -109,20 +126,36 @@ impl Entities {
             }
             AddEntity::ID => {
                 let p: AddEntity = packet.decode()?;
-                let mut e = Entity::spawned(p.runtime_id, p.unique_id, p.entity_type, p.position, p.velocity);
+                let mut e = Entity::spawned(
+                    p.runtime_id,
+                    p.unique_id,
+                    p.entity_type,
+                    p.position,
+                    p.velocity,
+                );
                 (e.yaw, e.pitch, e.head_yaw, e.moved_at) = (p.yaw, p.pitch, p.head_yaw, now);
                 if self.lean {
                     e.metadata.merge_lean(p.metadata);
                 } else {
                     e.metadata = p.metadata.into();
                     e.properties.merge(p.properties);
-                    e.attributes = p.attributes.into_iter().map(|a| (a.name, a.value)).collect();
+                    e.attributes = p
+                        .attributes
+                        .into_iter()
+                        .map(|a| (a.name, a.value))
+                        .collect();
                 }
                 self.insert(me, e);
             }
             AddItemEntity::ID if !self.lean => {
                 let p: AddItemEntity = packet.decode()?;
-                let mut e = Entity::spawned(p.runtime_entity_id, p.entity_id_self, ITEM_KIND.to_owned(), p.position, p.velocity);
+                let mut e = Entity::spawned(
+                    p.runtime_entity_id,
+                    p.entity_id_self,
+                    ITEM_KIND.to_owned(),
+                    p.position,
+                    p.velocity,
+                );
                 e.moved_at = now;
                 e.metadata = p.metadata.into();
                 e.item = Some(p.item.into());
@@ -130,7 +163,11 @@ impl Entities {
             }
             RemoveEntity::ID => {
                 let unique = packet.decode::<RemoveEntity>()?.entity_id_self;
-                if let Some(gone) = self.runtime_by_unique.remove(&unique).and_then(|r| self.by_runtime.remove(&r)) {
+                if let Some(gone) = self
+                    .runtime_by_unique
+                    .remove(&unique)
+                    .and_then(|r| self.by_runtime.remove(&r))
+                {
                     self.stamps.members_changed();
                     self.gone(gone);
                 }
@@ -155,7 +192,8 @@ impl Entities {
         if let Some(old) = self.by_runtime.get(&entity.runtime_id) {
             self.runtime_by_unique.remove(&old.unique_id);
         }
-        self.runtime_by_unique.insert(entity.unique_id, entity.runtime_id);
+        self.runtime_by_unique
+            .insert(entity.unique_id, entity.runtime_id);
         self.stamps.members_changed();
         if !self.lean {
             self.changes.push(EntityChange::Spawned(entity.runtime_id));

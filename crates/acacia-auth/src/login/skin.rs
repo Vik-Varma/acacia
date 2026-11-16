@@ -14,11 +14,33 @@ const FLAT_RESOURCE_PATCH: &str = include_str!("../../assets/skin_resource_patch
 /// Every `PieceType` BDS 1.26.52 reads in `PersonaPieces` and `PieceTintColors`; any other name
 /// fails the whole Login (README, "Persona piece types"). `hand` is the wire enum's `Hands`.
 pub const PERSONA_PIECE_TYPES: [&str; 27] = [
-    "persona_skeleton", "persona_body", "persona_skin", "persona_bottom", "persona_feet", "persona_dress",
-    "persona_top", "persona_high_pants", "persona_hand", "persona_outerwear", "persona_facial_hair",
-    "persona_mouth", "persona_eyes", "persona_hair", "persona_hood", "persona_back", "persona_face_accessory",
-    "persona_head", "persona_legs", "persona_left_leg", "persona_right_leg", "persona_arms", "persona_left_arm",
-    "persona_right_arm", "persona_capes", "persona_classic_skin", "persona_emote",
+    "persona_skeleton",
+    "persona_body",
+    "persona_skin",
+    "persona_bottom",
+    "persona_feet",
+    "persona_dress",
+    "persona_top",
+    "persona_high_pants",
+    "persona_hand",
+    "persona_outerwear",
+    "persona_facial_hair",
+    "persona_mouth",
+    "persona_eyes",
+    "persona_hair",
+    "persona_hood",
+    "persona_back",
+    "persona_face_accessory",
+    "persona_head",
+    "persona_legs",
+    "persona_left_leg",
+    "persona_right_leg",
+    "persona_arms",
+    "persona_left_arm",
+    "persona_right_arm",
+    "persona_capes",
+    "persona_classic_skin",
+    "persona_emote",
 ];
 
 /// The skin claims of [`super::ClientData`], named as the mitm dump names them.
@@ -60,10 +82,14 @@ impl Skin {
     pub fn for_account(account: &str) -> Self {
         // Salt predates the Acacia rename; changing it gives every account a new skin.
         let digest = Sha256::digest(format!("bedrock-client skin:{account}"));
-        let Some(json) = pick(CAPTURED, u64::from_le_bytes(digest[..8].try_into().unwrap())) else {
+        let Some(json) = pick(
+            CAPTURED,
+            u64::from_le_bytes(digest[..8].try_into().unwrap()),
+        ) else {
             return Self::flat();
         };
-        let mut skin: Skin = serde_json::from_str(json).expect("assets/skins holds mitm skin dumps");
+        let mut skin: Skin =
+            serde_json::from_str(json).expect("assets/skins holds mitm skin dumps");
         skin.personalise(&hex::encode(&digest[8..16]));
         skin
     }
@@ -72,7 +98,11 @@ impl Skin {
     /// to the player's account (one account kept it across characters, only the slot changed), so
     /// each bot gets its own and pool files store zeros.
     pub fn personalise(&mut self, hex: &str) {
-        let Some(old) = self.skin_id.strip_prefix("persona-").and_then(|rest| rest.split('-').next()) else {
+        let Some(old) = self
+            .skin_id
+            .strip_prefix("persona-")
+            .and_then(|rest| rest.split('-').next())
+        else {
             return;
         };
         let old = old.to_owned();
@@ -164,7 +194,8 @@ mod tests {
     fn persona() -> Skin {
         let mut skin = Skin::flat();
         skin.skin_id = "persona-dfd8de8cea28558c-2".into();
-        skin.skin_resource_patch = STANDARD.encode(r#"{"geometry":{"default":"geometry.persona_dfd8de8cea28558c-2"}}"#);
+        skin.skin_resource_patch =
+            STANDARD.encode(r#"{"geometry":{"default":"geometry.persona_dfd8de8cea28558c-2"}}"#);
         skin.skin_geometry = STANDARD.encode(r#"{"minecraft:geometry":[{"description":{"identifier":"geometry.persona_dfd8de8cea28558c-2"}}]}"#);
         skin
     }
@@ -176,7 +207,10 @@ mod tests {
         assert_eq!(skin.skin_id, "persona-0123456789abcdef-2");
         for field in [&skin.skin_resource_patch, &skin.skin_geometry] {
             let text = String::from_utf8(STANDARD.decode(field).unwrap()).unwrap();
-            assert!(text.contains("persona_0123456789abcdef-2") && !text.contains("dfd8de8c"), "{text}");
+            assert!(
+                text.contains("persona_0123456789abcdef-2") && !text.contains("dfd8de8c"),
+                "{text}"
+            );
         }
     }
 
@@ -209,7 +243,10 @@ mod tests {
     fn piece_types_outside_the_list_are_reported() {
         let mut skin = Skin::flat();
         assert_eq!(skin.unreadable_piece_type(), None);
-        skin.persona_pieces = vec![serde_json::json!({"PieceType": "persona_hand"}), serde_json::json!({"PieceType": "persona_hands"})];
+        skin.persona_pieces = vec![
+            serde_json::json!({"PieceType": "persona_hand"}),
+            serde_json::json!({"PieceType": "persona_hands"}),
+        ];
         assert_eq!(skin.unreadable_piece_type(), Some("persona_hands"));
         skin.persona_pieces.pop();
         skin.piece_tint_colours = vec![serde_json::json!({"Colors": []})];
@@ -221,7 +258,12 @@ mod tests {
         for json in CAPTURED {
             let skin: Skin = serde_json::from_str(json).unwrap();
             let pixels = STANDARD.decode(&skin.skin_data).unwrap().len() as u32;
-            assert_eq!(pixels, skin.skin_image_width * skin.skin_image_height * 4, "{}", skin.skin_id);
+            assert_eq!(
+                pixels,
+                skin.skin_image_width * skin.skin_image_height * 4,
+                "{}",
+                skin.skin_id
+            );
         }
     }
 }

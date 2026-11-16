@@ -19,7 +19,10 @@ struct Trace {
 
 impl Trace {
     fn report(&self) {
-        println!("session {}: {} packets, {} inputs", self.n, self.packets, self.inputs);
+        println!(
+            "session {}: {} packets, {} inputs",
+            self.n, self.packets, self.inputs
+        );
     }
 }
 
@@ -34,23 +37,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for line in text.lines() {
         // Keys are sorted, so the top-level "session" and "raw" are the last ones on the line.
         // Captures from before "session" hold one connection at a time.
-        let key = line.rfind(r#""session":"#).and_then(|at| field(&line[at..], r#""session":"#, ',')).unwrap_or("");
+        let key = line
+            .rfind(r#""session":"#)
+            .and_then(|at| field(&line[at..], r#""session":"#, ','))
+            .unwrap_or("");
         if line.contains(r#""event":"login""#) {
             logins += 1;
             let path = format!("{prefix}-{logins}.btrc");
-            let trace = Trace { n: logins, rec: Recorder::create(path.as_ref())?, packets: 0, inputs: 0 };
+            let trace = Trace {
+                n: logins,
+                rec: Recorder::create(path.as_ref())?,
+                packets: 0,
+                inputs: 0,
+            };
             if let Some(done) = traces.insert(key, trace) {
                 done.report();
             }
             continue;
         }
-        let (Some(trace), Some(id), Some(raw)) = (traces.get_mut(key), field(line, r#""id":"#, ','), line.rfind(r#""raw":""#)) else { continue };
+        let (Some(trace), Some(id), Some(raw)) = (
+            traces.get_mut(key),
+            field(line, r#""id":"#, ','),
+            line.rfind(r#""raw":""#),
+        ) else {
+            continue;
+        };
         let raw = &line[raw + 7..];
         let body = hex(&raw[..raw.find('"').unwrap_or(raw.len())]);
         let id: u32 = id.parse()?;
         // "dir" is "S>C" (escaped as S>C) or "C>S".
         if line.starts_with(r#"{"dir":"S"#) {
-            trace.rec.write(&Event::Packet(RawPacket { id, sender_subclient: 0, target_subclient: 0, body: body.into() }));
+            trace.rec.write(&Event::Packet(RawPacket {
+                id,
+                sender_subclient: 0,
+                target_subclient: 0,
+                body: body.into(),
+            }));
             trace.packets += 1;
         } else if id == PlayerAuthInput::ID && line.starts_with(r#"{"dir":"C"#) {
             trace.rec.write(&Event::Input(body.into()));
@@ -70,5 +92,7 @@ fn field<'a>(line: &'a str, key: &str, end: char) -> Option<&'a str> {
 }
 
 fn hex(s: &str) -> Vec<u8> {
-    (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap_or(0)).collect()
+    (0..s.len() / 2)
+        .map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap_or(0))
+        .collect()
 }

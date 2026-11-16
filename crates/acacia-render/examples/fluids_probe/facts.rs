@@ -20,7 +20,7 @@ pub fn check(world: &World, table: &BlockTable, path: &str) {
         cases += 1;
         let block = table.get(id);
         let rules = &block.fluid_rules;
-        let diverge =|field: String, expected: String, got: String| {
+        let diverge = |field: String, expected: String, got: String| {
             if expected != got {
                 println!("DIVERGENCE\t{key}\t{field}\t{expected}\t{got}");
             }
@@ -29,18 +29,34 @@ pub fn check(world: &World, table: &BlockTable, path: &str) {
             let expected = java["cover"][face].as_f64().expect("cover");
             let got = f64::from(rules.occluding(face));
             if (expected - got).abs() > 1e-4 {
-                diverge(format!("cover[{face}]"), format!("{expected}"), format!("{got}"));
+                diverge(
+                    format!("cover[{face}]"),
+                    format!("{expected}"),
+                    format!("{got}"),
+                );
             }
         }
         for face in SIDES {
-            diverge(format!("sturdy[{face}]"), java["sturdy"][face].to_string(), rules.sturdy[face].to_string());
+            diverge(
+                format!("sturdy[{face}]"),
+                java["sturdy"][face].to_string(),
+                rules.sturdy[face].to_string(),
+            );
         }
         let flag = |name: &str| java[name].to_string();
         diverge("solid".into(), flag("solid"), rules.solid.to_string());
-        diverge("blocks_motion".into(), flag("blocks_motion"), rules.blocks_motion.to_string());
+        diverge(
+            "blocks_motion".into(),
+            flag("blocks_motion"),
+            rules.blocks_motion.to_string(),
+        );
         diverge("overlay".into(), flag("overlay"), rules.overlay.to_string());
         diverge("ice".into(), flag("ice"), rules.ice.to_string());
-        diverge("solid_render".into(), flag("solid_render"), block.light.solid_render.to_string());
+        diverge(
+            "solid_render".into(),
+            flag("solid_render"),
+            block.light.solid_render.to_string(),
+        );
     }
     println!("CASES\t{cases}");
 }

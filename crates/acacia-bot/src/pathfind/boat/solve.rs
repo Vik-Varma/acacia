@@ -13,7 +13,17 @@ pub(crate) type Keys = [f32; 2];
 pub(crate) const W: Keys = [0.0, 1.0];
 pub(crate) const S: Keys = [0.0, -1.0];
 pub(crate) const NONE: Keys = [0.0, 0.0];
-const FIRSTS: [Keys; 9] = [W, [1.0, 1.0], [-1.0, 1.0], [1.0, 0.0], [-1.0, 0.0], NONE, S, [1.0, -1.0], [-1.0, -1.0]];
+const FIRSTS: [Keys; 9] = [
+    W,
+    [1.0, 1.0],
+    [-1.0, 1.0],
+    [1.0, 0.0],
+    [-1.0, 0.0],
+    NONE,
+    S,
+    [1.0, -1.0],
+    [-1.0, -1.0],
+];
 
 /// Look-ahead distances (blocks) of the follow policies tried, as zuri's pure pursuit.
 const LOOKS: [f32; 4] = [2.5, 4.0, 6.0, 9.0];
@@ -73,7 +83,9 @@ pub(crate) struct Course<'a, 'w, V: WorldView + ?Sized> {
 impl<V: WorldView + ?Sized> Course<'_, '_, V> {
     /// The boat rests where getting off lands on the planned exit.
     pub fn arrived(&self, st: &BoatState, world: &V) -> bool {
-        self.stop.is_some_and(|a| dist([st.pos[0], st.pos[2]], self.line.end()) < REST_REACH && a.rests_for(st, world))
+        self.stop.is_some_and(|a| {
+            dist([st.pos[0], st.pos[2]], self.line.end()) < REST_REACH && a.rests_for(st, world)
+        })
     }
 }
 
@@ -94,7 +106,12 @@ pub(crate) fn forward_speed(st: &BoatState) -> f32 {
 
 /// Pure pursuit with an approach: steer for the point `look` blocks ahead; near the stop, hold the speed under a
 /// ramp down to it (S over the ramp, W under it).
-pub(crate) fn policy<V: WorldView + ?Sized>(st: &BoatState, seg: &mut usize, look: f32, course: &Course<'_, '_, V>) -> Keys {
+pub(crate) fn policy<V: WorldView + ?Sized>(
+    st: &BoatState,
+    seg: &mut usize,
+    look: f32,
+    course: &Course<'_, '_, V>,
+) -> Keys {
     let p = [st.pos[0], st.pos[2]];
     let place = course.line.locate(p, *seg, WINDOW);
     *seg = place.seg;
@@ -109,10 +126,22 @@ pub(crate) fn policy<V: WorldView + ?Sized>(st: &BoatState, seg: &mut usize, loo
         if to_end < REVERSE_REACH && e.abs() > 90.0 && v <= STOPPED {
             // Behind and near: back onto it, the stern steered (a side key with S swings the bow the same way).
             let stern = wrap(e - 180.0);
-            return if -v > ramp { NONE } else if stern.abs() < STRAIGHT { S } else { [stern.signum(), -1.0] };
+            return if -v > ramp {
+                NONE
+            } else if stern.abs() < STRAIGHT {
+                S
+            } else {
+                [stern.signum(), -1.0]
+            };
         }
         return match e {
-            _ if to_end < ARRIVED => if v > STOPPED { S } else { NONE },
+            _ if to_end < ARRIVED => {
+                if v > STOPPED {
+                    S
+                } else {
+                    NONE
+                }
+            }
             _ if v > ramp + RAMP_SLACK => S,
             e if e.abs() > PIVOT / 2.0 => [e.signum(), 0.0],
             _ if v >= ramp => NONE,
@@ -160,10 +189,23 @@ struct Driver {
 impl Driver {
     fn new(plan: Plan, lag: u32) -> Self {
         let follow = plan.prefix + plan.first.map_or(0, |k| hold_for(k, plan.holds));
-        Self { plan, follow, lag, keys: plan.held, next: follow, due: None }
+        Self {
+            plan,
+            follow,
+            lag,
+            keys: plan.held,
+            next: follow,
+            due: None,
+        }
     }
 
-    fn keys<V: WorldView + ?Sized>(&mut self, t: u32, b: &BoatState, seg: &mut usize, course: &Course<'_, '_, V>) -> Keys {
+    fn keys<V: WorldView + ?Sized>(
+        &mut self,
+        t: u32,
+        b: &BoatState,
+        seg: &mut usize,
+        course: &Course<'_, '_, V>,
+    ) -> Keys {
         let p = self.plan;
         if t < p.prefix {
             return p.held;
@@ -174,7 +216,11 @@ impl Driver {
         }
         if t == self.next && self.due.is_none() {
             // A follow plan's own first choice is the candidate, pressed once the prefix is over.
-            let lag = if p.first.is_none() && t == self.follow { 0 } else { self.lag };
+            let lag = if p.first.is_none() && t == self.follow {
+                0
+            } else {
+                self.lag
+            };
             self.due = Some((t + lag, policy(b, seg, p.look, course)));
         }
         if let Some((_, keys)) = self.due.filter(|&(at, _)| t >= at) {
@@ -185,12 +231,22 @@ impl Driver {
 }
 
 /// Simulates a plan and scores it: higher is better. Returns the keys it holds once the prefix is over.
-pub(crate) fn score<V: WorldView + ?Sized>(st: &BoatState, seg: usize, plan: Plan, course: &Course<'_, '_, V>, world: &V) -> (f32, Keys) {
+pub(crate) fn score<V: WorldView + ?Sized>(
+    st: &BoatState,
+    seg: usize,
+    plan: Plan,
+    course: &Course<'_, '_, V>,
+    world: &V,
+) -> (f32, Keys) {
     let (mut b, mut seg) = (*st, seg);
     let (mut off, mut remain, mut chosen) = (0.0, 0.0, None);
     let (end, length) = (course.line.end(), course.line.length());
     // A boat already touching a bank would end every rollout at once: only pressing into it counts then.
-    let contact = if course.grid.clear(st.pos[0], st.pos[2], CONTACT_PAD) { CONTACT_PAD } else { 0.0 };
+    let contact = if course.grid.clear(st.pos[0], st.pos[2], CONTACT_PAD) {
+        CONTACT_PAD
+    } else {
+        0.0
+    };
     let mut driver = Driver::new(plan, course.lag);
     for t in 0..ROLLOUT_TICKS {
         let keys = driver.keys(t, &b, &mut seg, course);
@@ -199,7 +255,9 @@ pub(crate) fn score<V: WorldView + ?Sized>(st: &BoatState, seg: usize, plan: Pla
         }
         let speed = b.vel[0].hypot(b.vel[2]);
         boat_tick(&mut b, keys, world);
-        if !course.grid.clear(b.pos[0], b.pos[2], contact) && !(speed <= NUDGE_SPEED && dist([b.pos[0], b.pos[2]], end) < NUDGE_REACH) {
+        if !course.grid.clear(b.pos[0], b.pos[2], contact)
+            && !(speed <= NUDGE_SPEED && dist([b.pos[0], b.pos[2]], end) < NUDGE_REACH)
+        {
             return (-WALL + t as f32, chosen.unwrap_or(keys));
         }
         let place = course.line.locate([b.pos[0], b.pos[2]], seg, WINDOW);
@@ -210,7 +268,10 @@ pub(crate) fn score<V: WorldView + ?Sized>(st: &BoatState, seg: usize, plan: Pla
         }
         remain += (length - place.s).max(dist([b.pos[0], b.pos[2]], end));
         if course.arrived(&b, world) {
-            return (length + ARRIVAL - TIME_W * t as f32 - OFF_W * off, chosen.unwrap_or(keys));
+            return (
+                length + ARRIVAL - TIME_W * t as f32 - OFF_W * off,
+                chosen.unwrap_or(keys),
+            );
         }
     }
     let p = [b.pos[0], b.pos[2]];
@@ -230,9 +291,29 @@ pub(crate) fn score<V: WorldView + ?Sized>(st: &BoatState, seg: usize, plan: Pla
 
 /// The best keys to press at the end of `prefix`: the follow policies at each look-ahead, and each first key before
 /// the middle one takes over.
-pub(crate) fn solve<V: WorldView + ?Sized>(st: &BoatState, seg: usize, held: Keys, prefix: u32, holds: Holds, course: &Course<'_, '_, V>, world: &V) -> Keys {
-    let policies = LOOKS.iter().map(|&look| Plan { held, prefix, first: None, holds, look });
-    let firsts = FIRSTS.iter().map(|&k| Plan { held, prefix, first: Some(k), holds, look: LOOKS[1] });
+pub(crate) fn solve<V: WorldView + ?Sized>(
+    st: &BoatState,
+    seg: usize,
+    held: Keys,
+    prefix: u32,
+    holds: Holds,
+    course: &Course<'_, '_, V>,
+    world: &V,
+) -> Keys {
+    let policies = LOOKS.iter().map(|&look| Plan {
+        held,
+        prefix,
+        first: None,
+        holds,
+        look,
+    });
+    let firsts = FIRSTS.iter().map(|&k| Plan {
+        held,
+        prefix,
+        first: Some(k),
+        holds,
+        look: LOOKS[1],
+    });
     let mut best = (f32::MIN, W);
     for plan in policies.chain(firsts) {
         let (s, keys) = score(st, seg, plan, course, world);

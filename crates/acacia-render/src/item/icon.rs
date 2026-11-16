@@ -16,7 +16,10 @@ const TILE: usize = 16;
 /// Block space (0..1, x east, y up, z south) to icon pixels: the far top corner at (16, 2), the
 /// near bottom one at (16, 31).
 fn project(p: Vec3) -> Vec2 {
-    Vec2::new(16.0, 2.0) + p.x * Vec2::new(14.0, 7.0) + p.z * Vec2::new(-14.0, 7.0) + (1.0 - p.y) * Vec2::new(0.0, 15.0)
+    Vec2::new(16.0, 2.0)
+        + p.x * Vec2::new(14.0, 7.0)
+        + p.z * Vec2::new(-14.0, 7.0)
+        + (1.0 - p.y) * Vec2::new(0.0, 15.0)
 }
 
 /// Larger is nearer the viewer.
@@ -39,14 +42,27 @@ fn light(normal: Vec3) -> f32 {
 /// Crossed plants show their texture flat; `None` for blocks drawn as nothing.
 pub fn block_icon(block: &RenderBlock, atlas: &Atlas) -> Option<RgbaImage> {
     if block.shape == Shape::Cross {
-        let rgba = texels(atlas.layers.get(block.textures[0] as usize), tile_of(block, 0));
+        let rgba = texels(
+            atlas.layers.get(block.textures[0] as usize),
+            tile_of(block, 0),
+        );
         let flat = RgbaImage::from_raw(TILE as u32, TILE as u32, rgba)?;
-        return Some(image::imageops::resize(&flat, SIZE, SIZE, image::imageops::FilterType::Nearest));
+        return Some(image::imageops::resize(
+            &flat,
+            SIZE,
+            SIZE,
+            image::imageops::FilterType::Nearest,
+        ));
     }
     let mut icon = RgbaImage::new(SIZE, SIZE);
     let mut nearest = vec![f32::NEG_INFINITY; (SIZE * SIZE) as usize];
     for face in faces(block)? {
-        draw(&mut icon, &mut nearest, &face, &texels(atlas.layers.get(face.tile.layer as usize), face.tile));
+        draw(
+            &mut icon,
+            &mut nearest,
+            &face,
+            &texels(atlas.layers.get(face.tile.layer as usize), face.tile),
+        );
     }
     Some(icon)
 }
@@ -79,7 +95,14 @@ fn shield_icon(root: &std::path::Path, cloth: Option<&Banner>) -> Option<RgbaIma
     Some(RgbaImage::from_fn(SIZE, SIZE, |x, y| {
         let [u, v] = shield_plate_at(Vec2::new(x as f32 + 0.5, y as f32 + 0.5));
         let inside = (0.0..1.0).contains(&u) && (0.0..1.0).contains(&v);
-        if inside { *plate.get_pixel((u * plate.width() as f32) as u32, (v * plate.height() as f32) as u32) } else { image::Rgba([0; 4]) }
+        if inside {
+            *plate.get_pixel(
+                (u * plate.width() as f32) as u32,
+                (v * plate.height() as f32) as u32,
+            )
+        } else {
+            image::Rgba([0; 4])
+        }
     }))
 }
 
@@ -97,7 +120,11 @@ fn shield_plate_at(pixel: Vec2) -> [f32; 2] {
 
 /// The icon of an item both games draw as its model in a slot; `None` for any other item.
 /// `banner` is a banner stack's cloth, or the one on a shield.
-pub fn model_icon(root: &std::path::Path, name: &str, banner: Option<&Banner>) -> Option<RgbaImage> {
+pub fn model_icon(
+    root: &std::path::Path,
+    name: &str,
+    banner: Option<&Banner>,
+) -> Option<RgbaImage> {
     match name {
         "minecraft:banner" => banner_icon(root, banner?),
         super::shield::ITEM => shield_icon(root, banner),
@@ -110,7 +137,10 @@ pub fn model_icon(root: &std::path::Path, name: &str, banner: Option<&Banner>) -
 pub fn pattern_icon(root: &std::path::Path, code: &str) -> Option<RgbaImage> {
     // Bedrock's banner dye numbers.
     let (grey, white) = (8, 15);
-    let banner = crate::banner::compose(root, &crate::banner::Banner::from_bedrock(grey, [(code, white)], 0))?;
+    let banner = crate::banner::compose(
+        root,
+        &crate::banner::Banner::from_bedrock(grey, [(code, white)], 0),
+    )?;
     let scale = banner.width() / 64;
     let flag = image::imageops::crop_imm(&banner, scale, scale, 20 * scale, 40 * scale).to_image();
     let flag = image::imageops::resize(&flag, 12, 24, image::imageops::FilterType::Triangle);
@@ -121,7 +151,11 @@ pub fn pattern_icon(root: &std::path::Path, code: &str) -> Option<RgbaImage> {
 
 fn draw(icon: &mut RgbaImage, nearest: &mut [f32], face: &Face, rgba: &[u8]) {
     let [c0, c1, _, c3] = face.corners;
-    let (o, a, b) = (project(c0), project(c1) - project(c0), project(c3) - project(c0));
+    let (o, a, b) = (
+        project(c0),
+        project(c1) - project(c0),
+        project(c3) - project(c0),
+    );
     let det = a.perp_dot(b);
     if det.abs() < 1e-3 {
         return;
@@ -145,7 +179,12 @@ fn draw(icon: &mut RgbaImage, nearest: &mut [f32], face: &Face, rgba: &[u8]) {
         if rgba[i + 3] > 0 {
             *slot = at;
             let lit = |c: u8| (f32::from(c) * shade) as u8;
-            px.0 = [lit(rgba[i]), lit(rgba[i + 1]), lit(rgba[i + 2]), rgba[i + 3]];
+            px.0 = [
+                lit(rgba[i]),
+                lit(rgba[i + 1]),
+                lit(rgba[i + 2]),
+                rgba[i + 3],
+            ];
         }
     }
 }
@@ -159,17 +198,34 @@ mod tests {
         let [u, v] = shield_plate_at(Vec2::splat(16.0));
         assert!((u - 0.5).abs() < 1e-6 && (v - 0.5).abs() < 1e-6);
         // 15.6 pixels wide before the turn: narrower after it, and the slot's corners are empty.
-        assert!(shield_plate_at(Vec2::new(22.5, 16.0))[0] < 1.0 && shield_plate_at(Vec2::new(24.5, 16.0))[0] > 1.0);
-        assert!(shield_plate_at(Vec2::new(1.0, 1.0)).iter().any(|c| !(0.0..1.0).contains(c)));
+        assert!(
+            shield_plate_at(Vec2::new(22.5, 16.0))[0] < 1.0
+                && shield_plate_at(Vec2::new(24.5, 16.0))[0] > 1.0
+        );
+        assert!(
+            shield_plate_at(Vec2::new(1.0, 1.0))
+                .iter()
+                .any(|c| !(0.0..1.0).contains(c))
+        );
     }
 
     #[test]
     fn the_cube_fills_the_hexagon() {
-        let corners = [(Vec3::new(0.0, 1.0, 0.0), [16.0, 2.0]), (Vec3::new(1.0, 1.0, 1.0), [16.0, 16.0]), (Vec3::new(1.0, 0.0, 1.0), [16.0, 31.0])];
+        let corners = [
+            (Vec3::new(0.0, 1.0, 0.0), [16.0, 2.0]),
+            (Vec3::new(1.0, 1.0, 1.0), [16.0, 16.0]),
+            (Vec3::new(1.0, 0.0, 1.0), [16.0, 31.0]),
+        ];
         for (p, at) in corners {
             assert_eq!(project(p), Vec2::from(at), "{p}");
         }
-        assert!(depth(Vec3::ONE) > depth(Vec3::new(0.0, 1.0, 0.0)) && depth(Vec3::new(1.0, 0.0, 1.0)) > depth(Vec3::ZERO));
-        assert_eq!((light(Vec3::Y), light(Vec3::Z), light(Vec3::X)), (1.0, 0.8, 0.6));
+        assert!(
+            depth(Vec3::ONE) > depth(Vec3::new(0.0, 1.0, 0.0))
+                && depth(Vec3::new(1.0, 0.0, 1.0)) > depth(Vec3::ZERO)
+        );
+        assert_eq!(
+            (light(Vec3::Y), light(Vec3::Z), light(Vec3::X)),
+            (1.0, 0.8, 0.6)
+        );
     }
 }

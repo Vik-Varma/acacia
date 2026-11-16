@@ -48,7 +48,10 @@ pub(crate) struct Memo<K, V> {
 
 impl<K, V> Default for Memo<K, V> {
     fn default() -> Self {
-        Self { shards: std::array::from_fn(|_| Mutex::default()), len: AtomicUsize::new(0) }
+        Self {
+            shards: std::array::from_fn(|_| Mutex::default()),
+            len: AtomicUsize::new(0),
+        }
     }
 }
 
@@ -59,7 +62,14 @@ impl<K: Hash + Eq + Clone, V: Shift + Clone> Memo<K, V> {
     }
 
     /// The result for `key` at node `p`: a stored one whose cells all read the same here, else `compute`'s.
-    pub fn get_or<B: Blocks>(&self, t: &Terrain<B>, p: BlockPos, key: K, n: &mut Counts, compute: impl FnOnce() -> V) -> V {
+    pub fn get_or<B: Blocks>(
+        &self,
+        t: &Terrain<B>,
+        p: BlockPos,
+        key: K,
+        n: &mut Counts,
+        compute: impl FnOnce() -> V,
+    ) -> V {
         if n.off {
             n.misses += 1;
             return compute();
@@ -69,7 +79,10 @@ impl<K: Hash + Eq + Clone, V: Shift + Clone> Memo<K, V> {
             let entries = shard.entry(key.clone()).or_default();
             for i in 0..entries.len() {
                 let reads = &mut entries[i].reads;
-                match reads.iter().position(|&(q, id)| t.cell(add(p, q)).id() != id) {
+                match reads
+                    .iter()
+                    .position(|&(q, id)| t.cell(add(p, q)).id() != id)
+                {
                     // The cell that told this entry apart goes first: neighbouring nodes tend to differ there too.
                     Some(j) => reads.swap(0, j),
                     None => {
@@ -88,7 +101,10 @@ impl<K: Hash + Eq + Clone, V: Shift + Clone> Memo<K, V> {
         let mut stored = v.clone();
         let back = p.map(|c| -c);
         stored.shift(back);
-        let reads = reads.into_iter().map(|(q, id)| (add(q, back), id)).collect();
+        let reads = reads
+            .into_iter()
+            .map(|(q, id)| (add(q, back), id))
+            .collect();
         let mut shard = self.shard(&key);
         let entries = shard.entry(key).or_default();
         if entries.len() == PER_KEY {
@@ -97,7 +113,13 @@ impl<K: Hash + Eq + Clone, V: Shift + Clone> Memo<K, V> {
         } else {
             self.len.fetch_add(1, Ordering::Relaxed);
         }
-        entries.insert(0, Entry { reads, value: stored });
+        entries.insert(
+            0,
+            Entry {
+                reads,
+                value: stored,
+            },
+        );
         v
     }
 }
@@ -132,7 +154,10 @@ pub(crate) struct Store {
 
 impl Store {
     fn len(&self) -> usize {
-        [&self.runs.len, &self.hops.len, &self.leaps.len].iter().map(|l| l.load(Ordering::Relaxed)).sum()
+        [&self.runs.len, &self.hops.len, &self.leaps.len]
+            .iter()
+            .map(|l| l.load(Ordering::Relaxed))
+            .sum()
     }
 }
 
@@ -150,16 +175,26 @@ impl RolloutCache {
     pub(crate) fn claim<S: Sim>(&self, profile: MovementProfile, base: &S) -> Arc<Store> {
         let player = Momentum::default().synth([0, 0, 0], base);
         let mut store = lock(&self.store);
-        let held = store.owner.as_ref().is_some_and(|(p, s)| *p == profile && s.downcast_ref::<S>() == Some(&player));
+        let held = store
+            .owner
+            .as_ref()
+            .is_some_and(|(p, s)| *p == profile && s.downcast_ref::<S>() == Some(&player));
         if !held || store.len() > MAX_RESULTS {
-            *store = Arc::new(Store { owner: Some((profile, Box::new(player))), off: self.off, ..Store::default() });
+            *store = Arc::new(Store {
+                owner: Some((profile, Box::new(player))),
+                off: self.off,
+                ..Store::default()
+            });
         }
         store.clone()
     }
 
     /// A cache that keeps nothing: every search simulates every move.
     pub fn disabled() -> Self {
-        Self { off: true, ..Self::default() }
+        Self {
+            off: true,
+            ..Self::default()
+        }
     }
 }
 

@@ -5,7 +5,14 @@
 use acacia_world::BlockState;
 
 /// Face order as `RenderBlock::textures`: east, west, up, down, south, north.
-const NORMALS: [[i8; 3]; 6] = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+const NORMALS: [[i8; 3]; 6] = [
+    [1, 0, 0],
+    [-1, 0, 0],
+    [0, 1, 0],
+    [0, -1, 0],
+    [0, 0, 1],
+    [0, 0, -1],
+];
 const UP: [i8; 3] = [0, 1, 0];
 const NORTH: [i8; 3] = [0, 0, -1];
 const SOUTH: [i8; 3] = [0, 0, 1];
@@ -21,8 +28,26 @@ pub(super) fn orient(mut f: [String; 6], state: &BlockState) -> [String; 6] {
     }
     let (top, bottom, side) = (f[2].clone(), f[3].clone(), f[4].clone());
     match state.property("pillar_axis") {
-        Some("x") => f = [top.clone(), bottom, side.clone(), side.clone(), side.clone(), side],
-        Some("z") => f = [side.clone(), side.clone(), side.clone(), side, top.clone(), bottom],
+        Some("x") => {
+            f = [
+                top.clone(),
+                bottom,
+                side.clone(),
+                side.clone(),
+                side.clone(),
+                side,
+            ]
+        }
+        Some("z") => {
+            f = [
+                side.clone(),
+                side.clone(),
+                side.clone(),
+                side,
+                top.clone(),
+                bottom,
+            ]
+        }
         _ => {}
     }
     let turns = match state.property("minecraft:cardinal_direction") {
@@ -42,21 +67,45 @@ pub(super) fn orient(mut f: [String; 6], state: &BlockState) -> [String; 6] {
 
 /// Quarter turns of each face's texture.
 pub(super) fn turns(state: &BlockState) -> [u8; 6] {
-    six_way(state).map_or([0; 6], |layout| std::array::from_fn(|i| quarter_turns(i, layout[i].1)))
+    six_way(state).map_or([0; 6], |layout| {
+        std::array::from_fn(|i| quarter_turns(i, layout[i].1))
+    })
 }
 
 /// Each face's texture and where its top edge points, for a six-way block.
 fn six_way(state: &BlockState) -> Option<[(String, [i8; 3]); 6]> {
     let name = super::short_name(state.name);
     // `facing_direction` 0..=5 is down, up, north, south, west, east; `order` maps it to a face.
-    let facing = |order: [usize; 6]| Some(NORMALS[order[state.property("facing_direction")?.parse::<usize>().ok()?.min(5)]]);
+    let facing = |order: [usize; 6]| {
+        Some(
+            NORMALS[order[state
+                .property("facing_direction")?
+                .parse::<usize>()
+                .ok()?
+                .min(5)]],
+        )
+    };
     let (front, base): ([i8; 3], [(String, [i8; 3]); 6]) = match name {
         // Bedrock numbers a piston's horizontal facings the other way round (ViaBedrock's table).
         "piston" | "sticky_piston" => {
             let front = facing([3, 2, 4, 5, 0, 1])?;
-            let platform = if name == "piston" { "piston_top_normal" } else { "piston_top_sticky" };
+            let platform = if name == "piston" {
+                "piston_top_normal"
+            } else {
+                "piston_top_sticky"
+            };
             let side = || ("piston_side".to_owned(), NORTH);
-            (front, [side(), side(), side(), side(), ("piston_bottom".into(), UP), (platform.into(), UP)])
+            (
+                front,
+                [
+                    side(),
+                    side(),
+                    side(),
+                    side(),
+                    ("piston_bottom".into(), UP),
+                    (platform.into(), UP),
+                ],
+            )
         }
         "dispenser" | "dropper" => {
             let front = facing([3, 2, 5, 4, 1, 0])?;
@@ -66,7 +115,17 @@ fn six_way(state: &BlockState) -> Option<[(String, [i8; 3]); 6]> {
                 _ => (format!("{name}_front_vertical"), top.clone()),
             };
             let s = |t: &String| (t.clone(), UP);
-            (front, [s(&rest), s(&rest), (top.clone(), NORTH), (top, NORTH), s(&rest), s(&face)])
+            (
+                front,
+                [
+                    s(&rest),
+                    s(&rest),
+                    (top.clone(), NORTH),
+                    (top, NORTH),
+                    s(&rest),
+                    s(&face),
+                ],
+            )
         }
         "observer" => {
             let front = match state.property("minecraft:facing_direction")? {
@@ -80,13 +139,26 @@ fn six_way(state: &BlockState) -> Option<[(String, [i8; 3]); 6]> {
             let s = |t: &str, up| (t.to_owned(), up);
             // The arrow points away from the face, at the output (Java's model flips the up face's uv).
             let top = || s("observer_top", SOUTH);
-            (NORMALS[front], [s("observer_east", UP), s("observer_west", UP), top(), top(), s("observer_south", UP), s("observer_north", UP)])
+            (
+                NORMALS[front],
+                [
+                    s("observer_east", UP),
+                    s("observer_west", UP),
+                    top(),
+                    top(),
+                    s("observer_south", UP),
+                    s("observer_north", UP),
+                ],
+            )
         }
         _ => return None,
     };
     let mut out = base.clone();
     for (i, (texture, edge)) in base.into_iter().enumerate() {
-        let to = NORMALS.iter().position(|&n| n == turn(front, NORMALS[i])).expect("a turned normal is a normal");
+        let to = NORMALS
+            .iter()
+            .position(|&n| n == turn(front, NORMALS[i]))
+            .expect("a turned normal is a normal");
         out[to] = (texture, turn(front, edge));
     }
     Some(out)
@@ -108,7 +180,13 @@ fn turn(front: [i8; 3], [x, y, z]: [i8; 3]) -> [i8; 3] {
 /// outside (the mesher's sense: seen live on pistons' side bands).
 fn quarter_turns(face: usize, edge: [i8; 3]) -> u8 {
     let n = NORMALS[face];
-    let counter_clockwise = |[a, b, c]: [i8; 3]| [n[1] * c - n[2] * b, n[2] * a - n[0] * c, n[0] * b - n[1] * a];
+    let counter_clockwise = |[a, b, c]: [i8; 3]| {
+        [
+            n[1] * c - n[2] * b,
+            n[2] * a - n[0] * c,
+            n[0] * b - n[1] * a,
+        ]
+    };
     let mut v = TOP_EDGE[face];
     for k in 0..4 {
         if v == edge {
@@ -125,7 +203,9 @@ mod tests {
 
     fn state(name: &str, props: &str) -> &'static BlockState {
         let reg = acacia_world::BlockRegistry::vanilla();
-        let id = reg.find(name, props).unwrap_or_else(|| panic!("no state {name} {props}"));
+        let id = reg
+            .find(name, props)
+            .unwrap_or_else(|| panic!("no state {name} {props}"));
         reg.get(id).unwrap()
     }
 
@@ -135,16 +215,32 @@ mod tests {
 
     #[test]
     fn a_pistons_platform_is_on_its_facing_and_bedrock_swaps_horizontals() {
-        assert_eq!(faces("minecraft:piston", "facing_direction=1")[2], "piston_top_normal");
-        assert_eq!(faces("minecraft:piston", "facing_direction=1")[3], "piston_bottom");
-        assert_eq!(faces("minecraft:sticky_piston", "facing_direction=2")[4], "piston_top_sticky");
-        assert_eq!(faces("minecraft:piston", "facing_direction=4")[0], "piston_top_normal");
+        assert_eq!(
+            faces("minecraft:piston", "facing_direction=1")[2],
+            "piston_top_normal"
+        );
+        assert_eq!(
+            faces("minecraft:piston", "facing_direction=1")[3],
+            "piston_bottom"
+        );
+        assert_eq!(
+            faces("minecraft:sticky_piston", "facing_direction=2")[4],
+            "piston_top_sticky"
+        );
+        assert_eq!(
+            faces("minecraft:piston", "facing_direction=4")[0],
+            "piston_top_normal"
+        );
     }
 
     #[test]
     fn a_pistons_sides_point_their_band_at_the_platform() {
         let up = turns(state("minecraft:piston", "facing_direction=1"));
-        assert_eq!([up[0], up[1], up[4], up[5]], [0; 4], "sides of an upward piston stand upright");
+        assert_eq!(
+            [up[0], up[1], up[4], up[5]],
+            [0; 4],
+            "sides of an upward piston stand upright"
+        );
         let north = turns(state("minecraft:piston", "facing_direction=3"));
         assert_eq!(north[2], 0, "the top's band points north as drawn");
         assert_ne!(north[0], 0);
@@ -162,21 +258,46 @@ mod tests {
 
     #[test]
     fn an_observers_face_looks_its_facing() {
-        let down = faces("minecraft:observer", "minecraft:facing_direction=down,powered_bit=0");
+        let down = faces(
+            "minecraft:observer",
+            "minecraft:facing_direction=down,powered_bit=0",
+        );
         assert_eq!([&down[3], &down[2]], ["observer_north", "observer_south"]);
-        assert_eq!(faces("minecraft:observer", "minecraft:facing_direction=east,powered_bit=0")[0], "observer_north");
+        assert_eq!(
+            faces(
+                "minecraft:observer",
+                "minecraft:facing_direction=east,powered_bit=0"
+            )[0],
+            "observer_north"
+        );
     }
 
     #[test]
     fn an_observers_arrow_points_at_its_back() {
-        let north = turns(state("minecraft:observer", "minecraft:facing_direction=north,powered_bit=0"));
+        let north = turns(state(
+            "minecraft:observer",
+            "minecraft:facing_direction=north,powered_bit=0",
+        ));
         assert_eq!([north[2], north[3]], [2, 2]);
-        let east = turns(state("minecraft:observer", "minecraft:facing_direction=east,powered_bit=0"));
-        assert_eq!(east[2], 3, "three clockwise quarter turns seen from above point it west");
+        let east = turns(state(
+            "minecraft:observer",
+            "minecraft:facing_direction=east,powered_bit=0",
+        ));
+        assert_eq!(
+            east[2], 3,
+            "three clockwise quarter turns seen from above point it west"
+        );
     }
 
     #[test]
     fn other_blocks_keep_the_packs_faces() {
-        assert!(turns(state("minecraft:furnace", "minecraft:cardinal_direction=north")).iter().all(|&t| t == 0));
+        assert!(
+            turns(state(
+                "minecraft:furnace",
+                "minecraft:cardinal_direction=north"
+            ))
+            .iter()
+            .all(|&t| t == 0)
+        );
     }
 }

@@ -3,8 +3,8 @@
 
 use glam::DVec3;
 
-use super::java::behaviour::Behaviour;
 use super::java::Particle;
+use super::java::behaviour::Behaviour;
 use super::sheet::Sheet;
 use super::sprite::{Blend, Light, Sprite};
 use super::{Particles, Style};
@@ -23,15 +23,34 @@ pub struct Draw {
 
 impl Particles {
     /// `light` gives (block, sky) at a world position.
-    pub fn draws(&self, sheet: &Sheet, partial: f64, light: impl Fn(DVec3) -> [f32; 2]) -> Vec<Draw> {
+    pub fn draws(
+        &self,
+        sheet: &Sheet,
+        partial: f64,
+        light: impl Fn(DVec3) -> [f32; 2],
+    ) -> Vec<Draw> {
         match self.style {
-            Style::Java => self.java.particles.iter().filter_map(|p| java(p, sheet, partial, &light)).collect(),
-            Style::Bedrock => self.sprites.iter().filter_map(|s| bedrock(s, sheet, partial, &light)).collect(),
+            Style::Java => self
+                .java
+                .particles
+                .iter()
+                .filter_map(|p| java(p, sheet, partial, &light))
+                .collect(),
+            Style::Bedrock => self
+                .sprites
+                .iter()
+                .filter_map(|s| bedrock(s, sheet, partial, &light))
+                .collect(),
         }
     }
 }
 
-fn bedrock(s: &Sprite, sheet: &Sheet, partial: f64, light: &impl Fn(DVec3) -> [f32; 2]) -> Option<Draw> {
+fn bedrock(
+    s: &Sprite,
+    sheet: &Sheet,
+    partial: f64,
+    light: &impl Fn(DVec3) -> [f32; 2],
+) -> Option<Draw> {
     if !s.visible() {
         return None;
     }
@@ -45,12 +64,24 @@ fn bedrock(s: &Sprite, sheet: &Sheet, partial: f64, light: &impl Fn(DVec3) -> [f
         Light::Ramp => [(block + s.life() * 15.0).min(15.0), sky],
         Light::Block => [15.0, sky],
     };
-    Some(Draw { at, size: s.quad_size(), uv, color: s.tint(), light, blend: s.blend })
+    Some(Draw {
+        at,
+        size: s.quad_size(),
+        uv,
+        color: s.tint(),
+        light,
+        blend: s.blend,
+    })
 }
 
 /// `SingleQuadParticle.extract`: the quad at its interpolated place, `getQuadSize(a)` and
 /// `getLightCoords(a)`; the roll some classes keep is not drawn.
-fn java(p: &Particle, sheet: &Sheet, partial: f64, light: &impl Fn(DVec3) -> [f32; 2]) -> Option<Draw> {
+fn java(
+    p: &Particle,
+    sheet: &Sheet,
+    partial: f64,
+    light: &impl Fn(DVec3) -> [f32; 2],
+) -> Option<Draw> {
     if p.no_render || p.removed {
         return None;
     }
@@ -63,6 +94,20 @@ fn java(p: &Particle, sheet: &Sheet, partial: f64, light: &impl Fn(DVec3) -> [f3
         (0..3).for_each(|i| color[i] = from[i] + (to[i] - from[i]) * t);
     }
     // `getLayer`: TRANSLUCENT for these classes, OPAQUE (cut out) for the rest drawn here.
-    let blend = if matches!(p.behaviour, Behaviour::Campfire | Behaviour::SimpleAnimated { .. }) { Blend::Alpha } else { Blend::Cutout };
-    Some(Draw { at, size: p.quad_size(a), uv, color, light: p.light(a, light(at)), blend })
+    let blend = if matches!(
+        p.behaviour,
+        Behaviour::Campfire | Behaviour::SimpleAnimated { .. }
+    ) {
+        Blend::Alpha
+    } else {
+        Blend::Cutout
+    };
+    Some(Draw {
+        at,
+        size: p.quad_size(a),
+        uv,
+        color,
+        light: p.light(a, light(at)),
+        blend,
+    })
 }

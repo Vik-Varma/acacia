@@ -68,13 +68,24 @@ impl Label {
 pub enum Set {
     Cycle,
     /// `IntRange` (and `ClampingLazyMaxIntRange` as a slider).
-    Int { min: i32, max: i32 },
+    Int {
+        min: i32,
+        max: i32,
+    },
     /// `IntRange.xmap(to, from)`.
-    Mapped { min: i32, max: i32, to: fn(i32) -> f64, from: fn(f64) -> i32 },
+    Mapped {
+        min: i32,
+        max: i32,
+        to: fn(i32) -> f64,
+        from: fn(f64) -> i32,
+    },
     /// `UnitDouble`.
     Unit,
     /// `UnitDouble.xmap(to, from)`.
-    UnitMapped { to: fn(f64) -> f64, from: fn(f64) -> f64 },
+    UnitMapped {
+        to: fn(f64) -> f64,
+        from: fn(f64) -> f64,
+    },
     /// `SliderableEnum` over these constants.
     Enum(&'static [&'static str]),
 }
@@ -101,7 +112,13 @@ fn int_to_slider(v: i32, min: i32, max: i32) -> f64 {
     } else if v == max {
         1.0
     } else {
-        map(f64::from(v) + 0.5, f64::from(min), f64::from(max) + 1.0, 0.0, 1.0)
+        map(
+            f64::from(v) + 0.5,
+            f64::from(min),
+            f64::from(max) + 1.0,
+            0.0,
+            1.0,
+        )
     }
 }
 
@@ -163,11 +180,27 @@ pub fn create_button(ctx: &Ctx, values: Values, id: &str, width: i32) -> Box<dyn
     let mut w: Box<dyn Widget> = match d.set {
         Set::Cycle => {
             let shown = d.label.apply(ctx, caption.clone(), &v);
-            Box::new(CycleButton::new(ctx.lang, 0, 0, width, 20, caption, shown, Display::NameAndValue))
+            Box::new(CycleButton::new(
+                ctx.lang,
+                0,
+                0,
+                width,
+                20,
+                caption,
+                shown,
+                Display::NameAndValue,
+            ))
         }
         set => {
             let s = set.to_slider(&v);
-            Box::new(Slider::new(0, 0, width, 20, d.label.apply(ctx, caption, &set.from_slider(s)), s))
+            Box::new(Slider::new(
+                0,
+                0,
+                width,
+                20,
+                d.label.apply(ctx, caption, &set.from_slider(s)),
+                s,
+            ))
         }
     };
     w.base_mut().id = id.to_owned().into();

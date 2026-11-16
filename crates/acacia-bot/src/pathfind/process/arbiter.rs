@@ -7,8 +7,8 @@ use std::sync::Arc;
 use acacia_physics::{BlockPos, Vec3};
 
 use super::{Act, Ctx, Event, Look, ProcId, Process, Want};
-use crate::pathfind::{Goal, NavStatus, Pilot, RolloutCache};
 use crate::ActionError;
+use crate::pathfind::{Goal, NavStatus, Pilot, RolloutCache};
 
 struct Entry {
     id: ProcId,
@@ -63,13 +63,28 @@ impl Arbiter {
     pub fn add(&mut self, proc: impl Process + 'static, priority: i32) -> ProcId {
         let id = ProcId(self.next);
         self.next += 1;
-        let at = self.entries.iter().position(|e| e.priority < priority).unwrap_or(self.entries.len());
-        self.entries.insert(at, Entry { id, priority, paused: false, proc: Box::new(proc), other_at: self.tick });
+        let at = self
+            .entries
+            .iter()
+            .position(|e| e.priority < priority)
+            .unwrap_or(self.entries.len());
+        self.entries.insert(
+            at,
+            Entry {
+                id,
+                priority,
+                paused: false,
+                proc: Box::new(proc),
+                other_at: self.tick,
+            },
+        );
         id
     }
 
     pub fn pause(&mut self, id: ProcId) -> bool {
-        let Some(e) = self.entries.iter_mut().find(|e| e.id == id) else { return false };
+        let Some(e) = self.entries.iter_mut().find(|e| e.id == id) else {
+            return false;
+        };
         e.paused = true;
         if self.active == Some(id) {
             e.proc.lost_control();
@@ -79,7 +94,11 @@ impl Arbiter {
     }
 
     pub fn resume(&mut self, id: ProcId) -> bool {
-        self.entries.iter_mut().find(|e| e.id == id).map(|e| e.paused = false).is_some()
+        self.entries
+            .iter_mut()
+            .find(|e| e.id == id)
+            .map(|e| e.paused = false)
+            .is_some()
     }
 
     pub fn remove(&mut self, id: ProcId) -> Option<Box<dyn Process>> {
@@ -110,7 +129,10 @@ impl Arbiter {
     }
 
     pub fn get(&self, id: ProcId) -> Option<&dyn Process> {
-        self.entries.iter().find(|e| e.id == id).map(|e| e.proc.as_ref())
+        self.entries
+            .iter()
+            .find(|e| e.id == id)
+            .map(|e| e.proc.as_ref())
     }
 
     pub fn pilot(&self) -> Option<&Pilot> {
@@ -125,11 +147,23 @@ impl Arbiter {
     pub fn decide(&mut self, pos: Vec3, on_ground: bool, look: &dyn Look) -> Decision {
         self.tick += 1;
         let tick = self.tick;
-        let path = self.route.as_ref().and_then(|r| r.pilot.follower()).map_or(&[][..], |f| f.ahead());
+        let path = self
+            .route
+            .as_ref()
+            .and_then(|r| r.pilot.follower())
+            .map_or(&[][..], |f| f.ahead());
         let hazards = self.route.as_ref().and_then(|r| r.pilot.field());
         let (mut winner, mut finished) = (None, Vec::new());
         for e in self.entries.iter_mut().filter(|e| !e.paused) {
-            let cx = Ctx { tick, pos, on_ground, path, quiet: tick - e.other_at, look, hazards };
+            let cx = Ctx {
+                tick,
+                pos,
+                on_ground,
+                path,
+                quiet: tick - e.other_at,
+                look,
+                hazards,
+            };
             match e.proc.want(&cx) {
                 Want::Yield => {}
                 Want::Done(result) => finished.push((e.id, result)),
@@ -146,14 +180,24 @@ impl Arbiter {
             if let Some(old) = self.active.take() {
                 self.with(old, |p| p.lost_control());
             }
-            return if self.entries.is_empty() { Decision::Empty } else { Decision::Idle };
+            return if self.entries.is_empty() {
+                Decision::Empty
+            } else {
+                Decision::Idle
+            };
         };
-        self.entries.iter_mut().filter(|e| e.id != id).for_each(|e| e.other_at = tick);
+        self.entries
+            .iter_mut()
+            .filter(|e| e.id != id)
+            .for_each(|e| e.other_at = tick);
         if self.active != Some(id) {
             if let Some(old) = self.active.replace(id) {
                 self.with(old, |p| p.lost_control());
             }
-            tracing::debug!(proc = self.get(id).map(|p| p.name()), "process takes control");
+            tracing::debug!(
+                proc = self.get(id).map(|p| p.name()),
+                "process takes control"
+            );
             self.with(id, |p| p.regained());
         }
         match want {
@@ -165,7 +209,11 @@ impl Arbiter {
 
     fn route_to(&mut self, id: ProcId, goal: Goal) -> Decision {
         let tick = self.tick;
-        if self.route.as_ref().is_some_and(|r| r.owner == id && r.goal == goal && r.arrived) {
+        if self
+            .route
+            .as_ref()
+            .is_some_and(|r| r.owner == id && r.goal == goal && r.arrived)
+        {
             // Told again, not held silently: a process asking anew may have forgotten (the builder after an act at
             // the stand held there forever, live).
             if self.with(id, |p| p.arrived()) == Some(true) {
@@ -187,7 +235,13 @@ impl Arbiter {
                 if let Some(old) = self.route.take() {
                     pilot.inherit(old.pilot);
                 }
-                self.route = Some(Route { owner: id, goal, pilot, arrived: false, driven_at: tick });
+                self.route = Some(Route {
+                    owner: id,
+                    goal,
+                    pilot,
+                    arrived: false,
+                    driven_at: tick,
+                });
             }
         }
         Decision::Go
@@ -199,10 +253,15 @@ impl Arbiter {
             let event = Event::Dug { pos, block };
             self.entries.iter_mut().for_each(|e| e.proc.observe(&event));
         }
-        let Some(owner) = self.route.as_ref().map(|r| r.owner) else { return };
+        let Some(owner) = self.route.as_ref().map(|r| r.owner) else {
+            return;
+        };
         match result {
             Ok(NavStatus::Arrived) => {
-                self.route.as_mut().into_iter().for_each(|r| r.arrived = true);
+                self.route
+                    .as_mut()
+                    .into_iter()
+                    .for_each(|r| r.arrived = true);
                 if self.with(owner, |p| p.arrived()) == Some(true) {
                     self.finish(owner, Ok(()));
                 }
@@ -236,11 +295,18 @@ impl Arbiter {
     }
 
     fn with<T>(&mut self, id: ProcId, f: impl FnOnce(&mut dyn Process) -> T) -> Option<T> {
-        self.entries.iter_mut().find(|e| e.id == id).map(|e| f(e.proc.as_mut()))
+        self.entries
+            .iter_mut()
+            .find(|e| e.id == id)
+            .map(|e| f(e.proc.as_mut()))
     }
 
     fn finish(&mut self, id: ProcId, result: Result<(), ActionError>) {
-        tracing::debug!(proc = self.get(id).map(|p| p.name()), ?result, "process finished");
+        tracing::debug!(
+            proc = self.get(id).map(|p| p.name()),
+            ?result,
+            "process finished"
+        );
         self.entries.retain(|e| e.id != id);
         self.outcomes.insert(id, result);
         self.forget(id);

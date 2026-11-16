@@ -4,7 +4,10 @@
 /// capped by `chosen` unless it is 0 (auto).
 pub fn gui_scale(width: u32, height: u32, chosen: u32) -> u32 {
     let mut scale = 1;
-    while (chosen == 0 || scale < chosen) && width / (scale + 1) >= 320 && height / (scale + 1) >= 240 {
+    while (chosen == 0 || scale < chosen)
+        && width / (scale + 1) >= 320
+        && height / (scale + 1) >= 240
+    {
         scale += 1;
     }
     scale

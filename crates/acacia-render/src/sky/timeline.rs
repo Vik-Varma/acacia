@@ -8,8 +8,16 @@ use serde_json::Value;
 pub type Value4 = [f32; 4];
 
 /// `MoonPhase` in the timeline's order.
-pub const MOON_PHASES: [&str; 8] =
-    ["full_moon", "waning_gibbous", "third_quarter", "waning_crescent", "new_moon", "waxing_crescent", "first_quarter", "waxing_gibbous"];
+pub const MOON_PHASES: [&str; 8] = [
+    "full_moon",
+    "waning_gibbous",
+    "third_quarter",
+    "waning_crescent",
+    "new_moon",
+    "waxing_crescent",
+    "first_quarter",
+    "waxing_gibbous",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Easing {
@@ -52,7 +60,11 @@ fn bezier([x1, y1, x2, y2]: [f32; 4], x: f32) -> f32 {
         if error.abs() < 1e-5 {
             break;
         }
-        if error < 0.0 { t0 = t } else { t1 = t }
+        if error < 0.0 {
+            t0 = t
+        } else {
+            t1 = t
+        }
         let next = (t0 + t1) / 2.0;
         if next == t {
             break;
@@ -110,7 +122,10 @@ pub fn parse_value(v: &Value) -> Option<Value4> {
                 let f = |shift: u32| (c >> shift & 255) as f32 / 255.0;
                 Some([f(16), f(8), f(0), if hex.len() == 8 { f(24) } else { 1.0 }])
             }
-            None => MOON_PHASES.iter().position(|p| p == s).map(|i| [i as f32, 0.0, 0.0, 0.0]),
+            None => MOON_PHASES
+                .iter()
+                .position(|p| p == s)
+                .map(|i| [i as f32, 0.0, 0.0, 0.0]),
         },
         _ => None,
     }
@@ -126,19 +141,31 @@ pub struct Track {
 impl Track {
     /// `None` for a track of values that are not numbers, colours or moon phases.
     pub fn parse(v: &Value) -> Option<Track> {
-        let keyframes: Vec<_> = v["keyframes"].as_array()?.iter().map(|k| Some((k["ticks"].as_i64()?, parse_value(&k["value"])?))).collect::<Option<_>>()?;
+        let keyframes: Vec<_> = v["keyframes"]
+            .as_array()?
+            .iter()
+            .map(|k| Some((k["ticks"].as_i64()?, parse_value(&k["value"])?)))
+            .collect::<Option<_>>()?;
         // Moon phases are steps: an enum has nothing between its values.
-        let stepped = v["keyframes"][0]["value"].as_str().is_some_and(|s| !s.starts_with('#'));
+        let stepped = v["keyframes"][0]["value"]
+            .as_str()
+            .is_some_and(|s| !s.starts_with('#'));
         let easing = match &v["ease"] {
             _ if stepped => Easing::Constant,
             Value::String(s) if s == "constant" => Easing::Constant,
             Value::Object(o) => match o.get("cubic_bezier").and_then(Value::as_array) {
-                Some(a) if a.len() == 4 => Easing::Bezier(std::array::from_fn(|i| a[i].as_f64().unwrap_or(0.0) as f32)),
+                Some(a) if a.len() == 4 => {
+                    Easing::Bezier(std::array::from_fn(|i| a[i].as_f64().unwrap_or(0.0) as f32))
+                }
                 _ => Easing::Linear,
             },
             _ => Easing::Linear,
         };
-        (!keyframes.is_empty()).then_some(Track { keyframes, easing, modifier: Modifier::parse(v["modifier"].as_str())? })
+        (!keyframes.is_empty()).then_some(Track {
+            keyframes,
+            easing,
+            modifier: Modifier::parse(v["modifier"].as_str())?,
+        })
     }
 
     /// `KeyframeTrackSampler.sample` at the clock's whole `ticks` (it has no partial tick), the
@@ -152,7 +179,9 @@ impl Track {
         let (first, last) = (k[0], k[k.len() - 1]);
         let wrap_in = (last.1, last.0 - period, first.1, first.0);
         let wrap_out = (last.1, last.0, first.1, first.0 + period);
-        let mut segments = std::iter::once(wrap_in).chain(k.windows(2).map(|p| (p[0].1, p[0].0, p[1].1, p[1].0))).chain(std::iter::once(wrap_out));
+        let mut segments = std::iter::once(wrap_in)
+            .chain(k.windows(2).map(|p| (p[0].1, p[0].0, p[1].1, p[1].0)))
+            .chain(std::iter::once(wrap_out));
         let (from, from_t, to, to_t) = segments.find(|s| t < s.3).unwrap_or(wrap_out);
         if t <= from_t {
             return from;
@@ -160,7 +189,9 @@ impl Track {
         if t >= to_t {
             return to;
         }
-        let alpha = self.easing.apply((t - from_t) as f32 / (to_t - from_t) as f32);
+        let alpha = self
+            .easing
+            .apply((t - from_t) as f32 / (to_t - from_t) as f32);
         std::array::from_fn(|i| from[i] + alpha * (to[i] - from[i]))
     }
 }
@@ -174,12 +205,25 @@ pub struct Timeline {
 
 impl Timeline {
     pub fn parse(v: &Value) -> Timeline {
-        let tracks = v["tracks"].as_object().into_iter().flatten().filter_map(|(name, t)| Some((name.clone(), Track::parse(t)?))).collect();
-        Timeline { period: v["period_ticks"].as_i64().filter(|p| *p > 0).unwrap_or(24000), tracks }
+        let tracks = v["tracks"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .filter_map(|(name, t)| Some((name.clone(), Track::parse(t)?)))
+            .collect();
+        Timeline {
+            period: v["period_ticks"]
+                .as_i64()
+                .filter(|p| *p > 0)
+                .unwrap_or(24000),
+            tracks,
+        }
     }
 
     pub fn track(&self, attribute: &str) -> Option<&Track> {
-        self.tracks.iter().find_map(|(name, t)| (name == attribute).then_some(t))
+        self.tracks
+            .iter()
+            .find_map(|(name, t)| (name == attribute).then_some(t))
     }
 }
 
@@ -204,7 +248,10 @@ mod tests {
         assert_eq!(track.sample(1500, 24000), [2.0, 0.0, 0.0, 0.0]);
         // From 2000 back round to 1000 + 24000: a quarter of the way at 7750.
         assert_eq!(track.sample(7750, 24000)[0], 2.5);
-        assert_eq!(track.sample(500 + 24000 * 3, 24000)[0], track.sample(500, 24000)[0]);
+        assert_eq!(
+            track.sample(500 + 24000 * 3, 24000)[0],
+            track.sample(500, 24000)[0]
+        );
     }
 
     #[test]
@@ -221,14 +268,27 @@ mod tests {
     fn moon_phases_step() {
         let track = Track::parse(&json!({"keyframes": [{"ticks": 0, "value": "full_moon"}, {"ticks": 24000, "value": "waning_gibbous"}]})).unwrap();
         assert_eq!(track.easing, Easing::Constant);
-        assert_eq!((track.sample(23999, 192000)[0], track.sample(24000, 192000)[0], track.sample(100000, 192000)[0]), (0.0, 1.0, 1.0));
+        assert_eq!(
+            (
+                track.sample(23999, 192000)[0],
+                track.sample(24000, 192000)[0],
+                track.sample(100000, 192000)[0]
+            ),
+            (0.0, 1.0, 1.0)
+        );
     }
 
     #[test]
     fn bezier_ends_and_middle() {
         let ease = Easing::Bezier([0.362, 0.241, 0.638, 0.759]);
         assert!(ease.apply(0.0).abs() < 1e-4 && (ease.apply(1.0) - 1.0).abs() < 1e-4);
-        assert!((ease.apply(0.5) - 0.5).abs() < 1e-4, "symmetric control points");
-        assert_eq!(Modifier::Maximum.apply([0.2, 0.0, 0.0, 0.0], [0.5, 0.0, 0.0, 0.0])[0], 0.5);
+        assert!(
+            (ease.apply(0.5) - 0.5).abs() < 1e-4,
+            "symmetric control points"
+        );
+        assert_eq!(
+            Modifier::Maximum.apply([0.2, 0.0, 0.0, 0.0], [0.5, 0.0, 0.0, 0.0])[0],
+            0.5
+        );
     }
 }

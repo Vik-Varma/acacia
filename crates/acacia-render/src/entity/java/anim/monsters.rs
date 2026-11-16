@@ -32,7 +32,10 @@ pub(super) fn witch(p: &mut Poses, s: &RenderState) {
     head(p, s);
     let (pos, speed) = (s.walk_pos(), s.walk_speed());
     p.x_rot("right_leg", cos(pos * 0.6662) * 1.4 * speed * 0.5);
-    p.x_rot("left_leg", cos(pos * 0.6662 + std::f32::consts::PI) * 1.4 * speed * 0.5);
+    p.x_rot(
+        "left_leg",
+        cos(pos * 0.6662 + std::f32::consts::PI) * 1.4 * speed * 0.5,
+    );
     let pace = 0.01 * (s.num("entityId") as i32 % 10) as f32;
     p.x_rot("nose", sin(s.age() * pace) * 4.5 * pi_div(180.0));
     p.z_rot("nose", cos(s.age() * pace) * 2.5 * pi_div(180.0));
@@ -52,12 +55,24 @@ pub(super) fn vex(p: &mut Poses, s: &RenderState) {
     if s.flag("isCharging") {
         p.x_rot("body", 0.0);
         let (right, left) = (s.flag("rightHandItemState"), s.flag("leftHandItemState"));
-        let (x_rot, y_rot) = if right || left { ((std::f64::consts::PI * 7.0 / 6.0) as f32, pi_div(12.0)) } else { (-1.221_730_5, pi_div(12.0)) };
+        let (x_rot, y_rot) = if right || left {
+            ((std::f64::consts::PI * 7.0 / 6.0) as f32, pi_div(12.0))
+        } else {
+            (-1.221_730_5, pi_div(12.0))
+        };
         if right || !left {
-            (p.get("right_arm").x_rot, p.get("right_arm").y_rot, p.get("right_arm").z_rot) = (x_rot, y_rot, -0.471_238_88 - bob);
+            (
+                p.get("right_arm").x_rot,
+                p.get("right_arm").y_rot,
+                p.get("right_arm").z_rot,
+            ) = (x_rot, y_rot, -0.471_238_88 - bob);
         }
         if left || !right {
-            (p.get("left_arm").x_rot, p.get("left_arm").y_rot, p.get("left_arm").z_rot) = (x_rot, -y_rot, 0.471_238_88 + bob);
+            (
+                p.get("left_arm").x_rot,
+                p.get("left_arm").y_rot,
+                p.get("left_arm").z_rot,
+            ) = (x_rot, -y_rot, 0.471_238_88 + bob);
         }
     } else {
         p.x_rot("body", pi_div(20.0));

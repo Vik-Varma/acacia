@@ -7,20 +7,31 @@ use std::path::PathBuf;
 use acacia_bot::trace::{self, CORRECTION_TOLERANCE};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let _ = tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).without_time().with_ansi(false).try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .without_time()
+        .with_ansi(false)
+        .try_init();
     let mut path = None;
-    let (mut resync, mut verbose, mut tolerance, mut correction_tolerance) = (false, false, 1e-4, CORRECTION_TOLERANCE);
+    let (mut resync, mut verbose, mut tolerance, mut correction_tolerance) =
+        (false, false, 1e-4, CORRECTION_TOLERANCE);
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--resync" => resync = true,
             "--verbose" => verbose = true,
             "--tolerance" => tolerance = args.next().ok_or("--tolerance needs a value")?.parse()?,
-            "--correction-tolerance" => correction_tolerance = args.next().ok_or("--correction-tolerance needs a value")?.parse()?,
+            "--correction-tolerance" => {
+                correction_tolerance = args
+                    .next()
+                    .ok_or("--correction-tolerance needs a value")?
+                    .parse()?
+            }
             _ => path = Some(PathBuf::from(a)),
         }
     }
-    let events = trace::read(&path.ok_or("usage: replay <trace> [--resync] [--tolerance x] [--verbose]")?)?;
+    let events =
+        trace::read(&path.ok_or("usage: replay <trace> [--resync] [--tolerance x] [--verbose]")?)?;
     let report = trace::replay(&events, tolerance, resync);
 
     let mut per_mark: BTreeMap<String, (usize, usize, f32)> = BTreeMap::new();
@@ -43,22 +54,51 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         lagged.len()
     );
     for (mark, (diverged, corrections, max)) in &per_mark {
-        println!("  {mark:20} diverged {diverged:4} (max {max:.5})  correction mismatches {corrections}");
+        println!(
+            "  {mark:20} diverged {diverged:4} (max {max:.5})  correction mismatches {corrections}"
+        );
     }
     if verbose {
         for d in &report.diverged {
             let event = if d.near_event { " (event)" } else { "" };
-            println!("tick {:6} {:16} ours {:?} recorded {:?} delta err {:.5}{event} [{}]", d.tick, label(&d.mark), d.ours, d.recorded, d.delta_err, d.blocks);
+            println!(
+                "tick {:6} {:16} ours {:?} recorded {:?} delta err {:.5}{event} [{}]",
+                d.tick,
+                label(&d.mark),
+                d.ours,
+                d.recorded,
+                d.delta_err,
+                d.blocks
+            );
         }
         for c in &mismatches {
-            println!("corr {:6} {:16} ours {:?} server {:?} err {:?} delta err {:?} [{}]", c.tick, label(&c.mark), c.ours, c.server, c.error(), c.delta_err, c.blocks);
+            println!(
+                "corr {:6} {:16} ours {:?} server {:?} err {:?} delta err {:?} [{}]",
+                c.tick,
+                label(&c.mark),
+                c.ours,
+                c.server,
+                c.error(),
+                c.delta_err,
+                c.blocks
+            );
             println!("     delta ours {:?} server {:?}", c.deltas.0, c.deltas.1);
             if let (Some((pos, delta)), Some(ours)) = (c.sent, c.ours) {
-                println!("     sent {pos:?} {delta:?}: client-server {:.5}, ours-client {:.5}", dist(pos, c.server), dist(ours, pos));
+                println!(
+                    "     sent {pos:?} {delta:?}: client-server {:.5}, ours-client {:.5}",
+                    dist(pos, c.server),
+                    dist(ours, pos)
+                );
             }
         }
         for c in &lagged {
-            println!("lag  {:6} {:16} ours {:?} server {:?}", c.tick, label(&c.mark), c.ours, c.server);
+            println!(
+                "lag  {:6} {:16} ours {:?} server {:?}",
+                c.tick,
+                label(&c.mark),
+                c.ours,
+                c.server
+            );
         }
     }
     Ok(())

@@ -9,9 +9,15 @@ use crate::interact::Face;
 pub enum Step {
     Break(BlockPos),
     /// Place a scaffold block against `face` of `against`.
-    Place { against: BlockPos, face: Face },
+    Place {
+        against: BlockPos,
+        face: Face,
+    },
     /// Open (or close) a door, fence gate or trapdoor so it no longer blocks the move.
-    Door { pos: BlockPos, open: bool },
+    Door {
+        pos: BlockPos,
+        open: bool,
+    },
     /// Cross the water by boat to the move's end ([`Bot::boat_to`](crate::Bot::boat_to)).
     Boat,
 }
@@ -31,7 +37,10 @@ impl Work {
     }
 
     pub fn steps(&self) -> impl Iterator<Item = Step> + '_ {
-        self.steps[..usize::from(self.len)].iter().flatten().copied()
+        self.steps[..usize::from(self.len)]
+            .iter()
+            .flatten()
+            .copied()
     }
 
     /// Adds `step` unless already present; false if it was (or there is no room).
@@ -49,7 +58,9 @@ impl Work {
     }
 
     pub fn places(&self) -> u32 {
-        self.steps().filter(|s| matches!(s, Step::Place { .. })).count() as u32
+        self.steps()
+            .filter(|s| matches!(s, Step::Place { .. }))
+            .count() as u32
     }
 }
 

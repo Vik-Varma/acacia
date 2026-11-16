@@ -25,8 +25,23 @@ pub(super) fn commands(click: &Click, targets: &[Target], view: &View) -> Vec<Co
     let carrying = view.inventory.cursor.is_some();
     match click {
         // Slot -999: the carried stack thrown, one of it for the right button.
-        Click::Slot { slot: None, outside: true, button, .. } if carrying => vec![Command::DropCursor { one: *button == 1 }],
-        Click::Slot { slot: Some(i), button, input, .. } => slot(targets.get(*i).unwrap_or(&Target::None), *button, *input, view),
+        Click::Slot {
+            slot: None,
+            outside: true,
+            button,
+            ..
+        } if carrying => vec![Command::DropCursor { one: *button == 1 }],
+        Click::Slot {
+            slot: Some(i),
+            button,
+            input,
+            ..
+        } => slot(
+            targets.get(*i).unwrap_or(&Target::None),
+            *button,
+            *input,
+            view,
+        ),
         Click::QuickCraft { kind, slots } => quick_craft(*kind, slots, targets, view),
         Click::Slot { .. } => Vec::new(),
     }
@@ -43,31 +58,56 @@ fn slot(target: &Target, button: i32, input: Input, view: &View) -> Vec<Command>
                 _ => BotClick::Left,
             };
             // A beacon takes one item: the held stack is not put down whole.
-            let click = if *r == SlotRef::Ui(ui::BEACON_PAYMENT) && carrying && !all { BotClick::Right } else { click };
+            let click = if *r == SlotRef::Ui(ui::BEACON_PAYMENT) && carrying && !all {
+                BotClick::Right
+            } else {
+                click
+            };
             vec![Command::Click(*r, click)]
         }
         (Target::Slot(r), Input::Swap) => match swap_slot(button) {
-            Some(other) if other != *r => [*r, other, *r].map(|s| Command::Click(s, BotClick::Left)).into(),
+            Some(other) if other != *r => [*r, other, *r]
+                .map(|s| Command::Click(s, BotClick::Left))
+                .into(),
             _ => Vec::new(),
         },
         (Target::Slot(r), Input::Throw) if !carrying => {
-            vec![Command::Click(*r, BotClick::Left), Command::DropCursor { one: button == 0 }, Command::Click(*r, BotClick::Left)]
+            vec![
+                Command::Click(*r, BotClick::Left),
+                Command::DropCursor { one: button == 0 },
+                Command::Click(*r, BotClick::Left),
+            ]
         }
         (Target::Crafted, Input::Pickup | Input::QuickMove) => {
-            let name = Some(view.name.0.clone()).filter(|n| !n.is_empty() && view.inventory.bench == Some(acacia_ui::inventory::Bench::Anvil));
+            let name = Some(view.name.0.clone()).filter(|n| {
+                !n.is_empty() && view.inventory.bench == Some(acacia_ui::inventory::Bench::Anvil)
+            });
             vec![Command::TakeCrafted { all, name }]
         }
-        (Target::Cut(Some(id)), Input::Pickup | Input::QuickMove) => vec![Command::TakeCut { id: *id, all }],
-        (Target::Loom(Some(code)), Input::Pickup | Input::QuickMove) => vec![Command::Loom((*code).to_owned())],
-        (Target::Creative(_) | Target::Destroy, Input::Pickup | Input::QuickMove) if carrying => vec![Command::DestroyCursor],
-        (Target::Creative(id), Input::Pickup | Input::QuickMove) => vec![Command::Creative { id: *id, count: if all { 64 } else { 1 } }],
+        (Target::Cut(Some(id)), Input::Pickup | Input::QuickMove) => {
+            vec![Command::TakeCut { id: *id, all }]
+        }
+        (Target::Loom(Some(code)), Input::Pickup | Input::QuickMove) => {
+            vec![Command::Loom((*code).to_owned())]
+        }
+        (Target::Creative(_) | Target::Destroy, Input::Pickup | Input::QuickMove) if carrying => {
+            vec![Command::DestroyCursor]
+        }
+        (Target::Creative(id), Input::Pickup | Input::QuickMove) => vec![Command::Creative {
+            id: *id,
+            count: if all { 64 } else { 1 },
+        }],
         _ => Vec::new(),
     }
 }
 
 /// `quickCraftToSlots` as right clicks: kind 0 splits the stack evenly, kind 1 lays one on each.
 fn quick_craft(kind: i32, slots: &[usize], targets: &[Target], view: &View) -> Vec<Command> {
-    let count = view.inventory.cursor.as_ref().map_or(0, |c| usize::from(c.count));
+    let count = view
+        .inventory
+        .cursor
+        .as_ref()
+        .map_or(0, |c| usize::from(c.count));
     let each = match kind {
         0 => count / slots.len().max(1),
         1 => 1,
@@ -77,7 +117,8 @@ fn quick_craft(kind: i32, slots: &[usize], targets: &[Target], view: &View) -> V
         Some(Target::Slot(r)) => Some(*r),
         _ => None,
     });
-    refs.flat_map(|r| std::iter::repeat_n(Command::Click(r, BotClick::Right), each)).collect()
+    refs.flat_map(|r| std::iter::repeat_n(Command::Click(r, BotClick::Right), each))
+        .collect()
 }
 
 /// The bot's beacon power of a Java effect path.

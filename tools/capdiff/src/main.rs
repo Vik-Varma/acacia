@@ -26,10 +26,16 @@ fn run() -> Result<(), String> {
     {
         return pacing::run(left, right);
     }
-    let usage = "usage: capdiff <left.jsonl[#n]> <right.jsonl[#n]> [--window <seconds after spawn>]";
-    let (Some(left), Some(right)) = (args.first(), args.get(1)) else { return Err(usage.into()) };
+    let usage =
+        "usage: capdiff <left.jsonl[#n]> <right.jsonl[#n]> [--window <seconds after spawn>]";
+    let (Some(left), Some(right)) = (args.first(), args.get(1)) else {
+        return Err(usage.into());
+    };
     let window = match args.get(2).map(String::as_str) {
-        Some("--window") => args.get(3).and_then(|s| s.parse::<f64>().ok()).ok_or(usage)?,
+        Some("--window") => args
+            .get(3)
+            .and_then(|s| s.parse::<f64>().ok())
+            .ok_or(usage)?,
         Some(_) => return Err(usage.into()),
         None => 15.0,
     };

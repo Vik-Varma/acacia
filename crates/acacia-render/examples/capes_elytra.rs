@@ -17,9 +17,15 @@ fn vec(v: &Value) -> DVec3 {
 }
 
 fn main() {
-    let path = std::env::args().nth(1).expect("usage: capes_elytra <capes_elytra.jsonl>");
+    let path = std::env::args()
+        .nth(1)
+        .expect("usage: capes_elytra <capes_elytra.jsonl>");
     let mut out = compare::Report::default();
-    for line in std::fs::read_to_string(path).expect("oracle records").lines().filter(|l| !l.trim().is_empty()) {
+    for line in std::fs::read_to_string(path)
+        .expect("oracle records")
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+    {
         let r: Value = serde_json::from_str(line).expect("oracle record");
         let name = r["case"].as_str().unwrap_or_default();
         let mut case = out.case(name);
@@ -32,15 +38,34 @@ fn main() {
                 cloak.tick(at, num(t, "bob"));
                 cloak.walked(num(t, "walked"));
                 let position = old + (at - old) * f64::from(partial);
-                let got = cape(&cloak, position, num(t, "yaw"), partial, num(t, "fall_flying_scale"));
-                case.numbers(&format!("tick {i}"), &compare::floats(&t["cape"]), &got, 1e-4);
+                let got = cape(
+                    &cloak,
+                    position,
+                    num(t, "yaw"),
+                    partial,
+                    num(t, "fall_flying_scale"),
+                );
+                case.numbers(
+                    &format!("tick {i}"),
+                    &compare::floats(&t["cape"]),
+                    &got,
+                    1e-4,
+                );
             }
         } else {
             let mut wings = Wings::default();
             for (i, t) in ticks.iter().enumerate() {
-                let gliding = t["gliding"].as_bool().unwrap_or(false).then(|| vec(&t["movement"]));
+                let gliding = t["gliding"]
+                    .as_bool()
+                    .unwrap_or(false)
+                    .then(|| vec(&t["movement"]));
                 wings.tick(gliding, t["crouching"].as_bool().unwrap_or(false));
-                case.numbers(&format!("tick {i}"), &compare::floats(&t["rot"]), &wings.at(num(t, "partial")), 1e-6);
+                case.numbers(
+                    &format!("tick {i}"),
+                    &compare::floats(&t["rot"]),
+                    &wings.at(num(t, "partial")),
+                    1e-6,
+                );
             }
         }
     }

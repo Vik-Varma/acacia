@@ -36,7 +36,9 @@ impl Algorithm {
         match alg {
             NetworkSettingsCompressionAlgorithm::Deflate => Ok(Self::Deflate),
             NetworkSettingsCompressionAlgorithm::Snappy => Ok(Self::Snappy),
-            NetworkSettingsCompressionAlgorithm::Unknown(id) => Err(Error::UnknownCompression(id as u8)),
+            NetworkSettingsCompressionAlgorithm::Unknown(id) => {
+                Err(Error::UnknownCompression(id as u8))
+            }
         }
     }
 
@@ -53,15 +55,24 @@ impl Algorithm {
 
     pub fn compress(self, input: &[u8], out: &mut BytesMut) {
         match self {
-            Self::Deflate if input.len() <= small_deflate::MAX_INPUT => small_deflate::compress(input, out),
+            Self::Deflate if input.len() <= small_deflate::MAX_INPUT => {
+                small_deflate::compress(input, out)
+            }
             Self::Deflate => DEFLATE.with_borrow_mut(|deflate| {
                 deflate.reset();
                 let start = out.len();
                 loop {
-                    let (read, written) = (deflate.total_in() as usize, deflate.total_out() as usize);
+                    let (read, written) =
+                        (deflate.total_in() as usize, deflate.total_out() as usize);
                     out.resize(start + written + input.len() / 2 + 64, 0);
-                    let status = deflate.compress(&input[read..], &mut out[start + written..], flate2::FlushCompress::Finish);
-                    if status.expect("deflate into a buffer cannot fail") == flate2::Status::StreamEnd {
+                    let status = deflate.compress(
+                        &input[read..],
+                        &mut out[start + written..],
+                        flate2::FlushCompress::Finish,
+                    );
+                    if status.expect("deflate into a buffer cannot fail")
+                        == flate2::Status::StreamEnd
+                    {
                         break;
                     }
                 }
@@ -70,7 +81,9 @@ impl Algorithm {
             Self::Snappy => {
                 let start = out.len();
                 out.resize(start + snap::raw::max_compress_len(input.len()), 0);
-                let n = snap::raw::Encoder::new().compress(input, &mut out[start..]).expect("buffer sized by max_compress_len");
+                let n = snap::raw::Encoder::new()
+                    .compress(input, &mut out[start..])
+                    .expect("buffer sized by max_compress_len");
                 out.truncate(start + n);
             }
         }
@@ -99,11 +112,14 @@ impl Algorithm {
                 }
             }),
             Self::Snappy => {
-                let len = snap::raw::decompress_len(input).map_err(|e| Error::Decompress(e.to_string()))?;
+                let len = snap::raw::decompress_len(input)
+                    .map_err(|e| Error::Decompress(e.to_string()))?;
                 if len > max_len {
                     return Err(Error::BatchTooLarge);
                 }
-                snap::raw::Decoder::new().decompress_vec(input).map_err(|e| Error::Decompress(e.to_string()))
+                snap::raw::Decoder::new()
+                    .decompress_vec(input)
+                    .map_err(|e| Error::Decompress(e.to_string()))
             }
         }
     }
@@ -130,7 +146,10 @@ mod tests {
             let mut buf = BytesMut::from(&[alg.batch_id()][..]);
             alg.compress(&input, &mut buf);
             assert_eq!(decompress_batch(&buf, 1 << 20).unwrap().unwrap(), input);
-            assert!(matches!(decompress_batch(&buf, 100), Err(Error::BatchTooLarge)));
+            assert!(matches!(
+                decompress_batch(&buf, 100),
+                Err(Error::BatchTooLarge)
+            ));
         }
     }
 
@@ -140,19 +159,40 @@ mod tests {
         let mut buf = BytesMut::new();
         Algorithm::Deflate.compress(&input, &mut buf);
         for cut in [&buf[..buf.len() - 3], &buf[..buf.len() / 2], b""] {
-            assert!(matches!(Algorithm::Deflate.decompress(cut, 1 << 20), Err(Error::Decompress(_))));
+            assert!(matches!(
+                Algorithm::Deflate.decompress(cut, 1 << 20),
+                Err(Error::Decompress(_))
+            ));
         }
         let mut trailing = buf.to_vec();
         trailing.extend_from_slice(b"junk");
-        assert_eq!(Algorithm::Deflate.decompress(&trailing, 1 << 20).unwrap(), input);
-        assert_eq!(Algorithm::Deflate.decompress(&buf, 1 << 20).unwrap(), input, "the state is clean after a failure");
-        assert!(matches!(Algorithm::Deflate.decompress(&buf, input.len() - 1), Err(Error::BatchTooLarge)));
+        assert_eq!(
+            Algorithm::Deflate.decompress(&trailing, 1 << 20).unwrap(),
+            input
+        );
+        assert_eq!(
+            Algorithm::Deflate.decompress(&buf, 1 << 20).unwrap(),
+            input,
+            "the state is clean after a failure"
+        );
+        assert!(matches!(
+            Algorithm::Deflate.decompress(&buf, input.len() - 1),
+            Err(Error::BatchTooLarge)
+        ));
     }
 
     #[test]
     fn the_reused_deflate_state_carries_nothing_over() {
-        let incompressible: Vec<u8> = (0..5_000u32).map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8).collect();
-        for input in [&incompressible[..], b"", b"a", &[7; 3000], &incompressible[..]] {
+        let incompressible: Vec<u8> = (0..5_000u32)
+            .map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8)
+            .collect();
+        for input in [
+            &incompressible[..],
+            b"",
+            b"a",
+            &[7; 3000],
+            &incompressible[..],
+        ] {
             let mut buf = BytesMut::from(&[Algorithm::Deflate.batch_id()][..]);
             Algorithm::Deflate.compress(input, &mut buf);
             assert_eq!(decompress_batch(&buf, 1 << 20).unwrap().unwrap(), input);

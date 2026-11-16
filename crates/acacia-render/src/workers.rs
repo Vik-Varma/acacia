@@ -31,7 +31,10 @@ pub struct Job {
 
 pub enum Output {
     /// `None` when the column was unloaded before the job ran.
-    Mesh { version: u64, mesh: Option<SectionMesh> },
+    Mesh {
+        version: u64,
+        mesh: Option<SectionMesh>,
+    },
     Light(LightVolume),
 }
 
@@ -54,12 +57,22 @@ struct Shared {
 }
 
 impl Workers {
-    pub fn new(world: Arc<World>, light: Arc<RwLock<LightData>>, table: Arc<BlockTable>, biomes: Arc<BiomeColors>) -> Self {
+    pub fn new(
+        world: Arc<World>,
+        light: Arc<RwLock<LightData>>,
+        table: Arc<BlockTable>,
+        biomes: Arc<BiomeColors>,
+    ) -> Self {
         let cores = std::thread::available_parallelism().map_or(2, |n| n.get());
         let threads = (cores.saturating_sub(2)).clamp(1, 6);
         let (jobs, job_rx) = unbounded::<Job>();
         let (done_tx, done) = unbounded();
-        let shared = Arc::new(Shared { world, light, table, biomes });
+        let shared = Arc::new(Shared {
+            world,
+            light,
+            table,
+            biomes,
+        });
         for i in 0..threads {
             let (rx, tx, shared) = (job_rx.clone(), done_tx.clone(), shared.clone());
             std::thread::Builder::new()
@@ -67,17 +80,30 @@ impl Workers {
                 .spawn(move || {
                     for job in rx {
                         let output = match job.work {
-                            Work::Mesh { version } => Output::Mesh { version, mesh: build(job.key, &shared) },
+                            Work::Mesh { version } => Output::Mesh {
+                                version,
+                                mesh: build(job.key, &shared),
+                            },
                             Work::Light => Output::Light(shared.light.read().gather(job.key)),
                         };
-                        if tx.send(Done { key: job.key, output }).is_err() {
+                        if tx
+                            .send(Done {
+                                key: job.key,
+                                output,
+                            })
+                            .is_err()
+                        {
                             break;
                         }
                     }
                 })
                 .expect("spawn mesh thread");
         }
-        Workers { jobs, done, threads }
+        Workers {
+            jobs,
+            done,
+            threads,
+        }
     }
 
     pub fn submit(&self, job: Job) {
@@ -94,11 +120,15 @@ fn build((cx, sy, cz): SectionKey, s: &Shared) -> Option<SectionMesh> {
     let index = usize::try_from(sy - (dim.min_y >> 4)).ok()?;
     let column = s.world.get(cx, cz)?;
     if column.read().section_uniform(index) == Some(dim.air) {
-        return Some(SectionMesh { visibility: visibility::ALL, ..Default::default() });
+        return Some(SectionMesh {
+            visibility: visibility::ALL,
+            ..Default::default()
+        });
     }
     drop(column);
     let volume = Volume::gather_lit(&s.world, cx, sy, cz, s.table.lighting)?;
-    let cells = (s.table.lighting == Lighting::Java).then(|| s.light.read().gather_cells((cx, sy, cz)));
+    let cells =
+        (s.table.lighting == Lighting::Java).then(|| s.light.read().gather_cells((cx, sy, cz)));
     let mut mesh = mesh_section_lit(&volume, &s.table, &s.biomes, cells.as_ref());
     if !mesh.is_empty() {
         mesh.light = Some(s.light.read().gather((cx, sy, cz)));

@@ -27,12 +27,21 @@ pub(crate) fn overlapped_cells(bb: &Aabb) -> impl Iterator<Item = BlockPos> {
 
 /// Cells BDS's entity-inside walk visits: floor(min + 0.001)..=floor(max - 0.001), so a grazed cell is skipped.
 pub(crate) fn inside_cells(bb: &Aabb) -> impl Iterator<Item = BlockPos> {
-    let (min, max) = (block_pos(bb.min.map(|v| v + 1e-3)), block_pos(bb.max.map(|v| v - 1e-3)));
-    (min[0]..=max[0]).flat_map(move |x| (min[1]..=max[1]).flat_map(move |y| (min[2]..=max[2]).map(move |z| [x, y, z])))
+    let (min, max) = (
+        block_pos(bb.min.map(|v| v + 1e-3)),
+        block_pos(bb.max.map(|v| v - 1e-3)),
+    );
+    (min[0]..=max[0]).flat_map(move |x| {
+        (min[1]..=max[1]).flat_map(move |y| (min[2]..=max[2]).map(move |z| [x, y, z]))
+    })
 }
 
 fn centre(bb: &Aabb) -> Vec3 {
-    [(bb.min[0] + bb.max[0]) * 0.5, bb.min[1], (bb.min[2] + bb.max[2]) * 0.5]
+    [
+        (bb.min[0] + bb.max[0]) * 0.5,
+        bb.min[1],
+        (bb.min[2] + bb.max[2]) * 0.5,
+    ]
 }
 
 /// BDS `FinalizeMoveSystem`: a horizontal axis collided when the move was cut by more than this (bedsim: 1e-5).
@@ -81,7 +90,9 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
                 return false;
             }
             let step = auto_step(&start, cur, &boxes, one_way, st.step_height);
-            if !self.has_nearby_bboxes(st, &step.bb) && hz_dist_sqr(coll) < hz_dist_sqr(step.velocity) {
+            if !self.has_nearby_bboxes(st, &step.bb)
+                && hz_dist_sqr(coll) < hz_dist_sqr(step.velocity)
+            {
                 coll = step.velocity;
                 bb = step.bb;
             }
@@ -102,7 +113,10 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
         // The sweep's own boxes leave out a surface the box only touches.
         let rests = cur[1] < 0.0
             && cur[1] == coll[1]
-            && self.nearby_bboxes(st, &bb.extend_down(1e-4)).iter().any(|b| (bb.min[1] - b.max[1]).abs() <= 1e-6);
+            && self
+                .nearby_bboxes(st, &bb.extend_down(1e-4))
+                .iter()
+                .any(|b| (bb.min[1] - b.max[1]).abs() <= 1e-6);
         let yc = (cur[1] - coll[1]).abs() >= 1e-5 || rests;
         st.collide_x = (cur[0] - coll[0]).abs() > COLLIDED;
         st.collide_y = yc;
@@ -123,12 +137,15 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
             return true;
         }
         const DROP: f32 = -STEP_HEIGHT * 1.01;
-        let bb = st.bounding_box().grow_vec([-EDGE_BOUNDARY, 0.0, -EDGE_BOUNDARY]);
+        let bb = st
+            .bounding_box()
+            .grow_vec([-EDGE_BOUNDARY, 0.0, -EDGE_BOUNDARY]);
         let (mut xm, mut zm) = (st.vel[0], st.vel[2]);
         if !self.loaded(&bb.extend([xm, DROP, zm])) {
             return false;
         }
-        let supported = |dx: f32, dz: f32| self.has_nearby_bboxes(st, &bb.translate([dx, DROP, dz]));
+        let supported =
+            |dx: f32, dz: f32| self.has_nearby_bboxes(st, &bb.translate([dx, DROP, dz]));
 
         let mut i = 0;
         while i < EDGE_MAX_ITER && xm != 0.0 && !supported(xm, 0.0) {
@@ -192,7 +209,10 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
             boxes.clear();
             self.w.block_collisions(pos, &mut boxes);
             let origin = pos_vec(pos);
-            if let Some(_hit) = boxes.iter().find(|b| !b.is_empty() && bb.intersects(&b.translate(origin))) {
+            if let Some(_hit) = boxes
+                .iter()
+                .find(|b| !b.is_empty() && bb.intersects(&b.translate(origin)))
+            {
                 let dist = len_sqr(sub(add(origin, [0.5, 0.5, 0.5]), st.pos));
                 if dist < min_dist {
                     min_dist = dist;
@@ -216,8 +236,12 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
             self.w.block_collisions(pos, &mut boxes);
             let origin = pos_vec(pos);
             let crossing = boxes.iter().map(|b| b.translate(origin)).filter(|b| {
-                b.min[1] <= plane.min[1] && b.max[1] >= plane.min[1]
-                    && b.max[0] > plane.min[0] && b.min[0] < plane.max[0] && b.max[2] > plane.min[2] && b.min[2] < plane.max[2]
+                b.min[1] <= plane.min[1]
+                    && b.max[1] >= plane.min[1]
+                    && b.max[0] > plane.min[0]
+                    && b.min[0] < plane.max[0]
+                    && b.max[2] > plane.min[2]
+                    && b.min[2] < plane.max[2]
             });
             if let Some(top) = crossing.map(|b| b.max[1]).reduce(f32::max) {
                 let dist = len_sqr(sub(add(origin, [0.5, 0.5, 0.5]), st.pos));

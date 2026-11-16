@@ -22,11 +22,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         c.stop();
     }
     let end = position(&bot);
-    println!("end {end:?} moved {:.3}", (end[0] - start[0]).hypot(end[2] - start[2]));
+    println!(
+        "end {end:?} moved {:.3}",
+        (end[0] - start[0]).hypot(end[2] - start[2])
+    );
     bot.disconnect().await;
     Ok(())
 }
 
 fn position(bot: &Bot) -> [f64; 3] {
-    bot.java().map_or([f64::NAN; 3], |j| j.client().movement.player.pos)
+    bot.java()
+        .map_or([f64::NAN; 3], |j| j.client().movement.player.pos)
 }

@@ -20,8 +20,21 @@ use crate::biome::BiomeColors;
 use crate::blocks::{BlockTable, Layer, RenderBlock};
 
 /// The faces of the liquid at section-local `p` (none where there is no liquid).
-pub fn java_faces(volume: &Volume, table: &BlockTable, biomes: &BiomeColors, p: [i32; 3]) -> Vec<LiquidFace> {
-    tesselate(&Ctx { v: volume, table, biomes, cells: None }, p)
+pub fn java_faces(
+    volume: &Volume,
+    table: &BlockTable,
+    biomes: &BiomeColors,
+    p: [i32; 3],
+) -> Vec<LiquidFace> {
+    tesselate(
+        &Ctx {
+            v: volume,
+            table,
+            biomes,
+            cells: None,
+        },
+        p,
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,7 +85,11 @@ impl LiquidFace {
     /// The `CardinalLighting` shade Java scales the face's colour by: the sides' times the up face's.
     pub fn shade(&self, nether: bool) -> f32 {
         let d = OF_FACE[self.face];
-        if d == UP || d == DOWN { cardinal(nether, d) } else { cardinal(nether, UP) * cardinal(nether, d) }
+        if d == UP || d == DOWN {
+            cardinal(nether, d)
+        } else {
+            cardinal(nether, UP) * cardinal(nether, d)
+        }
     }
 
     /// The vertex colour Java writes (`ARGB.scaleRGB`).
@@ -91,7 +108,10 @@ pub fn light_coords(world: &impl LightWorld, face: &LiquidFace) -> u32 {
             return (240, 240);
         }
         let (block, sky) = world.light(p);
-        (u32::from(block.max(facts.emission)) << 4, u32::from(sky) << 4)
+        (
+            u32::from(block.max(facts.emission)) << 4,
+            u32::from(sky) << 4,
+        )
     };
     let [x, y, z] = face.light;
     let ((b0, s0), (b1, s1)) = (coords([x, y, z]), coords([x, y + 1, z]));
@@ -109,9 +129,17 @@ pub(super) fn liquid(ctx: &Ctx, p: [i32; 3], out: &mut SectionMesh) {
         let mut records = model::records4(corners, uv, face.face as u8, surface, NO_AO);
         if let Some(l) = &lighter {
             // Java bakes the shade into the vertex colour; here it is the vertex grey.
-            let (coords, grey) = (light_coords(&l.world, &face), (255.0 * face.shade(ctx.v.nether)) as u32);
-            records[0] = records[0].lit([vertex_light(coords & 0xFF, coords >> 16 & 0xFF, grey); 4]);
+            let (coords, grey) = (
+                light_coords(&l.world, &face),
+                (255.0 * face.shade(ctx.v.nether)) as u32,
+            );
+            records[0] =
+                records[0].lit([vertex_light(coords & 0xFF, coords >> 16 & 0xFF, grey); 4]);
         }
-        if b.layer == Layer::Translucent { out.translucent.extend(records) } else { out.solid.extend(records) }
+        if b.layer == Layer::Translucent {
+            out.translucent.extend(records)
+        } else {
+            out.solid.extend(records)
+        }
     }
 }

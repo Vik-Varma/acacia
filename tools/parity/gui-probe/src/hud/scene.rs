@@ -17,7 +17,11 @@ use crate::lang::comp;
 fn style(assets: &Assets, v: &Value) -> Style {
     let mut o = v.as_object().cloned().unwrap_or_default();
     o.insert("text".into(), json!("x"));
-    comp(assets, &Value::Object(o)).spans.first().map(|s| s.style.clone()).unwrap_or_default()
+    comp(assets, &Value::Object(o))
+        .spans
+        .first()
+        .map(|s| s.style.clone())
+        .unwrap_or_default()
 }
 
 /// `null`, `{type: blank}`, `{type: fixed, value}` or `{type: styled, style}`.
@@ -51,7 +55,12 @@ pub fn sidebar(c: &Value, assets: &Assets, gui: &mut Gui) {
             suffix: comp(assets, &t["suffix"]),
             color: t["color"].as_str().and_then(named_color),
         });
-        for m in t["members"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+        for m in t["members"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+        {
             member_of.insert(m.to_owned(), i);
         }
     }
@@ -59,7 +68,14 @@ pub fn sidebar(c: &Value, assets: &Assets, gui: &mut Gui) {
     let o = &c["objective"];
     let title = comp(assets, &o["display"]);
     let format = number_format(assets, &o["format"]);
-    let s = Sidebar { title: &title, format: format.as_ref(), scores: &scores, team: &team, background: background(c, 0.3), header: background(c, 0.4) };
+    let s = Sidebar {
+        title: &title,
+        format: format.as_ref(),
+        scores: &scores,
+        team: &team,
+        background: background(c, 0.3),
+        header: background(c, 0.4),
+    };
     sidebar::sidebar(gui, assets.font.as_ref(), &s);
 }
 
@@ -68,29 +84,56 @@ fn border_distance(c: &Value) -> Option<(f32, &Value)> {
     let b = c.get("border").filter(|b| !b.is_null())?;
     let max = 29_999_984.0;
     let half = b["size"].as_f64().unwrap_or(0.0) / 2.0;
-    let (cx, cz) = (b["centerX"].as_f64().unwrap_or(0.0), b["centerZ"].as_f64().unwrap_or(0.0));
+    let (cx, cz) = (
+        b["centerX"].as_f64().unwrap_or(0.0),
+        b["centerZ"].as_f64().unwrap_or(0.0),
+    );
     let (min_x, max_x) = ((cx - half).clamp(-max, max), (cx + half).clamp(-max, max));
     let (min_z, max_z) = ((cz - half).clamp(-max, max), (cz + half).clamp(-max, max));
     // The camera stand-in's position is a float widened to double.
-    let (x, z) = (f64::from(float(c, "camX", 0.0)), f64::from(float(c, "camZ", 0.0)));
-    Some(((x - min_x).min(max_x - x).min(z - min_z).min(max_z - z) as f32, b))
+    let (x, z) = (
+        f64::from(float(c, "camX", 0.0)),
+        f64::from(float(c, "camZ", 0.0)),
+    );
+    Some((
+        (x - min_x).min(max_x - x).min(z - min_z).min(max_z - z) as f32,
+        b,
+    ))
 }
 
 /// `Hud.extractCameraOverlays` then `extractSleepOverlay`; reads `scopeScale` back.
 pub fn overlays(c: &Value, gui: &mut Gui, state: &mut Map<String, Value>) {
     let partial = float(c, "partial", 0.0);
-    let warning = border_distance(c).map_or(0.0, |(d, b)| overlays::border_warning(d, int(b, "warningBlocks", 5), int(b, "warningTime", 15), 0.0, 0.0));
+    let warning = border_distance(c).map_or(0.0, |(d, b)| {
+        overlays::border_warning(
+            d,
+            int(b, "warningBlocks", 5),
+            int(b, "warningTime", 15),
+            0.0,
+            0.0,
+        )
+    });
     let ticks_frozen = int(c, "ticksFrozen", 0);
     let inputs = CameraOverlays {
-        vignette: c["vignette"].as_bool().unwrap_or(false).then(|| (float(c, "vignetteBrightness", 1.0), warning)),
+        vignette: c["vignette"]
+            .as_bool()
+            .unwrap_or(false)
+            .then(|| (float(c, "vignetteBrightness", 1.0), warning)),
         first_person: c["firstPerson"].as_bool().unwrap_or(false),
         scoping: c["scoping"].as_bool().unwrap_or(false),
         game_time_delta: partial,
-        equipment: if c["head"].as_str() == Some("carved_pumpkin") { vec!["misc/pumpkinblur".to_owned()] } else { Vec::new() },
+        equipment: if c["head"].as_str() == Some("carved_pumpkin") {
+            vec!["misc/pumpkinblur".to_owned()]
+        } else {
+            Vec::new()
+        },
         ticks_frozen,
         percent_frozen: ticks_frozen.min(140) as f32 / 140.0,
         partial,
-        portal: [c["portal"][0].as_f64().unwrap_or(0.0) as f32, c["portal"][1].as_f64().unwrap_or(0.0) as f32],
+        portal: [
+            c["portal"][0].as_f64().unwrap_or(0.0) as f32,
+            c["portal"][1].as_f64().unwrap_or(0.0) as f32,
+        ],
         nausea: float(c, "nausea", 0.0),
         screen_effect_scale: float(c, "screenEffectScale", 1.0),
     };

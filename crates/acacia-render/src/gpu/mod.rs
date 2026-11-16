@@ -14,19 +14,19 @@ mod inputs;
 mod light_probe;
 mod outline;
 mod over;
-mod shadows;
-mod updates;
 mod particle_feed;
 mod particles;
 mod pipeline;
 mod screen_effect;
 mod screenshot;
+mod shadows;
 mod sign_text;
 mod sky;
 mod sprites;
 mod stages;
 mod store;
 mod ui;
+mod updates;
 mod weather;
 mod world_pass;
 
@@ -38,19 +38,18 @@ use glam::DVec3;
 
 use crate::block_models::BlockModels;
 use crate::entity::EntityInstance;
-use entities::EntityPass;
 use crack::CrackPass;
 pub use crack::load_stages as load_crack_stages;
+use entities::EntityPass;
+pub use outline::Outline;
 use outline::OutlinePass;
+use sky::SkyPass;
 use stages::StageClock;
 use ui::UiPass;
-pub use outline::Outline;
-use sky::SkyPass;
 
 use crate::Error;
 use crate::assets::flipbook::Atlas;
 use crate::assets::image::Texture;
-use atlas::BlockTextures;
 use crate::biome::BiomeColors;
 use crate::camera::{Camera, Frustum};
 use crate::cull;
@@ -58,6 +57,7 @@ use crate::light::environment::LightConditions;
 use crate::look::Look;
 use crate::scene::{Scene, Update};
 use crate::sky::{NOON, Realm};
+use atlas::BlockTextures;
 use globals::Globals;
 use pipeline::Pipelines;
 use store::Store;
@@ -139,8 +139,16 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(target: impl Into<wgpu::SurfaceTarget<'static>>, size: (u32, u32)) -> Result<Renderer, Error> {
-        let device::Gpu { surface, device, queue, config } = device::open(target, size)?;
+    pub fn new(
+        target: impl Into<wgpu::SurfaceTarget<'static>>,
+        size: (u32, u32),
+    ) -> Result<Renderer, Error> {
+        let device::Gpu {
+            surface,
+            device,
+            queue,
+            config,
+        } = device::open(target, size)?;
         let pipelines = Pipelines::new(&device, config.format);
         let globals = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("globals"),
@@ -148,7 +156,14 @@ impl Renderer {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let textures = BlockTextures::new(&device, &queue, &Atlas { layers: vec![Texture::missing()], animations: Vec::new() });
+        let textures = BlockTextures::new(
+            &device,
+            &queue,
+            &Atlas {
+                layers: vec![Texture::missing()],
+                animations: Vec::new(),
+            },
+        );
         let sampler = pipeline::sampler(&device);
         let store = Store::new(&device);
         let entities = EntityPass::new(&device, config.format, &globals);
@@ -161,7 +176,14 @@ impl Renderer {
         let shadow_pass = shadows::ShadowPass::new(&device, config.format, &globals);
         let crack_pass = CrackPass::new(&device, config.format, &globals);
         let screen_effect = screen_effect::ScreenEffectPass::new(&device, config.format, &globals);
-        let bind_group = pipeline::bind_group(&device, &pipelines.layout, &globals, &store, &textures.view, &sampler);
+        let bind_group = pipeline::bind_group(
+            &device,
+            &pipelines.layout,
+            &globals,
+            &store,
+            &textures.view,
+            &sampler,
+        );
         Ok(Renderer {
             depth: pipeline::depth_view(&device, config.width, config.height),
             sign_text: sign_text::SignTextPass::new(&device, config.format, &globals),
@@ -214,65 +236,154 @@ impl Renderer {
     }
 
     /// Draws a frame from `camera`, with `ui` (its atlas and this frame's quads) over it.
-    pub fn render(&mut self, camera: &Camera, ui: Option<(&acacia_ui::Atlas, &[acacia_ui::Quad])>) -> FrameStats {
+    pub fn render(
+        &mut self,
+        camera: &Camera,
+        ui: Option<(&acacia_ui::Atlas, &[acacia_ui::Quad])>,
+    ) -> FrameStats {
         let mut clock = StageClock::start();
         let (cam_block, cam_frac) = camera.split_position();
         self.take_updates(cam_block);
         self.light_cache.next_frame();
         clock.mark("updates");
-        self.textures.animate(&self.queue, (self.started.elapsed().as_secs_f64() * 20.0) as u64);
+        self.textures.animate(
+            &self.queue,
+            (self.started.elapsed().as_secs_f64() * 20.0) as u64,
+        );
         self.prepare_particles(camera);
         let world = self.scene.as_ref().map(|s| s.world().clone());
         // Rain and clouds only under an open sky: the server's rain level outlasts a trip to the End.
         let open_sky = world.as_ref().is_none_or(|w| w.dimension().sky);
-        let (rain, clouds) = if open_sky { (self.weather.rain, self.clouds) } else { (0.0, None) };
+        let (rain, clouds) = if open_sky {
+            (self.weather.rain, self.clouds)
+        } else {
+            (0.0, None)
+        };
         // TODO: the level's game time; the renderer's clock stands in for it.
         let ticks = self.started.elapsed().as_secs_f64() * 20.0;
         let (sky, fog) = self.frame_environment(camera);
-        let clouds = clouds.map(|layer| crate::clouds::CloudLayer { fog_end: fog.cloud_end.min((layer.range * 16) as f32), ..sky.clouds().layer(layer) });
-        self.cloud_pass.prepare(&self.device, &self.queue, camera.position, clouds, ticks);
-        self.bolt_pass.prepare(&self.device, &self.queue, &self.bolts, camera.position);
+        let clouds = clouds.map(|layer| crate::clouds::CloudLayer {
+            fog_end: fog.cloud_end.min((layer.range * 16) as f32),
+            ..sky.clouds().layer(layer)
+        });
+        self.cloud_pass
+            .prepare(&self.device, &self.queue, camera.position, clouds, ticks);
+        self.bolt_pass
+            .prepare(&self.device, &self.queue, &self.bolts, camera.position);
         self.prepare_shadows(camera.position, &sky);
         clock.mark("effects");
 
         let view_proj = camera.view_proj();
-        let realm = self.world().map_or(Realm::Overworld, |w| Realm::of(&w.dimension()));
-        let conditions = LightConditions { flicker: self.flicker.at((self.started.elapsed().as_secs_f64() * 20.0) as u64), ..self.light_conditions };
-        let lightmap = crate::light::environment::frame_lightmap(self.look.lighting, realm, self.time, self.weather, &conditions);
+        let realm = self
+            .world()
+            .map_or(Realm::Overworld, |w| Realm::of(&w.dimension()));
+        let conditions = LightConditions {
+            flicker: self
+                .flicker
+                .at((self.started.elapsed().as_secs_f64() * 20.0) as u64),
+            ..self.light_conditions
+        };
+        let lightmap = crate::light::environment::frame_lightmap(
+            self.look.lighting,
+            realm,
+            self.time,
+            self.weather,
+            &conditions,
+        );
         let sky_pass = self.sky.as_ref().filter(|_| !fog.in_fluid);
         if let Some(pass) = sky_pass {
-            pass.prepare(&self.queue, &sky, fog.sky_end, camera.position.y, fog.underwater);
+            pass.prepare(
+                &self.queue,
+                &sky,
+                fog.sky_end,
+                camera.position.y,
+                fog.underwater,
+            );
         }
-        let globals = Globals::new(view_proj, (cam_block, cam_frac), fog.color, self.fog_distance, &self.look, fog.haze, &lightmap);
-        self.queue.write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
+        let globals = Globals::new(
+            view_proj,
+            (cam_block, cam_frac),
+            fog.color,
+            self.fog_distance,
+            &self.look,
+            fog.haze,
+            &lightmap,
+        );
+        self.queue
+            .write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
         let window = [self.config.width, self.config.height];
-        self.entities.set_over_globals(&self.queue, &globals.in_pictures(window));
+        self.entities
+            .set_over_globals(&self.queue, &globals.in_pictures(window));
         self.ui_pass.pictures(&self.device, window);
         let light_data = self.scene.as_ref().map(|s| s.light().clone());
         let light = self.light_cache.reader(light_data.as_deref());
         let light_at = |p: DVec3| light.at(p);
-        let blocks = self.block_models.near(camera.position, f64::from(self.fog_distance), self.started.elapsed().as_secs_f64() * 20.0);
-        self.screen_effect.prepare(&self.queue, camera, fog.underwater, light_at(camera.position));
-        self.entities.prepare(&self.device, &self.queue, &self.globals, self.entity_list.iter().chain(blocks), &self.ui_entities, camera.position, crate::glint::scroll(self.started.elapsed().as_millis() as u64), light_at);
-        self.outline_pass.prepare(&self.queue, self.outline.as_ref(), camera.position);
-        self.crack_pass.prepare(&self.queue, self.outline.as_ref(), camera.position);
+        let blocks = self.block_models.near(
+            camera.position,
+            f64::from(self.fog_distance),
+            self.started.elapsed().as_secs_f64() * 20.0,
+        );
+        self.screen_effect.prepare(
+            &self.queue,
+            camera,
+            fog.underwater,
+            light_at(camera.position),
+        );
+        self.entities.prepare(
+            &self.device,
+            &self.queue,
+            &self.globals,
+            self.entity_list.iter().chain(blocks),
+            &self.ui_entities,
+            camera.position,
+            crate::glint::scroll(self.started.elapsed().as_millis() as u64),
+            light_at,
+        );
+        self.outline_pass
+            .prepare(&self.queue, self.outline.as_ref(), camera.position);
+        self.crack_pass
+            .prepare(&self.queue, self.outline.as_ref(), camera.position);
         let (atlas, quads) = ui.map_or((None, &[][..]), |(a, q)| (Some(a), q));
         if let Some(atlas) = atlas {
-            self.ui_pass.prepare(&self.device, &self.queue, atlas, (quads, self.ui_blur), [self.config.width, self.config.height], crate::glint::scroll(self.started.elapsed().as_millis() as u64));
+            self.ui_pass.prepare(
+                &self.device,
+                &self.queue,
+                atlas,
+                (quads, self.ui_blur),
+                [self.config.width, self.config.height],
+                crate::glint::scroll(self.started.elapsed().as_millis() as u64),
+            );
         }
-        self.sign_text.prepare(&self.device, &self.queue, self.ui_pass.texture.as_ref(), self.block_models.sign_text(), camera.position, light_at);
-        let weather_light = |p: [i32; 3]| light.at(glam::IVec3::from(p).as_dvec3()).map(|l| l as u8);
-        let level = world.as_deref().map(|world| crate::weather::level::WorldWeather { world, biomes: &self.biomes, light: &weather_light });
-        self.weather_pass.prepare(&self.queue, level.as_ref(), camera.position, rain, ticks);
+        self.sign_text.prepare(
+            &self.device,
+            &self.queue,
+            self.ui_pass.texture.as_ref(),
+            self.block_models.sign_text(),
+            camera.position,
+            light_at,
+        );
+        let weather_light =
+            |p: [i32; 3]| light.at(glam::IVec3::from(p).as_dvec3()).map(|l| l as u8);
+        let level = world
+            .as_deref()
+            .map(|world| crate::weather::level::WorldWeather {
+                world,
+                biomes: &self.biomes,
+                light: &weather_light,
+            });
+        self.weather_pass
+            .prepare(&self.queue, level.as_ref(), camera.position, rain, ticks);
         drop(light);
         clock.mark("entities+ui");
         let frustum = Frustum::new(view_proj);
-        let reachable = self
-            .scene
-            .as_ref()
-            .filter(|_| self.cave_culling)
-            .map(|s| cull::visible_sections(&frustum, cam_block, cam_frac, s.sections(), |k| s.visibility(k)));
-        let (solid, translucent) = self.store.draws(&frustum, cam_block, cam_frac, reachable.as_ref());
+        let reachable = self.scene.as_ref().filter(|_| self.cave_culling).map(|s| {
+            cull::visible_sections(&frustum, cam_block, cam_frac, s.sections(), |k| {
+                s.visibility(k)
+            })
+        });
+        let (solid, translucent) =
+            self.store
+                .draws(&frustum, cam_block, cam_frac, reachable.as_ref());
         let stats = FrameStats {
             sections: self.store.sections(),
             drawn: solid.len().max(translucent.len()),
@@ -282,10 +393,17 @@ impl Renderer {
         };
 
         clock.mark("cull");
-        let Some(frame) = device::acquire_or_reconfigure(&self.surface, &self.device, &self.config) else { return stats };
+        let Some(frame) = device::acquire_or_reconfigure(&self.surface, &self.device, &self.config)
+        else {
+            return stats;
+        };
         clock.mark("acquire");
         let view = frame.texture.create_view(&Default::default());
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("frame") });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("frame"),
+            });
         self.world_pass(&mut encoder, &view, [&solid, &translucent], realm, &fog);
         self.draw_pictures(&mut encoder);
         if atlas.is_some() {

@@ -40,10 +40,16 @@ pub struct TabPlayer {
 
 /// `DefaultPlayerSkin.get(UUID)`: by `UUID.hashCode`.
 pub fn default_skin(uuid: u128) -> String {
-    const SKINS: [&str; 9] = ["alex", "ari", "efe", "kai", "makena", "noor", "steve", "sunny", "zuri"];
+    const SKINS: [&str; 9] = [
+        "alex", "ari", "efe", "kai", "makena", "noor", "steve", "sunny", "zuri",
+    ];
     let hilo = ((uuid >> 64) as u64) ^ (uuid as u64);
     let n = (((hilo >> 32) as i32) ^ (hilo as i32)).rem_euclid(18) as usize;
-    format!("entity/player/{}/{}", if n < 9 { "slim" } else { "wide" }, SKINS[n % 9])
+    format!(
+        "entity/player/{}/{}",
+        if n < 9 { "slim" } else { "wide" },
+        SKINS[n % 9]
+    )
 }
 
 /// `PlayerTabOverlay.extractPingIcon`'s sprite.
@@ -60,7 +66,11 @@ pub fn ping_sprite(latency: i32) -> &'static str {
 
 /// `Options.getBackgroundColor(553648127)`: the row background.
 pub fn row_background(chat_only: bool, opacity: f32) -> u32 {
-    if chat_only { 0x20FF_FFFF } else { crate::java::mth::color_from_float(opacity, 0.0, 0.0, 0.0) }
+    if chat_only {
+        0x20FF_FFFF
+    } else {
+        crate::java::mth::color_from_float(opacity, 0.0, 0.0, 0.0)
+    }
 }
 
 /// `withStyle(ITALIC)` on a component's root.
@@ -128,7 +138,12 @@ impl TabList {
 
     /// `getPlayerInfos`: `PLAYER_COMPARATOR` order, at most 80.
     pub fn sorted<'p>(i: &TabInputs<'p>) -> Vec<&'p TabPlayer> {
-        let team = |p: &TabPlayer| (i.team)(&p.name).map_or("", |t| t.name.as_str()).encode_utf16().collect::<Vec<u16>>();
+        let team = |p: &TabPlayer| {
+            (i.team)(&p.name)
+                .map_or("", |t| t.name.as_str())
+                .encode_utf16()
+                .collect::<Vec<u16>>()
+        };
         let mut out: Vec<&TabPlayer> = i.players.iter().collect();
         out.sort_by(|a, b| {
             a.list_order
@@ -153,7 +168,14 @@ impl TabList {
             Some(team) => team.formatted_name(name),
             None => name,
         };
-        if spectator { name.with_style(&Style { italic: Some(true), ..Style::default() }) } else { name }
+        if spectator {
+            name.with_style(&Style {
+                italic: Some(true),
+                ..Style::default()
+            })
+        } else {
+            name
+        }
     }
 
     /// `extractRenderState` for a `screen_width` wide screen.
@@ -174,17 +196,26 @@ impl TabList {
                 }
                 if !objective.hearts {
                     if let Some((value, own)) = &info {
-                        let text = own.as_ref().or(objective.format.as_ref()).unwrap_or(&default).format(*value);
+                        let text = own
+                            .as_ref()
+                            .or(objective.format.as_ref())
+                            .unwrap_or(&default)
+                            .format(*value);
                         score_width = font.width(&text);
                         formatted = Some(text);
                     }
-                    max_score = max_score.max(if score_width > 0 { spacer + score_width } else { 0 });
+                    max_score = max_score.max(if score_width > 0 {
+                        spacer + score_width
+                    } else {
+                        0
+                    });
                 }
             }
             entries.push((name, score, formatted, score_width));
         }
         if !self.health.is_empty() {
-            self.health.retain(|id, _| players.iter().any(|p| p.uuid == *id));
+            self.health
+                .retain(|id, _| players.iter().any(|p| p.uuid == *id));
         }
         let slots = players.len() as i32;
         let (mut rows, mut cols) = (slots, 1);
@@ -193,20 +224,44 @@ impl TabList {
             rows = (slots + cols - 1) / cols;
         }
         let head = if i.online_mode { 9 } else { 0 };
-        let width_for_score = i.objective.map_or(0, |o| if o.hearts { 90 } else { max_score });
-        let slot_width = (cols * (head + max_name + width_for_score + 13)).min(screen_width - 50) / cols;
+        let width_for_score = i
+            .objective
+            .map_or(0, |o| if o.hearts { 90 } else { max_score });
+        let slot_width =
+            (cols * (head + max_name + width_for_score + 13)).min(screen_width - 50) / cols;
         let xxo = screen_width / 2 - (slot_width * cols + (cols - 1) * 5) / 2;
         let mut yyo = 10;
         let mut max_line = slot_width * cols + (cols - 1) * 5;
-        let split = |t: &Option<Text>| t.as_ref().map(|t| split_lines(font, t, screen_width - 50, &Style::default()).into_iter().map(|l| l.0).collect::<Vec<Text>>());
+        let split = |t: &Option<Text>| {
+            t.as_ref().map(|t| {
+                split_lines(font, t, screen_width - 50, &Style::default())
+                    .into_iter()
+                    .map(|l| l.0)
+                    .collect::<Vec<Text>>()
+            })
+        };
         let (header, footer) = (split(&self.header), split(&self.footer));
         for line in header.iter().chain(footer.iter()).flatten() {
             max_line = max_line.max(font.width(line));
         }
-        let band = |gui: &mut Gui, y0: i32, y1: i32| gui.fill(screen_width / 2 - max_line / 2 - 1, y0, screen_width / 2 + max_line / 2 + 1, y1, 0x8000_0000);
+        let band = |gui: &mut Gui, y0: i32, y1: i32| {
+            gui.fill(
+                screen_width / 2 - max_line / 2 - 1,
+                y0,
+                screen_width / 2 + max_line / 2 + 1,
+                y1,
+                0x8000_0000,
+            )
+        };
         let lines = |gui: &mut Gui, lines: &[Text], yyo: &mut i32| {
             for line in lines {
-                gui.text(line.clone(), screen_width / 2 - font.width(line) / 2, *yyo, WHITE, true);
+                gui.text(
+                    line.clone(),
+                    screen_width / 2 - font.width(line) / 2,
+                    *yyo,
+                    WHITE,
+                    true,
+                );
                 *yyo += 9;
             }
         };
@@ -216,7 +271,9 @@ impl TabList {
             yyo += 1;
         }
         band(gui, yyo - 1, yyo + rows * 9);
-        for (n, (p, (name, score, formatted, score_width))) in players.iter().zip(entries).enumerate() {
+        for (n, (p, (name, score, formatted, score_width))) in
+            players.iter().zip(entries).enumerate()
+        {
             let n = n as i32;
             let mut xo = xxo + (n / rows) * slot_width + (n / rows) * 5;
             let yo = yyo + (n % rows) * 9;
@@ -226,21 +283,38 @@ impl TabList {
                 xo += 9;
             }
             let spectator = p.game_mode == SPECTATOR;
-            gui.text(name, xo, yo, if spectator { 0x90FF_FFFF } else { WHITE }, true);
+            gui.text(
+                name,
+                xo,
+                yo,
+                if spectator { 0x90FF_FFFF } else { WHITE },
+                true,
+            );
             if let Some(objective) = i.objective.filter(|_| !spectator) {
                 let left = xo + max_name + 1;
                 let right = left + width_for_score;
                 if right - left > 5 {
                     if objective.hearts {
-                        let health = self.health.entry(p.uuid).or_insert_with(|| HealthState::new(score));
+                        let health = self
+                            .health
+                            .entry(p.uuid)
+                            .or_insert_with(|| HealthState::new(score));
                         health.update(score, i.tick);
-                        tab_hearts::hearts(gui, font, i.lang, health, i.tick, yo, left, right, score);
+                        tab_hearts::hearts(
+                            gui, font, i.lang, health, i.tick, yo, left, right, score,
+                        );
                     } else if let Some(text) = formatted {
                         gui.text(text, right - score_width, yo, WHITE, true);
                     }
                 }
             }
-            gui.sprite(ping_sprite(p.latency), xo - head + slot_width - 11, yo, 10, 8);
+            gui.sprite(
+                ping_sprite(p.latency),
+                xo - head + slot_width - 11,
+                yo,
+                10,
+                8,
+            );
         }
         if let Some(footer) = &footer {
             yyo += rows * 9 + 1;
@@ -275,7 +349,17 @@ mod tests {
     use super::*;
 
     fn player(uuid: u128, name: &str) -> TabPlayer {
-        TabPlayer { uuid, name: name.into(), game_mode: 0, latency: 0, display_name: None, list_order: 0, show_hat: true, skin: default_skin(uuid), upside_down: false }
+        TabPlayer {
+            uuid,
+            name: name.into(),
+            game_mode: 0,
+            latency: 0,
+            display_name: None,
+            list_order: 0,
+            show_hat: true,
+            skin: default_skin(uuid),
+            upside_down: false,
+        }
     }
 
     #[test]
@@ -287,11 +371,28 @@ mod tests {
         let players = [a, b, player(3, "carl")];
         let none = |_: &str| -> Option<&Team> { None };
         let no_score = |_: &str| None;
-        let i = TabInputs { players: &players, team: &none, score: &no_score, objective: None, online_mode: true, tick: 0, background: 0, lang: &|_| None };
-        let names: Vec<&str> = TabList::sorted(&i).iter().map(|p| p.name.as_str()).collect();
+        let i = TabInputs {
+            players: &players,
+            team: &none,
+            score: &no_score,
+            objective: None,
+            online_mode: true,
+            tick: 0,
+            background: 0,
+            lang: &|_| None,
+        };
+        let names: Vec<&str> = TabList::sorted(&i)
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect();
         assert_eq!(names, ["carl", "bob", "Alice"]);
         assert_eq!(ping_sprite(149), "icon/ping_5");
         assert_eq!(default_skin(0), "entity/player/slim/alex");
-        assert_eq!(TabList::name_for_display(&players[0], &i).spans[0].style.italic, Some(true));
+        assert_eq!(
+            TabList::name_for_display(&players[0], &i).spans[0]
+                .style
+                .italic,
+            Some(true)
+        );
     }
 }

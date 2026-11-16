@@ -1,7 +1,7 @@
 //! Moving items by name between the open container (chest, barrel, shulker box, ...) and the main inventory.
 
 use super::matching_slots;
-use crate::items::{open_container, quick_move_up_to_ops, Op, SlotRef};
+use crate::items::{Op, SlotRef, open_container, quick_move_up_to_ops};
 use crate::state::GameState;
 use crate::{ActionError, Bot};
 
@@ -11,7 +11,10 @@ impl Bot {
     /// `count` once the inventory has no more or the container is full. `NotPossible` with no container open, none
     /// of the item in the inventory, or no room for any.
     pub async fn deposit(&mut self, name: &str, count: u32) -> Result<u32, ActionError> {
-        let sources: Vec<SlotRef> = matching_slots(&self.state, |item, _| item == name).into_iter().map(|(slot, _)| slot).collect();
+        let sources: Vec<SlotRef> = matching_slots(&self.state, |item, _| item == name)
+            .into_iter()
+            .map(|(slot, _)| slot)
+            .collect();
         self.move_named(name, count, sources).await
     }
 
@@ -21,7 +24,12 @@ impl Bot {
         self.move_named(name, count, sources).await
     }
 
-    async fn move_named(&mut self, name: &str, count: u32, sources: Vec<SlotRef>) -> Result<u32, ActionError> {
+    async fn move_named(
+        &mut self,
+        name: &str,
+        count: u32,
+        sources: Vec<SlotRef>,
+    ) -> Result<u32, ActionError> {
         if open_container(&self.state).is_none() {
             return Err(ActionError::NotPossible("no container is open".into()));
         }
@@ -41,7 +49,16 @@ impl Bot {
             };
             self.click_pause().await?;
             self.item_stack_request(&ops).await?;
-            moved += ops.iter().map(|op| if let Op::Transfer { count, .. } = op { u32::from(*count) } else { 0 }).sum::<u32>();
+            moved += ops
+                .iter()
+                .map(|op| {
+                    if let Op::Transfer { count, .. } = op {
+                        u32::from(*count)
+                    } else {
+                        0
+                    }
+                })
+                .sum::<u32>();
         }
         Ok(moved)
     }
@@ -49,7 +66,12 @@ impl Bot {
 
 /// The open container's slots holding item `name`.
 fn container_slots(state: &GameState, name: &str) -> Vec<SlotRef> {
-    let Some(open) = open_container(state) else { return Vec::new() };
+    let Some(open) = open_container(state) else {
+        return Vec::new();
+    };
     let named = |id| state.items.name(id) == Some(name);
-    open.iter().filter(|(_, s)| named(s.network_id)).filter_map(|(i, _)| u8::try_from(i).ok().map(SlotRef::Container)).collect()
+    open.iter()
+        .filter(|(_, s)| named(s.network_id))
+        .filter_map(|(i, _)| u8::try_from(i).ok().map(SlotRef::Container))
+        .collect()
 }

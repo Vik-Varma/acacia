@@ -11,13 +11,13 @@ use acacia_client::proto::types::Action;
 use acacia_physics::{BlockPos, Vec3};
 use acacia_world::{Mining, Tool};
 
-use super::break_time::{break_ticks, BreakConditions, Progress};
-use super::confirm::{Confirm, Expect, Verdict};
-use super::geometry::{block_distance, facing_face, BLOCK_REACH};
-use super::wire::{self, SwingSource};
 use super::Face;
+use super::break_time::{BreakConditions, Progress, break_ticks};
+use super::confirm::{Confirm, Expect, Verdict};
+use super::geometry::{BLOCK_REACH, block_distance, facing_face};
+use super::wire::{self, SwingSource};
 use crate::cancel::Held;
-use crate::state::{effect, ItemStack};
+use crate::state::{ItemStack, effect};
 use crate::{ActionError, Bot};
 
 /// Tries of a break the server shows no change for.
@@ -35,18 +35,27 @@ impl Bot {
     /// should stand still while mining. A cancelled or dropped break is aborted (see [`crate::cancel`]).
     pub async fn break_block(&mut self, pos: BlockPos) -> Result<(), ActionError> {
         if !self.has_physics() {
-            return Err(ActionError::NotPossible("block breaking needs a physics bot".into()));
+            return Err(ActionError::NotPossible(
+                "block breaking needs a physics bot".into(),
+            ));
         }
-        let (_, state) = self.block_at(pos).ok_or_else(|| ActionError::NotPossible(format!("{pos:?} is not loaded")))?;
+        let (_, state) = self
+            .block_at(pos)
+            .ok_or_else(|| ActionError::NotPossible(format!("{pos:?} is not loaded")))?;
         if state.is_air() || state.is_liquid() {
-            return Err(ActionError::NotPossible(format!("nothing to break at {pos:?}")));
+            return Err(ActionError::NotPossible(format!(
+                "nothing to break at {pos:?}"
+            )));
         }
         let (name, mining) = (state.name, state.mining);
-        break_ticks(&mining, &self.break_conditions()).ok_or_else(|| ActionError::NotPossible(format!("{name} cannot be broken")))?;
+        break_ticks(&mining, &self.break_conditions())
+            .ok_or_else(|| ActionError::NotPossible(format!("{name} cannot be broken")))?;
         let eye = self.eye_position();
         let distance = block_distance(eye, pos);
         if distance > BLOCK_REACH {
-            return Err(ActionError::NotPossible(format!("{name} at {pos:?} is {distance:.2} blocks away")));
+            return Err(ActionError::NotPossible(format!(
+                "{name} at {pos:?} is {distance:.2} blocks away"
+            )));
         }
         let (face, aim) = self.visible_aim(pos, None)?;
         let slot = self.admit_action().await?;
@@ -55,21 +64,31 @@ impl Bot {
         self.unclaim(breaking);
         self.release(slot);
         result.map_err(|e| match e {
-            ActionError::Rejected(why) => ActionError::Rejected(format!("breaking {name} at {pos:?}: {why}")),
+            ActionError::Rejected(why) => {
+                ActionError::Rejected(format!("breaking {name} at {pos:?}: {why}"))
+            }
             e => e,
         })
     }
 
     /// Mines, then waits for the server's echo; re-mines while the server shows the block unchanged.
-    async fn break_confirmed(&mut self, pos: BlockPos, face: Face, aim: Vec3, mining: Mining) -> Result<(), ActionError> {
+    async fn break_confirmed(
+        &mut self,
+        pos: BlockPos,
+        face: Face,
+        aim: Vec3,
+        mining: Mining,
+    ) -> Result<(), ActionError> {
         let t = Instant::now();
         self.look_at(aim).await?;
-        self.act_timing.add(crate::act_timing::Phase::Aim, t.elapsed());
+        self.act_timing
+            .add(crate::act_timing::Phase::Aim, t.elapsed());
         let mut confirm: Option<Confirm> = None;
         loop {
             let t = Instant::now();
             let gone = self.mine(pos, face, mining).await?;
-            self.act_timing.add(crate::act_timing::Phase::Mine, t.elapsed());
+            self.act_timing
+                .add(crate::act_timing::Phase::Mine, t.elapsed());
             if gone {
                 return Ok(());
             }
@@ -100,20 +119,27 @@ impl Bot {
         #[cfg(feature = "java")]
         self.java_abort_break(pos, face);
         if let Some(m) = self.backend.movement_mut() {
-            m.pending_actions.push(wire::block_action(Action::AbortBreak, pos, face));
+            m.pending_actions
+                .push(wire::block_action(Action::AbortBreak, pos, face));
         }
     }
 
     /// Ends a break that finished early (`AbortBreak` with the next tick; see [`wire::break_step`]).
     pub(crate) fn end_break(&mut self, pos: BlockPos, face: Face) {
         if let Some(m) = self.backend.movement_mut() {
-            m.pending_actions.push(wire::block_action(Action::AbortBreak, pos, face));
+            m.pending_actions
+                .push(wire::block_action(Action::AbortBreak, pos, face));
         }
     }
 
     /// Sends the block actions until the progress, summed at each tick's break speed, is full. `Ok(true)` if
     /// the block disappeared on its own before the prediction was due.
-    async fn mine(&mut self, pos: BlockPos, face: Face, mining: Mining) -> Result<bool, ActionError> {
+    async fn mine(
+        &mut self,
+        pos: BlockPos,
+        face: Face,
+        mining: Mining,
+    ) -> Result<bool, ActionError> {
         #[cfg(feature = "java")]
         if self.java().is_some() {
             return self.java_mine(pos, face, mining).await;
@@ -124,7 +150,8 @@ impl Bot {
             let ticks_now = break_ticks(&mining, &self.break_conditions()).unwrap_or(u32::MAX);
             let last = progress.step(ticks_now);
             if let Some(m) = self.backend.movement_mut() {
-                m.pending_actions.extend(wire::break_step(tick == 0, last, pos, face, false));
+                m.pending_actions
+                    .extend(wire::break_step(tick == 0, last, pos, face, false));
             }
             if tick % SWING_EVERY == 0 {
                 self.swing_from(Some(SwingSource::Mine));
@@ -149,16 +176,25 @@ impl Bot {
         let inv = &self.state.inventory;
         let held = inv.held();
         let eye = self.eye_position();
-        let eye_block = [eye[0].floor() as i32, eye[1].floor() as i32, eye[2].floor() as i32];
+        let eye_block = [
+            eye[0].floor() as i32,
+            eye[1].floor() as i32,
+            eye[2].floor() as i32,
+        ];
         let helmet = inv.armor.first().cloned().unwrap_or_default();
         let effects = &self.state.player.effects;
         let level = |id| u8::try_from(effects.level(id)).unwrap_or(u8::MAX);
         BreakConditions {
-            tool: self.state.items.name(held.network_id).and_then(Tool::from_identifier),
+            tool: self
+                .state
+                .items
+                .name(held.network_id)
+                .and_then(Tool::from_identifier),
             efficiency: enchantment_level(held, EFFICIENCY),
             haste: level(effect::HASTE).max(level(effect::CONDUIT_POWER)),
             mining_fatigue: level(effect::MINING_FATIGUE),
-            underwater: self.block_at(eye_block).is_some_and(|(_, s)| s.is_water()) && enchantment_level(&helmet, AQUA_AFFINITY) == 0,
+            underwater: self.block_at(eye_block).is_some_and(|(_, s)| s.is_water())
+                && enchantment_level(&helmet, AQUA_AFFINITY) == 0,
             // Non-physics bots can't break blocks; true keeps the formula's default.
             on_ground: self.backend.movement().is_none_or(|m| m.on_ground()),
         }
@@ -167,7 +203,9 @@ impl Bot {
 
 /// Level of enchantment `id` in the item's NBT `ench` list, 0 if absent.
 pub(crate) fn enchantment_level(item: &ItemStack, id: i16) -> u8 {
-    let Some(Value::List(list)) = item.nbt.as_ref().and_then(|n| n.value.get("ench")) else { return 0 };
+    let Some(Value::List(list)) = item.nbt.as_ref().and_then(|n| n.value.get("ench")) else {
+        return 0;
+    };
     list.items
         .iter()
         .find(|e| matches!(e.get("id"), Some(Value::Short(i)) if *i == id))

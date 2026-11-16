@@ -2,14 +2,19 @@
 
 use acacia_physics::BlockPos;
 
-use super::build_sim::{builder, explain, run, view, World};
-use super::build_tests::{scaffold_left, wrong, ORIGIN};
+use super::build_sim::{World, builder, explain, run, view};
+use super::build_tests::{ORIGIN, scaffold_left, wrong};
 use super::grid::Grid;
 use crate::build::{Block, Structure};
 use crate::pathfind::process::{Act, Arbiter};
 
 fn door(facing: &str, hinge: u8, upper: u8) -> Option<Block> {
-    Some(Block::new("wooden_door", &format!("door_hinge_bit={hinge},minecraft:cardinal_direction={facing},open_bit=0,upper_block_bit={upper}")))
+    Some(Block::new(
+        "wooden_door",
+        &format!(
+            "door_hinge_bit={hinge},minecraft:cardinal_direction={facing},open_bit=0,upper_block_bit={upper}"
+        ),
+    ))
 }
 
 /// 5×3×5: a plank floor (grass under the sunflower) with a wall along z 0 holding a double door, a bed
@@ -20,7 +25,10 @@ fn room() -> Structure {
         for z in 0..5 {
             s.set([x, 0, z], Some(Block::new("oak_planks", "")));
             for y in 1..3 {
-                s.set([x, y, z], Some(Block::new(if z == 0 { "cobblestone" } else { "air" }, "")));
+                s.set(
+                    [x, y, z],
+                    Some(Block::new(if z == 0 { "cobblestone" } else { "air" }, "")),
+                );
             }
         }
     }
@@ -30,14 +38,40 @@ fn room() -> Structure {
     s.set([1, 2, 0], door("east", 0, 1));
     s.set([2, 1, 0], door("east", 0, 0));
     s.set([2, 2, 0], door("east", 1, 1));
-    s.set([1, 1, 2], Some(Block::new("bed", "direction=3,head_piece_bit=0,occupied_bit=0")));
-    s.set([2, 1, 2], Some(Block::new("bed", "direction=3,head_piece_bit=1,occupied_bit=0")));
-    s.set([3, 1, 3], Some(Block::new("sunflower", "upper_block_bit=0")));
-    s.set([3, 2, 3], Some(Block::new("sunflower", "upper_block_bit=1")));
+    s.set(
+        [1, 1, 2],
+        Some(Block::new(
+            "bed",
+            "direction=3,head_piece_bit=0,occupied_bit=0",
+        )),
+    );
+    s.set(
+        [2, 1, 2],
+        Some(Block::new(
+            "bed",
+            "direction=3,head_piece_bit=1,occupied_bit=0",
+        )),
+    );
+    s.set(
+        [3, 1, 3],
+        Some(Block::new("sunflower", "upper_block_bit=0")),
+    );
+    s.set(
+        [3, 2, 3],
+        Some(Block::new("sunflower", "upper_block_bit=1")),
+    );
     s
 }
 
-const ITEMS: &[(&str, u32)] = &[("oak_planks", 64), ("cobblestone", 64), ("grass_block", 4), ("wooden_door", 4), ("bed", 2), ("sunflower", 2), ("dirt", 64)];
+const ITEMS: &[(&str, u32)] = &[
+    ("oak_planks", 64),
+    ("cobblestone", 64),
+    ("grass_block", 4),
+    ("wooden_door", 4),
+    ("bed", 2),
+    ("sunflower", 2),
+    ("dirt", 64),
+];
 
 #[test]
 fn builds_doors_a_bed_and_a_sunflower_block_exact() {
@@ -56,13 +90,31 @@ fn builds_doors_a_bed_and_a_sunflower_block_exact() {
     let ticks = run(&mut w, [0.5, 1.0, 0.5], &mut arb, id, 12_000);
     let st = status.lock().unwrap().clone();
     eprintln!("{ticks} ticks, {st:?}");
-    explain(&w, &s, ORIGIN).iter().for_each(|l| eprintln!("OPEN {l}"));
+    explain(&w, &s, ORIGIN)
+        .iter()
+        .for_each(|l| eprintln!("OPEN {l}"));
     assert_eq!(arb.outcome(id), Some(&Ok(())), "status {st:?}");
     assert_eq!(wrong(&g, &s), Vec::new());
-    assert_eq!(scaffold_left(&g), Vec::<BlockPos>::new(), "scaffold removed");
-    let places = |item: &str| w.log.iter().filter(|a| matches!(a, Act::Place { item: i, .. } if i.ends_with(item))).count();
-    assert_eq!((places("wooden_door"), places(":bed"), places("sunflower")), (2, 1, 1), "one placement per pair");
-    assert_eq!(view(&g, at([2, 2, 0])).1, "door_hinge_bit=1,minecraft:cardinal_direction=east,open_bit=0,upper_block_bit=1");
+    assert_eq!(
+        scaffold_left(&g),
+        Vec::<BlockPos>::new(),
+        "scaffold removed"
+    );
+    let places = |item: &str| {
+        w.log
+            .iter()
+            .filter(|a| matches!(a, Act::Place { item: i, .. } if i.ends_with(item)))
+            .count()
+    };
+    assert_eq!(
+        (places("wooden_door"), places(":bed"), places("sunflower")),
+        (2, 1, 1),
+        "one placement per pair"
+    );
+    assert_eq!(
+        view(&g, at([2, 2, 0])).1,
+        "door_hinge_bit=1,minecraft:cardinal_direction=east,open_bit=0,upper_block_bit=1"
+    );
 }
 
 /// 8×3×2 with a wall row at z 0: door A at x1 (hinge 0) with cobblestone right of it at x2-3, which built first
@@ -74,7 +126,10 @@ fn hinge_wall() -> Structure {
             s.set([x, 0, z], Some(Block::new("oak_planks", "")));
             for y in 1..3 {
                 let wall = z == 0 && matches!(x, 2 | 3 | 6);
-                s.set([x, y, z], Some(Block::new(if wall { "cobblestone" } else { "air" }, "")));
+                s.set(
+                    [x, y, z],
+                    Some(Block::new(if wall { "cobblestone" } else { "air" }, "")),
+                );
             }
         }
     }
@@ -90,22 +145,49 @@ fn a_door_goes_in_before_the_wall_that_would_flip_its_hinge() {
     let g = Grid::floor(-20, 30);
     let at = |p: BlockPos| [ORIGIN[0] + p[0], ORIGIN[1] + p[1], ORIGIN[2] + p[2]];
     let s = hinge_wall();
-    let mut w = World::new(&g, &[("oak_planks", 64), ("cobblestone", 64), ("wooden_door", 4), ("dirt", 64)]);
+    let mut w = World::new(
+        &g,
+        &[
+            ("oak_planks", 64),
+            ("cobblestone", 64),
+            ("wooden_door", 4),
+            ("dirt", 64),
+        ],
+    );
     let (proc, status) = builder(&s, ORIGIN, &[]);
     let mut arb = Arbiter::new();
     let id = arb.add(proc, 10);
     let ticks = run(&mut w, [0.5, 1.0, 3.5], &mut arb, id, 12_000);
     let st = status.lock().unwrap().clone();
     eprintln!("{ticks} ticks, {st:?}");
-    explain(&w, &s, ORIGIN).iter().for_each(|l| eprintln!("OPEN {l}"));
+    explain(&w, &s, ORIGIN)
+        .iter()
+        .for_each(|l| eprintln!("OPEN {l}"));
     assert_eq!(arb.outcome(id), Some(&Ok(())), "status {st:?}");
     assert_eq!(wrong(&g, &s), Vec::new());
-    let placed = |p: BlockPos| w.log.iter().position(|a| matches!(a, Act::Place { against, face, .. } if face.adjacent(*against) == at(p)));
+    let placed = |p: BlockPos| {
+        w.log.iter().position(
+            |a| matches!(a, Act::Place { against, face, .. } if face.adjacent(*against) == at(p)),
+        )
+    };
     let door_a = placed([1, 1, 0]).expect("door A placed");
-    assert!(placed([2, 1, 0]).expect("wall placed") > door_a, "door A before the wall right of it");
+    assert!(
+        placed([2, 1, 0]).expect("wall placed") > door_a,
+        "door A before the wall right of it"
+    );
     let door_b = placed([5, 1, 0]).expect("door B placed");
-    assert!(placed([6, 1, 0]).expect("wall placed") < door_b, "door B after the wall it needs");
-    assert_eq!(w.log.iter().filter(|a| matches!(a, Act::Break { .. })).count(), 0, "nothing broken and redone");
+    assert!(
+        placed([6, 1, 0]).expect("wall placed") < door_b,
+        "door B after the wall it needs"
+    );
+    assert_eq!(
+        w.log
+            .iter()
+            .filter(|a| matches!(a, Act::Break { .. }))
+            .count(),
+        0,
+        "nothing broken and redone"
+    );
 }
 
 /// 5×3×3: a plank floor and a cobblestone wall along z 1 with a door at x 2 as vanilla saves it (the upper half
@@ -115,7 +197,12 @@ fn vanilla_door_wall() -> Structure {
     for x in 0..5 {
         for z in 0..3 {
             s.set([x, 0, z], Some(Block::new("oak_planks", "")));
-            (1..3).for_each(|y| s.set([x, y, z], Some(Block::new(if z == 1 { "cobblestone" } else { "air" }, ""))));
+            (1..3).for_each(|y| {
+                s.set(
+                    [x, y, z],
+                    Some(Block::new(if z == 1 { "cobblestone" } else { "air" }, "")),
+                )
+            });
         }
     }
     s.set([2, 1, 1], door("east", 0, 0));
@@ -126,22 +213,44 @@ fn vanilla_door_wall() -> Structure {
 /// Builds [`vanilla_door_wall`] with the bot's feet at `start` (offset from the origin); returns the world log.
 fn build_door_wall(g: &Grid, start: [f32; 3]) -> Vec<Act> {
     let s = vanilla_door_wall();
-    let mut w = World::new(g, &[("oak_planks", 64), ("cobblestone", 64), ("wooden_door", 4), ("dirt", 64)]);
+    let mut w = World::new(
+        g,
+        &[
+            ("oak_planks", 64),
+            ("cobblestone", 64),
+            ("wooden_door", 4),
+            ("dirt", 64),
+        ],
+    );
     let (proc, status) = builder(&s, ORIGIN, &[]);
     let mut arb = Arbiter::new();
     let id = arb.add(proc, 10);
-    let feet = [ORIGIN[0] as f32 + start[0], ORIGIN[1] as f32 + start[1], ORIGIN[2] as f32 + start[2]];
+    let feet = [
+        ORIGIN[0] as f32 + start[0],
+        ORIGIN[1] as f32 + start[1],
+        ORIGIN[2] as f32 + start[2],
+    ];
     let ticks = run(&mut w, feet, &mut arb, id, 8000);
     let st = status.lock().unwrap().clone();
     eprintln!("{ticks} ticks, {st:?}");
-    explain(&w, &s, ORIGIN).iter().for_each(|l| eprintln!("OPEN {l}"));
+    explain(&w, &s, ORIGIN)
+        .iter()
+        .for_each(|l| eprintln!("OPEN {l}"));
     assert_eq!(arb.outcome(id), Some(&Ok(())), "status {st:?}");
     // Judged against what the server builds: the upper half takes the lower half's facing.
     let mut built = s.clone();
     built.set([2, 2, 1], door("east", 0, 1));
     // The use-click that closes a walked-through door leaves the sim's upper half open (not compared: BDS keeps it 0).
-    let upper_open = |(_, want, have): &(BlockPos, String, String)| *have == want.replace("open_bit=0", "open_bit=1");
-    assert_eq!(wrong(g, &built).into_iter().filter(|w| !upper_open(w)).collect::<Vec<_>>(), Vec::new());
+    let upper_open = |(_, want, have): &(BlockPos, String, String)| {
+        *have == want.replace("open_bit=0", "open_bit=1")
+    };
+    assert_eq!(
+        wrong(g, &built)
+            .into_iter()
+            .filter(|w| !upper_open(w))
+            .collect::<Vec<_>>(),
+        Vec::new()
+    );
     w.log
 }
 
@@ -149,8 +258,20 @@ fn build_door_wall(g: &Grid, start: [f32; 3]) -> Vec<Act> {
 fn a_vanilla_door_goes_in_once() {
     let g = Grid::floor(-20, 30);
     let log = build_door_wall(&g, [0.5, 1.0, 3.5]);
-    let doors = log.iter().filter(|a| matches!(a, Act::Place { item, .. } if item.ends_with("wooden_door"))).count();
-    assert_eq!((doors, log.iter().filter(|a| matches!(a, Act::Break { .. })).count()), (1, 0), "no place and break loop on the upper half");
+    let doors = log
+        .iter()
+        .filter(|a| matches!(a, Act::Place { item, .. } if item.ends_with("wooden_door")))
+        .count();
+    assert_eq!(
+        (
+            doors,
+            log.iter()
+                .filter(|a| matches!(a, Act::Break { .. }))
+                .count()
+        ),
+        (1, 0),
+        "no place and break loop on the upper half"
+    );
 }
 
 #[test]
@@ -172,10 +293,29 @@ fn a_bed_takes_the_item_of_its_colour() {
     let mut s = Structure::new([2, 2, 1]);
     s.set([0, 0, 0], Some(Block::new("oak_planks", "")));
     s.set([1, 0, 0], Some(Block::new("oak_planks", "")));
-    s.set([0, 1, 0], Some(Block::new("bed", "bed_color=14,direction=3,head_piece_bit=0,occupied_bit=0")));
-    s.set([1, 1, 0], Some(Block::new("bed", "bed_color=14,direction=3,head_piece_bit=1,occupied_bit=0")));
+    s.set(
+        [0, 1, 0],
+        Some(Block::new(
+            "bed",
+            "bed_color=14,direction=3,head_piece_bit=0,occupied_bit=0",
+        )),
+    );
+    s.set(
+        [1, 1, 0],
+        Some(Block::new(
+            "bed",
+            "bed_color=14,direction=3,head_piece_bit=1,occupied_bit=0",
+        )),
+    );
     let mut w = World::new(&g, &[("oak_planks", 4), ("bed@3", 1), ("dirt", 16)]);
-    w.stations.insert(station, [("minecraft:bed@3".to_string(), 1), ("minecraft:bed@14".to_string(), 1)].into());
+    w.stations.insert(
+        station,
+        [
+            ("minecraft:bed@3".to_string(), 1),
+            ("minecraft:bed@14".to_string(), 1),
+        ]
+        .into(),
+    );
     let (proc, status) = builder(&s, ORIGIN, &[station]);
     let mut arb = Arbiter::new();
     let id = arb.add(proc, 10);
@@ -183,7 +323,21 @@ fn a_bed_takes_the_item_of_its_colour() {
     let st = status.lock().unwrap().clone();
     assert_eq!(arb.outcome(id), Some(&Ok(())), "status {st:?}");
     assert_eq!(wrong(&g, &s), Vec::new());
-    assert_eq!((w.inv["minecraft:bed@3"], w.stations[&station]["minecraft:bed@3"]), (1, 1), "the white bed held is not used or fetched");
-    assert_eq!(w.stations[&station]["minecraft:bed@14"], 0, "the red bed fetched");
-    assert!(w.log.iter().any(|a| matches!(a, Act::Place { item, .. } if item == "minecraft:bed@14")));
+    assert_eq!(
+        (
+            w.inv["minecraft:bed@3"],
+            w.stations[&station]["minecraft:bed@3"]
+        ),
+        (1, 1),
+        "the white bed held is not used or fetched"
+    );
+    assert_eq!(
+        w.stations[&station]["minecraft:bed@14"], 0,
+        "the red bed fetched"
+    );
+    assert!(
+        w.log
+            .iter()
+            .any(|a| matches!(a, Act::Place { item, .. } if item == "minecraft:bed@14"))
+    );
 }

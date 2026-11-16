@@ -49,7 +49,9 @@ impl fmt::Display for Error {
             Error::Truncated => f.write_str("FSB5 file is truncated"),
             Error::Malformed(why) => write!(f, "malformed FSB5 file: {why}"),
             Error::Empty => f.write_str("FSB5 bank holds no samples"),
-            Error::Unsupported(c) => write!(f, "unsupported FSB5 codec {} ({c:#x})", codec_name(*c)),
+            Error::Unsupported(c) => {
+                write!(f, "unsupported FSB5 codec {} ({c:#x})", codec_name(*c))
+            }
         }
     }
 }
@@ -68,24 +70,42 @@ pub fn decode_sample(sample: &Sample<'_>) -> Result<Pcm, Error> {
     let frames = sample.num_samples as usize;
     let samples = match sample.codec {
         CODEC_FADPCM => fadpcm::decode(sample.data, channels, frames),
-        CODEC_PCM16 => pcm16(sample.data, frames * channels, sample.flags & container::FLAG_BIG_ENDIAN != 0),
+        CODEC_PCM16 => pcm16(
+            sample.data,
+            frames * channels,
+            sample.flags & container::FLAG_BIG_ENDIAN != 0,
+        ),
         c => return Err(Error::Unsupported(c)),
     };
-    Ok(Pcm { sample_rate: sample.sample_rate, channels: sample.channels, samples })
+    Ok(Pcm {
+        sample_rate: sample.sample_rate,
+        channels: sample.channels,
+        samples,
+    })
 }
 
 /// `len` samples of 16-bit PCM; missing data decodes as silence.
 fn pcm16(data: &[u8], len: usize, big_endian: bool) -> Vec<i16> {
-    let read = if big_endian { i16::from_be_bytes } else { i16::from_le_bytes };
-    let mut out: Vec<i16> = data.as_chunks::<2>().0.iter().take(len).map(|&b| read(b)).collect();
+    let read = if big_endian {
+        i16::from_be_bytes
+    } else {
+        i16::from_le_bytes
+    };
+    let mut out: Vec<i16> = data
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .take(len)
+        .map(|&b| read(b))
+        .collect();
     out.resize(len, 0);
     out
 }
 
 fn codec_name(codec: u32) -> &'static str {
     const NAMES: [&str; 18] = [
-        "NONE", "PCM8", "PCM16", "PCM24", "PCM32", "PCMFLOAT", "GCADPCM", "IMAADPCM", "VAG", "HEVAG", "XMA",
-        "MPEG", "CELT", "AT9", "XWMA", "VORBIS", "FADPCM", "OPUS",
+        "NONE", "PCM8", "PCM16", "PCM24", "PCM32", "PCMFLOAT", "GCADPCM", "IMAADPCM", "VAG",
+        "HEVAG", "XMA", "MPEG", "CELT", "AT9", "XWMA", "VORBIS", "FADPCM", "OPUS",
     ];
     NAMES.get(codec as usize).copied().unwrap_or("unknown")
 }

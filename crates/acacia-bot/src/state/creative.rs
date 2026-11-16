@@ -3,7 +3,9 @@
 
 use std::sync::OnceLock;
 
-use acacia_client::proto::packets::{CreativeContent, CreativeContentGroupsItemCategory as Category};
+use acacia_client::proto::packets::{
+    CreativeContent, CreativeContentGroupsItemCategory as Category,
+};
 use acacia_client::proto::{Packet, RawPacket};
 
 use super::ItemStack;
@@ -59,8 +61,15 @@ impl Creative {
                     Category::Items => CreativeTab::Items,
                     _ => return None,
                 };
-                let stack = ItemStack { count: 1, ..ItemStack::from(&item.item) };
-                (!stack.is_empty()).then_some(CreativeItem { entry_id: item.entry_id, stack, tab })
+                let stack = ItemStack {
+                    count: 1,
+                    ..ItemStack::from(&item.item)
+                };
+                (!stack.is_empty()).then_some(CreativeItem {
+                    entry_id: item.entry_id,
+                    stack,
+                    tab,
+                })
             };
             content.items.iter().filter_map(entry).collect()
         })

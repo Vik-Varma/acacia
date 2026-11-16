@@ -30,7 +30,11 @@ impl Renderer {
     }
 
     pub fn set_vsync(&mut self, on: bool) {
-        self.config.present_mode = if on { wgpu::PresentMode::AutoVsync } else { wgpu::PresentMode::AutoNoVsync };
+        self.config.present_mode = if on {
+            wgpu::PresentMode::AutoVsync
+        } else {
+            wgpu::PresentMode::AutoNoVsync
+        };
         self.surface.configure(&self.device, &self.config);
     }
 
@@ -85,7 +89,13 @@ impl Renderer {
 
     /// Draws the sun, moon and stars from now on.
     pub fn set_sky_textures(&mut self, textures: &SkyTextures) {
-        self.sky = Some(SkyPass::new(&self.device, &self.queue, self.config.format, &self.globals, textures));
+        self.sky = Some(SkyPass::new(
+            &self.device,
+            &self.queue,
+            self.config.format,
+            &self.globals,
+            textures,
+        ));
     }
 
     /// The entities to draw from now on; ids come from the models set last.
@@ -100,7 +110,8 @@ impl Renderer {
 
     /// The rain streaks, from [`crate::weather::load_texture`].
     pub fn set_weather_texture(&mut self, streaks: &crate::weather::Streaks) {
-        self.weather_pass.set_texture(&self.device, &self.queue, streaks);
+        self.weather_pass
+            .set_texture(&self.device, &self.queue, streaks);
     }
 
     /// The cloud map, from [`crate::weather::load_clouds`].
@@ -110,7 +121,8 @@ impl Renderer {
 
     /// The overlay drawn with the camera in water, from [`crate::fluid_view::load_underwater`].
     pub fn set_underwater_texture(&mut self, image: &image::RgbaImage) {
-        self.screen_effect.set_texture(&self.device, &self.queue, image);
+        self.screen_effect
+            .set_texture(&self.device, &self.queue, image);
     }
 
     /// The block outlined from now on, or none.

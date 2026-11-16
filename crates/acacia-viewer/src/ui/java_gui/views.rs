@@ -3,12 +3,12 @@
 use acacia_ui::java::screen::book::{BookView, BookViewScreen};
 use acacia_ui::java::screen::book_edit::{BookEdit, BookEditScreen};
 use acacia_ui::java::screen::confirm::{Confirm, ConfirmScreen};
-use acacia_ui::java::screen::sign::{Sign, SignEdit, SignEditScreen};
 use acacia_ui::java::screen::death::DeathScreen;
 use acacia_ui::java::screen::loading::{LevelLoadingScreen, Load, Reason};
 use acacia_ui::java::screen::message::MessageScreen;
 use acacia_ui::java::screen::options::pages::{self, Client};
 use acacia_ui::java::screen::pause::{Pause, PauseScreen};
+use acacia_ui::java::screen::sign::{Sign, SignEdit, SignEditScreen};
 use acacia_ui::java::screen::win::{WinScreen, scroll_speed};
 use acacia_ui::java::screen::{Env, Screen};
 use acacia_ui::java::text::{Style, Text};
@@ -20,45 +20,108 @@ use super::{JavaGui, options};
 /// What the options pages read from a client that is not signed in to Mojang's services: no
 /// friends, the vanilla high-contrast pack, the stable feature set. Telemetry is allowed, as for
 /// any account that hasn't turned it off, so its screen opens.
-const CLIENT: Client = Client { telemetry: true, high_contrast_pack: true, minecart: false, friends: false, friend_requests: false, ticked: true };
+const CLIENT: Client = Client {
+    telemetry: true,
+    high_contrast_pack: true,
+    minecart: false,
+    friends: false,
+    friend_requests: false,
+    ticked: true,
+};
 
 /// A screen's environment in the world: blurred under it when the option is on.
 fn env(gui: &JavaGui, size: [i32; 2]) -> Env {
-    Env { width: size[0], height: size[1], in_world: true, blur: gui.menu_blur >= 1 }
+    Env {
+        width: size[0],
+        height: size[1],
+        in_world: true,
+        blur: gui.menu_blur >= 1,
+    }
 }
 
 /// `minecraft.gui.screen()` for `view` at `size` after `init`.
 pub fn build(gui: &JavaGui, ctx: &Ctx, view: &View, size: [i32; 2]) -> Box<dyn Screen> {
     let env = env(gui, size);
     match view {
-        View::Pause => Box::new(PauseScreen::new(ctx, env, Pause { show_menu: true, topmost: true, local_server: false, friends_available: true, reporting_active: true })),
+        View::Pause => Box::new(PauseScreen::new(
+            ctx,
+            env,
+            Pause {
+                show_menu: true,
+                topmost: true,
+                local_server: false,
+                friends_available: true,
+                reporting_active: true,
+            },
+        )),
         View::Options { page, settings } => {
             if let Some(screen) = super::beside::screen(ctx, env, page) {
                 return screen;
             }
             let values = |id: &str| options::value(settings, id);
-            let screen = pages::build(ctx, env, page, &values, CLIENT).or_else(|| pages::build(ctx, env, "options", &values, CLIENT));
+            let screen = pages::build(ctx, env, page, &values, CLIENT)
+                .or_else(|| pages::build(ctx, env, "options", &values, CLIENT));
             Box::new(screen.expect("the options screen builds"))
         }
         View::Win { ticks } => Box::new(credits_roll(gui, size, *ticks)),
         // The bot reports no load progress or chunk statuses, only that the player has not arrived.
-        View::Loading => Box::new(LevelLoadingScreen::new(env, Reason::Other, Load { has_progress: false, progress: 0.0, view: None, visualize: false })),
-        View::Sign { lines, line, cursor, hanging } => {
+        View::Loading => Box::new(LevelLoadingScreen::new(
+            env,
+            Reason::Other,
+            Load {
+                has_progress: false,
+                progress: 0.0,
+                view: None,
+                visualize: false,
+            },
+        )),
+        View::Sign {
+            lines,
+            line,
+            cursor,
+            hanging,
+        } => {
             // The bot reports neither the sign's wood, mount, dye nor glow.
-            let sign = Sign { wood: "oak".into(), hanging: *hanging, wall: false, dye: "black".into(), glowing: false };
-            let edit = SignEdit { lines: lines.clone(), line: *line, cursor: *cursor, selection: *cursor, blink_start: 0 };
+            let sign = Sign {
+                wood: "oak".into(),
+                hanging: *hanging,
+                wall: false,
+                dye: "black".into(),
+                glowing: false,
+            };
+            let edit = SignEdit {
+                lines: lines.clone(),
+                line: *line,
+                cursor: *cursor,
+                selection: *cursor,
+                blink_start: 0,
+            };
             Box::new(SignEditScreen::new(ctx, env, sign, edit))
         }
-        View::Book { pages, page, writing: false, .. } => {
-            let mut book = BookView { pages: pages.iter().map(|p| Text::legacy(p)).collect(), page: 0 };
+        View::Book {
+            pages,
+            page,
+            writing: false,
+            ..
+        } => {
+            let mut book = BookView {
+                pages: pages.iter().map(|p| Text::legacy(p)).collect(),
+                page: 0,
+            };
             book.set_page(*page);
             Box::new(BookViewScreen::new(ctx, env, &book))
         }
-        View::Book { pages, page, writing: true, caret } => {
+        View::Book {
+            pages,
+            page,
+            writing: true,
+            caret,
+        } => {
             let mut book = BookEdit::new(ctx.font, pages.clone(), 0);
             book.page = (*page).min(book.pages.len() - 1);
             book.load_page(ctx.font);
-            book.editor.seek((*caret).min(book.editor.field.value.len()), false);
+            book.editor
+                .seek((*caret).min(book.editor.field.value.len()), false);
             Box::new(BookEditScreen::new(ctx, env, &book))
         }
         // No death message or score reaches the viewer.
@@ -77,7 +140,16 @@ pub fn build(gui: &JavaGui, ctx: &Ctx, view: &View, size: [i32; 2]) -> Box<dyn S
             screen.death_background = true;
             Box::new(screen)
         }
-        View::Disconnected { reason } => Box::new(MessageScreen::disconnected(ctx, Env { in_world: false, ..env }, ctx.tr("disconnect.lost"), Text::legacy(reason), Style::default())),
+        View::Disconnected { reason } => Box::new(MessageScreen::disconnected(
+            ctx,
+            Env {
+                in_world: false,
+                ..env
+            },
+            ctx.tr("disconnect.lost"),
+            Text::legacy(reason),
+            Style::default(),
+        )),
     }
 }
 

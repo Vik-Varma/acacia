@@ -47,7 +47,9 @@ pub struct Tracking;
 unsafe impl GlobalAlloc for Tracking {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let h = header(layout);
-        let Ok(outer) = Layout::from_size_align(layout.size() + h, layout.align().max(16)) else { return std::ptr::null_mut() };
+        let Ok(outer) = Layout::from_size_align(layout.size() + h, layout.align().max(16)) else {
+            return std::ptr::null_mut();
+        };
         let base = unsafe { System.alloc(outer) };
         if base.is_null() {
             return base;
@@ -63,6 +65,11 @@ unsafe impl GlobalAlloc for Tracking {
         let base = unsafe { ptr.sub(h) };
         let r = unsafe { base.read() };
         LIVE[r as usize].fetch_sub(layout.size() as isize, Ordering::Relaxed);
-        unsafe { System.dealloc(base, Layout::from_size_align_unchecked(layout.size() + h, layout.align().max(16))) };
+        unsafe {
+            System.dealloc(
+                base,
+                Layout::from_size_align_unchecked(layout.size() + h, layout.align().max(16)),
+            )
+        };
     }
 }

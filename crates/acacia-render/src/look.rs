@@ -114,8 +114,14 @@ impl Dropped {
         spin_ticks: 20.0,
         copies: [1, 16, 32, 48],
         scatter: 0.15,
-        flat: Ground { scale: 0.5, lift: 2.0 / 16.0 },
-        block: Ground { scale: 0.25, lift: 3.0 / 16.0 },
+        flat: Ground {
+            scale: 0.5,
+            lift: 2.0 / 16.0,
+        },
+        block: Ground {
+            scale: 0.25,
+            lift: 3.0 / 16.0,
+        },
     };
 }
 
@@ -129,7 +135,13 @@ impl Look {
     /// Water opacity is `biomes_client.json`'s default water_surface_transparency.
     pub const BEDROCK: Look = Look {
         // Not infinity: JSON has none, and a look pack stores this.
-        fog: Fog { cylinder: false, linear: false, band: 0.3, band_limits: (0.0, f32::MAX), haze: None },
+        fog: Fog {
+            cylinder: false,
+            linear: false,
+            band: 0.3,
+            band_limits: (0.0, f32::MAX),
+            haze: None,
+        },
         water_alpha: Some(0.65),
         biome_blend: 1,
         ambient_occlusion: [0.45, 0.62, 0.8, 1.0],
@@ -147,7 +159,10 @@ impl Look {
             linear: true,
             band: 0.1,
             band_limits: (4.0, 64.0),
-            haze: Some(Haze { overworld: (0.0, 1024.0), nether: (10.0, 96.0) }),
+            haze: Some(Haze {
+                overworld: (0.0, 1024.0),
+                nether: (10.0, 96.0),
+            }),
         },
         water_alpha: None,
         biome_blend: 2,

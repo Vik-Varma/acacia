@@ -67,7 +67,13 @@ impl Queue {
         let mut due = self.due.lock().expect("queue lock");
         let order = due.1;
         due.1 += 1;
-        due.0.push(Due { at, order, socket, to, data });
+        due.0.push(Due {
+            at,
+            order,
+            socket,
+            to,
+            data,
+        });
         self.wake.notify_one();
     }
 
@@ -105,13 +111,22 @@ pub struct Proxy {
 impl Proxy {
     /// Passes a datagram going `up` (or down) through `link`, queueing it to be sent where it
     /// arrives.
-    fn pass(&self, up: bool, link: &Mutex<Link>, socket: &Arc<UdpSocket>, to: Option<SocketAddr>, data: &[u8]) {
+    fn pass(
+        &self,
+        up: bool,
+        link: &Mutex<Link>,
+        socket: &Arc<UdpSocket>,
+        to: Option<SocketAddr>,
+        data: &[u8],
+    ) {
         let counters = if up { &self.up } else { &self.down };
         counters.received.fetch_add(1, Relaxed);
         let now = Instant::now();
         let mut link = link.lock().expect("link lock");
         let fate = link.admit(now, data.len());
-        counters.max_backlog.fetch_max(link.backlog(now) as u64, Relaxed);
+        counters
+            .max_backlog
+            .fetch_max(link.backlog(now) as u64, Relaxed);
         drop(link);
         if let Some(capture) = &self.capture {
             capture.record(up, fate, data);
@@ -125,9 +140,21 @@ impl Proxy {
 }
 
 /// Starts the proxy on `listen` for `server`; its threads run until the process ends.
-pub fn start(listen: SocketAddr, server: SocketAddr, up: Impairment, down: Impairment, seed: u64, capture: Option<Capture>) -> std::io::Result<Arc<Proxy>> {
+pub fn start(
+    listen: SocketAddr,
+    server: SocketAddr,
+    up: Impairment,
+    down: Impairment,
+    seed: u64,
+    capture: Option<Capture>,
+) -> std::io::Result<Arc<Proxy>> {
     let socket = Arc::new(UdpSocket::bind(listen)?);
-    let proxy = Arc::new(Proxy { up: Counters::default(), down: Counters::default(), capture, queue: Queue::default() });
+    let proxy = Arc::new(Proxy {
+        up: Counters::default(),
+        down: Counters::default(),
+        capture,
+        queue: Queue::default(),
+    });
     let sender = proxy.clone();
     thread::spawn(move || sender.queue.send_forever([&sender.up, &sender.down]));
     let relay = proxy.clone();
@@ -141,12 +168,23 @@ pub fn start(listen: SocketAddr, server: SocketAddr, up: Impairment, down: Impai
                 Err(_) => break,
             };
             if !flows.contains_key(&client) {
-                let Ok(upstream) = open_upstream(server) else { continue };
+                let Ok(upstream) = open_upstream(server) else {
+                    continue;
+                };
                 let now = Instant::now();
                 let seed = seed.wrapping_add(flows.len() as u64 * 2);
                 let downlink = Mutex::new(Link::new(down, now, seed ^ 0x9E37_79B9_7F4A_7C15));
-                spawn_downstream(relay.clone(), upstream.clone(), socket.clone(), client, downlink);
-                flows.insert(client, (upstream, Arc::new(Mutex::new(Link::new(up, now, seed)))));
+                spawn_downstream(
+                    relay.clone(),
+                    upstream.clone(),
+                    socket.clone(),
+                    client,
+                    downlink,
+                );
+                flows.insert(
+                    client,
+                    (upstream, Arc::new(Mutex::new(Link::new(up, now, seed)))),
+                );
             }
             let (upstream, uplink) = &flows[&client];
             relay.pass(true, uplink, upstream, None, &buffer[..size]);
@@ -156,14 +194,26 @@ pub fn start(listen: SocketAddr, server: SocketAddr, up: Impairment, down: Impai
 }
 
 fn open_upstream(server: SocketAddr) -> std::io::Result<Arc<UdpSocket>> {
-    let any: SocketAddr = if server.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" }.parse().expect("an address");
+    let any: SocketAddr = if server.is_ipv4() {
+        "0.0.0.0:0"
+    } else {
+        "[::]:0"
+    }
+    .parse()
+    .expect("an address");
     let upstream = UdpSocket::bind(any)?;
     upstream.connect(server)?;
     Ok(Arc::new(upstream))
 }
 
 /// The server's answers to `client`, back out of the listening socket.
-fn spawn_downstream(proxy: Arc<Proxy>, upstream: Arc<UdpSocket>, socket: Arc<UdpSocket>, client: SocketAddr, link: Mutex<Link>) {
+fn spawn_downstream(
+    proxy: Arc<Proxy>,
+    upstream: Arc<UdpSocket>,
+    socket: Arc<UdpSocket>,
+    client: SocketAddr,
+    link: Mutex<Link>,
+) {
     thread::spawn(move || {
         let mut buffer = vec![0; MAX_DATAGRAM];
         loop {

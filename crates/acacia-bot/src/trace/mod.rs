@@ -9,7 +9,7 @@
 
 mod replay;
 
-pub use replay::{replay, CorrectionDiff, Report, TickDiff, CORRECTION_TOLERANCE};
+pub use replay::{CORRECTION_TOLERANCE, CorrectionDiff, Report, TickDiff, replay};
 
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
@@ -106,7 +106,13 @@ impl Recorder {
             }
             Event::Equipment(e) => {
                 w.write_all(&[EQUIPMENT])?;
-                for level in [e.depth_strider, e.soul_speed, e.swift_sneak, i32::from(e.leather_boots), i32::from(e.elytra)] {
+                for level in [
+                    e.depth_strider,
+                    e.soul_speed,
+                    e.swift_sneak,
+                    i32::from(e.leather_boots),
+                    i32::from(e.elytra),
+                ] {
                     w.write_all(&level.to_le_bytes())?;
                 }
                 Ok(())
@@ -125,12 +131,18 @@ fn write_bytes(w: &mut impl Write, b: &[u8]) -> io::Result<()> {
 pub fn read(path: &Path) -> io::Result<Vec<Event>> {
     let file = File::open(path)?;
     let gzipped = path.extension().is_some_and(|e| e == "gz");
-    let mut r: BufReader<Box<dyn Read>> =
-        BufReader::new(if gzipped { Box::new(flate2::read::GzDecoder::new(file)) } else { Box::new(file) });
+    let mut r: BufReader<Box<dyn Read>> = BufReader::new(if gzipped {
+        Box::new(flate2::read::GzDecoder::new(file))
+    } else {
+        Box::new(file)
+    });
     let mut magic = [0; 5];
     r.read_exact(&mut magic)?;
     if &magic != MAGIC {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "not a movement trace"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "not a movement trace",
+        ));
     }
     let mut events = Vec::new();
     loop {
@@ -150,7 +162,12 @@ fn read_event(r: &mut impl Read, kind: u8) -> io::Result<Event> {
     Ok(match kind {
         PACKET => {
             let id = read_u32(r)?;
-            Event::Packet(RawPacket { id, sender_subclient: 0, target_subclient: 0, body: read_bytes(r)? })
+            Event::Packet(RawPacket {
+                id,
+                sender_subclient: 0,
+                target_subclient: 0,
+                body: read_bytes(r)?,
+            })
         }
         INPUT => Event::Input(read_bytes(r)?),
         START => {
@@ -158,7 +175,11 @@ fn read_event(r: &mut impl Read, kind: u8) -> io::Result<Event> {
             for x in &mut v {
                 *x = f32::from_bits(read_u32(r)?);
             }
-            Event::Start { feet: [v[0], v[1], v[2]], yaw: v[3], pitch: v[4] }
+            Event::Start {
+                feet: [v[0], v[1], v[2]],
+                yaw: v[3],
+                pitch: v[4],
+            }
         }
         MARK => Event::Mark(String::from_utf8_lossy(&read_bytes(r)?).into_owned()),
         EQUIPMENT => {
@@ -166,9 +187,20 @@ fn read_event(r: &mut impl Read, kind: u8) -> io::Result<Event> {
             for x in &mut v {
                 *x = read_u32(r)? as i32;
             }
-            Event::Equipment(Equipment { depth_strider: v[0], soul_speed: v[1], swift_sneak: v[2], leather_boots: v[3] != 0, elytra: v[4] != 0 })
+            Event::Equipment(Equipment {
+                depth_strider: v[0],
+                soul_speed: v[1],
+                swift_sneak: v[2],
+                leather_boots: v[3] != 0,
+                elytra: v[4] != 0,
+            })
         }
-        k => return Err(io::Error::new(io::ErrorKind::InvalidData, format!("unknown trace event {k}"))),
+        k => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unknown trace event {k}"),
+            ));
+        }
     })
 }
 
@@ -191,8 +223,15 @@ mod tests {
     #[test]
     fn reads_own_actor_flags() {
         // BDS 1.26 to a vanilla client (runtime id 1): flags only, not sprinting.
-        let body = Bytes::from_static(&[1, 1, 0, 7, 7, 0x80, 0x80, 0xc0, 0x80, 0x80, 0x82, 0x80, 3, 0, 0, 0]);
-        let packet = RawPacket { id: SetEntityData::ID, sender_subclient: 0, target_subclient: 0, body };
+        let body = Bytes::from_static(&[
+            1, 1, 0, 7, 7, 0x80, 0x80, 0xc0, 0x80, 0x80, 0x82, 0x80, 3, 0, 0, 0,
+        ]);
+        let packet = RawPacket {
+            id: SetEntityData::ID,
+            sender_subclient: 0,
+            target_subclient: 0,
+            body,
+        };
         assert!(about(&packet, 1) && !about(&packet, 2));
         let flags = actor_flags(&packet.decode().unwrap()).unwrap();
         assert_eq!(flags.0 & MetadataFlags1::SPRINTING.0, 0);
@@ -203,8 +242,17 @@ mod tests {
         let path = std::env::temp_dir().join(format!("btrc-{}.bin", std::process::id()));
         let events = vec![
             Event::Mark("drill".into()),
-            Event::Start { feet: [1.5, -60.0, 2.5], yaw: -90.0, pitch: 0.0 },
-            Event::Packet(RawPacket { id: 7, sender_subclient: 0, target_subclient: 0, body: Bytes::from_static(b"abc") }),
+            Event::Start {
+                feet: [1.5, -60.0, 2.5],
+                yaw: -90.0,
+                pitch: 0.0,
+            },
+            Event::Packet(RawPacket {
+                id: 7,
+                sender_subclient: 0,
+                target_subclient: 0,
+                body: Bytes::from_static(b"abc"),
+            }),
             Event::Input(Bytes::from_static(b"xyz")),
         ];
         let mut rec = Recorder::create(&path).unwrap();

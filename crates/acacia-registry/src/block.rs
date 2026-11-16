@@ -59,7 +59,10 @@ impl Block {
         if let Some(info) = BLOCKS.iter().find(|b| full(b.name)) {
             return Some(info.block);
         }
-        BEDROCK_ALIASES.binary_search_by(|(n, _)| n[10..].cmp(path)).ok().map(|i| BEDROCK_ALIASES[i].1)
+        BEDROCK_ALIASES
+            .binary_search_by(|(n, _)| n[10..].cmp(path))
+            .ok()
+            .map(|i| BEDROCK_ALIASES[i].1)
     }
 }
 

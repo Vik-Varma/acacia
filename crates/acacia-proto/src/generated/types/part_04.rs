@@ -1611,7 +1611,7 @@ impl EaseType {
         }
     }
     pub fn read(r: &mut &[u8]) -> Result<Self> {
-        let v = Self::from_raw(read_u8(r)? as i64);
+        let v = Self::from_raw(read_varint(r)? as i64);
         if let Self::Unknown(value) = v {
             crate::strict::note(crate::strict::Leniency::UnknownEnum {
                 ty: "EaseType",
@@ -1621,7 +1621,7 @@ impl EaseType {
         Ok(v)
     }
     pub fn write(&self, w: &mut BytesMut) {
-        write_u8(w, self.to_raw() as u8)
+        write_varint(w, self.to_raw() as u32)
     }
 }
 

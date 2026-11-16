@@ -23,7 +23,8 @@ impl Token {
 
 /// Longest first, so `==` is not read as two `=`.
 const SYMBOLS: [&str; 26] = [
-    "&&", "||", "==", "!=", "<=", ">=", "??", "->", "(", ")", "[", "]", "{", "}", ",", ";", "?", ":", "!", "<", ">", "+", "-", "*", "/", "=",
+    "&&", "||", "==", "!=", "<=", ">=", "??", "->", "(", ")", "[", "]", "{", "}", ",", ";", "?",
+    ":", "!", "<", ">", "+", "-", "*", "/", "=",
 ];
 
 /// Tokens with the byte offset each starts at.
@@ -34,22 +35,39 @@ pub(crate) fn tokens(source: &str) -> Result<Vec<(Token, usize)>, Error> {
         let rest = &source[at..];
         let fail = |kind| Error { kind, at };
         let take = |pred: fn(char) -> bool| rest.find(|c| !pred(c)).unwrap_or(rest.len());
-        let len = if first.is_ascii_digit() || (first == '.' && rest[1..].starts_with(|c: char| c.is_ascii_digit())) {
+        let len = if first.is_ascii_digit()
+            || (first == '.' && rest[1..].starts_with(|c: char| c.is_ascii_digit()))
+        {
             let mut len = take(|c| c.is_ascii_digit() || c == '.');
-            let exponent = rest[len..].strip_prefix(['e', 'E']).map(|e| e.strip_prefix(['+', '-']).unwrap_or(e));
+            let exponent = rest[len..]
+                .strip_prefix(['e', 'E'])
+                .map(|e| e.strip_prefix(['+', '-']).unwrap_or(e));
             if let Some(digits) = exponent.filter(|e| e.starts_with(|c: char| c.is_ascii_digit())) {
-                len = rest.len() - digits.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+                len = rest.len()
+                    - digits
+                        .trim_start_matches(|c: char| c.is_ascii_digit())
+                        .len();
             }
-            out.push((Token::Num(rest[..len].parse().map_err(|_| fail(ErrorKind::BadNumber))?), at));
+            out.push((
+                Token::Num(
+                    rest[..len]
+                        .parse()
+                        .map_err(|_| fail(ErrorKind::BadNumber))?,
+                ),
+                at,
+            ));
             // C-style float suffix: `1.0f`.
-            let suffix = rest[len..].starts_with(['f', 'F']) && !rest[len + 1..].starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_');
+            let suffix = rest[len..].starts_with(['f', 'F'])
+                && !rest[len + 1..].starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_');
             len + usize::from(suffix)
         } else if first.is_ascii_alphabetic() || first == '_' {
             let len = take(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.');
             out.push((Token::Name(rest[..len].to_ascii_lowercase()), at));
             len
         } else if first == '\'' {
-            let end = rest[1..].find('\'').ok_or_else(|| fail(ErrorKind::UnterminatedString))?;
+            let end = rest[1..]
+                .find('\'')
+                .ok_or_else(|| fail(ErrorKind::UnterminatedString))?;
             out.push((Token::Text(rest[1..=end].to_owned()), at));
             end + 2
         } else if let Some(symbol) = SYMBOLS.iter().find(|s| rest.starts_with(**s)) {

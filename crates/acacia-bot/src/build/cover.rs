@@ -5,12 +5,12 @@
 use acacia_physics::BlockPos;
 
 use super::builder::Builder;
-use super::plan::{go, no_stand, unbuilt, Next, SEARCHES, STANDS};
-use super::reach::{click_for, stands, Keep, Stand, STAND_SLACK};
+use super::plan::{Next, SEARCHES, STANDS, go, no_stand, unbuilt};
+use super::reach::{Keep, STAND_SLACK, Stand, click_for, stands};
 use super::sight_stats;
 use super::status::Phase;
-use crate::pathfind::process::Ctx;
 use crate::pathfind::Goal;
+use crate::pathfind::process::Ctx;
 
 /// Blocks of travel a stand may cost per extra cell it reaches before a nearer one wins. At 4, with pillars at 4 a
 /// block, live house16 one bot walked 26 s more and cleaned up 21 s more scaffold (54 blocks broken against
@@ -22,24 +22,50 @@ const PILLAR: f32 = 12.0;
 /// Ready placements whose stands are scored per tick: [`SEARCHES`], or `BUILD_SEARCHES` for an A/B.
 fn searches() -> usize {
     static N: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
-    *N.get_or_init(|| std::env::var("BUILD_SEARCHES").ok().and_then(|v| v.parse().ok()).unwrap_or(SEARCHES))
+    *N.get_or_init(|| {
+        std::env::var("BUILD_SEARCHES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(SEARCHES)
+    })
 }
 
 /// Walled in on all four sides with no stand: only a stand in the unbuilt cell above, or above that looking
 /// straight down, could click it, and both wait on it (live snowy house: a dirt mound's pit rested 83 times, the
 /// cells over it held back, the build stalled). Given up for good, so the layers above go on.
 fn pit(cx: &Ctx, pos: BlockPos) -> bool {
-    [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]].iter().all(|d| cx.look.solid([pos[0] + d[0], pos[1], pos[2] + d[2]]) == Some(true))
+    [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]
+        .iter()
+        .all(|d| cx.look.solid([pos[0] + d[0], pos[1], pos[2] + d[2]]) == Some(true))
 }
 
 /// `ready`: placements that can be done once in reach, best rank first; `committed`: the task the pilot drives
 /// to, kept while it is still ready (a new goal restarts the pilot).
-pub(super) fn walk(b: &mut Builder, cx: &Ctx, ready: &[(usize, String)], committed: Option<BlockPos>) -> Option<Next> {
+pub(super) fn walk(
+    b: &mut Builder,
+    cx: &Ctx,
+    ready: &[(usize, String)],
+    committed: Option<BlockPos>,
+) -> Option<Next> {
     let mut candidates: Vec<(BlockPos, Stand)> = Vec::new();
     for (k, (i, _)) in ready.iter().take(searches()).enumerate() {
         let (pos, target) = (b.cells[*i].pos, b.cells[*i].target.clone());
-        let keep = Keep { feet: &|f| no_stand(b, cx.look, f), pillar: &|c| unbuilt(b, cx.look, c) };
-        let found = stands(pos, cx.pos, cx.look, &keep, &|e| sight_stats::at("stand search", || click_for(pos, &target, e, cx.look, STAND_SLACK).is_some()), STANDS);
+        let keep = Keep {
+            feet: &|f| no_stand(b, cx.look, f),
+            pillar: &|c| unbuilt(b, cx.look, c),
+        };
+        let found = stands(
+            pos,
+            cx.pos,
+            cx.look,
+            &keep,
+            &|e| {
+                sight_stats::at("stand search", || {
+                    click_for(pos, &target, e, cx.look, STAND_SLACK).is_some()
+                })
+            },
+            STANDS,
+        );
         if found.is_empty() {
             if pit(cx, pos) {
                 b.give_up(pos);
@@ -54,16 +80,30 @@ pub(super) fn walk(b: &mut Builder, cx: &Ctx, ready: &[(usize, String)], committ
         candidates.extend(found.into_iter().map(|s| (pos, s)));
     }
     let cells = super::ahead::cells(b, cx.look, ready);
-    let reached = |s: &Stand| -> Vec<BlockPos> { sight_stats::at("stand reach", || super::ahead::reaches(&cells, s.eye(), cx.look, STAND_SLACK)) };
+    let reached = |s: &Stand| -> Vec<BlockPos> {
+        sight_stats::at("stand reach", || {
+            super::ahead::reaches(&cells, s.eye(), cx.look, STAND_SLACK)
+        })
+    };
     let travel = |s: &Stand| {
-        let d = [s.feet[0] as f32 + 0.5 - cx.pos[0], s.feet[1] as f32 - cx.pos[1], s.feet[2] as f32 + 0.5 - cx.pos[2]];
+        let d = [
+            s.feet[0] as f32 + 0.5 - cx.pos[0],
+            s.feet[1] as f32 - cx.pos[1],
+            s.feet[2] as f32 + 0.5 - cx.pos[2],
+        ];
         d[0].hypot(d[2]) + d[1].abs() * 2.0 + s.pillar as f32 * PILLAR + b.away_cost(s.feet)
     };
     let mut scored: Vec<(f32, f32, BlockPos, BlockPos, Vec<BlockPos>)> = candidates
         .iter()
         .map(|(task, s)| {
             let cells = reached(s);
-            (cells.len() as f32 / (1.0 + travel(s) / WALK), travel(s), *task, s.feet, cells)
+            (
+                cells.len() as f32 / (1.0 + travel(s) / WALK),
+                travel(s),
+                *task,
+                s.feet,
+                cells,
+            )
         })
         .collect();
     scored.sort_by(|x, y| y.0.total_cmp(&x.0).then(x.1.total_cmp(&y.1)));
@@ -72,7 +112,31 @@ pub(super) fn walk(b: &mut Builder, cx: &Ctx, ready: &[(usize, String)], committ
     // not reach cost 601 ticks a try, again after each avoid ran out).
     let task = scored.first()?.2;
     b.batch = scored[0].4.clone();
-    sight_stats::at("walk", || sight_stats::count(|| format!("{} y{} batch {}", ready.iter().find(|(i, _)| b.cells[*i].pos == task).map_or("?", |(_, n)| n.as_str()), task[1], b.batch.len().min(6))));
-    let goals: Vec<Goal> = scored.iter().take(STANDS).map(|x| Goal::Block(x.3)).collect();
-    Some(Next::Go(Phase::Building, task, if goals.len() == 1 { goals[0].clone() } else { Goal::Or(goals) }))
+    sight_stats::at("walk", || {
+        sight_stats::count(|| {
+            format!(
+                "{} y{} batch {}",
+                ready
+                    .iter()
+                    .find(|(i, _)| b.cells[*i].pos == task)
+                    .map_or("?", |(_, n)| n.as_str()),
+                task[1],
+                b.batch.len().min(6)
+            )
+        })
+    });
+    let goals: Vec<Goal> = scored
+        .iter()
+        .take(STANDS)
+        .map(|x| Goal::Block(x.3))
+        .collect();
+    Some(Next::Go(
+        Phase::Building,
+        task,
+        if goals.len() == 1 {
+            goals[0].clone()
+        } else {
+            Goal::Or(goals)
+        },
+    ))
 }

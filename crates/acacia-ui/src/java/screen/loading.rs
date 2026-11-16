@@ -19,10 +19,23 @@ pub enum Reason {
 }
 
 /// `ChunkStatus`es in `COLORS`' order; `None` in a cell is a chunk with no status yet.
-pub const STATUSES: [&str; 10] =
-    ["empty", "structure_starts", "structure_references", "biomes", "terrain", "features", "initialize_light", "light", "spawn", "full"];
+pub const STATUSES: [&str; 10] = [
+    "empty",
+    "structure_starts",
+    "structure_references",
+    "biomes",
+    "terrain",
+    "features",
+    "initialize_light",
+    "light",
+    "spawn",
+    "full",
+];
 
-const COLORS: [u32; 10] = [5_526_612, 10_066_329, 6_250_897, 8_434_258, 3_159_410, 2_213_376, 13_421_772, 16_769_184, 15_884_384, 16_777_215];
+const COLORS: [u32; 10] = [
+    5_526_612, 10_066_329, 6_250_897, 8_434_258, 3_159_410, 2_213_376, 13_421_772, 16_769_184,
+    15_884_384, 16_777_215,
+];
 
 /// `ChunkLoadStatusView`: `radius` and the statuses of the `2 * radius + 1` square, x major.
 #[derive(Clone, Debug, PartialEq)]
@@ -60,7 +73,12 @@ pub struct LevelLoadingScreen {
 
 impl LevelLoadingScreen {
     pub fn new(env: Env, reason: Reason, load: Load) -> LevelLoadingScreen {
-        LevelLoadingScreen { env, reason, load, smoothed: 0.0 }
+        LevelLoadingScreen {
+            env,
+            reason,
+            load,
+            smoothed: 0.0,
+        }
     }
 
     /// `tick` (closing once the level is ready is the owner's).
@@ -70,20 +88,35 @@ impl LevelLoadingScreen {
 }
 
 /// `extractChunksForRendering(graphics, xCenter, yCenter, size, margin, view)`.
-pub fn chunks(ctx: &mut Ctx, x_center: i32, y_center: i32, size: i32, margin: i32, view: &ChunkView, visualize: bool) {
+pub fn chunks(
+    ctx: &mut Ctx,
+    x_center: i32,
+    y_center: i32,
+    size: i32,
+    margin: i32,
+    view: &ChunkView,
+    visualize: bool,
+) {
     let width = size + margin;
     let diameter = view.radius * 2 + 1;
     let total = diameter * width - margin;
     let (x0, y0) = (x_center - total / 2, y_center - total / 2);
     if visualize {
         let c = width / 2 + 1;
-        ctx.gui.fill(x_center - c, y_center - c, x_center + c, y_center + c, 0xFFFF_0000);
+        ctx.gui.fill(
+            x_center - c,
+            y_center - c,
+            x_center + c,
+            y_center + c,
+            0xFFFF_0000,
+        );
     }
     for x in 0..diameter {
         for z in 0..diameter {
             let color = view.get(x, z).map_or(0, |s| COLORS[s]);
             let (cx, cy) = (x0 + x * width, y0 + z * width);
-            ctx.gui.fill(cx, cy, cx + size, cy + size, color | 0xFF00_0000);
+            ctx.gui
+                .fill(cx, cy, cx + size, cy + size, color | 0xFF00_0000);
         }
     }
 }
@@ -93,9 +126,19 @@ impl Screen for LevelLoadingScreen {
         let (w, h) = (self.env.width, self.env.height);
         match self.reason {
             Reason::NetherPortal => {
-                ctx.gui.draws.push(GuiDraw::AtlasSprite { sprite: "block/nether_portal".into(), x: 0, y: 0, w, h, color: 0xFFFF_FFFF });
+                ctx.gui.draws.push(GuiDraw::AtlasSprite {
+                    sprite: "block/nether_portal".into(),
+                    x: 0,
+                    y: 0,
+                    w,
+                    h,
+                    color: 0xFFFF_FFFF,
+                });
             }
-            Reason::EndPortal => ctx.gui.draws.push(GuiDraw::Picture(Picture::EndPortal { rect: [0, 0, w, h] })),
+            Reason::EndPortal => ctx
+                .gui
+                .draws
+                .push(GuiDraw::Picture(Picture::EndPortal { rect: [0, 0, w, h] })),
             Reason::Other => {
                 panorama(&self.env, ctx);
                 blurred(&self.env, ctx);
@@ -113,11 +156,22 @@ impl Screen for LevelLoadingScreen {
             }
             None => yc - 50,
         };
-        ctx.centered_text(ctx.tr("multiplayer.downloadingTerrain"), xc, top, 0xFFFF_FFFF);
+        ctx.centered_text(
+            ctx.tr("multiplayer.downloadingTerrain"),
+            xc,
+            top,
+            0xFFFF_FFFF,
+        );
         if self.load.has_progress {
             let (left, y) = (xc - 100, top + 9 + 3);
             ctx.gui.fill(left, y, left + 200, y + 2, 0xFF00_0000);
-            ctx.gui.fill(left, y, left + (self.smoothed * 200.0).round() as i32, y + 2, 0xFF00_FF00);
+            ctx.gui.fill(
+                left,
+                y,
+                left + (self.smoothed * 200.0).round() as i32,
+                y + 2,
+                0xFF00_FF00,
+            );
         }
     }
 
@@ -138,7 +192,10 @@ impl GenericMessageScreen {
         let mut box_ = FocusableTextWidget::new(ctx.font, title, 12, max, true, Fill::Always);
         box_.base.x = env.width / 2 - box_.base.w / 2;
         box_.base.y = env.height / 2 - 9 / 2;
-        GenericMessageScreen { env, widgets: vec![Box::new(box_)] }
+        GenericMessageScreen {
+            env,
+            widgets: vec![Box::new(box_)],
+        }
     }
 }
 

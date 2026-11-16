@@ -1,8 +1,11 @@
 //! The player's inventory as the server last described it, in `InventoryMenu` slot order.
 
-use acacia_java_proto::ids::play::clientbound as from;
-use acacia_java_proto::inventory::{ContainerSetContent, ContainerSetSlot, PLAYER_CONTAINER, SetCursorItem, SetHeldSlot, SetPlayerInventory};
 use acacia_java_proto::container::{ContainerClose, ContainerSetData, OpenScreen};
+use acacia_java_proto::ids::play::clientbound as from;
+use acacia_java_proto::inventory::{
+    ContainerSetContent, ContainerSetSlot, PLAYER_CONTAINER, SetCursorItem, SetHeldSlot,
+    SetPlayerInventory,
+};
 use acacia_java_proto::item::ItemStack;
 use acacia_java_proto::merchant::MerchantOffers;
 use acacia_java_proto::{Error as WireError, Wire};
@@ -37,7 +40,16 @@ pub struct Inventory {
 
 impl Default for Inventory {
     fn default() -> Self {
-        Self { slots: std::array::from_fn(|_| None), selected: 0, cursor: None, state_id: 0, window: None, enchantments: std::sync::Arc::from([]), predicted: Vec::new(), resent: 0 }
+        Self {
+            slots: std::array::from_fn(|_| None),
+            selected: 0,
+            cursor: None,
+            state_id: 0,
+            window: None,
+            enchantments: std::sync::Arc::from([]),
+            predicted: Vec::new(),
+            resent: 0,
+        }
     }
 }
 
@@ -59,7 +71,11 @@ impl Inventory {
 
     /// Hotbar slot `i`, 0-8.
     pub fn hotbar(&self, i: usize) -> Option<&ItemStack> {
-        if i < HOTBAR_SIZE { self.slot(HOTBAR_START + i) } else { None }
+        if i < HOTBAR_SIZE {
+            self.slot(HOTBAR_START + i)
+        } else {
+            None
+        }
     }
 
     /// The main-hand stack.
@@ -103,7 +119,10 @@ impl Inventory {
                     self.set_window_slot(packet);
                 } else {
                     if let Ok(slot) = usize::try_from(packet.slot) {
-                        self.resent += u32::from(self.predicted.contains(&slot) && self.slots.get(slot) == Some(&packet.item));
+                        self.resent += u32::from(
+                            self.predicted.contains(&slot)
+                                && self.slots.get(slot) == Some(&packet.item),
+                        );
                         self.set_slot(slot, packet.item);
                     }
                     self.state_id = packet.state_id.0;
@@ -118,7 +137,7 @@ impl Inventory {
             from::OPEN_SCREEN => self.open(&OpenScreen::read(&mut body)?),
             from::CONTAINER_SET_DATA => self.set_window_data(ContainerSetData::read(&mut body)?),
             from::MERCHANT_OFFERS => self.set_offers(MerchantOffers::read(&mut body)?),
-            from::CONTAINER_CLOSE =>self.close(ContainerClose::read(&mut body)?.container.0),
+            from::CONTAINER_CLOSE => self.close(ContainerClose::read(&mut body)?.container.0),
             from::SET_CURSOR_ITEM => self.cursor = SetCursorItem::read(&mut body)?.item,
             from::SET_HELD_SLOT => {
                 let slot = SetHeldSlot::read(&mut body)?.slot.0;

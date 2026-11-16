@@ -16,7 +16,9 @@ use crate::script::Script;
 /// Serves `script` to every client that connects to `socket`, until the task is dropped.
 pub async fn serve(socket: UdpSocket, script: Script) {
     let port = socket.local_addr().map_or(0, |a| a.port());
-    let motd = format!("MCPE;load server;{PROTOCOL_VERSION};{GAME_VERSION};0;1000;1;load;Survival;1;{port};{port};0;");
+    let motd = format!(
+        "MCPE;load server;{PROTOCOL_VERSION};{GAME_VERSION};0;1000;1;load;Survival;1;{port};{port};0;"
+    );
     let mut server = Server::new(ServerConfig::new(1, motd), Instant::now());
     let mut peers: HashMap<SocketAddr, Peer> = HashMap::new();
     let mut buf = vec![0u8; 2048];
@@ -52,7 +54,12 @@ pub async fn serve(socket: UdpSocket, script: Script) {
         while let Some((to, datagram)) = server.poll_transmit(now) {
             let _ = socket.send_to(&datagram, to).await;
         }
-        let deadline = server.poll_timeout().into_iter().chain(due).min().unwrap_or(now + Duration::from_millis(100));
+        let deadline = server
+            .poll_timeout()
+            .into_iter()
+            .chain(due)
+            .min()
+            .unwrap_or(now + Duration::from_millis(100));
         tokio::select! {
             r = socket.recv_from(&mut buf) => {
                 if let Ok((n, from)) = r {

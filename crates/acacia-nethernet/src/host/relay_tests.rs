@@ -45,15 +45,33 @@ impl FakeTurn {
         match (msg.class, msg.method) {
             (Class::Indication, Method::Send) => {
                 let peer = msg.xor_peer().unwrap();
-                assert!(self.permits.contains(&peer.ip()), "send to {peer} without a permission");
+                assert!(
+                    self.permits.contains(&peer.ip()),
+                    "send to {peer} without a permission"
+                );
                 return (None, Some((peer, msg.into_data().unwrap())));
             }
-            (_, Method::Allocate) => reply = reply.with(Attr::XorRelayedAddress(addr(RELAY))).with(Attr::XorMappedAddress(addr(MAPPED))).with(Attr::Lifetime(600)),
+            (_, Method::Allocate) => {
+                reply = reply
+                    .with(Attr::XorRelayedAddress(addr(RELAY)))
+                    .with(Attr::XorMappedAddress(addr(MAPPED)))
+                    .with(Attr::Lifetime(600))
+            }
             (_, Method::CreatePermission) => {
                 self.permits.insert(msg.xor_peer().unwrap().ip());
             }
             (_, Method::ChannelBind) => {
-                let channel = msg.attrs.iter().find_map(|a| if let Attr::ChannelNumber(n) = a { Some(*n) } else { None }).unwrap();
+                let channel = msg
+                    .attrs
+                    .iter()
+                    .find_map(|a| {
+                        if let Attr::ChannelNumber(n) = a {
+                            Some(*n)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap();
                 self.channels.insert(channel, msg.xor_peer().unwrap());
             }
             _ => {}
@@ -93,8 +111,13 @@ impl Net {
                 moved = true;
                 if to == addr(STUN) {
                     let request = Message::decode(&data).unwrap();
-                    let answer = Message::new(Class::Success, Method::Binding, request.transaction_id).with(Attr::XorMappedAddress(addr(MAPPED)));
-                    assert!(self.host.handle_datagram(self.now, to, &answer.encode(None, true)));
+                    let answer =
+                        Message::new(Class::Success, Method::Binding, request.transaction_id)
+                            .with(Attr::XorMappedAddress(addr(MAPPED)));
+                    assert!(
+                        self.host
+                            .handle_datagram(self.now, to, &answer.encode(None, true))
+                    );
                 } else if to == addr(TURN) {
                     let (reply, onward) = self.turn.owner_sent(&data);
                     if let Some(reply) = reply {
@@ -108,11 +131,15 @@ impl Net {
             }
             while let Some(t) = self.client.as_mut().and_then(Connection::poll_transmit) {
                 moved = true;
-                if let Some(wrapped) = (t.destination == addr(RELAY)).then(|| self.turn.peer_sent(addr(CLIENT), &t.contents)).flatten() {
+                if let Some(wrapped) = (t.destination == addr(RELAY))
+                    .then(|| self.turn.peer_sent(addr(CLIENT), &t.contents))
+                    .flatten()
+                {
                     assert!(self.host.handle_datagram(self.now, addr(TURN), &wrapped));
                 }
             }
-            self.events.extend(std::iter::from_fn(|| self.host.poll_event()));
+            self.events
+                .extend(std::iter::from_fn(|| self.host.poll_event()));
             if !moved {
                 return;
             }
@@ -126,9 +153,21 @@ impl Net {
             if done(self) {
                 return;
             }
-            assert!(self.now < end, "not done after 40 s; host events: {:?}", self.events);
-            let timers = self.client.as_ref().and_then(Connection::poll_timeout).into_iter().chain(self.host.poll_timeout());
-            self.now = timers.min().unwrap_or(self.now).max(self.now + Duration::from_millis(1));
+            assert!(
+                self.now < end,
+                "not done after 40 s; host events: {:?}",
+                self.events
+            );
+            let timers = self
+                .client
+                .as_ref()
+                .and_then(Connection::poll_timeout)
+                .into_iter()
+                .chain(self.host.poll_timeout());
+            self.now = timers
+                .min()
+                .unwrap_or(self.now)
+                .max(self.now + Duration::from_millis(1));
             if let Some(client) = self.client.as_mut() {
                 client.handle_timeout(self.now);
             }
@@ -139,29 +178,70 @@ impl Net {
 
 #[test]
 fn a_client_joins_through_the_hosts_relay() {
-    std::thread::Builder::new().stack_size(32 << 20).spawn(join_through_relay).unwrap().join().unwrap();
+    std::thread::Builder::new()
+        .stack_size(32 << 20)
+        .spawn(join_through_relay)
+        .unwrap()
+        .join()
+        .unwrap();
 }
 
 fn join_through_relay() {
-    let ice = IceConfig { stun: vec![addr(STUN)], turn: vec![TurnServer { addr: addr(TURN), username: "u".into(), password: "p".into() }] };
-    let host = Host::new(SigningKey::from_slice(&[9; 48]).unwrap(), HostConfig { ice, ..HostConfig::default() });
-    let mut net = Net { host, turn: FakeTurn::default(), client: None, events: Vec::new(), now: Instant::now() };
+    let ice = IceConfig {
+        stun: vec![addr(STUN)],
+        turn: vec![TurnServer {
+            addr: addr(TURN),
+            username: "u".into(),
+            password: "p".into(),
+        }],
+    };
+    let host = Host::new(
+        SigningKey::from_slice(&[9; 48]).unwrap(),
+        HostConfig {
+            ice,
+            ..HostConfig::default()
+        },
+    );
+    let mut net = Net {
+        host,
+        turn: FakeTurn::default(),
+        client: None,
+        events: Vec::new(),
+        now: Instant::now(),
+    };
     assert!(net.host.gathered(addr(HOST)).is_empty());
     net.host.gather(net.now);
     net.trade();
-    assert_eq!(net.host.gathered(addr(HOST)).len(), 2, "one srflx (STUN and TURN agree) and one relay");
+    assert_eq!(
+        net.host.gathered(addr(HOST)).len(),
+        2,
+        "one srflx (STUN and TURN agree) and one relay"
+    );
 
     let identity = Identity::self_signed(SigningKey::from_slice(&[5; 48]).unwrap());
     let (mut client, offer) = Connection::offer(addr(CLIENT), &identity, net.now).unwrap();
     let answer = net.host.answer(&offer, addr(HOST), net.now).unwrap();
-    assert!(answer.sdp.contains(" 203.0.113.1 19132 typ srflx raddr 10.0.0.2 rport 19132 "), "{}", answer.sdp);
-    assert!(answer.sdp.contains(" 192.0.2.10 49152 typ relay raddr 203.0.113.1 rport 19132 "), "{}", answer.sdp);
+    assert!(
+        answer
+            .sdp
+            .contains(" 203.0.113.1 19132 typ srflx raddr 10.0.0.2 rport 19132 "),
+        "{}",
+        answer.sdp
+    );
+    assert!(
+        answer
+            .sdp
+            .contains(" 192.0.2.10 49152 typ relay raddr 203.0.113.1 rport 19132 "),
+        "{}",
+        answer.sdp
+    );
     client.accept_answer(&answer.sdp, net.now).unwrap();
     net.client = Some(client);
     net.run_until(|n| n.events.contains(&HostEvent::Open(answer.peer)));
     assert_eq!(net.host.remote_addr(answer.peer), Some(addr(CLIENT)));
 
-    net.host.send(answer.peer, Bytes::from_static(b"relayed"), net.now);
+    net.host
+        .send(answer.peer, Bytes::from_static(b"relayed"), net.now);
     let mut got = None;
     net.run_until(|n| {
         got = got.take().or_else(|| n.client.as_mut()?.poll_message());

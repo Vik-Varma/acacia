@@ -26,15 +26,25 @@ pub struct Baked {
 }
 
 /// `assets` is the jar's `assets/minecraft`; `java_dir` holds the downloads.
-pub fn bake(exporter: &Exporter, java_dir: &Path, assets: &Path, out: &Path) -> Result<Baked, Error> {
+pub fn bake(
+    exporter: &Exporter,
+    java_dir: &Path,
+    assets: &Path,
+    out: &Path,
+) -> Result<Baked, Error> {
     let models = exporter.output("ItemModelExporter")?;
     let json: Value = serde_json::from_slice(&std::fs::read(&models)?)?;
-    let images: BTreeSet<&str> = json["meshes"].as_array().into_iter().flatten()
+    let images: BTreeSet<&str> = json["meshes"]
+        .as_array()
+        .into_iter()
+        .flatten()
         .flat_map(|mesh| mesh["quads"].as_array().into_iter().flatten())
         .filter_map(|quad| quad["image"].as_str())
         .collect();
     for image in &images {
-        let path = image.strip_prefix("minecraft:").ok_or_else(|| format!("image outside minecraft: {image}"))?;
+        let path = image
+            .strip_prefix("minecraft:")
+            .ok_or_else(|| format!("image outside minecraft: {image}"))?;
         for file in [path.to_owned(), format!("{path}.mcmeta")] {
             let (from, to) = (assets.join(&file), out.join("java").join(&file));
             if from.is_file() {
@@ -47,9 +57,17 @@ pub fn bake(exporter: &Exporter, java_dir: &Path, assets: &Path, out: &Path) -> 
     std::fs::create_dir_all(to.parent().expect("a file in a directory"))?;
     std::fs::copy(&models, to)?;
     let url = format!("https://raw.githubusercontent.com/RaphiMC/ViaBedrock/{COMMIT}/{FILE}");
-    let names = names(&serde_json::from_slice(&pinned(&java_dir.join("item_mappings.json"), SHA1, || get(&url))?)?);
+    let names = names(&serde_json::from_slice(&pinned(
+        &java_dir.join("item_mappings.json"),
+        SHA1,
+        || get(&url),
+    )?)?);
     std::fs::write(out.join(NAMES), serde_json::to_vec(&names)?)?;
-    Ok(Baked { items: json["items"].as_object().map_or(0, |i| i.len()), images: images.len(), names: names.len() })
+    Ok(Baked {
+        items: json["items"].as_object().map_or(0, |i| i.len()),
+        images: images.len(),
+        names: names.len(),
+    })
 }
 
 /// By Bedrock item, the Java item per aux (`""` for any). Items keyed by block state map to one
@@ -63,7 +81,11 @@ fn names(table: &Value) -> BTreeMap<String, BTreeMap<String, String>> {
                 by_aux.insert(aux.clone(), id.to_owned());
             }
         }
-        if let Some(id) = entry["block"].as_object().and_then(|b| b.values().next()).and_then(|java| java["java_id"].as_str()) {
+        if let Some(id) = entry["block"]
+            .as_object()
+            .and_then(|b| b.values().next())
+            .and_then(|java| java["java_id"].as_str())
+        {
             by_aux.insert(String::new(), id.to_owned());
         }
         if !by_aux.is_empty() {

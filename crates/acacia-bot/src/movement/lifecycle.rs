@@ -3,8 +3,8 @@
 
 use acacia_physics::{PlayerState, Vec3};
 
-use super::rewind::History;
 use super::Movement;
+use super::rewind::History;
 
 impl Movement {
     /// Starts simulating from the spawn position (feet).

@@ -33,7 +33,11 @@ impl JumpBar {
             (self.ticks, self.scale) = (0, 0.0);
         } else if was_jumping {
             self.ticks += 1;
-            self.scale = if self.ticks < 10 { self.ticks as f32 * 0.1 } else { 0.8 + 2.0 / (self.ticks - 9) as f32 * 0.1 };
+            self.scale = if self.ticks < 10 {
+                self.ticks as f32 * 0.1
+            } else {
+                0.8 + 2.0 / (self.ticks - 9) as f32 * 0.1
+            };
         }
         None
     }
@@ -49,7 +53,11 @@ pub(crate) fn apply_synced(mount: &mut Mount, synced: Synced) {
     }
     if let Some(dashing) = synced.dashing {
         if dashing && mount.dash_cooldown == 0 {
-            mount.dash_cooldown = if mount.kind == MountKind::Camel { 55 } else { 40 };
+            mount.dash_cooldown = if mount.kind == MountKind::Camel {
+                55
+            } else {
+                40
+            };
         }
         mount.dashing = dashing;
     }
@@ -68,10 +76,21 @@ pub(crate) fn apply_attributes(mount: &mut Mount, data: &MountData) {
 fn new_mount(e: &Entity, game_time: i64) -> Option<Mount> {
     let (width, height, _) = e.dimensions()?;
     let seat = ENTITY_SHAPES.get(usize::try_from(e.kind).ok()?)?.seat;
-    let mut mount = Mount::new(short_name(e.kind), (width, height), seat, e.position, e.y_rot)?;
+    let mut mount = Mount::new(
+        short_name(e.kind),
+        (width, height),
+        seat,
+        e.position,
+        e.y_rot,
+    )?;
     (mount.body.pitch, mount.body.delta, mount.game_time) = (e.x_rot, e.motion, game_time);
     apply_attributes(&mut mount, &e.mount);
-    let synced = Synced { standing: Some(e.mount.standing), dashing: None, last_pose_change: Some(e.mount.last_pose_change), boost: e.mount.boost };
+    let synced = Synced {
+        standing: Some(e.mount.standing),
+        dashing: None,
+        last_pose_change: Some(e.mount.last_pose_change),
+        boost: e.mount.boost,
+    };
     apply_synced(&mut mount, synced);
     mount.dashing = e.mount.dashing;
     Some(mount)
@@ -80,7 +99,9 @@ fn new_mount(e: &Entity, game_time: i64) -> Option<Mount> {
 impl Client {
     fn holding(&self, item: Item) -> bool {
         let held = [self.inventory.held(), self.inventory.offhand()];
-        held.into_iter().flatten().any(|s| u16::try_from(s.item).ok().and_then(Item::from_java_id) == Some(item))
+        held.into_iter()
+            .flatten()
+            .any(|s| u16::try_from(s.item).ok().and_then(Item::from_java_id) == Some(item))
     }
 
     /// Whether the player in the driver's seat controls `e`, so the client simulates it.
@@ -95,14 +116,22 @@ impl Client {
 
     /// The mount the player drives now: kept while control lasts, built when it starts, dropped when it ends.
     pub(crate) fn controlled_mount(&self, vehicle: i32, kept: Option<Mount>) -> Option<Mount> {
-        let e = self.world.entities.get(&vehicle).filter(|e| self.controls(e))?;
+        let e = self
+            .world
+            .entities
+            .get(&vehicle)
+            .filter(|e| self.controls(e))?;
         kept.or_else(|| new_mount(e, self.world.game_time))
     }
 
     /// The rider's `aiStep` part for a mount: the jump bar, returning the charge to send on release.
     pub(crate) fn charge_jump(&mut self, was_jumping: bool, jumping: bool) -> Option<i32> {
         let riding = self.movement.riding.as_mut()?;
-        let mount = riding.driven.as_mut().and_then(|d| d.mount_mut()).filter(|m| m.can_jump() && m.jump_cooldown() == 0);
+        let mount = riding
+            .driven
+            .as_mut()
+            .and_then(|d| d.mount_mut())
+            .filter(|m| m.can_jump() && m.jump_cooldown() == 0);
         let Some(mount) = mount else {
             riding.jump_bar.scale = 0.0;
             return None;
@@ -116,7 +145,10 @@ impl Client {
     // TODO: only the first seat; a second rider (camel, boat) sits elsewhere, and minecarts' seat moves on rails.
     pub(crate) fn passenger_feet(&self, vehicle: i32) -> Option<[f64; 3]> {
         let e = self.world.entities.get(&vehicle)?;
-        let seat = ENTITY_SHAPES.get(usize::try_from(e.kind).ok()?)?.seat.map(f64::from);
+        let seat = ENTITY_SHAPES
+            .get(usize::try_from(e.kind).ok()?)?
+            .seat
+            .map(f64::from);
         Some(seat_feet(e.position, seat, e.y_rot))
     }
 }

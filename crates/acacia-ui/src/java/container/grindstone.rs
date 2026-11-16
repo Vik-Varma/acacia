@@ -12,7 +12,9 @@ pub struct Grindstone {
 impl Grindstone {
     pub fn new(width: i32, height: i32, title: Text, inventory: Text) -> Grindstone {
         let slots = item_combiner::slots(&[(49, 19), (49, 40), (129, 34)], (8, 84));
-        Grindstone { base: Base::new(width, height, [176, 166], title, inventory, slots) }
+        Grindstone {
+            base: Base::new(width, height, [176, 166], title, inventory, slots),
+        }
     }
 }
 

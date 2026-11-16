@@ -57,9 +57,13 @@ impl Foil {
         let name = item.strip_prefix("minecraft:").unwrap_or(item);
         matches!(
             (name, self),
-            ("enchanted_golden_apple" | "nether_star" | "enchanted_book" | "experience_bottle", _)
-                | ("potion" | "splash_potion" | "lingering_potion", Foil::Bedrock)
-                | ("written_book" | "end_crystal" | "debug_stick", Foil::Java)
+            (
+                "enchanted_golden_apple" | "nether_star" | "enchanted_book" | "experience_bottle",
+                _
+            ) | (
+                "potion" | "splash_potion" | "lingering_potion",
+                Foil::Bedrock
+            ) | ("written_book" | "end_crystal" | "debug_stick", Foil::Java)
         )
     }
 }
@@ -72,7 +76,10 @@ pub fn scroll(millis: u64) -> [f32; 2] {
 
 fn scroll_at(millis: u64, speed: f64) -> [f32; 2] {
     let ticks = (millis as f64 * speed) as u64;
-    [-((ticks % 110_000) as f32 / 110_000.0), (ticks % 30_000) as f32 / 30_000.0]
+    [
+        -((ticks % 110_000) as f32 / 110_000.0),
+        (ticks % 30_000) as f32 / 30_000.0,
+    ]
 }
 
 /// Java's `TextureTransform.setupGlintTexturing(scale)` at `millis` with the `glintSpeed`
@@ -80,8 +87,12 @@ fn scroll_at(millis: u64, speed: f64) -> [f32; 2] {
 pub fn texturing(millis: u64, speed: f64, scale: f32) -> glam::Mat4 {
     let [u, v] = scroll_at(millis, speed * 8.0);
     let (sin, cos) = crate::entity::java::mth::joml_sin_cos(TURN);
-    let turn = glam::Mat4::from_cols_array(&[cos, sin, 0.0, 0.0, -sin, cos, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]);
-    glam::Mat4::from_translation(glam::Vec3::new(u, v, 0.0)) * turn * glam::Mat4::from_scale(glam::Vec3::splat(scale))
+    let turn = glam::Mat4::from_cols_array(&[
+        cos, sin, 0.0, 0.0, -sin, cos, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+    ]);
+    glam::Mat4::from_translation(glam::Vec3::new(u, v, 0.0))
+        * turn
+        * glam::Mat4::from_scale(glam::Vec3::splat(scale))
 }
 
 /// Where a vertex samples the glint texture: scaled, turned, then slid. `gpu/entity.wgsl` and
@@ -102,9 +113,25 @@ impl Images {
     /// Java's `enchanted_glint_item` and `enchanted_glint_armor` where the look's files have
     /// them, else Bedrock's `enchanted_item_glint` and `enchanted_actor_glint`.
     pub fn load(files: &Path) -> Option<Images> {
-        let open = |name: &str| Some(image::open(image_file(files, &format!("textures/misc/{name}"))?).ok()?.into_rgba8());
-        let pair = |item: &str, armor: &str| Some(Images { item: open(item)?, armor: open(armor)? });
-        let bedrock = || pair("enchanted_item_glint", "enchanted_actor_glint").map(|i| Images { item: tinted(i.item), armor: tinted(i.armor) });
+        let open = |name: &str| {
+            Some(
+                image::open(image_file(files, &format!("textures/misc/{name}"))?)
+                    .ok()?
+                    .into_rgba8(),
+            )
+        };
+        let pair = |item: &str, armor: &str| {
+            Some(Images {
+                item: open(item)?,
+                armor: open(armor)?,
+            })
+        };
+        let bedrock = || {
+            pair("enchanted_item_glint", "enchanted_actor_glint").map(|i| Images {
+                item: tinted(i.item),
+                armor: tinted(i.armor),
+            })
+        };
         pair("enchanted_glint_item", "enchanted_glint_armor").or_else(bedrock)
     }
 }
@@ -141,7 +168,11 @@ mod tests {
     fn uvs_are_scaled_turned_then_slid() {
         // new Matrix4f().translation(-0.25, 0.5, 0).rotateZ(π/18).scale(8) applied to (1, 0).
         let [u, v] = uv([1.0, 0.0], [8.0, 8.0], [-0.25, 0.5]);
-        assert!((u - (8.0 * TURN.cos() - 0.25)).abs() < 1e-6 && (v - (8.0 * TURN.sin() + 0.5)).abs() < 1e-6, "{u} {v}");
+        assert!(
+            (u - (8.0 * TURN.cos() - 0.25)).abs() < 1e-6
+                && (v - (8.0 * TURN.sin() + 0.5)).abs() < 1e-6,
+            "{u} {v}"
+        );
         // A 16-texel sprite spans a sixteenth of the glint texture; armour 0.16 of it.
         assert_eq!(Glint::Item.scale([16, 16]), [0.0625, 0.0625]);
         assert_eq!(Glint::Item.scale([16, 32]), [0.0625, 0.125]);
@@ -156,11 +187,28 @@ mod tests {
 
     #[test]
     fn each_game_has_its_own_items_that_always_shimmer() {
-        for both in ["minecraft:enchanted_golden_apple", "minecraft:nether_star", "minecraft:enchanted_book", "experience_bottle"] {
-            assert!(Foil::Bedrock.always(both) && Foil::Java.always(both), "{both}");
+        for both in [
+            "minecraft:enchanted_golden_apple",
+            "minecraft:nether_star",
+            "minecraft:enchanted_book",
+            "experience_bottle",
+        ] {
+            assert!(
+                Foil::Bedrock.always(both) && Foil::Java.always(both),
+                "{both}"
+            );
         }
-        assert!(Foil::Bedrock.always("minecraft:splash_potion") && !Foil::Java.always("minecraft:splash_potion"));
-        assert!(Foil::Java.always("minecraft:written_book") && !Foil::Bedrock.always("minecraft:written_book"));
-        assert!(!Foil::Bedrock.always("minecraft:golden_apple") && !Foil::Java.always("minecraft:diamond_sword"));
+        assert!(
+            Foil::Bedrock.always("minecraft:splash_potion")
+                && !Foil::Java.always("minecraft:splash_potion")
+        );
+        assert!(
+            Foil::Java.always("minecraft:written_book")
+                && !Foil::Bedrock.always("minecraft:written_book")
+        );
+        assert!(
+            !Foil::Bedrock.always("minecraft:golden_apple")
+                && !Foil::Java.always("minecraft:diamond_sword")
+        );
     }
 }

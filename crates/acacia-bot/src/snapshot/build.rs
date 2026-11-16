@@ -8,8 +8,16 @@ impl Bot {
     /// A full snapshot built now, whether or not snapshots are published (see [`crate::snapshot`]).
     pub fn snapshot(&self) -> BotSnapshot {
         let tick = self.snapshots.as_ref().map_or(0, |p| p.tick);
-        let entities = Arc::new(super::slots::ListBuilder::default().build(&self.state.entities, 0, &Default::default()).0);
-        BotSnapshot { hot: self.hot_snapshot(tick), cold: Arc::new(build_cold(&self.state, 0)), entities }
+        let entities = Arc::new(
+            super::slots::ListBuilder::default()
+                .build(&self.state.entities, 0, &Default::default())
+                .0,
+        );
+        BotSnapshot {
+            hot: self.hot_snapshot(tick),
+            cold: Arc::new(build_cold(&self.state, 0)),
+            entities,
+        }
     }
 
     pub(super) fn hot_snapshot(&self, tick: u64) -> Hot {
@@ -17,7 +25,8 @@ impl Bot {
         // A simulating bot's body is its simulation's (the server's position only moves on corrections).
         let m = self.backend.motion();
         let simulated = m.as_ref().map(|m| (m.position, m.yaw, m.pitch));
-        let (position, yaw, pitch) = simulated.unwrap_or(([p.position.x, p.position.y, p.position.z], p.yaw, p.pitch));
+        let (position, yaw, pitch) =
+            simulated.unwrap_or(([p.position.x, p.position.y, p.position.z], p.yaw, p.pitch));
         Hot {
             tick,
             position,
@@ -59,13 +68,39 @@ fn stack(window: i32, slot: usize, s: &ItemStack) -> Stack {
 
 pub(super) fn build_cold(state: &GameState, version: u64) -> Cold {
     let inv = &state.inventory;
-    let inventory = inv.iter().filter(|(w, _, s)| *w != Inventory::WINDOW_UI && !s.is_empty()).map(|(w, i, s)| stack(w, i, s)).collect();
-    let cursor = Some(inv.cursor()).filter(|s| !s.is_empty()).map(|s| stack(Inventory::WINDOW_UI, 0, s));
-    let effects = state.player.effects.iter().map(|e| EffectSummary { id: e.id, amplifier: e.amplifier, duration: e.duration }).collect();
+    let inventory = inv
+        .iter()
+        .filter(|(w, _, s)| *w != Inventory::WINDOW_UI && !s.is_empty())
+        .map(|(w, i, s)| stack(w, i, s))
+        .collect();
+    let cursor = Some(inv.cursor())
+        .filter(|s| !s.is_empty())
+        .map(|s| stack(Inventory::WINDOW_UI, 0, s));
+    let effects = state
+        .player
+        .effects
+        .iter()
+        .map(|e| EffectSummary {
+            id: e.id,
+            amplifier: e.amplifier,
+            duration: e.duration,
+        })
+        .collect();
     let players = state
         .player_list
         .iter()
-        .map(|p| Player { uuid: p.uuid, username: p.username.clone(), xuid: p.xuid.clone(), entity_unique_id: p.entity_unique_id })
+        .map(|p| Player {
+            uuid: p.uuid,
+            username: p.username.clone(),
+            xuid: p.xuid.clone(),
+            entity_unique_id: p.entity_unique_id,
+        })
         .collect();
-    Cold { version, inventory, cursor, effects, players }
+    Cold {
+        version,
+        inventory,
+        cursor,
+        effects,
+        players,
+    }
 }

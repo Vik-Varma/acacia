@@ -30,17 +30,33 @@ impl Mount {
     pub(crate) fn of(state: &GameState) -> Option<Mount> {
         let vehicle = state.riding.vehicle.as_ref()?;
         let pose = vehicle_pose(state, vehicle)?;
-        let velocity = vehicle.runtime_id.and_then(|id| state.entities.get(id)).map(|e| [e.velocity.x, e.velocity.z]);
-        let o = state.riding.seat_offset.as_ref().map_or([0.0; 3], |o| [o.x, o.y, o.z]);
+        let velocity = vehicle
+            .runtime_id
+            .and_then(|id| state.entities.get(id))
+            .map(|e| [e.velocity.x, e.velocity.z]);
+        let o = state
+            .riding
+            .seat_offset
+            .as_ref()
+            .map_or([0.0; 3], |o| [o.x, o.y, o.z]);
         let p = &pose.position;
-        Some(Mount { vehicle: [p.x, p.y, p.z], yaw: pose.yaw, motion: velocity.unwrap_or([0.0; 2]), seat_offset: o })
+        Some(Mount {
+            vehicle: [p.x, p.y, p.z],
+            yaw: pose.yaw,
+            motion: velocity.unwrap_or([0.0; 2]),
+            seat_offset: o,
+        })
     }
 
     /// The seat in world space: the offset turned by the vehicle's yaw.
     pub(crate) fn seat(&self) -> Vec3 {
         let (v, o) = (self.vehicle, self.seat_offset);
         let (sin, cos) = (-self.yaw.to_radians()).sin_cos();
-        [v[0] + o[2] * sin + o[0] * cos, v[1] + o[1], v[2] + o[2] * cos - o[0] * sin]
+        [
+            v[0] + o[2] * sin + o[0] * cos,
+            v[1] + o[1],
+            v[2] + o[2] * cos - o[0] * sin,
+        ]
     }
 
     /// Feet of the passenger after leaving: the first free spot of 24 around the vehicle's block, at
@@ -73,12 +89,25 @@ fn horizontal_offsets([dx, dz]: [f32; 2]) -> [[f32; 2]; 8] {
     let s = [-f[1], f[0]];
     let add = |a: [f32; 2], b: [f32; 2], k: f32| [a[0] + k * b[0], a[1] + k * b[1]];
     let neg = |a: [f32; 2]| [-a[0], -a[1]];
-    [s, neg(s), add(s, f, -1.0), add(neg(s), f, -1.0), add(s, f, 1.0), add(f, s, -1.0), neg(f), f]
+    [
+        s,
+        neg(s),
+        add(s, f, -1.0),
+        add(neg(s), f, -1.0),
+        add(s, f, 1.0),
+        add(f, s, -1.0),
+        neg(f),
+        f,
+    ]
 }
 
 /// The floor height inside the spot's block if a player fits there, standing on it.
 fn free_spot(world: &(impl WorldView + ?Sized), p: Vec3) -> Option<f32> {
-    let cell = [p[0].floor() as i32, p[1].floor() as i32, p[2].floor() as i32];
+    let cell = [
+        p[0].floor() as i32,
+        p[1].floor() as i32,
+        p[2].floor() as i32,
+    ];
     let floor = match top(world, cell) {
         Some(t) if t > 0.0 && t < 1.0 => t,
         Some(_) => return None,
@@ -91,7 +120,14 @@ fn free_spot(world: &(impl WorldView + ?Sized), p: Vec3) -> Option<f32> {
         }
     };
     let half = PLAYER_WIDTH.min(1.0) / 2.0;
-    let body = Aabb::new(p[0] - half, p[1] + floor, p[2] - half, p[0] + half, p[1] + floor + PLAYER_HEIGHT, p[2] + half);
+    let body = Aabb::new(
+        p[0] - half,
+        p[1] + floor,
+        p[2] - half,
+        p[0] + half,
+        p[1] + floor + PLAYER_HEIGHT,
+        p[2] + half,
+    );
     let mut hits = Vec::new();
     world.collisions(&body, &mut hits);
     hits.is_empty().then_some(floor)

@@ -40,9 +40,21 @@ pub fn replay(c: &Value, assets: &Assets, state: &mut Map<String, Value>) -> Vec
     let mut deferred = Deferred::default();
     if c["kind"] == "lines" {
         for t in c["tooltips"].as_array().into_iter().flatten() {
-            let lines = t["lines"].as_array().into_iter().flatten().map(|l| Line::Text(Text::from_json(l, &lang))).collect();
+            let lines = t["lines"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|l| Line::Text(Text::from_json(l, &lang)))
+                .collect();
             let style = t["style"].as_str().map(str::to_owned);
-            let tooltip = Tooltip { lines, x: kit::int(t, "x", 0), y: kit::int(t, "y", 0), positioner: positioner(t), style, extra_space: false };
+            let tooltip = Tooltip {
+                lines,
+                x: kit::int(t, "x", 0),
+                y: kit::int(t, "y", 0),
+                positioner: positioner(t),
+                style,
+                extra_space: false,
+            };
             deferred.set(tooltip, kit::bool(t, "replace"));
         }
     } else {
@@ -56,8 +68,15 @@ pub fn replay(c: &Value, assets: &Assets, state: &mut Map<String, Value>) -> Vec
             key: Some(0),
         };
         let stack = kit::item(c, 0).unwrap_or_default();
-        let plain = if stack.is_empty() { Vec::new() } else { tooltip_lines(&stack, &d) };
-        state.insert("lines".to_owned(), plain.iter().map(|l| Value::from(l.plain())).collect());
+        let plain = if stack.is_empty() {
+            Vec::new()
+        } else {
+            tooltip_lines(&stack, &d)
+        };
+        state.insert(
+            "lines".to_owned(),
+            plain.iter().map(|l| Value::from(l.plain())).collect(),
+        );
         if !stack.is_empty() {
             deferred.set(stack_tooltip(&stack, &d, font, kit::mouse(c)), false);
         }

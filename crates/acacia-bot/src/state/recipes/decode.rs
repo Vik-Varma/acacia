@@ -1,7 +1,7 @@
 use acacia_client::proto::packets::CraftingData;
 use acacia_client::proto::types::{
-    ItemLegacy, RecipeIngredient, RecipeIngredientContent as C, RecipeIngredientContentValidContent as V, ShapedRecipe,
-    ShapelessRecipe,
+    ItemLegacy, RecipeIngredient, RecipeIngredientContent as C,
+    RecipeIngredientContentValidContent as V, ShapedRecipe, ShapelessRecipe,
 };
 
 use super::{Ingredient, Recipe, RecipeBook, RecipeKind};
@@ -14,11 +14,18 @@ pub(super) fn add(book: &mut RecipeBook, data: CraftingData) {
     if data.clear_recipes {
         book.clear();
     }
-    let shaped = data.shaped_recipes.into_iter().chain(data.shaped_chemistry_recipes);
+    let shaped = data
+        .shaped_recipes
+        .into_iter()
+        .chain(data.shaped_chemistry_recipes);
     for recipe in shaped {
         book.push(shaped_recipe(recipe));
     }
-    let shapeless = data.shapeless_recipes.into_iter().chain(data.shulker_box_recipes).chain(data.shapeless_chemistry_recipes);
+    let shapeless = data
+        .shapeless_recipes
+        .into_iter()
+        .chain(data.shulker_box_recipes)
+        .chain(data.shapeless_chemistry_recipes);
     for recipe in shapeless {
         book.push(shapeless_recipe(recipe));
     }
@@ -29,7 +36,10 @@ pub(super) fn add(book: &mut RecipeBook, data: CraftingData) {
             kind: RecipeKind::SmithingTransform,
             block: r.tag,
             priority: 0,
-            inputs: [r.template, r.base, r.addition].iter().map(ingredient).collect(),
+            inputs: [r.template, r.base, r.addition]
+                .iter()
+                .map(ingredient)
+                .collect(),
             outputs: vec![ItemStack::from(&r.result)],
         });
     }
@@ -43,7 +53,10 @@ pub(super) fn add(book: &mut RecipeBook, data: CraftingData) {
             kind: RecipeKind::SmithingTrim,
             block: r.block,
             priority: 0,
-            inputs: [r.template, r.input, r.addition].iter().map(ingredient).collect(),
+            inputs: [r.template, r.input, r.addition]
+                .iter()
+                .map(ingredient)
+                .collect(),
             outputs: Vec::new(),
         });
     }
@@ -53,7 +66,10 @@ fn shaped_recipe(r: ShapedRecipe) -> Recipe {
     let dim = |v: i32| u8::try_from(v).unwrap_or(0);
     Recipe {
         network_id: r.network_id,
-        kind: RecipeKind::Shaped { width: dim(r.width), height: dim(r.height) },
+        kind: RecipeKind::Shaped {
+            width: dim(r.width),
+            height: dim(r.height),
+        },
         block: r.block,
         priority: r.priority,
         inputs: r.input.iter().map(ingredient).collect(),
@@ -81,11 +97,24 @@ fn outputs(items: &[ItemLegacy]) -> Vec<ItemStack> {
 fn ingredient(i: &RecipeIngredient) -> Ingredient {
     let count = u16::try_from(i.count).unwrap_or(0);
     let metadata = |m: i32| (m != ANY_METADATA && m != -1).then_some(m);
-    let C::Valid(valid) = &i.content else { return Ingredient::Empty };
+    let C::Valid(valid) = &i.content else {
+        return Ingredient::Empty;
+    };
     match &valid.content {
-        V::Name(n) => Ingredient::Item { name: n.name.clone(), metadata: metadata(n.metadata), count },
-        V::ItemTag(t) => Ingredient::Tag { tag: t.tag.clone(), count },
-        V::Molang(m) => Ingredient::Molang { expression: m.expression.clone(), version: m.version, count },
+        V::Name(n) => Ingredient::Item {
+            name: n.name.clone(),
+            metadata: metadata(n.metadata),
+            count,
+        },
+        V::ItemTag(t) => Ingredient::Tag {
+            tag: t.tag.clone(),
+            count,
+        },
+        V::Molang(m) => Ingredient::Molang {
+            expression: m.expression.clone(),
+            version: m.version,
+            count,
+        },
         V::Empty(_) | V::Default => Ingredient::Empty,
     }
 }

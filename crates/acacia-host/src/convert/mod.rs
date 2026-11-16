@@ -13,13 +13,14 @@ pub(crate) use snapshot::{cold, entities, hot, snapshot};
 pub(crate) use world::{block, find_blocks, item_table};
 
 use acacia_api::{
-    ApiError, AutoEatPolicy, Control, EquipDestination, ErrorCode, EventGroup, Face, FoodPreference, FormAnswer, FormValue, Goal,
+    ApiError, AutoEatPolicy, Control, EquipDestination, ErrorCode, EventGroup, Face,
+    FoodPreference, FormAnswer, FormValue, Goal,
 };
 use acacia_bot::forms::{FormReply, FormValue as BotFormValue};
 use acacia_bot::interact::Face as BotFace;
 use acacia_bot::movement::Key;
-use acacia_bot::survival::{AutoEat, Destination, FoodChoice};
 use acacia_bot::pathfind::Goal as BotGoal;
+use acacia_bot::survival::{AutoEat, Destination, FoodChoice};
 use acacia_bot::{ActionError, ConnectError, Events};
 
 pub(crate) fn face(face: Face) -> BotFace {
@@ -115,8 +116,13 @@ pub(crate) fn form_reply(answer: FormAnswer) -> FormReply {
     match answer {
         FormAnswer::Button { index } => FormReply::Button(index as usize),
         FormAnswer::Modal { yes } => FormReply::Modal(yes),
-        FormAnswer::Custom { values } => FormReply::Custom(values.into_iter().map(form_value).collect()),
-        FormAnswer::Dialog { button, values } => FormReply::Dialog { button: button as usize, values: values.into_iter().map(form_value).collect() },
+        FormAnswer::Custom { values } => {
+            FormReply::Custom(values.into_iter().map(form_value).collect())
+        }
+        FormAnswer::Dialog { button, values } => FormReply::Dialog {
+            button: button as usize,
+            values: values.into_iter().map(form_value).collect(),
+        },
         FormAnswer::Close => FormReply::Close,
     }
 }
@@ -136,5 +142,9 @@ pub(crate) fn auto_eat(p: &AutoEatPolicy) -> AutoEat {
         FoodPreference::Saturation => FoodChoice::Saturation,
         FoodPreference::NoWaste => FoodChoice::NoWaste,
     });
-    AutoEat { below: p.below.unwrap_or(default.below), prefer, from_inventory: p.from_inventory.unwrap_or(default.from_inventory) }
+    AutoEat {
+        below: p.below.unwrap_or(default.below),
+        prefer,
+        from_inventory: p.from_inventory.unwrap_or(default.from_inventory),
+    }
 }

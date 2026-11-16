@@ -41,7 +41,17 @@ fn template() -> Vec<u8> {
 
 /// A `MobEffectInstance` with one hidden effect behind it.
 fn mob_effect() -> Vec<u8> {
-    cat(&[&v(2), &v(1), &v(200), &[0, 1, 1], &[1], &v(0), &v(100), &[0, 0, 0], &[0]])
+    cat(&[
+        &v(2),
+        &v(1),
+        &v(200),
+        &[0, 1, 1],
+        &[1],
+        &v(0),
+        &v(100),
+        &[0, 0, 0],
+        &[0],
+    ])
 }
 
 fn texts(n: usize) -> Vec<u8> {
@@ -49,10 +59,29 @@ fn texts(n: usize) -> Vec<u8> {
 }
 
 fn block_predicate() -> Vec<u8> {
-    let properties = cat(&[&[2], &s("facing"), &[1], &s("north"), &s("age"), &[0], &[1], &s("1"), &[0]]);
+    let properties = cat(&[
+        &[2],
+        &s("facing"),
+        &[1],
+        &s("north"),
+        &s("age"),
+        &[0],
+        &[1],
+        &s("1"),
+        &[0],
+    ]);
     let exact = cat(&[&[1], &v(DAMAGE), &v(4)]);
     let partial = cat(&[&[1], &[1], &v(0), COMPOUND]);
-    cat(&[&[1], HOLDER_SET_IDS, &[1], &properties, &[1], COMPOUND, &exact, &partial])
+    cat(&[
+        &[1],
+        HOLDER_SET_IDS,
+        &[1],
+        &properties,
+        &[1],
+        COMPOUND,
+        &exact,
+        &partial,
+    ])
 }
 
 /// A sample value for every component the server can send, built from the 26.3 stream codecs.
@@ -72,7 +101,8 @@ fn samples() -> Vec<(i32, Vec<u8>)> {
         &v(4),
         SOUND_REF,
     ]);
-    let attribute = |display: &[u8]| cat(&[&v(5), &s("minecraft:base"), F64, &v(0), &v(1), display]);
+    let attribute =
+        |display: &[u8]| cat(&[&v(5), &s("minecraft:base"), F64, &v(0), &v(1), display]);
     let explosion = cat(&[&v(1), &[1], &[0, 0, 0, 1], &[0], &[1, 0]]);
     let mut samples = vec![
         (1, v(64)),
@@ -90,29 +120,87 @@ fn samples() -> Vec<(i32, Vec<u8>)> {
         (13, vec![1, 7, 5]),
         (14, cat(&[&[1], &block_predicate()])),
         (15, vec![0]),
-        (16, cat(&[&[2], &attribute(&cat(&[&v(2), TEXT])), &attribute(&v(0))])),
-        (17, cat(&[&[1], F32, &[2, 1, 0], &[1], &s("x"), &[1], &[0, 0, 0, 7]])),
+        (
+            16,
+            cat(&[&[2], &attribute(&cat(&[&v(2), TEXT])), &attribute(&v(0))]),
+        ),
+        (
+            17,
+            cat(&[&[1], F32, &[2, 1, 0], &[1], &s("x"), &[1], &[0, 0, 0, 7]]),
+        ),
         (18, vec![1, 2, 3, 6]),
         (19, v(2)),
         (20, vec![]),
         (21, vec![1]),
         (23, cat(&[&v(4), F32, &[0]])),
-        (24, cat(&[F32, &v(1), &sound_direct(), &[1], &consume_effects])),
+        (
+            24,
+            cat(&[F32, &v(1), &sound_direct(), &[1], &consume_effects]),
+        ),
         (25, template()),
         (26, cat(&[F32, &[1], &s("a:b")])),
         (27, holder_set_tag()),
-        (28, cat(&[&[1], HOLDER_SET_IDS, &[1], F32, &[1, 1], F32, &v(1), &[1]])),
+        (
+            28,
+            cat(&[&[1], HOLDER_SET_IDS, &[1], F32, &[1, 1], F32, &v(1), &[1]]),
+        ),
         (29, cat(&[&v(1), F32])),
         (30, F32.repeat(6)),
         (31, v(15)),
-        (32, cat(&[&v(4), SOUND_REF, &[1], &s("minecraft:diamond"), &[0], &[1], HOLDER_SET_IDS, &[1, 1, 1, 0, 0], &sound_direct()])),
+        (
+            32,
+            cat(&[
+                &v(4),
+                SOUND_REF,
+                &[1],
+                &s("minecraft:diamond"),
+                &[0],
+                &[1],
+                HOLDER_SET_IDS,
+                &[1, 1, 1, 0, 0],
+                &sound_direct(),
+            ]),
+        ),
         (33, HOLDER_SET_IDS.to_vec()),
         (34, vec![]),
         (35, s("a:b")),
         (36, cat(&[&[1], &v(2)])),
-        (37, cat(&[F32, F32, &[1], F32, &[1], &holder_set_tag(), F32, F32, &F32.repeat(3), &[0], &[1], SOUND_REF, &[0]])),
+        (
+            37,
+            cat(&[
+                F32,
+                F32,
+                &[1],
+                F32,
+                &[1],
+                &holder_set_tag(),
+                F32,
+                F32,
+                &F32.repeat(3),
+                &[0],
+                &[1],
+                SOUND_REF,
+                &[0],
+            ]),
+        ),
         (38, cat(&[&[1, 0], &[1], SOUND_REF, &[0]])),
-        (39, cat(&[&v(10), &v(5), &[1], &v(1), F32, F32, &[0, 0], F32, F32, &[0], &[1], &sound_direct()])),
+        (
+            39,
+            cat(&[
+                &v(10),
+                &v(5),
+                &[1],
+                &v(1),
+                F32,
+                F32,
+                &[0, 0],
+                F32,
+                F32,
+                &[0],
+                &[1],
+                &sound_direct(),
+            ]),
+        ),
         (40, cat(&[&v(1), &v(6)])),
         (41, cat(&[&v(2), &v(6)])),
         (42, v(3)),
@@ -125,12 +213,30 @@ fn samples() -> Vec<(i32, Vec<u8>)> {
         (50, v(1)),
         (51, cat(&[&[1], &template()])),
         (52, cat(&[&[2], &template(), &template()])),
-        (53, cat(&[&[1], &v(9), &[1], &[0, 0, 0, 1], &[1], &mob_effect(), &[1], &s("x")])),
+        (
+            53,
+            cat(&[
+                &[1],
+                &v(9),
+                &[1],
+                &[0, 0, 0, 1],
+                &[1],
+                &mob_effect(),
+                &[1],
+                &s("x"),
+            ]),
+        ),
         (54, F32.to_vec()),
         (55, cat(&[&[1], &v(3), &v(160)])),
         (56, cat(&[&[2], &s("p1"), &[0], &s("p2"), &[1], &s("f")])),
-        (57, cat(&[&s("t"), &[0], &s("me"), &v(0), &[1], TEXT, &[1], TEXT, &[1]])),
-        (58, cat(&[&v(0), &s("a:b"), TEXT, &v(0), &s("c:d"), TEXT, &[1]])),
+        (
+            57,
+            cat(&[&s("t"), &[0], &s("me"), &v(0), &[1], TEXT, &[1], TEXT, &[1]]),
+        ),
+        (
+            58,
+            cat(&[&v(0), &s("a:b"), TEXT, &v(0), &s("c:d"), TEXT, &[1]]),
+        ),
         (58, cat(&[&v(3), &v(4)])),
         (60, cat(&[&v(12), COMPOUND])),
         (61, COMPOUND.to_vec()),
@@ -144,10 +250,32 @@ fn samples() -> Vec<(i32, Vec<u8>)> {
         (69, cat(&[&[1], &s("minecraft:overworld"), &[0; 8], &[1]])),
         (70, explosion.clone()),
         (71, cat(&[&v(2), &[1], &explosion])),
-        (72, cat(&[&[1], &[0; 16], &s("Notch"), &[1], &s("textures"), &s("v"), &[1], &s("sig"), &[1], &s("a:b"), &[0, 0], &[1, 1]])),
-        (72, cat(&[&[0], &[1], &s("Notch"), &[0], &[0], &[0, 0, 0], &[0]])),
+        (
+            72,
+            cat(&[
+                &[1],
+                &[0; 16],
+                &s("Notch"),
+                &[1],
+                &s("textures"),
+                &s("v"),
+                &[1],
+                &s("sig"),
+                &[1],
+                &s("a:b"),
+                &[0, 0],
+                &[1, 1],
+            ]),
+        ),
+        (
+            72,
+            cat(&[&[0], &[1], &s("Notch"), &[0], &[0], &[0, 0, 0], &[0]]),
+        ),
         (73, s("a:b")),
-        (74, cat(&[&[2], &v(0), &s("a:b"), &s("k"), &v(3), &v(7), &v(1)])),
+        (
+            74,
+            cat(&[&[2], &v(0), &s("a:b"), &s("k"), &v(3), &v(7), &v(1)]),
+        ),
         (75, v(1)),
         (76, cat(&[&[1], &template(), &[0, 0, 1], &template()])),
         (77, cat(&[&[3, 1], &template(), &[0, 1], &template()])),
@@ -165,7 +293,12 @@ fn samples() -> Vec<(i32, Vec<u8>)> {
         (119, cat(&[&texts(4), &[0], &v(15), &[0]])),
         (120, vec![]),
     ];
-    samples.extend((88..=108).chain(110..=117).chain([121]).map(|id| (id, v(1))));
+    samples.extend(
+        (88..=108)
+            .chain(110..=117)
+            .chain([121])
+            .map(|id| (id, v(1))),
+    );
     samples
 }
 
@@ -180,18 +313,28 @@ fn every_synced_component_skips_exactly_its_bytes() {
     for (id, value) in samples() {
         let bytes = cat(&[&stack_with(id, &value), &[TRAILER]]);
         let mut input = &bytes[..];
-        assert!(<Option<ItemStack>>::read(&mut input).is_ok(), "component {id}");
+        assert!(
+            <Option<ItemStack>>::read(&mut input).is_ok(),
+            "component {id}"
+        );
         assert_eq!(input, [TRAILER], "component {id} left bytes");
         // Same path on every prefix, so each one must run out.
         for cut in 0..bytes.len() - 1 {
-            assert!(<Option<ItemStack>>::read(&mut &bytes[..cut]).is_err(), "component {id} cut at {cut}");
+            assert!(
+                <Option<ItemStack>>::read(&mut &bytes[..cut]).is_err(),
+                "component {id} cut at {cut}"
+            );
         }
     }
 }
 
 #[test]
 fn samples_cover_every_component_type() {
-    let mut ids: Vec<i32> = samples().into_iter().map(|(id, _)| id).chain(NOT_SYNCED).collect();
+    let mut ids: Vec<i32> = samples()
+        .into_iter()
+        .map(|(id, _)| id)
+        .chain(NOT_SYNCED)
+        .collect();
     ids.sort_unstable();
     ids.dedup();
     assert_eq!(ids, (0..components::COUNT).collect::<Vec<_>>());
@@ -201,12 +344,18 @@ fn samples_cover_every_component_type() {
 fn unsynced_and_unknown_components_are_refused() {
     for id in NOT_SYNCED {
         let err = <Option<ItemStack>>::read(&mut &stack_with(id, &[])[..]).unwrap_err();
-        assert!(matches!(err, Error::Invalid(name) if name.starts_with("synced component")), "{id}: {err}");
+        assert!(
+            matches!(err, Error::Invalid(name) if name.starts_with("synced component")),
+            "{id}: {err}"
+        );
     }
     let unknown = <Option<ItemStack>>::read(&mut &stack_with(components::COUNT, &[])[..]);
     assert_eq!(unknown, Err(Error::Invalid("data component type")));
     let removed_unknown = cat(&[&[1, 1, 0, 1], &v(components::COUNT)]);
-    assert_eq!(<Option<ItemStack>>::read(&mut &removed_unknown[..]), Err(Error::Invalid("data component type")));
+    assert_eq!(
+        <Option<ItemStack>>::read(&mut &removed_unknown[..]),
+        Err(Error::Invalid("data component type"))
+    );
 }
 
 #[test]
@@ -223,7 +372,10 @@ fn damaged_named_efficiency_pickaxe_is_byte_exact() {
     assert_eq!((stack.item, stack.count), (DIAMOND_PICKAXE, 1));
     assert_eq!(stack.components.damage, Some(100));
     assert_eq!(stack.components.enchantments, [(8, 5)]);
-    assert_eq!(stack.components.custom_name_text().as_deref(), Some("Miner"));
+    assert_eq!(
+        stack.components.custom_name_text().as_deref(),
+        Some("Miner")
+    );
 
     let mut out = Vec::new();
     Some(stack).write(&mut out);
@@ -276,5 +428,8 @@ fn hostile_nesting_is_cut_off() {
         value.extend(cat(&[&[1], &v(1153), &v(1), &[1, 0], &v(52)]));
     }
     let bytes = cat(&[&[1], &v(1153), &[1, 0], &v(52), &value]);
-    assert_eq!(<Option<ItemStack>>::read(&mut &bytes[..]), Err(Error::TooDeep(MAX_DEPTH)));
+    assert_eq!(
+        <Option<ItemStack>>::read(&mut &bytes[..]),
+        Err(Error::TooDeep(MAX_DEPTH))
+    );
 }

@@ -52,13 +52,24 @@ impl Storage {
             return Err(Error::BitsPerBlock(bits));
         }
         let raw = r.bytes(word_count(bits) * 4)?;
-        let words = raw.as_chunks::<4>().0.iter().map(|w| u32::from_le_bytes(*w)).collect();
+        let words = raw
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|w| u32::from_le_bytes(*w))
+            .collect();
         let len = r.var_i32()?;
         if len <= 0 || len as usize > VOLUME {
             return Err(Error::PaletteLength(len));
         }
-        let palette = (0..len).map(|_| r.var_i32().map(|v| v as u32)).collect::<Result<_, _>>()?;
-        Ok(Storage::Packed { bits, palette, words })
+        let palette = (0..len)
+            .map(|_| r.var_i32().map(|v| v as u32))
+            .collect::<Result<_, _>>()?;
+        Ok(Storage::Packed {
+            bits,
+            palette,
+            words,
+        })
     }
 
     /// Advances past a storage whose header byte was already read, without decoding it.
@@ -103,19 +114,30 @@ impl Storage {
         if let [id] = palette[..] {
             return Storage::Single(id);
         }
-        let bits = *VALID_BITS.iter().find(|&&b| palette.len() <= 1 << b).expect("16 bits holds 4096");
+        let bits = *VALID_BITS
+            .iter()
+            .find(|&&b| palette.len() <= 1 << b)
+            .expect("16 bits holds 4096");
         let mut words = vec![0; word_count(bits)].into_boxed_slice();
         let per = per_word(bits);
         for (i, p) in indices.enumerate() {
             words[i / per] |= (p as u32) << ((i % per) * bits as usize);
         }
-        Storage::Packed { bits, palette, words }
+        Storage::Packed {
+            bits,
+            palette,
+            words,
+        }
     }
 
     pub(crate) fn get(&self, idx: usize) -> u32 {
         match self {
             Storage::Single(id) => *id,
-            Storage::Packed { bits, palette, words } => {
+            Storage::Packed {
+                bits,
+                palette,
+                words,
+            } => {
                 let p = packed_get(words, *bits, idx);
                 // A malformed index falls back to the first entry instead of panicking.
                 palette.get(p).copied().unwrap_or(palette[0])
@@ -128,14 +150,28 @@ impl Storage {
             if cur == id {
                 return;
             }
-            *self = Storage::Packed { bits: 1, palette: vec![cur], words: vec![0; word_count(1)].into() };
+            *self = Storage::Packed {
+                bits: 1,
+                palette: vec![cur],
+                words: vec![0; word_count(1)].into(),
+            };
         }
-        let Storage::Packed { bits, palette, words } = self else { unreachable!() };
+        let Storage::Packed {
+            bits,
+            palette,
+            words,
+        } = self
+        else {
+            unreachable!()
+        };
         let p = match palette.iter().position(|&v| v == id) {
             Some(p) => p,
             None => {
                 if palette.len() >= 1 << *bits {
-                    let grown = *VALID_BITS.iter().find(|&&b| b > *bits).expect("16 bits holds 4096");
+                    let grown = *VALID_BITS
+                        .iter()
+                        .find(|&&b| b > *bits)
+                        .expect("16 bits holds 4096");
                     *words = repack(words, *bits, grown);
                     *bits = grown;
                 }
@@ -156,7 +192,11 @@ impl Storage {
     pub(crate) fn copy_into(&self, out: &mut [u32; VOLUME]) {
         match self {
             Storage::Single(id) => out.fill(*id),
-            Storage::Packed { bits, palette, words } => {
+            Storage::Packed {
+                bits,
+                palette,
+                words,
+            } => {
                 let (per, mask) = (per_word(*bits), (1u32 << bits) - 1);
                 for (chunk, &w) in out.chunks_mut(per).zip(words.iter()) {
                     for (i, v) in chunk.iter_mut().enumerate() {
@@ -216,13 +256,19 @@ mod tests {
         for i in 0..VOLUME {
             s.set(i, (i % 40) as u32 + 100);
         }
-        let Storage::Packed { bits, .. } = &s else { panic!() };
+        let Storage::Packed { bits, .. } = &s else {
+            panic!()
+        };
         assert_eq!(*bits, 6);
         for i in 0..VOLUME {
             assert_eq!(s.get(i), (i % 40) as u32 + 100);
         }
         let mut out = [0; VOLUME];
         s.copy_into(&mut out);
-        assert!(out.iter().enumerate().all(|(i, &v)| v == (i % 40) as u32 + 100));
+        assert!(
+            out.iter()
+                .enumerate()
+                .all(|(i, &v)| v == (i % 40) as u32 + 100)
+        );
     }
 }

@@ -15,7 +15,10 @@ impl Walk {
     /// One tick on, having moved `blocks` over the ground.
     pub fn step(self, blocks: f32) -> Walk {
         let speed = self.speed + ((blocks * 4.0).min(1.0) - self.speed) * 0.4;
-        Walk { distance: self.distance + speed, speed }
+        Walk {
+            distance: self.distance + speed,
+            speed,
+        }
     }
 }
 
@@ -30,7 +33,13 @@ pub(super) struct Motion {
 
 impl Motion {
     pub fn of(e: &Tracked, walk: Walk) -> Motion {
-        Motion { position: e.instance.position, yaw: e.instance.yaw, head_yaw: e.head_yaw, pitch: e.pitch, walk }
+        Motion {
+            position: e.instance.position,
+            yaw: e.instance.yaw,
+            head_yaw: e.head_yaw,
+            pitch: e.pitch,
+            walk,
+        }
     }
 
     pub fn towards(self, to: Motion, t: f32) -> Motion {
@@ -41,7 +50,10 @@ impl Motion {
             yaw: angle(self.yaw, to.yaw),
             head_yaw: angle(self.head_yaw, to.head_yaw),
             pitch: angle(self.pitch, to.pitch),
-            walk: Walk { distance: mix(self.walk.distance, to.walk.distance), speed: mix(self.walk.speed, to.walk.speed) },
+            walk: Walk {
+                distance: mix(self.walk.distance, to.walk.distance),
+                speed: mix(self.walk.speed, to.walk.speed),
+            },
         }
     }
 }

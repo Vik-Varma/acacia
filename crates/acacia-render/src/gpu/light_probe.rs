@@ -23,7 +23,10 @@ impl LightCache {
     }
 
     pub(super) fn reader<'a>(&'a self, data: Option<&'a RwLock<LightData>>) -> LightReader<'a> {
-        LightReader { cache: self, data: data.and_then(RwLock::try_read) }
+        LightReader {
+            cache: self,
+            data: data.and_then(RwLock::try_read),
+        }
     }
 }
 
@@ -53,14 +56,19 @@ mod tests {
     #[test]
     fn a_held_lock_answers_last_frames_light() {
         let lock = RwLock::new(LightData::default());
-        lock.write().light.fill((0, 0, 0), crate::light::data::pack(7, 3));
+        lock.write()
+            .light
+            .fill((0, 0, 0), crate::light::data::pack(7, 3));
         let mut cache = LightCache::default();
         let p = DVec3::new(1.5, 2.5, 3.5);
         assert_eq!(cache.reader(Some(&lock)).at(p), [7.0, 3.0]);
         cache.next_frame();
         let held = lock.write();
         assert_eq!(cache.reader(Some(&lock)).at(p), [7.0, 3.0]);
-        assert_eq!(cache.reader(Some(&lock)).at(DVec3::new(-5.0, 0.0, 0.0)), [0.0, 15.0]);
+        assert_eq!(
+            cache.reader(Some(&lock)).at(DVec3::new(-5.0, 0.0, 0.0)),
+            [0.0, 15.0]
+        );
         drop(held);
     }
 }

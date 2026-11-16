@@ -81,9 +81,19 @@ pub fn light_now(world: &World, table: &BlockTable) -> LightData {
     data
 }
 
-fn run(world: &World, table: &PropsTable, data: &RwLock<LightData>, changes: &Receiver<ChunkChange>, tx: &Sender<LightEvent>) {
+fn run(
+    world: &World,
+    table: &PropsTable,
+    data: &RwLock<LightData>,
+    changes: &Receiver<ChunkChange>,
+    tx: &Sender<LightEvent>,
+) {
     let lighter = WorldLighter::new(world, table, lit_dimension(world, table));
-    let mut batch: Vec<ChunkChange> = world.chunk_positions().into_iter().map(|(x, z)| ChunkChange::Column { x, z }).collect();
+    let mut batch: Vec<ChunkChange> = world
+        .chunk_positions()
+        .into_iter()
+        .map(|(x, z)| ChunkChange::Column { x, z })
+        .collect();
     let mut last_unload_check = Instant::now();
     loop {
         if batch.is_empty() {
@@ -97,15 +107,24 @@ fn run(world: &World, table: &PropsTable, data: &RwLock<LightData>, changes: &Re
         if last_unload_check.elapsed() >= UNLOAD_CHECK {
             last_unload_check = Instant::now();
             let mut d = data.write();
-            let gone: Vec<_> = d.columns.iter().copied().filter(|&(x, z)| world.get(x, z).is_none()).collect();
-            gone.into_iter().for_each(|(x, z)| lighter.drop_column(&mut d, x, z));
+            let gone: Vec<_> = d
+                .columns
+                .iter()
+                .copied()
+                .filter(|&(x, z)| world.get(x, z).is_none())
+                .collect();
+            gone.into_iter()
+                .for_each(|(x, z)| lighter.drop_column(&mut d, x, z));
         }
         apply(&lighter, data, &batch);
         let mut d = data.write();
         let touched = d.take_touched();
         d.generation += 1;
         drop(d);
-        let events = batch.drain(..).map(LightEvent::World).chain(touched.into_iter().map(LightEvent::Light));
+        let events = batch
+            .drain(..)
+            .map(LightEvent::World)
+            .chain(touched.into_iter().map(LightEvent::Light));
         for e in events {
             if tx.send(e).is_err() {
                 return;

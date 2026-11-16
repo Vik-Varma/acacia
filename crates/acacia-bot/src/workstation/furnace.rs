@@ -3,8 +3,8 @@
 
 use std::time::Duration;
 
-use acacia_client::proto::types::WindowType;
 use acacia_client::proto::RawPacket;
+use acacia_client::proto::types::WindowType;
 use acacia_physics::BlockPos;
 
 use crate::items::SlotRef;
@@ -28,29 +28,69 @@ impl Bot {
     /// Smelts `count` items named `input` at the furnace, blast furnace or smoker at `pos`: puts
     /// them in, adds `fuel` (identifier and count) if given, waits until they are done, takes the
     /// output and closes. Returns how many items were taken out.
-    pub async fn smelt(&mut self, pos: BlockPos, input: &str, count: u8, fuel: Option<(&str, u8)>) -> Result<u16, ActionError> {
-        self.open_station_and_look(pos, &[WindowType::Furnace, WindowType::BlastFurnace, WindowType::Smoker]).await?;
+    pub async fn smelt(
+        &mut self,
+        pos: BlockPos,
+        input: &str,
+        count: u8,
+        fuel: Option<(&str, u8)>,
+    ) -> Result<u16, ActionError> {
+        self.open_station_and_look(
+            pos,
+            &[
+                WindowType::Furnace,
+                WindowType::BlastFurnace,
+                WindowType::Smoker,
+            ],
+        )
+        .await?;
         let result = self.smelt_open(input, count, fuel).await;
         self.close_station().await?;
         result
     }
 
-    async fn smelt_open(&mut self, input: &str, count: u8, fuel: Option<(&str, u8)>) -> Result<u16, ActionError> {
-        let kind = self.state.containers.open.as_ref().map_or(WindowType::Furnace, |c| c.window_type);
-        self.put_matching(|name, _| name == input, u16::from(count), SlotRef::Container(INPUT)).await?;
+    async fn smelt_open(
+        &mut self,
+        input: &str,
+        count: u8,
+        fuel: Option<(&str, u8)>,
+    ) -> Result<u16, ActionError> {
+        let kind = self
+            .state
+            .containers
+            .open
+            .as_ref()
+            .map_or(WindowType::Furnace, |c| c.window_type);
+        self.put_matching(
+            |name, _| name == input,
+            u16::from(count),
+            SlotRef::Container(INPUT),
+        )
+        .await?;
         if let Some((fuel, fuel_count)) = fuel {
-            self.put_matching(|name, _| name == fuel, u16::from(fuel_count), SlotRef::Container(FUEL)).await?;
+            self.put_matching(
+                |name, _| name == fuel,
+                u16::from(fuel_count),
+                SlotRef::Container(FUEL),
+            )
+            .await?;
         }
         let timeout = smelt_time(kind) * u32::from(count) + SMELT_SLACK;
         let done = |bot: &Bot, _: &RawPacket| {
-            let slot = |i| SlotRef::Container(i).stack(&bot.state).map_or(0, |s| s.count);
+            let slot = |i| {
+                SlotRef::Container(i)
+                    .stack(&bot.state)
+                    .map_or(0, |s| s.count)
+            };
             (slot(INPUT) == 0 && slot(OUTPUT) > 0).then_some(())
         };
         match self.wait_until(timeout, done).await {
             Ok(()) | Err(ActionError::Timeout) => {}
             Err(e) => return Err(e),
         }
-        let taken = SlotRef::Container(OUTPUT).stack(&self.state).map_or(0, |s| s.count);
+        let taken = SlotRef::Container(OUTPUT)
+            .stack(&self.state)
+            .map_or(0, |s| s.count);
         if taken == 0 {
             return Err(ActionError::Timeout);
         }

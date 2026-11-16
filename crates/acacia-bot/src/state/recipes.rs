@@ -21,7 +21,10 @@ mod tags;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RecipeKind {
     /// `inputs` holds `width * height` cells row by row; blank cells are [`Ingredient::Empty`].
-    Shaped { width: u8, height: u8 },
+    Shaped {
+        width: u8,
+        height: u8,
+    },
     Shapeless,
     /// `inputs` is `[template, base, addition]`, `outputs` the upgraded item.
     SmithingTransform,
@@ -59,11 +62,25 @@ impl Recipe {
 pub enum Ingredient {
     Empty,
     /// `metadata` `None` takes any aux value.
-    Item { name: String, metadata: Option<i32>, count: u16 },
-    Tag { tag: String, count: u16 },
-    Molang { expression: String, version: i16, count: u16 },
+    Item {
+        name: String,
+        metadata: Option<i32>,
+        count: u16,
+    },
+    Tag {
+        tag: String,
+        count: u16,
+    },
+    Molang {
+        expression: String,
+        version: i16,
+        count: u16,
+    },
     /// Any of these items: Java recipes' tags and item lists.
-    AnyOf { items: Vec<Item>, count: u16 },
+    AnyOf {
+        items: Vec<Item>,
+        count: u16,
+    },
 }
 
 impl Ingredient {
@@ -74,7 +91,10 @@ impl Ingredient {
     pub fn count(&self) -> u16 {
         match self {
             Ingredient::Empty => 0,
-            Ingredient::Item { count, .. } | Ingredient::Tag { count, .. } | Ingredient::Molang { count, .. } | Ingredient::AnyOf { count, .. } => *count,
+            Ingredient::Item { count, .. }
+            | Ingredient::Tag { count, .. }
+            | Ingredient::Molang { count, .. }
+            | Ingredient::AnyOf { count, .. } => *count,
         }
     }
 
@@ -84,11 +104,16 @@ impl Ingredient {
     pub fn accepts(&self, name: &str, metadata: u32) -> bool {
         match self {
             Ingredient::Empty => false,
-            Ingredient::Item { name: want, metadata: meta, .. } => want == name && meta.is_none_or(|m| m as u32 == metadata),
+            Ingredient::Item {
+                name: want,
+                metadata: meta,
+                ..
+            } => want == name && meta.is_none_or(|m| m as u32 == metadata),
             Ingredient::Tag { tag, .. } => tags::has_tag(name, tag),
             Ingredient::Molang { expression, .. } => molang::accepts(expression, name),
             Ingredient::AnyOf { items, .. } => {
-                Item::from_bedrock(name, i16::try_from(metadata).unwrap_or(-1)).is_some_and(|i| items.contains(&i))
+                Item::from_bedrock(name, i16::try_from(metadata).unwrap_or(-1))
+                    .is_some_and(|i| items.contains(&i))
             }
         }
     }
@@ -105,7 +130,9 @@ pub struct RecipeBook {
 
 impl RecipeBook {
     pub fn get(&self, network_id: u32) -> Option<&Recipe> {
-        self.by_network_id.get(&network_id).map(|&i| &self.recipes[i])
+        self.by_network_id
+            .get(&network_id)
+            .map(|&i| &self.recipes[i])
     }
 
     /// Network id of the multi recipe with `uuid` (lowercase, dashed).
@@ -124,7 +151,11 @@ impl RecipeBook {
 
     /// Recipes whose first output is item `network_id`, in the server's order.
     pub fn producing(&self, network_id: i32) -> impl Iterator<Item = &Recipe> {
-        self.recipes.iter().filter(move |r| r.outputs.first().is_some_and(|o| o.network_id == network_id))
+        self.recipes.iter().filter(move |r| {
+            r.outputs
+                .first()
+                .is_some_and(|o| o.network_id == network_id)
+        })
     }
 
     pub fn len(&self) -> usize {
@@ -142,7 +173,8 @@ impl RecipeBook {
     }
 
     fn push(&mut self, recipe: Recipe) {
-        self.by_network_id.insert(recipe.network_id, self.recipes.len());
+        self.by_network_id
+            .insert(recipe.network_id, self.recipes.len());
         self.recipes.push(recipe);
     }
 }
@@ -191,7 +223,10 @@ impl Recipes {
     #[cfg(feature = "java")]
     pub(crate) fn java() -> Self {
         static BOOK: std::sync::LazyLock<RecipeBook> = std::sync::LazyLock::new(java::book);
-        Recipes { shared: Some(&BOOK), ..Recipes::default() }
+        Recipes {
+            shared: Some(&BOOK),
+            ..Recipes::default()
+        }
     }
 }
 

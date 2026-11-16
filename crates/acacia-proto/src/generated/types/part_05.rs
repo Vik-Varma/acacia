@@ -534,14 +534,8 @@ pub struct AttributeDataContentColour {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnvironmentAttributeData {
     pub attribute_name: String,
-    pub from_attribute: Option<AttributeData>,
-    pub attribute: AttributeData,
-    pub to_attribute: Option<AttributeData>,
-    pub current_transition_ticks: u32,
-    pub total_transition_ticks: u32,
-    pub ease_type: i32,
-    pub local_transition_ticks: u32,
-    pub noise_transition: bool,
+    pub payload_type: EnvironmentAttributeDataPayloadType,
+    pub content: EnvironmentAttributeDataContent,
 }
 impl EnvironmentAttributeData {
     pub fn read(r: &mut &[u8]) -> Result<Self> {
@@ -552,44 +546,14 @@ impl EnvironmentAttributeData {
             })
         })()
         .map_err(|e| e.at("EnvironmentAttributeData.attribute_name"))?;
-        let f_from_attribute = (|| -> Result<_> {
-            Ok(if read_bool(r)? {
-                Some(AttributeData::read(r)?)
-            } else {
-                None
-            })
-        })()
-        .map_err(|e| e.at("EnvironmentAttributeData.from_attribute"))?;
-        let f_attribute = (|| -> Result<_> { Ok(AttributeData::read(r)?) })()
-            .map_err(|e| e.at("EnvironmentAttributeData.attribute"))?;
-        let f_to_attribute = (|| -> Result<_> {
-            Ok(if read_bool(r)? {
-                Some(AttributeData::read(r)?)
-            } else {
-                None
-            })
-        })()
-        .map_err(|e| e.at("EnvironmentAttributeData.to_attribute"))?;
-        let f_current_transition_ticks = (|| -> Result<_> { Ok(read_lu32(r)?) })()
-            .map_err(|e| e.at("EnvironmentAttributeData.current_transition_ticks"))?;
-        let f_total_transition_ticks = (|| -> Result<_> { Ok(read_lu32(r)?) })()
-            .map_err(|e| e.at("EnvironmentAttributeData.total_transition_ticks"))?;
-        let f_ease_type = (|| -> Result<_> { Ok(read_li32(r)?) })()
-            .map_err(|e| e.at("EnvironmentAttributeData.ease_type"))?;
-        let f_local_transition_ticks = (|| -> Result<_> { Ok(read_lu32(r)?) })()
-            .map_err(|e| e.at("EnvironmentAttributeData.local_transition_ticks"))?;
-        let f_noise_transition = (|| -> Result<_> { Ok(read_bool(r)?) })()
-            .map_err(|e| e.at("EnvironmentAttributeData.noise_transition"))?;
+        let f_payload_type =
+            (|| -> Result<_> { Ok(EnvironmentAttributeDataPayloadType::read(r)?) })()
+                .map_err(|e| e.at("EnvironmentAttributeData.payload_type"))?;
+        let f_content = (|| -> Result<_> { Ok(if f_payload_type == EnvironmentAttributeDataPayloadType::Constant { EnvironmentAttributeDataContent::Constant({ let f1_attribute = AttributeData::read(r)?; EnvironmentAttributeDataContentConstant { attribute: f1_attribute } }) } else if f_payload_type == EnvironmentAttributeDataPayloadType::Transition { EnvironmentAttributeDataContent::Transition({ let f1_from_attribute = AttributeData::read(r)?; let f1_to_attribute = AttributeData::read(r)?; let f1_total_transition_ticks = read_varint(r)?; let f1_current_transition_ticks = read_varint(r)?; let f1_ease_type = EaseType::read(r)?; let f1_clock_name = { let n = to_len(read_varint(r)?)?; read_utf8(r, n)? }; EnvironmentAttributeDataContentTransition { from_attribute: f1_from_attribute, to_attribute: f1_to_attribute, total_transition_ticks: f1_total_transition_ticks, current_transition_ticks: f1_current_transition_ticks, ease_type: f1_ease_type, clock_name: f1_clock_name } }) } else if f_payload_type == EnvironmentAttributeDataPayloadType::NoiseTransition { EnvironmentAttributeDataContent::NoiseTransition({ let f1_from_attribute = AttributeData::read(r)?; let f1_to_attribute = AttributeData::read(r)?; let f1_total_transition_ticks = read_varint(r)?; let f1_current_transition_ticks = read_varint(r)?; let f1_ease_type = EaseType::read(r)?; let f1_clock_name = { let n = to_len(read_varint(r)?)?; read_utf8(r, n)? }; let f1_local_transition_ticks = read_varint(r)?; let f1_noise_name = { let n = to_len(read_varint(r)?)?; read_utf8(r, n)? }; let f1_noise_alignment = { let f2_type = EnvironmentAttributeDataContentNoiseTransitionNoiseAlignmentType::read(r)?; let f2_value = read_varint(r)?; EnvironmentAttributeDataContentNoiseTransitionNoiseAlignment { r#type: f2_type, value: f2_value } }; EnvironmentAttributeDataContentNoiseTransition { from_attribute: f1_from_attribute, to_attribute: f1_to_attribute, total_transition_ticks: f1_total_transition_ticks, current_transition_ticks: f1_current_transition_ticks, ease_type: f1_ease_type, clock_name: f1_clock_name, local_transition_ticks: f1_local_transition_ticks, noise_name: f1_noise_name, noise_alignment: f1_noise_alignment } }) } else { EnvironmentAttributeDataContent::Default }) })().map_err(|e| e.at("EnvironmentAttributeData.content"))?;
         Ok(Self {
             attribute_name: f_attribute_name,
-            from_attribute: f_from_attribute,
-            attribute: f_attribute,
-            to_attribute: f_to_attribute,
-            current_transition_ticks: f_current_transition_ticks,
-            total_transition_ticks: f_total_transition_ticks,
-            ease_type: f_ease_type,
-            local_transition_ticks: f_local_transition_ticks,
-            noise_transition: f_noise_transition,
+            payload_type: f_payload_type,
+            content: f_content,
         })
     }
     pub fn write(&self, w: &mut BytesMut) {
@@ -598,33 +562,171 @@ impl EnvironmentAttributeData {
             write_varint(w, b.len() as u32);
             write_slice(w, b);
         }
-        match &self.from_attribute {
-            Some(x0) => {
-                write_bool(w, true);
-                x0.write(w);
+        self.payload_type.write(w);
+        match &self.content {
+            EnvironmentAttributeDataContent::Constant(x0) => {
+                let x1 = x0;
+                x1.attribute.write(w);
             }
-            None => write_bool(w, false),
-        }
-        self.attribute.write(w);
-        match &self.to_attribute {
-            Some(x0) => {
-                write_bool(w, true);
-                x0.write(w);
+            EnvironmentAttributeDataContent::Transition(x0) => {
+                let x1 = x0;
+                x1.from_attribute.write(w);
+                x1.to_attribute.write(w);
+                write_varint(w, x1.total_transition_ticks);
+                write_varint(w, x1.current_transition_ticks);
+                x1.ease_type.write(w);
+                {
+                    let b = x1.clock_name.as_bytes();
+                    write_varint(w, b.len() as u32);
+                    write_slice(w, b);
+                }
             }
-            None => write_bool(w, false),
+            EnvironmentAttributeDataContent::NoiseTransition(x0) => {
+                let x1 = x0;
+                x1.from_attribute.write(w);
+                x1.to_attribute.write(w);
+                write_varint(w, x1.total_transition_ticks);
+                write_varint(w, x1.current_transition_ticks);
+                x1.ease_type.write(w);
+                {
+                    let b = x1.clock_name.as_bytes();
+                    write_varint(w, b.len() as u32);
+                    write_slice(w, b);
+                }
+                write_varint(w, x1.local_transition_ticks);
+                {
+                    let b = x1.noise_name.as_bytes();
+                    write_varint(w, b.len() as u32);
+                    write_slice(w, b);
+                }
+                {
+                    let x2 = &x1.noise_alignment;
+                    x2.r#type.write(w);
+                    write_varint(w, x2.value);
+                }
+            }
+            EnvironmentAttributeDataContent::Default => {}
         }
-        write_lu32(w, self.current_transition_ticks);
-        write_lu32(w, self.total_transition_ticks);
-        write_li32(w, self.ease_type);
-        write_lu32(w, self.local_transition_ticks);
-        write_bool(w, self.noise_transition);
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EnvironmentAttributeDataPayloadType {
+    Constant,
+    Transition,
+    NoiseTransition,
+    Unknown(i64),
+}
+impl EnvironmentAttributeDataPayloadType {
+    pub fn from_raw(v: i64) -> Self {
+        match v {
+            0 => Self::Constant,
+            1 => Self::Transition,
+            2 => Self::NoiseTransition,
+            v => Self::Unknown(v),
+        }
+    }
+    pub fn to_raw(self) -> i64 {
+        match self {
+            Self::Constant => 0,
+            Self::Transition => 1,
+            Self::NoiseTransition => 2,
+            Self::Unknown(v) => v,
+        }
+    }
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let v = Self::from_raw(read_varint(r)? as i64);
+        if let Self::Unknown(value) = v {
+            crate::strict::note(crate::strict::Leniency::UnknownEnum {
+                ty: "EnvironmentAttributeDataPayloadType",
+                value,
+            });
+        }
+        Ok(v)
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        write_varint(w, self.to_raw() as u32)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum EnvironmentAttributeDataContent {
+    Constant(EnvironmentAttributeDataContentConstant),
+    Transition(EnvironmentAttributeDataContentTransition),
+    NoiseTransition(EnvironmentAttributeDataContentNoiseTransition),
+    Default,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnvironmentAttributeDataContentConstant {
+    pub attribute: AttributeData,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnvironmentAttributeDataContentTransition {
+    pub from_attribute: AttributeData,
+    pub to_attribute: AttributeData,
+    pub total_transition_ticks: u32,
+    pub current_transition_ticks: u32,
+    pub ease_type: EaseType,
+    pub clock_name: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnvironmentAttributeDataContentNoiseTransition {
+    pub from_attribute: AttributeData,
+    pub to_attribute: AttributeData,
+    pub total_transition_ticks: u32,
+    pub current_transition_ticks: u32,
+    pub ease_type: EaseType,
+    pub clock_name: String,
+    pub local_transition_ticks: u32,
+    pub noise_name: String,
+    pub noise_alignment: EnvironmentAttributeDataContentNoiseTransitionNoiseAlignment,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnvironmentAttributeDataContentNoiseTransitionNoiseAlignment {
+    pub r#type: EnvironmentAttributeDataContentNoiseTransitionNoiseAlignmentType,
+    pub value: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EnvironmentAttributeDataContentNoiseTransitionNoiseAlignmentType {
+    MinLocalTransitionEnd,
+    Unknown(i64),
+}
+impl EnvironmentAttributeDataContentNoiseTransitionNoiseAlignmentType {
+    pub fn from_raw(v: i64) -> Self {
+        match v {
+            0 => Self::MinLocalTransitionEnd,
+            v => Self::Unknown(v),
+        }
+    }
+    pub fn to_raw(self) -> i64 {
+        match self {
+            Self::MinLocalTransitionEnd => 0,
+            Self::Unknown(v) => v,
+        }
+    }
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let v = Self::from_raw(read_u8(r)? as i64);
+        if let Self::Unknown(value) = v {
+            crate::strict::note(crate::strict::Leniency::UnknownEnum {
+                ty: "EnvironmentAttributeDataContentNoiseTransitionNoiseAlignmentType",
+                value,
+            });
+        }
+        Ok(v)
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        write_u8(w, self.to_raw() as u8)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AttributeLayerData {
     pub name: String,
-    pub noise_name: Option<String>,
     pub dimension_id: i32,
     pub settings: AttributeLayerSettings,
     pub environment_attributes: Vec<EnvironmentAttributeData>,
@@ -638,17 +740,6 @@ impl AttributeLayerData {
             })
         })()
         .map_err(|e| e.at("AttributeLayerData.name"))?;
-        let f_noise_name = (|| -> Result<_> {
-            Ok(if read_bool(r)? {
-                Some({
-                    let n = to_len(read_varint(r)?)?;
-                    read_utf8(r, n)?
-                })
-            } else {
-                None
-            })
-        })()
-        .map_err(|e| e.at("AttributeLayerData.noise_name"))?;
         let f_dimension_id = (|| -> Result<_> { Ok(read_zigzag32(r)?) })()
             .map_err(|e| e.at("AttributeLayerData.dimension_id"))?;
         let f_settings = (|| -> Result<_> { Ok(AttributeLayerSettings::read(r)?) })()
@@ -666,7 +757,6 @@ impl AttributeLayerData {
         .map_err(|e| e.at("AttributeLayerData.environment_attributes"))?;
         Ok(Self {
             name: f_name,
-            noise_name: f_noise_name,
             dimension_id: f_dimension_id,
             settings: f_settings,
             environment_attributes: f_environment_attributes,
@@ -677,17 +767,6 @@ impl AttributeLayerData {
             let b = self.name.as_bytes();
             write_varint(w, b.len() as u32);
             write_slice(w, b);
-        }
-        match &self.noise_name {
-            Some(x0) => {
-                write_bool(w, true);
-                {
-                    let b = x0.as_bytes();
-                    write_varint(w, b.len() as u32);
-                    write_slice(w, b);
-                }
-            }
-            None => write_bool(w, false),
         }
         write_zigzag32(w, self.dimension_id);
         self.settings.write(w);
@@ -704,8 +783,8 @@ pub struct EntityDiagnosticTimingInfo {
     pub entity: String,
     pub duration_nanos: u64,
     pub percent_of_total: u8,
-    pub position: Vec3f,
-    pub dimension: String,
+    pub position: Option<Vec3f>,
+    pub dimension: Option<String>,
 }
 impl EntityDiagnosticTimingInfo {
     pub fn read(r: &mut &[u8]) -> Result<Self> {
@@ -727,12 +806,22 @@ impl EntityDiagnosticTimingInfo {
             .map_err(|e| e.at("EntityDiagnosticTimingInfo.duration_nanos"))?;
         let f_percent_of_total = (|| -> Result<_> { Ok(read_u8(r)?) })()
             .map_err(|e| e.at("EntityDiagnosticTimingInfo.percent_of_total"))?;
-        let f_position = (|| -> Result<_> { Ok(Vec3f::read(r)?) })()
-            .map_err(|e| e.at("EntityDiagnosticTimingInfo.position"))?;
+        let f_position = (|| -> Result<_> {
+            Ok(if read_bool(r)? {
+                Some(Vec3f::read(r)?)
+            } else {
+                None
+            })
+        })()
+        .map_err(|e| e.at("EntityDiagnosticTimingInfo.position"))?;
         let f_dimension = (|| -> Result<_> {
-            Ok({
-                let n = to_len(read_varint(r)?)?;
-                read_utf8(r, n)?
+            Ok(if read_bool(r)? {
+                Some({
+                    let n = to_len(read_varint(r)?)?;
+                    read_utf8(r, n)?
+                })
+            } else {
+                None
             })
         })()
         .map_err(|e| e.at("EntityDiagnosticTimingInfo.dimension"))?;
@@ -758,11 +847,23 @@ impl EntityDiagnosticTimingInfo {
         }
         write_lu64(w, self.duration_nanos);
         write_u8(w, self.percent_of_total);
-        self.position.write(w);
-        {
-            let b = self.dimension.as_bytes();
-            write_varint(w, b.len() as u32);
-            write_slice(w, b);
+        match &self.position {
+            Some(x0) => {
+                write_bool(w, true);
+                x0.write(w);
+            }
+            None => write_bool(w, false),
+        }
+        match &self.dimension {
+            Some(x0) => {
+                write_bool(w, true);
+                {
+                    let b = x0.as_bytes();
+                    write_varint(w, b.len() as u32);
+                    write_slice(w, b);
+                }
+            }
+            None => write_bool(w, false),
         }
     }
 }

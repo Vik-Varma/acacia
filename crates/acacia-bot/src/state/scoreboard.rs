@@ -21,7 +21,11 @@ pub enum SortOrder {
 
 impl SortOrder {
     fn from_wire(v: i32) -> Self {
-        if v == 0 { Self::Ascending } else { Self::Descending }
+        if v == 0 {
+            Self::Ascending
+        } else {
+            Self::Descending
+        }
     }
 }
 
@@ -46,12 +50,18 @@ pub struct Objective {
 
 impl Objective {
     fn new(name: &str) -> Self {
-        Self { name: name.to_owned(), ..Self::default() }
+        Self {
+            name: name.to_owned(),
+            ..Self::default()
+        }
     }
 
     /// `(display, score)` in display order: by score per [`SortOrder`], ties by display name.
     pub fn lines(&self) -> Vec<(String, i32)> {
-        self.sorted().into_iter().map(|e| (e.display.clone(), e.score)).collect()
+        self.sorted()
+            .into_iter()
+            .map(|e| (e.display.clone(), e.score))
+            .collect()
     }
 
     /// The entries in display order (see [`Objective::lines`]).
@@ -62,7 +72,9 @@ impl Objective {
                 SortOrder::Ascending => a.score.cmp(&b.score),
                 SortOrder::Descending => b.score.cmp(&a.score),
             };
-            by_score.then_with(|| a.display.cmp(&b.display)).then_with(|| ida.cmp(idb))
+            by_score
+                .then_with(|| a.display.cmp(&b.display))
+                .then_with(|| ida.cmp(idb))
         });
         entries.into_iter().map(|(_, e)| e).collect()
     }
@@ -78,8 +90,12 @@ pub struct Scoreboard {
 }
 
 impl Scoreboard {
-    pub const PACKETS: &'static [u32] =
-        &[SetDisplayObjective::ID, RemoveObjective::ID, SetScore::ID, SetScoreboardIdentity::ID];
+    pub const PACKETS: &'static [u32] = &[
+        SetDisplayObjective::ID,
+        RemoveObjective::ID,
+        SetScore::ID,
+        SetScoreboardIdentity::ID,
+    ];
 
     pub fn objective(&self, name: &str) -> Option<&Objective> {
         self.objectives.get(name)
@@ -90,7 +106,9 @@ impl Scoreboard {
     }
 
     pub fn displayed(&self, slot: &str) -> Option<&Objective> {
-        self.slots.get(slot).and_then(|name| self.objectives.get(name))
+        self.slots
+            .get(slot)
+            .and_then(|name| self.objectives.get(name))
     }
 
     pub fn sidebar(&self) -> Option<&Objective> {
@@ -100,7 +118,12 @@ impl Scoreboard {
     /// Sidebar lines in display order with formatting stripped; empty when no sidebar is shown.
     pub fn sidebar_text(&self) -> Vec<String> {
         self.sidebar()
-            .map(|o| o.lines().into_iter().map(|(line, _)| strip_formatting(&line)).collect())
+            .map(|o| {
+                o.lines()
+                    .into_iter()
+                    .map(|(line, _)| strip_formatting(&line))
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -111,7 +134,9 @@ impl Scoreboard {
     pub fn apply(&mut self, packet: &RawPacket) -> Result<(), DecodeError> {
         match packet.id {
             SetDisplayObjective::ID => self.display(packet.decode()?),
-            RemoveObjective::ID => self.remove_objective(&packet.decode::<RemoveObjective>()?.objective_name),
+            RemoveObjective::ID => {
+                self.remove_objective(&packet.decode::<RemoveObjective>()?.objective_name)
+            }
             SetScore::ID => self.set_scores(packet.decode()?),
             SetScoreboardIdentity::ID => self.set_identities(packet.decode()?),
             _ => {}
@@ -138,7 +163,9 @@ impl Scoreboard {
 
     // Objectives are created lazily so scores sent before SetDisplayObjective aren't lost.
     fn objective_mut(&mut self, name: &str) -> &mut Objective {
-        self.objectives.entry(name.to_owned()).or_insert_with(|| Objective::new(name))
+        self.objectives
+            .entry(name.to_owned())
+            .or_insert_with(|| Objective::new(name))
     }
 
     fn set_scores(&mut self, p: SetScore) {
@@ -149,12 +176,21 @@ impl Scoreboard {
                     self.remove_score(id, r.objective_name.as_deref());
                     continue;
                 }
-                Content::FakePlayer(f) => {
-                    (f.objective_name, ScoreEntry { display: f.custom_name, entity_unique_id: None, score: f.score })
-                }
+                Content::FakePlayer(f) => (
+                    f.objective_name,
+                    ScoreEntry {
+                        display: f.custom_name,
+                        entity_unique_id: None,
+                        score: f.score,
+                    },
+                ),
                 Content::Default(d) => (
                     d.objective_name,
-                    ScoreEntry { display: String::new(), entity_unique_id: Some(d.entity_unique_id), score: d.score },
+                    ScoreEntry {
+                        display: String::new(),
+                        entity_unique_id: Some(d.entity_unique_id),
+                        score: d.score,
+                    },
                 ),
             };
             self.objective_mut(&objective).scores.insert(id, entry);

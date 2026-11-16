@@ -4,6 +4,7 @@
 use std::borrow::Cow;
 
 use super::{Env, Screen, arena_children, render_all, transparent_background};
+use crate::java::gui::Metrics;
 use crate::java::gui::{Blend, GuiDraw, PoseOp};
 use crate::java::text::Text;
 use crate::java::widget::button::Button;
@@ -11,13 +12,25 @@ use crate::java::widget::input::{Child, Key};
 use crate::java::widget::layout::Arena;
 use crate::java::widget::measure::width_str;
 use crate::java::widget::{Ctx, Widget};
-use crate::java::gui::Metrics;
 
 /// `DyeColor`'s names in order, with their text colours.
 pub const DYES: [(&str, u32); 16] = [
-    ("white", 0xFF_FFFF), ("orange", 0xFF_681F), ("magenta", 0xFF_00FF), ("light_blue", 0x9A_C0CD), ("yellow", 0xFF_FF00), ("lime", 0xBF_FF00),
-    ("pink", 0xFF_69B4), ("gray", 0x80_8080), ("light_gray", 0xD3_D3D3), ("cyan", 0x00_FFFF), ("purple", 0xA0_20F0), ("blue", 0x00_00FF),
-    ("brown", 0x8B_4513), ("green", 0x00_FF00), ("red", 0xFF_0000), ("black", 0x00_0000),
+    ("white", 0xFF_FFFF),
+    ("orange", 0xFF_681F),
+    ("magenta", 0xFF_00FF),
+    ("light_blue", 0x9A_C0CD),
+    ("yellow", 0xFF_FF00),
+    ("lime", 0xBF_FF00),
+    ("pink", 0xFF_69B4),
+    ("gray", 0x80_8080),
+    ("light_gray", 0xD3_D3D3),
+    ("cyan", 0x00_FFFF),
+    ("purple", 0xA0_20F0),
+    ("blue", 0x00_00FF),
+    ("brown", 0x8B_4513),
+    ("green", 0x00_FF00),
+    ("red", 0xFF_0000),
+    ("black", 0x00_0000),
 ];
 
 /// `DyeColor.getTextColor` (opaque) by name; black when unknown.
@@ -35,11 +48,7 @@ fn scale_rgb(c: u32, s: f32) -> u32 {
 /// `AbstractSignRenderer.getDarkColor` (whose glowing-black case the screen never reaches).
 pub fn text_color(dye: &str, glowing: bool) -> u32 {
     let c = dye_text_color(dye);
-    if glowing {
-        c
-    } else {
-        scale_rgb(c, 0.4)
-    }
+    if glowing { c } else { scale_rgb(c, 0.4) }
 }
 
 /// The sign block being edited.
@@ -82,7 +91,13 @@ impl SignEdit {
     /// A new screen on `lines`: the cursor at the end of the first.
     pub fn new(lines: [String; 4], now: i64) -> SignEdit {
         let cursor = lines[0].len();
-        SignEdit { lines, line: 0, cursor, selection: cursor, blink_start: now }
+        SignEdit {
+            lines,
+            line: 0,
+            cursor,
+            selection: cursor,
+            blink_start: now,
+        }
     }
 
     fn message(&self) -> &str {
@@ -99,11 +114,18 @@ impl SignEdit {
     fn step(&self, dir: i32) -> usize {
         let s = self.message();
         let at = self.cursor.min(s.len());
-        if dir < 0 { s[..at].char_indices().next_back().map_or(0, |(i, _)| i) } else { s[at..].chars().next().map_or(at, |c| at + c.len_utf8()) }
+        if dir < 0 {
+            s[..at].char_indices().next_back().map_or(0, |(i, _)| i)
+        } else {
+            s[at..].chars().next().map_or(at, |c| at + c.len_utf8())
+        }
     }
 
     fn delete_selection(&mut self) -> String {
-        let (a, b) = (self.cursor.min(self.selection), self.cursor.max(self.selection));
+        let (a, b) = (
+            self.cursor.min(self.selection),
+            self.cursor.max(self.selection),
+        );
         let s = self.message();
         let out = format!("{}{}", &s[..a], &s[b..]);
         self.cursor = a;
@@ -113,7 +135,11 @@ impl SignEdit {
 
     /// `TextFieldHelper.insertText`, kept only when the line still fits the sign.
     pub fn insert(&mut self, m: &dyn Metrics, sign: &Sign, text: &str) {
-        let message = if self.selection != self.cursor { self.delete_selection() } else { self.message().to_owned() };
+        let message = if self.selection != self.cursor {
+            self.delete_selection()
+        } else {
+            self.message().to_owned()
+        };
         let at = self.cursor.min(message.len());
         let new = format!("{}{}{}", &message[..at], text, &message[at..]);
         if width_str(m, &new) <= sign.max_line_width() {
@@ -134,7 +160,11 @@ impl SignEdit {
     pub fn key(&mut self, key: Key, shift: bool) -> bool {
         match key {
             Key::Up | Key::Down | Key::Enter => {
-                self.line = if key == Key::Up { (self.line + 3) & 3 } else { (self.line + 1) & 3 };
+                self.line = if key == Key::Up {
+                    (self.line + 3) & 3
+                } else {
+                    (self.line + 1) & 3
+                };
                 self.cursor_to_end(false);
             }
             Key::A => {
@@ -191,19 +221,49 @@ impl SignEditScreen {
     pub fn new(ctx: &Ctx, env: Env, sign: Sign, edit: SignEdit) -> SignEditScreen {
         let mut done = Button::named(ctx, 200, "gui.done");
         (done.base.x, done.base.y) = (env.width / 2 - 100, env.height / 4 + 144);
-        SignEditScreen { env, sign, edit, widgets: vec![Box::new(done) as Box<dyn Widget>] }
+        SignEditScreen {
+            env,
+            sign,
+            edit,
+            widgets: vec![Box::new(done) as Box<dyn Widget>],
+        }
     }
 
     fn background_texture(&self, ctx: &mut Ctx) {
         let s = &self.sign;
         let (ops, texture, x, y, h, tex) = if s.hanging {
-            (vec![PoseOp::Translate(0.0, -13.0), PoseOp::Scale(4.5, 4.5)], format!("gui/hanging_signs/{}", s.wood), -8, -8, 16, [16, 16])
+            (
+                vec![PoseOp::Translate(0.0, -13.0), PoseOp::Scale(4.5, 4.5)],
+                format!("gui/hanging_signs/{}", s.wood),
+                -8,
+                -8,
+                16,
+                [16, 16],
+            )
         } else {
-            (vec![PoseOp::Translate(0.0, 27.0), PoseOp::Scale(3.9, 3.9)], format!("gui/signs/{}", s.wood), -12, -13, if s.wall { 12 } else { 26 }, [24, 26])
+            (
+                vec![PoseOp::Translate(0.0, 27.0), PoseOp::Scale(3.9, 3.9)],
+                format!("gui/signs/{}", s.wood),
+                -12,
+                -13,
+                if s.wall { 12 } else { 26 },
+                [24, 26],
+            )
         };
         let w = tex[0];
         ctx.push(ops);
-        ctx.gui.draws.push(GuiDraw::Blit { texture: Cow::Owned(texture), blend: Blend::Textured, x, y, w, h, uv: [0.0, 0.0], src: [w, h], tex, color: 0xFFFF_FFFF });
+        ctx.gui.draws.push(GuiDraw::Blit {
+            texture: Cow::Owned(texture),
+            blend: Blend::Textured,
+            x,
+            y,
+            w,
+            h,
+            uv: [0.0, 0.0],
+            src: [w, h],
+            tex,
+            color: 0xFFFF_FFFF,
+        });
         ctx.pop();
     }
 
@@ -217,19 +277,36 @@ impl SignEditScreen {
         let cursor_y = e.line as i32 * lh - mid;
         let x_of = |line: &str, i: usize| width_str(m, &line[..i]) - width_str(m, line) / 2;
         for (i, line) in e.lines.iter().enumerate() {
-            ctx.gui.text(Text::literal(line.as_str()), -width_str(m, line) / 2, i as i32 * lh - mid, color, false);
+            ctx.gui.text(
+                Text::literal(line.as_str()),
+                -width_str(m, line) / 2,
+                i as i32 * lh - mid,
+                color,
+                false,
+            );
             if i == e.line && e.cursor >= line.len() && show {
-                ctx.gui.text(Text::literal("_"), x_of(line, line.len()), cursor_y, color, false);
+                ctx.gui.text(
+                    Text::literal("_"),
+                    x_of(line, line.len()),
+                    cursor_y,
+                    color,
+                    false,
+                );
             }
         }
         let line = &e.lines[e.line];
         if e.cursor < line.len() && show {
             let x = x_of(line, e.cursor);
-            ctx.gui.fill(x, cursor_y - 1, x + 1, cursor_y + lh, color | 0xFF00_0000);
+            ctx.gui
+                .fill(x, cursor_y - 1, x + 1, cursor_y + lh, color | 0xFF00_0000);
         }
         if e.selection != e.cursor {
-            let (a, b) = (x_of(line, e.cursor.min(e.selection)), x_of(line, e.cursor.max(e.selection)));
-            ctx.gui.highlight(a.min(b), cursor_y, a.max(b), cursor_y + lh, true);
+            let (a, b) = (
+                x_of(line, e.cursor.min(e.selection)),
+                x_of(line, e.cursor.max(e.selection)),
+            );
+            ctx.gui
+                .highlight(a.min(b), cursor_y, a.max(b), cursor_y + lh, true);
         }
     }
 
@@ -245,9 +322,16 @@ impl Screen for SignEditScreen {
 
     fn foreground(&mut self, ctx: &mut Ctx) {
         render_all(&mut self.widgets, ctx);
-        let title = ctx.tr(if self.sign.hanging { "hanging_sign.edit" } else { "sign.edit" });
+        let title = ctx.tr(if self.sign.hanging {
+            "hanging_sign.edit"
+        } else {
+            "sign.edit"
+        });
         ctx.centered_text(title, self.env.width / 2, 40, 0xFFFF_FFFF);
-        let (ox, oy) = (self.env.width as f32 / 2.0, if self.sign.hanging { 125.0 } else { 90.0 });
+        let (ox, oy) = (
+            self.env.width as f32 / 2.0,
+            if self.sign.hanging { 125.0 } else { 90.0 },
+        );
         ctx.push(vec![PoseOp::Translate(ox, oy)]);
         self.background_texture(ctx);
         ctx.pop();

@@ -2,7 +2,8 @@
 //! can answer them every frame.
 
 use acacia_bot::proto::types::{
-    MetadataDictionaryItemKey as Key, MetadataDictionaryItemValueDefault as Plain, MetadataFlags1 as Flags, MetadataFlags2,
+    MetadataDictionaryItemKey as Key, MetadataDictionaryItemValueDefault as Plain,
+    MetadataFlags1 as Flags, MetadataFlags2,
 };
 use std::sync::Arc;
 
@@ -66,9 +67,14 @@ const BLOCKING_BIT: usize = FLAGS.len();
 
 impl Facts {
     /// `health` is the entity's `minecraft:health` attribute, when the server sent it.
-    pub fn of<'a>(meta: &Metadata, health: Option<f32>, properties: impl Iterator<Item = (&'a str, Property<'a>)>) -> Facts {
+    pub fn of<'a>(
+        meta: &Metadata,
+        health: Option<f32>,
+        properties: impl Iterator<Item = (&'a str, Property<'a>)>,
+    ) -> Facts {
         let set = meta.flags();
-        let blocking = u32::from(meta.flags_extended().contains(MetadataFlags2::BLOCKING)) << BLOCKING_BIT;
+        let blocking =
+            u32::from(meta.flags_extended().contains(MetadataFlags2::BLOCKING)) << BLOCKING_BIT;
         let property = |value| match value {
             Property::Enum(text) => Value::Text(text.into()),
             Property::Int(n) => Value::Num(n as f32),
@@ -76,8 +82,15 @@ impl Facts {
             Property::Bool(b) => Value::Num(f32::from(u8::from(b))),
         };
         Facts {
-            properties: properties.map(|(name, value)| (name.into(), property(value))).collect(),
-            flags: FLAGS.iter().enumerate().fold(blocking, |bits, (i, (_, flag))| bits | u32::from(set.contains(*flag)) << i),
+            properties: properties
+                .map(|(name, value)| (name.into(), property(value)))
+                .collect(),
+            flags: FLAGS
+                .iter()
+                .enumerate()
+                .fold(blocking, |bits, (i, (_, flag))| {
+                    bits | u32::from(set.contains(*flag)) << i
+                }),
             variant: meta.int(Key::Variant),
             mark_variant: meta.int(Key::MarkVariant),
             skin_id: meta.int(Key::SkinId),
@@ -90,20 +103,27 @@ impl Facts {
             health: health.unwrap_or(0.0),
             swell: meta.int(Key::CreeperSwell),
             freezing: meta.float(Key::FreezingEffectStrength),
-            row_time: [Key::PaddleTimeLeft, Key::PaddleTimeRight].map(|key| meta.float(key) * ROW_SWEEP),
+            row_time: [Key::PaddleTimeLeft, Key::PaddleTimeRight]
+                .map(|key| meta.float(key) * ROW_SWEEP),
         }
     }
 
     /// The own player's, whose metadata the server does not send back: only what its input says.
     pub fn own(sneaking: bool, blocking: bool) -> Facts {
-        Facts { flags: u32::from(blocking) << BLOCKING_BIT | u32::from(sneaking) << SNEAKING_BIT, ..Facts::default() }
+        Facts {
+            flags: u32::from(blocking) << BLOCKING_BIT | u32::from(sneaking) << SNEAKING_BIT,
+            ..Facts::default()
+        }
     }
 
     /// A shield holder blocks while sneaking: BDS left the flag unset on a sneaking player
     /// with a shield (2026-10-10, 1.26.50).
     pub fn with_a_shield(self) -> Facts {
         let sneaking = self.flags >> SNEAKING_BIT & 1;
-        Facts { flags: self.flags | sneaking << BLOCKING_BIT, ..self }
+        Facts {
+            flags: self.flags | sneaking << BLOCKING_BIT,
+            ..self
+        }
     }
 
     pub fn blocking(&self) -> bool {
@@ -113,9 +133,19 @@ impl Facts {
     /// Answers a Molang query (without the `query.` prefix); the ones it does not know are 0.
     pub fn query(&self, name: &str) -> Value {
         if let Some(property) = name.strip_prefix("property:") {
-            let sent = self.properties.iter().find(|(n, _)| &**n == property).map(|(_, v)| v.clone());
+            let sent = self
+                .properties
+                .iter()
+                .find(|(n, _)| &**n == property)
+                .map(|(_, v)| v.clone());
             // A cow, pig or chicken the server has sent no climate for is temperate.
-            return sent.unwrap_or_else(|| if property == "minecraft:climate_variant" { Value::Text("temperate".into()) } else { Value::Num(0.0) });
+            return sent.unwrap_or_else(|| {
+                if property == "minecraft:climate_variant" {
+                    Value::Text("temperate".into())
+                } else {
+                    Value::Num(0.0)
+                }
+            });
         }
         Value::Num(match name {
             "variant" => self.variant as f32,
@@ -130,7 +160,10 @@ impl Facts {
             CREEPER_SWELL => self.swell as f32,
             _ if name == ROW_TIME[0] => self.row_time[0],
             _ if name == ROW_TIME[1] => self.row_time[1],
-            _ => FLAGS.iter().position(|(flag, _)| *flag == name).map_or(0.0, |i| (self.flags >> i & 1) as f32),
+            _ => FLAGS
+                .iter()
+                .position(|(flag, _)| *flag == name)
+                .map_or(0.0, |i| (self.flags >> i & 1) as f32),
         })
     }
 }

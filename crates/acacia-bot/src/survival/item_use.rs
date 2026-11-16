@@ -33,8 +33,13 @@ impl Snapshot {
 #[derive(Debug, Clone, PartialEq)]
 enum Phase {
     Using,
-    Confirming { left: u32 },
-    Releasing { left: u32, result: Result<(), ActionError> },
+    Confirming {
+        left: u32,
+    },
+    Releasing {
+        left: u32,
+        result: Result<(), ActionError>,
+    },
 }
 
 /// What the bot sends this tick.
@@ -65,7 +70,15 @@ pub(crate) struct ItemUse {
 impl ItemUse {
     /// `release_ticks`: how long "use" stays held after the item is consumed.
     pub fn new(slot: u8, before: Snapshot, use_ticks: u32, release_ticks: u32, auto: bool) -> Self {
-        Self { slot, auto, before, use_ticks, release_ticks, elapsed: 0, phase: Phase::Using }
+        Self {
+            slot,
+            auto,
+            before,
+            use_ticks,
+            release_ticks,
+            elapsed: 0,
+            phase: Phase::Using,
+        }
     }
 
     /// Advances one client tick. `selected`: the selected hotbar slot now.
@@ -79,9 +92,15 @@ impl ItemUse {
                 // Vanilla finishes on the tick after the use time ran out; Dragonfly rejects a finish
                 // before 1.61 s, so finishing exactly at 32 ticks would be early there.
                 if self.elapsed > self.use_ticks {
-                    self.phase = Phase::Confirming { left: CONFIRM_TICKS };
+                    self.phase = Phase::Confirming {
+                        left: CONFIRM_TICKS,
+                    };
                     // Already completed by the server (BDS): the finish would name the stack it replaced.
-                    return if now.consumed_since(&self.before) { UseTick::Nothing } else { UseTick::Finish };
+                    return if now.consumed_since(&self.before) {
+                        UseTick::Nothing
+                    } else {
+                        UseTick::Finish
+                    };
                 }
                 let left = self.use_ticks - self.elapsed;
                 if self.elapsed >= EFFECTS_AFTER && left > 0 && left.is_multiple_of(EFFECT_EVERY) {
@@ -90,9 +109,14 @@ impl ItemUse {
             }
             Phase::Confirming { left } => {
                 if now.consumed_since(&self.before) {
-                    self.phase = Phase::Releasing { left: self.release_ticks, result: Ok(()) };
+                    self.phase = Phase::Releasing {
+                        left: self.release_ticks,
+                        result: Ok(()),
+                    };
                 } else if *left == 0 {
-                    let result = Err(ActionError::Rejected("the server did not consume the item".into()));
+                    let result = Err(ActionError::Rejected(
+                        "the server did not consume the item".into(),
+                    ));
                     self.phase = Phase::Releasing { left: 0, result };
                 } else {
                     *left -= 1;

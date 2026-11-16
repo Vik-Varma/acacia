@@ -27,14 +27,33 @@ pub struct Lerp {
 impl Lerp {
     /// The handler for an entity type, by registry name.
     pub fn for_kind(name: &str) -> Self {
-        Lerp { steps: steps(name), queue: VecDeque::new(), target: ([0.0; 3], 0.0, 0.0), last_step: [0.0; 3], current: 0.0, remaining: 0.0, speed: 1.0, last: [0.0; 3] }
+        Lerp {
+            steps: steps(name),
+            queue: VecDeque::new(),
+            target: ([0.0; 3], 0.0, 0.0),
+            last_step: [0.0; 3],
+            current: 0.0,
+            remaining: 0.0,
+            speed: 1.0,
+            last: [0.0; 3],
+        }
     }
 
     /// `interpolateTo`: queues `path` from the entity at `pos` facing `facing`; without a path, a hold where it is
     /// headed, and without a rotation, the one it is headed to.
-    pub fn interpolate_to(&mut self, pos: &mut [f64; 3], facing: (f32, f32), path: Option<PositionPath>, rot: Option<(f32, f32)>) {
+    pub fn interpolate_to(
+        &mut self,
+        pos: &mut [f64; 3],
+        facing: (f32, f32),
+        path: Option<PositionPath>,
+        rot: Option<(f32, f32)>,
+    ) {
         let active = !self.queue.is_empty();
-        let (base, by, bx) = if active { self.target } else { (*pos, facing.0, facing.1) };
+        let (base, by, bx) = if active {
+            self.target
+        } else {
+            (*pos, facing.0, facing.1)
+        };
         let path = path.unwrap_or(PositionPath::Linear(base));
         let (y, x) = rot.unwrap_or((by, bx));
         let end = path.end();
@@ -119,10 +138,11 @@ fn steps(name: &str) -> u32 {
     match name.strip_prefix("minecraft:").unwrap_or(name) {
         "player" | "allay" | "mannequin" | "evoker_fangs" => 2,
         "block_display" | "item_display" | "text_display" => 1,
-        "arrow" | "spectral_arrow" | "trident" | "item" | "experience_orb" | "falling_block" | "fishing_bobber" | "eye_of_ender"
-        | "breeze_wind_charge" | "wind_charge" | "cushion" | "dragon_fireball" | "fireball" | "small_fireball" | "wither_skull"
-        | "egg" | "ender_pearl" | "snowball" | "experience_bottle" | "splash_potion" | "lingering_potion" | "firework_rocket"
-        | "llama_spit" | "tnt" => 0,
+        "arrow" | "spectral_arrow" | "trident" | "item" | "experience_orb" | "falling_block"
+        | "fishing_bobber" | "eye_of_ender" | "breeze_wind_charge" | "wind_charge" | "cushion"
+        | "dragon_fireball" | "fireball" | "small_fireball" | "wither_skull" | "egg"
+        | "ender_pearl" | "snowball" | "experience_bottle" | "splash_potion"
+        | "lingering_potion" | "firework_rocket" | "llama_spit" | "tnt" => 0,
         _ => 3,
     }
 }
@@ -135,10 +155,28 @@ mod tests {
     fn a_zombie_reaches_each_target_in_three_ticks() {
         let mut lerp = Lerp::for_kind("minecraft:zombie");
         let mut pos = [0.0, 64.0, 0.0];
-        lerp.interpolate_to(&mut pos, (0.0, 0.0), Some(PositionPath::Stepped(vec![([0.3, 64.0, 0.0], 3)])), None);
+        lerp.interpolate_to(
+            &mut pos,
+            (0.0, 0.0),
+            Some(PositionPath::Stepped(vec![([0.3, 64.0, 0.0], 3)])),
+            None,
+        );
         assert_eq!(pos[0], 0.0);
-        let seen: Vec<f64> = (0..4).map(|_| { lerp.interpolate(&mut pos); pos[0] }).collect();
-        assert_eq!(seen, [0.3 * f64::from(1.0_f32 / 3.0), 0.3 * f64::from(2.0_f32 / 3.0), 0.3, 0.3]);
+        let seen: Vec<f64> = (0..4)
+            .map(|_| {
+                lerp.interpolate(&mut pos);
+                pos[0]
+            })
+            .collect();
+        assert_eq!(
+            seen,
+            [
+                0.3 * f64::from(1.0_f32 / 3.0),
+                0.3 * f64::from(2.0_f32 / 3.0),
+                0.3,
+                0.3
+            ]
+        );
     }
 
     #[test]
@@ -149,7 +187,12 @@ mod tests {
         lerp.interpolate_to(&mut pos, (0.0, 0.0), step(3.0), None);
         lerp.interpolate(&mut pos);
         lerp.interpolate_to(&mut pos, (0.0, 0.0), step(6.0), None);
-        let seen: Vec<f64> = (0..5).map(|_| { lerp.interpolate(&mut pos); pos[0] }).collect();
+        let seen: Vec<f64> = (0..5)
+            .map(|_| {
+                lerp.interpolate(&mut pos);
+                pos[0]
+            })
+            .collect();
         assert_eq!((seen[0], seen[4]), (3.0 * f64::from(2.0_f32 / 3.0), 6.0));
         assert!((3.2..3.25).contains(&seen[1]), "no catch-up: {seen:?}");
     }
@@ -158,7 +201,12 @@ mod tests {
     fn fast_types_snap() {
         let mut lerp = Lerp::for_kind("minecraft:arrow");
         let mut pos = [0.0; 3];
-        lerp.interpolate_to(&mut pos, (0.0, 0.0), Some(PositionPath::Linear([1.0, 2.0, 3.0])), None);
+        lerp.interpolate_to(
+            &mut pos,
+            (0.0, 0.0),
+            Some(PositionPath::Linear([1.0, 2.0, 3.0])),
+            None,
+        );
         assert_eq!(pos, [1.0, 2.0, 3.0]);
     }
 }

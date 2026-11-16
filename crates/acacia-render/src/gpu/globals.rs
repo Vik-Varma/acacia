@@ -47,7 +47,12 @@ impl Globals {
             cam_frac: [frac.x, frac.y, frac.z, 0.0],
             water: [look.water_alpha.unwrap_or(-1.0), 0.0, 0.0, 0.0],
             fog: [fog_color[0], fog_color[1], fog_color[2], fog_end],
-            fog_shape: [look.fog.start(fog_end), flag(look.fog.cylinder), flag(look.fog.linear), 0.0],
+            fog_shape: [
+                look.fog.start(fog_end),
+                flag(look.fog.cylinder),
+                flag(look.fog.linear),
+                0.0,
+            ],
             haze: [haze_start, haze_end, 0.0, 0.0],
             ao: look.ambient_occlusion,
             light: [flag(look.lighting == Lighting::Java), 0.0, 0.0, 0.0],
@@ -60,7 +65,24 @@ impl Globals {
     /// ortho), no fog, the inventory's lights.
     pub(super) fn in_pictures(self, [width, height]: [u32; 2]) -> Globals {
         let (w, h) = (width as f32, height as f32);
-        let ortho = Mat4::from_cols_array(&[2.0 / w, 0.0, 0.0, 0.0, 0.0, -2.0 / h, 0.0, 0.0, 0.0, 0.0, 1.0 / 2000.0, 0.0, -1.0, 1.0, 0.5, 1.0]);
+        let ortho = Mat4::from_cols_array(&[
+            2.0 / w,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            -2.0 / h,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0 / 2000.0,
+            0.0,
+            -1.0,
+            1.0,
+            0.5,
+            1.0,
+        ]);
         Globals {
             view_proj: ortho.to_cols_array_2d(),
             cam_block: [0; 4],
@@ -75,7 +97,13 @@ impl Globals {
 }
 
 pub(super) fn srgb_to_linear(c: [f32; 3]) -> [f32; 3] {
-    c.map(|v| if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) })
+    c.map(|v| {
+        if v <= 0.04045 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    })
 }
 
 #[cfg(test)]
@@ -87,23 +115,60 @@ mod tests {
 
     /// Every shader module, as the pipelines assemble them.
     const MODULES: [(&str, &str); 8] = [
-        ("weather", concat!(include_str!("globals.wgsl"), include_str!("weather.wgsl"))),
-        ("bolts", concat!(include_str!("globals.wgsl"), include_str!("bolts.wgsl"))),
-        ("clouds", concat!(include_str!("globals.wgsl"), include_str!("clouds.wgsl"))),
-        ("sign text", concat!(include_str!("globals.wgsl"), include_str!("sign_text.wgsl"))),
-        ("screen effect", concat!(include_str!("globals.wgsl"), include_str!("screen_effect.wgsl"))),
-        ("terrain", concat!(include_str!("globals.wgsl"), include_str!("terrain.wgsl"), include_str!("light.wgsl"), include_str!("model.wgsl"))),
-        ("entity", concat!(include_str!("globals.wgsl"), include_str!("entity.wgsl"))),
-        ("sky", concat!(include_str!("globals.wgsl"), include_str!("sky.wgsl"))),
+        (
+            "weather",
+            concat!(include_str!("globals.wgsl"), include_str!("weather.wgsl")),
+        ),
+        (
+            "bolts",
+            concat!(include_str!("globals.wgsl"), include_str!("bolts.wgsl")),
+        ),
+        (
+            "clouds",
+            concat!(include_str!("globals.wgsl"), include_str!("clouds.wgsl")),
+        ),
+        (
+            "sign text",
+            concat!(include_str!("globals.wgsl"), include_str!("sign_text.wgsl")),
+        ),
+        (
+            "screen effect",
+            concat!(
+                include_str!("globals.wgsl"),
+                include_str!("screen_effect.wgsl")
+            ),
+        ),
+        (
+            "terrain",
+            concat!(
+                include_str!("globals.wgsl"),
+                include_str!("terrain.wgsl"),
+                include_str!("light.wgsl"),
+                include_str!("model.wgsl")
+            ),
+        ),
+        (
+            "entity",
+            concat!(include_str!("globals.wgsl"), include_str!("entity.wgsl")),
+        ),
+        (
+            "sky",
+            concat!(include_str!("globals.wgsl"), include_str!("sky.wgsl")),
+        ),
     ];
 
     #[test]
     fn shaders_validate_and_agree_on_the_uniform_size() {
         for (name, source) in MODULES {
-            let module = wgsl::parse_str(source).unwrap_or_else(|e| panic!("{name}: {}", e.emit_to_string(source)));
-            Validator::new(ValidationFlags::all(), Capabilities::all()).validate(&module).unwrap_or_else(|e| panic!("{name}: {e:?}"));
+            let module = wgsl::parse_str(source)
+                .unwrap_or_else(|e| panic!("{name}: {}", e.emit_to_string(source)));
+            Validator::new(ValidationFlags::all(), Capabilities::all())
+                .validate(&module)
+                .unwrap_or_else(|e| panic!("{name}: {e:?}"));
             let span = module.types.iter().find_map(|(_, t)| match t.inner {
-                TypeInner::Struct { span, .. } if t.name.as_deref() == Some("Globals") => Some(span),
+                TypeInner::Struct { span, .. } if t.name.as_deref() == Some("Globals") => {
+                    Some(span)
+                }
                 _ => None,
             });
             assert_eq!(span, Some(size_of::<Globals>() as u32), "{name}");

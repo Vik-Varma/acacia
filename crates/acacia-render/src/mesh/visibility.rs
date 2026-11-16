@@ -57,9 +57,20 @@ pub fn section_visibility(v: &Volume, table: &BlockTable) -> u16 {
         while let Some(i) = stack.pop() {
             let (x, y, z) = ((i >> 8) as i32, (i & 15) as i32, ((i >> 4) & 15) as i32);
             faces |= faces_of(x, y, z);
-            for (dx, dy, dz) in [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)] {
+            for (dx, dy, dz) in [
+                (1, 0, 0),
+                (-1, 0, 0),
+                (0, 1, 0),
+                (0, -1, 0),
+                (0, 0, 1),
+                (0, 0, -1),
+            ] {
                 let (nx, ny, nz) = (x + dx, y + dy, z + dz);
-                if (0..16).contains(&nx) && (0..16).contains(&ny) && (0..16).contains(&nz) && open[index(nx, ny, nz)] {
+                if (0..16).contains(&nx)
+                    && (0..16).contains(&ny)
+                    && (0..16).contains(&nz)
+                    && open[index(nx, ny, nz)]
+                {
                     open[index(nx, ny, nz)] = false;
                     stack.push(index(nx, ny, nz));
                 }
@@ -82,7 +93,9 @@ pub fn section_visibility(v: &Volume, table: &BlockTable) -> u16 {
 #[cfg(test)]
 #[test]
 fn pair_bits_are_distinct_and_fill_all() {
-    let bits: Vec<u16> = (0..6).flat_map(|a| (a + 1..6).map(move |b| pair_bit(a, b))).collect();
+    let bits: Vec<u16> = (0..6)
+        .flat_map(|a| (a + 1..6).map(move |b| pair_bit(a, b)))
+        .collect();
     assert_eq!(bits.iter().fold(0, |acc, b| acc | b), ALL);
     assert!(bits.iter().all(|b| b.count_ones() == 1) && bits.len() == 15);
     assert_eq!(pair_bit(4, 1), pair_bit(1, 4));

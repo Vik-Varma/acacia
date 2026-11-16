@@ -5,8 +5,8 @@
 
 use acacia_client::proto::nbt::{List, Nbt, Value};
 use acacia_client::proto::packets::{
-    BookEdit, BookEditContent, BookEditContentAddPage, BookEditContentDeletePage, BookEditContentReplacePage,
-    BookEditContentSign, BookEditContentSwapPages, BookEditType,
+    BookEdit, BookEditContent, BookEditContentAddPage, BookEditContentDeletePage,
+    BookEditContentReplacePage, BookEditContentSign, BookEditContentSwapPages, BookEditType,
 };
 
 use crate::human::{BOOK_SIGN, CLICK};
@@ -28,11 +28,22 @@ const COMPOUND_TAG: u8 = 10;
 /// One page edit of a book and quill. Pages count from 0.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PageEdit {
-    Replace { page: u8, text: String },
+    Replace {
+        page: u8,
+        text: String,
+    },
     /// Inserts a page before an existing one.
-    Insert { page: u8, text: String },
-    Delete { page: u8 },
-    Swap { a: u8, b: u8 },
+    Insert {
+        page: u8,
+        text: String,
+    },
+    Delete {
+        page: u8,
+    },
+    Swap {
+        a: u8,
+        b: u8,
+    },
 }
 
 impl Bot {
@@ -45,8 +56,16 @@ impl Bot {
             Some(WRITTEN_BOOK) => false,
             _ => return None,
         };
-        let Some(Value::List(pages)) = held.nbt.as_ref().and_then(|n| n.value.get("pages")) else { return Some((Vec::new(), writable)) };
-        let text = |page: &Value| if let Some(Value::String(text)) = page.get("text") { text.to_string() } else { String::new() };
+        let Some(Value::List(pages)) = held.nbt.as_ref().and_then(|n| n.value.get("pages")) else {
+            return Some((Vec::new(), writable));
+        };
+        let text = |page: &Value| {
+            if let Some(Value::String(text)) = page.get("text") {
+                text.to_string()
+            } else {
+                String::new()
+            }
+        };
         Some((pages.items.iter().map(text).collect(), writable))
     }
 
@@ -73,19 +92,39 @@ impl Bot {
     pub async fn write_book(&mut self, pages: &[&str]) -> Result<(), ActionError> {
         let slot = self.held_book()?;
         if pages.len() > usize::from(MAX_PAGES) {
-            return Err(ActionError::NotPossible(format!("a book holds at most {MAX_PAGES} pages")));
+            return Err(ActionError::NotPossible(format!(
+                "a book holds at most {MAX_PAGES} pages"
+            )));
         }
-        let edits: Vec<PageEdit> = pages.iter().enumerate().map(|(i, t)| PageEdit::Replace { page: i as u8, text: (*t).to_owned() }).collect();
+        let edits: Vec<PageEdit> = pages
+            .iter()
+            .enumerate()
+            .map(|(i, t)| PageEdit::Replace {
+                page: i as u8,
+                text: (*t).to_owned(),
+            })
+            .collect();
         edits.iter().try_for_each(check_edit)?;
         self.open_book(slot);
-        let mut time = self.human.typing(pages.iter().map(|t| t.chars().count()).sum());
+        let mut time = self
+            .human
+            .typing(pages.iter().map(|t| t.chars().count()).sum());
         for _ in 1..pages.len() {
             time += self.human.between(CLICK);
         }
         self.pause(time).await?;
         let old = self.state.inventory.main[usize::from(slot)].clone();
-        let new = edits.iter().fold(old.clone(), |book, edit| edited_book(&book, edit));
-        self.send_bedrock(&legacy::rewrite_slot(None, &SlotChange { slot, old: &old, new: &new }));
+        let new = edits
+            .iter()
+            .fold(old.clone(), |book, edit| edited_book(&book, edit));
+        self.send_bedrock(&legacy::rewrite_slot(
+            None,
+            &SlotChange {
+                slot,
+                old: &old,
+                new: &new,
+            },
+        ));
         for edit in &edits {
             self.send_bedrock(&page_packet(slot, edit));
         }
@@ -104,12 +143,26 @@ impl Bot {
             return;
         }
         for page in 0..2 {
-            self.send_bedrock(&page_packet(slot, &PageEdit::Replace { page, text: String::new() }));
+            self.send_bedrock(&page_packet(
+                slot,
+                &PageEdit::Replace {
+                    page,
+                    text: String::new(),
+                },
+            ));
         }
         let opened = with_pages(&book, Vec::new());
         let id = self.reflexes.next_legacy_id();
         let click = wire::click_air(self.hand());
-        self.send_bedrock(&legacy::with_slot_change(click, Some(id), &SlotChange { slot, old: &book, new: &opened }));
+        self.send_bedrock(&legacy::with_slot_change(
+            click,
+            Some(id),
+            &SlotChange {
+                slot,
+                old: &book,
+                new: &opened,
+            },
+        ));
         self.state.inventory.main[usize::from(slot)] = opened;
         self.equip_now();
     }
@@ -130,11 +183,20 @@ impl Bot {
         let slot = self.held_book()?;
         check_title(title)?;
         let xuid = self.backend.require("books")?.client.xuid().to_owned();
-        let written = self.state.items.id(WRITTEN_BOOK).ok_or_else(|| ActionError::NotPossible("no written book in the item registry".into()))?;
+        let written = self.state.items.id(WRITTEN_BOOK).ok_or_else(|| {
+            ActionError::NotPossible("no written book in the item registry".into())
+        })?;
         let old = self.state.inventory.main[usize::from(slot)].clone();
         let new = signed_book(&old, written, title, AUTHOR, &xuid);
         let id = self.reflexes.next_legacy_id();
-        self.send_bedrock(&legacy::rewrite_slot(Some(id), &SlotChange { slot, old: &old, new: &new }));
+        self.send_bedrock(&legacy::rewrite_slot(
+            Some(id),
+            &SlotChange {
+                slot,
+                old: &old,
+                new: &new,
+            },
+        ));
         self.send_bedrock(&sign_packet(slot, title, AUTHOR, &xuid));
         self.state.inventory.main[usize::from(slot)] = new;
         Ok(())
@@ -153,29 +215,40 @@ impl Bot {
         let inv = &self.state.inventory;
         match self.state.items.name(inv.held().network_id) {
             Some(WRITABLE_BOOK) => Ok(inv.selected_hotbar_slot),
-            other => Err(ActionError::NotPossible(format!("holding {other:?}, not a book and quill"))),
+            other => Err(ActionError::NotPossible(format!(
+                "holding {other:?}, not a book and quill"
+            ))),
         }
     }
 }
 
 fn check_title(title: &str) -> Result<(), ActionError> {
     if title.trim().is_empty() || title.chars().count() > MAX_TITLE_CHARS {
-        return Err(ActionError::NotPossible(format!("a book title has 1 to {MAX_TITLE_CHARS} characters")));
+        return Err(ActionError::NotPossible(format!(
+            "a book title has 1 to {MAX_TITLE_CHARS} characters"
+        )));
     }
     Ok(())
 }
 
 fn check_edit(edit: &PageEdit) -> Result<(), ActionError> {
     let (pages, text) = match edit {
-        PageEdit::Replace { page, text } | PageEdit::Insert { page, text } => ([*page, 0], text.as_str()),
+        PageEdit::Replace { page, text } | PageEdit::Insert { page, text } => {
+            ([*page, 0], text.as_str())
+        }
         PageEdit::Delete { page } => ([*page, 0], ""),
         PageEdit::Swap { a, b } => ([*a, *b], ""),
     };
     if pages.iter().any(|&p| p >= MAX_PAGES) {
-        return Err(ActionError::NotPossible(format!("pages go from 0 to {}", MAX_PAGES - 1)));
+        return Err(ActionError::NotPossible(format!(
+            "pages go from 0 to {}",
+            MAX_PAGES - 1
+        )));
     }
     if text.chars().count() > MAX_PAGE_CHARS {
-        return Err(ActionError::NotPossible(format!("a page holds at most {MAX_PAGE_CHARS} characters")));
+        return Err(ActionError::NotPossible(format!(
+            "a page holds at most {MAX_PAGE_CHARS} characters"
+        )));
     }
     Ok(())
 }
@@ -185,22 +258,45 @@ pub(crate) fn page_packet(slot: u8, edit: &PageEdit) -> BookEdit {
     let (r#type, content) = match edit {
         PageEdit::Replace { page: p, text } => (
             BookEditType::ReplacePage,
-            BookEditContent::ReplacePage(BookEditContentReplacePage { page_number: page(p), text: text.clone(), photo_name: String::new() }),
+            BookEditContent::ReplacePage(BookEditContentReplacePage {
+                page_number: page(p),
+                text: text.clone(),
+                photo_name: String::new(),
+            }),
         ),
         PageEdit::Insert { page: p, text } => (
             BookEditType::AddPage,
-            BookEditContent::AddPage(BookEditContentAddPage { page_number: page(p), text: text.clone(), photo_name: String::new() }),
+            BookEditContent::AddPage(BookEditContentAddPage {
+                page_number: page(p),
+                text: text.clone(),
+                photo_name: String::new(),
+            }),
         ),
-        PageEdit::Delete { page: p } => (BookEditType::DeletePage, BookEditContent::DeletePage(BookEditContentDeletePage { page_number: page(p) })),
-        PageEdit::Swap { a, b } => {
-            (BookEditType::SwapPages, BookEditContent::SwapPages(BookEditContentSwapPages { page1: page(a), page2: page(b) }))
-        }
+        PageEdit::Delete { page: p } => (
+            BookEditType::DeletePage,
+            BookEditContent::DeletePage(BookEditContentDeletePage {
+                page_number: page(p),
+            }),
+        ),
+        PageEdit::Swap { a, b } => (
+            BookEditType::SwapPages,
+            BookEditContent::SwapPages(BookEditContentSwapPages {
+                page1: page(a),
+                page2: page(b),
+            }),
+        ),
     };
-    BookEdit { inventory_slot: i32::from(slot), r#type, content }
+    BookEdit {
+        inventory_slot: i32::from(slot),
+        r#type,
+        content,
+    }
 }
 
 fn has_pages(book: &ItemStack) -> bool {
-    book.nbt.as_ref().is_some_and(|n| n.value.get("pages").is_some())
+    book.nbt
+        .as_ref()
+        .is_some_and(|n| n.value.get("pages").is_some())
 }
 
 /// `book` with its `pages` list replaced; an empty list has element type 0, as vanilla writes it.
@@ -213,7 +309,13 @@ pub(crate) fn with_pages(book: &ItemStack, pages: Vec<Value>) -> ItemStack {
     entries.retain(|(k, _)| k != "pages");
     entries.push(("pages".into(), Value::List(List { tag, items: pages })));
     entries.sort_by(|a, b| a.0.cmp(&b.0));
-    ItemStack { nbt: Some(Nbt { name: String::new(), value: Value::Compound(entries) }), ..book.clone() }
+    ItemStack {
+        nbt: Some(Nbt {
+            name: String::new(),
+            value: Value::Compound(entries),
+        }),
+        ..book.clone()
+    }
 }
 
 /// `book` with `edit` applied to its `pages` list of `{photoname, text}`.
@@ -222,7 +324,12 @@ pub(crate) fn edited_book(book: &ItemStack, edit: &PageEdit) -> ItemStack {
         Some(Value::List(list)) => list.items.clone(),
         _ => Vec::new(),
     };
-    let page = |text: &str| Value::Compound(vec![("photoname".into(), Value::String("".into())), ("text".into(), Value::String(text.into()))]);
+    let page = |text: &str| {
+        Value::Compound(vec![
+            ("photoname".into(), Value::String("".into())),
+            ("text".into(), Value::String(text.into())),
+        ])
+    };
     match *edit {
         PageEdit::Replace { page: i, ref text } => {
             let i = usize::from(i);
@@ -231,31 +338,62 @@ pub(crate) fn edited_book(book: &ItemStack, edit: &PageEdit) -> ItemStack {
             }
             pages[i] = page(text);
         }
-        PageEdit::Insert { page: i, ref text } if usize::from(i) <= pages.len() => pages.insert(usize::from(i), page(text)),
-        PageEdit::Delete { page: i } if usize::from(i) < pages.len() => drop(pages.remove(usize::from(i))),
-        PageEdit::Swap { a, b } if usize::from(a.max(b)) < pages.len() => pages.swap(usize::from(a), usize::from(b)),
+        PageEdit::Insert { page: i, ref text } if usize::from(i) <= pages.len() => {
+            pages.insert(usize::from(i), page(text))
+        }
+        PageEdit::Delete { page: i } if usize::from(i) < pages.len() => {
+            drop(pages.remove(usize::from(i)))
+        }
+        PageEdit::Swap { a, b } if usize::from(a.max(b)) < pages.len() => {
+            pages.swap(usize::from(a), usize::from(b))
+        }
         _ => {}
     }
     with_pages(book, pages)
 }
 
 /// The written book `book` becomes when signed: its NBT plus the signature, keys in byte order.
-pub(crate) fn signed_book(book: &ItemStack, written_book: i32, title: &str, author: &str, xuid: &str) -> ItemStack {
+pub(crate) fn signed_book(
+    book: &ItemStack,
+    written_book: i32,
+    title: &str,
+    author: &str,
+    xuid: &str,
+) -> ItemStack {
     let mut entries = match book.nbt.as_ref().map(|n| &n.value) {
         Some(Value::Compound(entries)) => entries.clone(),
         _ => Vec::new(),
     };
-    let signature =
-        [("author", Value::String(author.into())), ("generation", Value::Int(0)), ("title", Value::String(title.into())), ("xuid", Value::String(xuid.into()))];
+    let signature = [
+        ("author", Value::String(author.into())),
+        ("generation", Value::Int(0)),
+        ("title", Value::String(title.into())),
+        ("xuid", Value::String(xuid.into())),
+    ];
     entries.retain(|(k, _)| !signature.iter().any(|(s, _)| s == k));
     entries.extend(signature.map(|(k, v)| (k.into(), v)));
     entries.sort_by(|a, b| a.0.cmp(&b.0));
-    ItemStack { network_id: written_book, nbt: Some(Nbt { name: String::new(), value: Value::Compound(entries) }), ..book.clone() }
+    ItemStack {
+        network_id: written_book,
+        nbt: Some(Nbt {
+            name: String::new(),
+            value: Value::Compound(entries),
+        }),
+        ..book.clone()
+    }
 }
 
 pub(crate) fn sign_packet(slot: u8, title: &str, author: &str, xuid: &str) -> BookEdit {
-    let content = BookEditContentSign { title: title.to_owned(), author: author.to_owned(), xuid: xuid.to_owned() };
-    BookEdit { inventory_slot: i32::from(slot), r#type: BookEditType::Sign, content: BookEditContent::Sign(content) }
+    let content = BookEditContentSign {
+        title: title.to_owned(),
+        author: author.to_owned(),
+        xuid: xuid.to_owned(),
+    };
+    BookEdit {
+        inventory_slot: i32::from(slot),
+        r#type: BookEditType::Sign,
+        content: BookEditContent::Sign(content),
+    }
 }
 
 #[cfg(test)]

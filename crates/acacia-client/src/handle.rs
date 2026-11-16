@@ -4,13 +4,13 @@ use acacia_session::blob_store::BlobStore;
 use acacia_session::proto::Packet;
 use bytes::Bytes;
 
+use crate::Event;
 use crate::client::ClientBuilder;
 use crate::driver::Command;
 use crate::event_queue::EventReceiver;
 use crate::filter::PacketFilter;
 use crate::packet_trace::PacketTrace;
 use crate::sender::ClientSender;
-use crate::Event;
 
 /// A spawned connection. Dropping it disconnects.
 pub struct Client {

@@ -3,16 +3,24 @@
 use acacia_physics::BlockPos;
 use acacia_world::BlockAccess;
 
-use super::build_sim::{builder, explain, run, World};
-use super::build_tests::{scaffold_left, ORIGIN};
+use super::build_sim::{World, builder, explain, run};
+use super::build_tests::{ORIGIN, scaffold_left};
 use super::grid::Grid;
 use crate::build::tests::scenes_redstone::{self, FLOORS, STOCK};
-use crate::build::{check, Structure, Transform};
+use crate::build::{Structure, Transform, check};
 use crate::pathfind::process::{Arbiter, BlockView};
 
 fn build(s: &Structure, floor: &str) {
     let g = Grid::floor(-20, 30);
-    g.fill(ORIGIN, [ORIGIN[0] + s.size[0] - 1, ORIGIN[1], ORIGIN[2] + s.size[2] - 1], floor);
+    g.fill(
+        ORIGIN,
+        [
+            ORIGIN[0] + s.size[0] - 1,
+            ORIGIN[1],
+            ORIGIN[2] + s.size[2] - 1,
+        ],
+        floor,
+    );
     let mut stock: Vec<(&str, u32)> = Vec::new();
     // The kit's dirt and hoe, as examples/support/house.rs `kit` gives them.
     for (item, n) in STOCK.iter().chain(&[("dirt", 64), ("diamond_hoe", 1)]) {
@@ -28,9 +36,18 @@ fn build(s: &Structure, floor: &str) {
     let ticks = run(&mut w, [0.5, 1.0, 0.5], &mut arb, id, 12_000);
     let st = status.lock().unwrap().clone();
     eprintln!("{ticks} ticks, {st:?}");
-    explain(&w, s, ORIGIN).iter().for_each(|l| eprintln!("OPEN {l}"));
-    let at = Transform { origin: ORIGIN, ..Transform::default() };
-    let wrong = check(s, &at, |p| g.registry.get(g.view.block(p[0], p[1], p[2])).map(BlockView::of));
+    explain(&w, s, ORIGIN)
+        .iter()
+        .for_each(|l| eprintln!("OPEN {l}"));
+    let at = Transform {
+        origin: ORIGIN,
+        ..Transform::default()
+    };
+    let wrong = check(s, &at, |p| {
+        g.registry
+            .get(g.view.block(p[0], p[1], p[2]))
+            .map(BlockView::of)
+    });
     assert_eq!(arb.outcome(id), Some(&Ok(())), "status {st:?}");
     assert_eq!(wrong, Vec::new());
     assert_eq!(scaffold_left(&g), Vec::<BlockPos>::new());

@@ -13,9 +13,23 @@ pub fn background_color(chat_only: bool, opacity: f32, default: f32) -> u32 {
 }
 
 /// `GuiGraphicsExtractor.textWithBackdrop`; `background` is `getBackgroundColor(0.0F)`.
-pub fn text_with_backdrop(gui: &mut Gui, text: Text, x: i32, y: i32, width: i32, color: u32, background: u32) {
+pub fn text_with_backdrop(
+    gui: &mut Gui,
+    text: Text,
+    x: i32,
+    y: i32,
+    width: i32,
+    color: u32,
+    background: u32,
+) {
     if background != 0 {
-        gui.fill(x - 2, y - 2, x + width + 2, y + 9 + 2, multiply(background, color));
+        gui.fill(
+            x - 2,
+            y - 2,
+            x + width + 2,
+            y + 9 + 2,
+            multiply(background, color),
+        );
     }
     gui.text(text, x, y, color, true);
 }
@@ -38,7 +52,17 @@ pub struct Titles {
 
 impl Default for Titles {
     fn default() -> Titles {
-        Titles { title: None, subtitle: None, time: 0, fade_in: 10, stay: 70, fade_out: 20, overlay: None, overlay_time: 0, overlay_animated: false }
+        Titles {
+            title: None,
+            subtitle: None,
+            time: 0,
+            fade_in: 10,
+            stay: 70,
+            fade_out: 20,
+            overlay: None,
+            overlay_time: 0,
+            overlay_animated: false,
+        }
     }
 }
 
@@ -102,24 +126,49 @@ impl Titles {
     }
 
     /// `Hud.extractOverlayMessage`.
-    pub fn overlay_message(&self, gui: &mut Gui, font: &dyn Metrics, partial: f32, background: u32) {
-        let Some(message) = self.overlay.as_ref().filter(|_| self.overlay_time > 0) else { return };
+    pub fn overlay_message(
+        &self,
+        gui: &mut Gui,
+        font: &dyn Metrics,
+        partial: f32,
+        background: u32,
+    ) {
+        let Some(message) = self.overlay.as_ref().filter(|_| self.overlay_time > 0) else {
+            return;
+        };
         let t = self.overlay_time as f32 - partial;
         let alpha = ((t * 255.0 / 20.0) as i32).min(255);
         if alpha <= 0 {
             return;
         }
         gui.next_stratum();
-        gui.push(vec![PoseOp::Translate((gui.width / 2) as f32, (gui.height - 68) as f32)]);
-        let color = if self.overlay_animated { hsv_to_argb(t / 50.0, 0.7, 0.6, alpha as u32) } else { with_alpha(alpha as u32, 0xFF_FFFF) };
+        gui.push(vec![PoseOp::Translate(
+            (gui.width / 2) as f32,
+            (gui.height - 68) as f32,
+        )]);
+        let color = if self.overlay_animated {
+            hsv_to_argb(t / 50.0, 0.7, 0.6, alpha as u32)
+        } else {
+            with_alpha(alpha as u32, 0xFF_FFFF)
+        };
         let width = font.width(message);
-        text_with_backdrop(gui, message.clone(), -width / 2, -4, width, color, background);
+        text_with_backdrop(
+            gui,
+            message.clone(),
+            -width / 2,
+            -4,
+            width,
+            color,
+            background,
+        );
         gui.pop();
     }
 
     /// `Hud.extractTitle`.
     pub fn title(&self, gui: &mut Gui, font: &dyn Metrics, partial: f32, background: u32) {
-        let Some(title) = self.title.as_ref().filter(|_| self.time > 0) else { return };
+        let Some(title) = self.title.as_ref().filter(|_| self.time > 0) else {
+            return;
+        };
         let t = self.time as f32 - partial;
         let mut alpha = 255;
         if self.time > self.fade_out + self.stay {
@@ -134,16 +183,35 @@ impl Titles {
             return;
         }
         gui.next_stratum();
-        gui.push(vec![PoseOp::Translate((gui.width / 2) as f32, (gui.height / 2) as f32)]);
+        gui.push(vec![PoseOp::Translate(
+            (gui.width / 2) as f32,
+            (gui.height / 2) as f32,
+        )]);
         gui.push(vec![PoseOp::Scale(4.0, 4.0)]);
         let color = with_alpha(alpha as u32, 0xFF_FFFF);
         let width = font.width(title);
-        text_with_backdrop(gui, title.clone(), -width / 2, -10, width, color, background);
+        text_with_backdrop(
+            gui,
+            title.clone(),
+            -width / 2,
+            -10,
+            width,
+            color,
+            background,
+        );
         gui.pop();
         if let Some(subtitle) = &self.subtitle {
             gui.push(vec![PoseOp::Scale(2.0, 2.0)]);
             let width = font.width(subtitle);
-            text_with_backdrop(gui, subtitle.clone(), -width / 2, 5, width, color, background);
+            text_with_backdrop(
+                gui,
+                subtitle.clone(),
+                -width / 2,
+                5,
+                width,
+                color,
+                background,
+            );
             gui.pop();
         }
         gui.pop();
@@ -175,7 +243,11 @@ impl ToolHighlight {
         match &selected {
             None => self.timer = 0,
             Some(s) => {
-                if self.last.as_ref().is_none_or(|l| l.item != s.item || l.hover_name != s.hover_name) {
+                if self
+                    .last
+                    .as_ref()
+                    .is_none_or(|l| l.item != s.item || l.hover_name != s.hover_name)
+                {
                     self.timer = (40.0 * display_time) as i32;
                 } else if self.timer > 0 {
                     self.timer -= 1;
@@ -187,17 +259,30 @@ impl ToolHighlight {
 
     /// `Hud.extractSelectedItemName`; `can_hurt` is `gameMode.canHurtPlayer()`.
     pub fn draw(&self, gui: &mut Gui, font: &dyn Metrics, can_hurt: bool, background: u32) {
-        let Some(last) = self.last.as_ref().filter(|_| self.timer > 0) else { return };
+        let Some(last) = self.last.as_ref().filter(|_| self.timer > 0) else {
+            return;
+        };
         let mut name = last.hover_name.clone().with_color(last.rarity_color);
         if last.custom_name {
-            name = name.with_style(&Style { italic: Some(true), ..Style::default() });
+            name = name.with_style(&Style {
+                italic: Some(true),
+                ..Style::default()
+            });
         }
         let width = font.width(&name);
         let x = (gui.width - width) / 2;
         let y = gui.height - 59 + if can_hurt { 0 } else { 14 };
         let alpha = ((self.timer as f32 * 256.0 / 10.0) as i32).min(255);
         if alpha > 0 {
-            text_with_backdrop(gui, name, x, y, width, with_alpha(alpha as u32, 0xFF_FFFF), background);
+            text_with_backdrop(
+                gui,
+                name,
+                x,
+                y,
+                width,
+                with_alpha(alpha as u32, 0xFF_FFFF),
+                background,
+            );
         }
     }
 }
@@ -215,7 +300,14 @@ mod tests {
         let mut gui = Gui::new(320, 240);
         t.title(&mut gui, &Fixed(6.0), 0.5, 0);
         // 0.5 ticks into a 10-tick fade in.
-        assert!(matches!(&gui.draws[3], GuiDraw::Text { color: 0x0CFF_FFFF, x: -6, .. }));
+        assert!(matches!(
+            &gui.draws[3],
+            GuiDraw::Text {
+                color: 0x0CFF_FFFF,
+                x: -6,
+                ..
+            }
+        ));
         for _ in 0..100 {
             t.tick();
         }
@@ -224,7 +316,14 @@ mod tests {
 
     #[test]
     fn highlight_restarts_on_a_new_name() {
-        let held = |n: &str| Some(HeldName { item: "stone".into(), hover_name: Text::literal(n), rarity_color: 0xFFFFFF, custom_name: false });
+        let held = |n: &str| {
+            Some(HeldName {
+                item: "stone".into(),
+                hover_name: Text::literal(n),
+                rarity_color: 0xFFFFFF,
+                custom_name: false,
+            })
+        };
         let mut h = ToolHighlight::default();
         h.tick(held("Stone"), 1.0);
         h.tick(held("Stone"), 1.0);
@@ -238,9 +337,34 @@ mod tests {
     #[test]
     fn backdrop_takes_the_text_alpha() {
         let mut gui = Gui::new(320, 240);
-        text_with_backdrop(&mut gui, Text::literal("a"), 0, 0, 6, 0x80FF_FFFF, background_color(true, 0.5, 0.0));
+        text_with_backdrop(
+            &mut gui,
+            Text::literal("a"),
+            0,
+            0,
+            6,
+            0x80FF_FFFF,
+            background_color(true, 0.5, 0.0),
+        );
         assert_eq!(gui.draws.len(), 1);
-        text_with_backdrop(&mut gui, Text::literal("a"), 0, 0, 6, 0x80FF_FFFF, background_color(false, 0.5, 0.0));
-        assert_eq!(gui.draws[1], GuiDraw::Fill { x0: -2, y0: -2, x1: 8, y1: 11, color: 0x3F00_0000 });
+        text_with_backdrop(
+            &mut gui,
+            Text::literal("a"),
+            0,
+            0,
+            6,
+            0x80FF_FFFF,
+            background_color(false, 0.5, 0.0),
+        );
+        assert_eq!(
+            gui.draws[1],
+            GuiDraw::Fill {
+                x0: -2,
+                y0: -2,
+                x1: 8,
+                y1: 11,
+                color: 0x3F00_0000
+            }
+        );
     }
 }

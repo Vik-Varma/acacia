@@ -55,7 +55,11 @@ impl Schedule {
     /// Removes and returns the wake-ups due by `now`, stale ones included.
     pub fn take_due(&mut self, now: Instant) -> Vec<(Instant, SocketAddr)> {
         let mut due = Vec::new();
-        while self.timers.peek().is_some_and(|Reverse((at, _))| *at <= now) {
+        while self
+            .timers
+            .peek()
+            .is_some_and(|Reverse((at, _))| *at <= now)
+        {
             due.push(self.timers.pop().expect("peeked").0);
         }
         due

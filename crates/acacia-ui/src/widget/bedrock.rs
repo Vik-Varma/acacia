@@ -68,22 +68,45 @@ impl Kit {
     pub fn load(root: &Path, atlas: &mut Atlas) -> Kit {
         let mut n = |name: &str| Nine::bedrock(root, name, atlas);
         Kit {
-            button: [n("button_borderless_light"), n("button_borderless_lighthover"), n("button_borderless_lightpressed"), n("button_borderless_lightpressednohover")],
+            button: [
+                n("button_borderless_light"),
+                n("button_borderless_lighthover"),
+                n("button_borderless_lightpressed"),
+                n("button_borderless_lightpressednohover"),
+            ],
             border: n("focus_border_white"),
-            toggle: [n("toggle_off"), n("toggle_off_hover"), n("toggle_on"), n("toggle_on_hover")],
+            toggle: [
+                n("toggle_off"),
+                n("toggle_off_hover"),
+                n("toggle_on"),
+                n("toggle_on_hover"),
+            ],
             slider_border: n("slider_border"),
             slider_back: [n("slider_background"), n("slider_background_hover")],
             slider_fill: [n("slider_progress"), n("slider_progress_hover")],
-            handle: [n("slider_button_default"), n("slider_button_hover"), n("slider_button_indent")],
+            handle: [
+                n("slider_button_default"),
+                n("slider_button_hover"),
+                n("slider_button_indent"),
+            ],
             edit: [n("edit_box_indent"), n("edit_box_indent_hover")],
             list_back: n("dropdown_background"),
             chevron: [n("dropdown_chevron"), n("chevron_white_down")],
-            radio: [n("radio_off"), n("radio_off_hover"), n("radio_on"), n("radio_on_hover")],
+            radio: [
+                n("radio_off"),
+                n("radio_off_hover"),
+                n("radio_on"),
+                n("radio_on_hover"),
+            ],
             rail: n("ScrollRail"),
             thumb: n("ScrollHandle"),
             dialog: n("dialog_background_hollow_3"),
             hole: n("control"),
-            close: [n("close_button_default"), n("close_button_hover"), n("close_button_pressed")],
+            close: [
+                n("close_button_default"),
+                n("close_button_hover"),
+                n("close_button_pressed"),
+            ],
             panel: n("dialog_background_opaque"),
             cell: n("cell_image"),
             highlight: n("highlight_slot"),
@@ -91,13 +114,21 @@ impl Kit {
             arrow: [n("arrow_inactive"), n("arrow_active")],
             brew_arrow: [n("brewing_arrow_empty"), n("brewing_arrow_full")],
             brew_fuel: [n("brewing_fuel_bar_empty"), n("brewing_fuel_bar_full")],
-            empty_slots: ["helmet", "chestplate", "leggings", "boots", "shield"].map(|s| n(&format!("empty_armor_slot_{s}"))),
+            empty_slots: ["helmet", "chestplate", "leggings", "boots", "shield"]
+                .map(|s| n(&format!("empty_armor_slot_{s}"))),
             white: atlas.white(),
         }
     }
 
     /// `nine` over `rect`, or a flat `fallback` when the pack lacks it.
-    pub fn paint(&self, list: &mut DrawList, nine: Option<Nine>, rect: [f32; 4], tint: [u8; 4], fallback: u32) {
+    pub fn paint(
+        &self,
+        list: &mut DrawList,
+        nine: Option<Nine>,
+        rect: [f32; 4],
+        tint: [u8; 4],
+        fallback: u32,
+    ) {
         match nine {
             Some(nine) => list.nine(nine, rect, tint),
             None => list.fill(self.white, rect, rgba(fallback, tint[3])),
@@ -106,7 +137,9 @@ impl Kit {
 
     /// Wrapped label lines of `widget` 194 wide; empty for widgets without a label.
     fn label_lines(&self, font: Option<&Font>, widget: &Widget, width: f32) -> Vec<String> {
-        let text = widget.label_with_value().filter(|_| !matches!(widget, Widget::Dropdown { .. }));
+        let text = widget
+            .label_with_value()
+            .filter(|_| !matches!(widget, Widget::Dropdown { .. }));
         let text = match (widget, text) {
             (_, Some(t)) => t,
             (Widget::Dropdown { label, .. } | Widget::Input { label, .. }, None) => label.clone(),
@@ -119,12 +152,20 @@ impl Kit {
     pub fn height(&self, font: Option<&Font>, widget: &Widget, width: f32) -> f32 {
         let label = self.label_lines(font, widget, width).len() as f32 * LINE;
         match widget {
-            Widget::Text { text } | Widget::Header { text } => lines(font, text, width).len() as f32 * LINE,
+            Widget::Text { text } | Widget::Header { text } => {
+                lines(font, text, width).len() as f32 * LINE
+            }
             Widget::Divider => 9.0,
             Widget::Button { .. } => 32.0,
-            Widget::Toggle { label, .. } => (lines(font, label, width - 34.0).len() as f32 * LINE + 2.0).max(TOGGLE[1]) + SPACER,
-            Widget::Slider { .. } | Widget::Steps { .. } => label + LABEL_GAP + SLIDER_HEIGHT + SPACER,
-            Widget::Dropdown { .. } | Widget::Input { .. } => label + LABEL_GAP + BOX_HEIGHT + SPACER,
+            Widget::Toggle { label, .. } => {
+                (lines(font, label, width - 34.0).len() as f32 * LINE + 2.0).max(TOGGLE[1]) + SPACER
+            }
+            Widget::Slider { .. } | Widget::Steps { .. } => {
+                label + LABEL_GAP + SLIDER_HEIGHT + SPACER
+            }
+            Widget::Dropdown { .. } | Widget::Input { .. } => {
+                label + LABEL_GAP + BOX_HEIGHT + SPACER
+            }
         }
     }
 
@@ -132,7 +173,11 @@ impl Kit {
     fn control(&self, font: Option<&Font>, widget: &Widget, rect: [f32; 4]) -> [f32; 4] {
         let [l, t, r, _] = rect;
         let top = t + self.label_lines(font, widget, r - l).len() as f32 * LINE + LABEL_GAP;
-        let h = if matches!(widget, Widget::Slider { .. } | Widget::Steps { .. }) { SLIDER_HEIGHT } else { BOX_HEIGHT };
+        let h = if matches!(widget, Widget::Slider { .. } | Widget::Steps { .. }) {
+            SLIDER_HEIGHT
+        } else {
+            BOX_HEIGHT
+        };
         [l, top, r, top + h]
     }
 }
@@ -146,13 +191,23 @@ pub(crate) fn inset(r: [f32; 4], by: f32) -> [f32; 4] {
 }
 
 impl Skin for Kit {
-    fn draw(&self, list: &mut DrawList, font: Option<&Font>, widget: &Widget, rect: [f32; 4], state: State) {
+    fn draw(
+        &self,
+        list: &mut DrawList,
+        font: Option<&Font>,
+        widget: &Widget,
+        rect: [f32; 4],
+        state: State,
+    ) {
         draw::widget(self, list, font, widget, rect, state);
     }
 
     fn hit(&self, font: Option<&Font>, widget: &Widget, rect: [f32; 4]) -> [f32; 4] {
         match widget {
-            Widget::Slider { .. } | Widget::Steps { .. } | Widget::Dropdown { .. } | Widget::Input { .. } => self.control(font, widget, rect),
+            Widget::Slider { .. }
+            | Widget::Steps { .. }
+            | Widget::Dropdown { .. }
+            | Widget::Input { .. } => self.control(font, widget, rect),
             Widget::Toggle { .. } => [rect[0], rect[1], rect[2], rect[3] - SPACER],
             _ => rect,
         }
@@ -170,15 +225,34 @@ impl Skin for Kit {
     fn dropdown_list(&self, _font: Option<&Font>, rect: [f32; 4], _options: usize) -> ListGeometry {
         let top = rect[3] - SPACER;
         let list = [rect[0], top, rect[2], top + LIST_HEIGHT];
-        ListGeometry { rect: list, first: [list[0] + 4.0, list[1] + 3.0], row: LIST_ROW, row_width: list[2] - list[0] - 8.0 }
+        ListGeometry {
+            rect: list,
+            first: [list[0] + 4.0, list[1] + 3.0],
+            row: LIST_ROW,
+            row_width: list[2] - list[0] - 8.0,
+        }
     }
 
-    fn draw_dropdown_list(&self, list: &mut DrawList, font: Option<&Font>, g: ListGeometry, options: &[String], selected: usize, hover: Option<usize>, scroll: f32) {
+    fn draw_dropdown_list(
+        &self,
+        list: &mut DrawList,
+        font: Option<&Font>,
+        g: ListGeometry,
+        options: &[String],
+        selected: usize,
+        hover: Option<usize>,
+        scroll: f32,
+    ) {
         draw::dropdown_list(self, list, font, g, options, selected, hover, scroll);
     }
 
     fn scroll_track(&self, viewport: [f32; 4]) -> [f32; 4] {
-        [viewport[2] + 2.0, viewport[1] + 2.0, viewport[2] + 7.0, viewport[3] - 2.0]
+        [
+            viewport[2] + 2.0,
+            viewport[1] + 2.0,
+            viewport[2] + 7.0,
+            viewport[3] - 2.0,
+        ]
     }
 
     fn thumb(&self, track: [f32; 4], visible: f32, content: f32, scroll: f32) -> [f32; 4] {
@@ -189,7 +263,13 @@ impl Skin for Kit {
     }
 
     fn draw_scrollbar(&self, list: &mut DrawList, track: [f32; 4], thumb: [f32; 4]) {
-        self.paint(list, self.rail, [track[0] + 1.0, track[1], track[2] - 1.0, track[3]], crate::draw::WHITE, 0x434343);
+        self.paint(
+            list,
+            self.rail,
+            [track[0] + 1.0, track[1], track[2] - 1.0, track[3]],
+            crate::draw::WHITE,
+            0x434343,
+        );
         self.paint(list, self.thumb, thumb, crate::draw::WHITE, 0xC6C6C6);
     }
 

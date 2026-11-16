@@ -18,15 +18,15 @@ mod source;
 
 use std::ops::{BitOr, BitOrAssign};
 
-use acacia_client::proto::packets::{SetTitle, SetTitleType};
 use acacia_client::proto::RawPacket;
+use acacia_client::proto::packets::{SetTitle, SetTitleType};
 use acacia_client::{DisconnectReason, Violation};
 
-pub use channel::{channel, EventReceiver};
-pub use chat::{ChatKind, ChatMatch, ChatMessage, ChatPattern};
+pub use channel::{EventReceiver, channel};
 pub(crate) use chat::flatten as rawtext_value;
-pub use out::EventSink;
+pub use chat::{ChatKind, ChatMatch, ChatMessage, ChatPattern};
 pub(crate) use out::EventOut;
+pub use out::EventSink;
 pub(crate) use source::EventSource;
 
 use crate::forms::Form;
@@ -90,7 +90,11 @@ pub enum BotEvent {
     /// A server form waiting for [`crate::Bot::answer_form`].
     Form(Form),
     /// Health or hunger changed.
-    Health { health: f32, food: f32, saturation: f32 },
+    Health {
+        health: f32,
+        food: f32,
+        saturation: f32,
+    },
     Died,
     Respawned,
     PlayerJoined(PlayerListEntry),
@@ -106,9 +110,14 @@ pub enum BotEvent {
     /// The open window's contents arrived (`InventoryContent`): first after its [`BotEvent::WindowOpened`],
     /// then on every full refresh (live-updating GUIs resend them). Not for the own inventory.
     WindowContents(Container),
-    WindowClosed { window_id: i32 },
+    WindowClosed {
+        window_id: i32,
+    },
     /// The server opened a sign editor ([`crate::Bot::write_sign`]).
-    SignEditor { position: [i32; 3], front: bool },
+    SignEditor {
+        position: [i32; 3],
+        front: bool,
+    },
     Title(Title),
     /// The server shows the player sleeping in a bed.
     Slept,
@@ -118,7 +127,9 @@ pub enum BotEvent {
     /// Strict mode only ([`crate::BotConfig::strict`]).
     Violation(Violation),
     /// Only from [`channel`]: this many lossy events were dropped here because the consumer fell behind.
-    Lagged { dropped: u64 },
+    Lagged {
+        dropped: u64,
+    },
     /// Always the last event.
     Disconnected(DisconnectReason),
 }
@@ -127,7 +138,14 @@ impl BotEvent {
     /// A newer event or the state supersedes it (ticks, raw packets, violations, titles, moves), so a full queue
     /// may drop it.
     pub fn is_lossy(&self) -> bool {
-        matches!(self, Self::Packet(_) | Self::Tick | Self::Violation(_) | Self::Title(_) | Self::EntitiesMoved(_))
+        matches!(
+            self,
+            Self::Packet(_)
+                | Self::Tick
+                | Self::Violation(_)
+                | Self::Title(_)
+                | Self::EntitiesMoved(_)
+        )
     }
 }
 

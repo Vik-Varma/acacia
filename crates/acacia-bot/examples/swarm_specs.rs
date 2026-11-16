@@ -5,15 +5,19 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use acacia_bot::Bot;
 use acacia_bot::client::auth::FileTokenCache;
 use acacia_bot::swarm::{BotSpec, Swarm};
-use acacia_bot::Bot;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
     let mut args = std::env::args().skip(1);
-    let path = args.next().ok_or("usage: swarm_specs <specs.json> [seconds] [shards] [shard_fill]")?;
+    let path = args
+        .next()
+        .ok_or("usage: swarm_specs <specs.json> [seconds] [shards] [shard_fill]")?;
     let secs: u64 = args.next().map_or(60, |s| s.parse().expect("seconds"));
     let specs: Vec<BotSpec<()>> = serde_json::from_slice(&std::fs::read(path)?)?;
 

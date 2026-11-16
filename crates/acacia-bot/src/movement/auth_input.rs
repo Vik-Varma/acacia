@@ -2,7 +2,8 @@
 //! platform online logins claim (docs/research/04-bedrock-gameplay-layer.md §1).
 
 use acacia_client::proto::packets::{
-    PlayerAuthInput, PlayerAuthInputInputMode, PlayerAuthInputInteractionModel, PlayerAuthInputPlayMode,
+    PlayerAuthInput, PlayerAuthInputInputMode, PlayerAuthInputInteractionModel,
+    PlayerAuthInputPlayMode,
 };
 use acacia_client::proto::types::{InputData as F, Vec2f, Vec3f};
 use acacia_physics::{Input, TickOutput};
@@ -34,11 +35,24 @@ fn vec3([x, y, z]: [f32; 3]) -> Vec3f {
 
 /// Yaw wrapped to -180..180 and pitch clamped to -90..=90, as the client sends them.
 pub(super) fn wire_rotation(yaw: f32, pitch: f32) -> (f32, f32) {
-    (wrap_yaw(yaw), if pitch.is_finite() { pitch.clamp(-90.0, 90.0) } else { 0.0 })
+    (
+        wrap_yaw(yaw),
+        if pitch.is_finite() {
+            pitch.clamp(-90.0, 90.0)
+        } else {
+            0.0
+        },
+    )
 }
 
 /// `loaded`: past the loading screen, after which vanilla reports PlayMode Screen instead of Normal.
-pub(super) fn build(input: &Input, out: &TickOutput, e: &Edges, tick: u64, loaded: bool) -> PlayerAuthInput {
+pub(super) fn build(
+    input: &Input,
+    out: &TickOutput,
+    e: &Edges,
+    tick: u64,
+    loaded: bool,
+) -> PlayerAuthInput {
     let (yaw, pitch) = wire_rotation(input.yaw, input.pitch);
     let [strafe, forward] = input.move_vector;
 
@@ -97,12 +111,23 @@ pub(super) fn build(input: &Input, out: &TickOutput, e: &Edges, tick: u64, loade
         pitch,
         yaw,
         // A fixed offset whatever the pose: the servers read feet as position - 1.62 even when sneaking.
-        position: vec3([out.position[0], out.position[1] + EYE_HEIGHT, out.position[2]]),
-        move_vector: Vec2f { x: out.move_vector[0], z: out.move_vector[1] },
+        position: vec3([
+            out.position[0],
+            out.position[1] + EYE_HEIGHT,
+            out.position[2],
+        ]),
+        move_vector: Vec2f {
+            x: out.move_vector[0],
+            z: out.move_vector[1],
+        },
         head_yaw: yaw,
         input_data: flags,
         input_mode: PlayerAuthInputInputMode::Touch,
-        play_mode: if loaded { PlayerAuthInputPlayMode::Screen } else { PlayerAuthInputPlayMode::Normal },
+        play_mode: if loaded {
+            PlayerAuthInputPlayMode::Screen
+        } else {
+            PlayerAuthInputPlayMode::Normal
+        },
         interaction_model: PlayerAuthInputInteractionModel::Touch,
         interact_rotation: Vec2f { x: pitch, z: yaw },
         tick,
@@ -113,8 +138,15 @@ pub(super) fn build(input: &Input, out: &TickOutput, e: &Edges, tick: u64, loade
         vehicle_rotation: None,
         predicted_vehicle: None,
         analogue_move_vector: Vec2f { x: 0.0, z: 0.0 },
-        camera_orientation: Vec3f { x: -ys * pc, y: -ps, z: yc * pc },
-        raw_move_vector: Vec2f { x: strafe, z: forward },
+        camera_orientation: Vec3f {
+            x: -ys * pc,
+            y: -ps,
+            z: yc * pc,
+        },
+        raw_move_vector: Vec2f {
+            x: strafe,
+            z: forward,
+        },
     }
 }
 

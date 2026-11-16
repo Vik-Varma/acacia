@@ -4,18 +4,24 @@
 
 use std::path::PathBuf;
 
-use acacia_bot::build::journal::Journal;
-use acacia_bot::build::{check, check_text, findings, Block, BuildJob, BuildStatus, Builder, Mismatch, Phase, Structure, Transform};
-use acacia_bot::pathfind::process::{BlockView, Status};
-use acacia_bot::pathfind::Processes;
 use acacia_bot::Bot;
+use acacia_bot::build::journal::Journal;
+use acacia_bot::build::{
+    Block, BuildJob, BuildStatus, Builder, Mismatch, Phase, Structure, Transform, check,
+    check_text, findings,
+};
+use acacia_bot::pathfind::Processes;
+use acacia_bot::pathfind::process::{BlockView, Status};
 
 use super::{Error, Fill, Pad};
 
 #[path = "../../src/build/tests/scenes_redstone.rs"]
 mod scenes_redstone;
 
-const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/build/house16.mcstructure");
+const FIXTURE: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/build/house16.mcstructure"
+);
 /// Default tick cap (`MAX_TICKS` overrides).
 const MAX_TICKS: u32 = 40_000;
 /// Ticks without a cell done before a run counts as stalled (`STALL_TICKS` overrides). Two bots on house16
@@ -27,8 +33,26 @@ const STATIONS: [[i32; 3]; 2] = [[0, 0, -10], [1, 0, -10]];
 /// Stacks per barrel, as (item, stacks): house16 twice over. An offline bot that reconnects comes back with an
 /// empty inventory (BDS 1.26.52, seen 2026-10-17), so what a dropped bot took is gone.
 const STOCK: [&[(&str, u32)]; 2] = [
-    &[("cobblestone", 9), ("oak_planks", 6), ("oak_log", 2), ("glass_pane", 2), ("oak_slab", 3), ("oak_stairs", 1)],
-    &[("torch", 2), ("ladder", 2), ("oak_fence", 2), ("cobblestone_wall", 2), ("stone_button", 2), ("furnace", 2), ("dispenser", 2), ("observer", 2), ("piston", 2), ("oak_stairs", 1)],
+    &[
+        ("cobblestone", 9),
+        ("oak_planks", 6),
+        ("oak_log", 2),
+        ("glass_pane", 2),
+        ("oak_slab", 3),
+        ("oak_stairs", 1),
+    ],
+    &[
+        ("torch", 2),
+        ("ladder", 2),
+        ("oak_fence", 2),
+        ("cobblestone_wall", 2),
+        ("stone_button", 2),
+        ("furnace", 2),
+        ("dispenser", 2),
+        ("observer", 2),
+        ("piston", 2),
+        ("oak_stairs", 1),
+    ],
 ];
 
 /// The structure for `scene` and junk to clear (pad offsets): `house16`; `wall`, house16's wall with its log
@@ -38,12 +62,28 @@ const STOCK: [&[(&str, u32)]; 2] = [
 /// furnace where junk dirt stood (the cell BDS kept mining out).
 fn scene(name: &str) -> Result<(PathBuf, Vec<Fill<'static>>), Error> {
     let at = |p: [i32; 3]| [AT[0] + p[0], AT[1] + p[1], AT[2] + p[2]];
-    let put = |s: &mut Structure, p: [i32; 3], name: &str, props: &str| s.set(p, Some(Block::new(name, props)));
+    let put = |s: &mut Structure, p: [i32; 3], name: &str, props: &str| {
+        s.set(p, Some(Block::new(name, props)))
+    };
     let s = match name {
-        "house16" => return Ok((FIXTURE.into(), vec![([6, 0, -6], [8, 1, -4], "dirt"), ([12, 2, 2], [13, 2, 3], "stone")])),
+        "house16" => {
+            return Ok((
+                FIXTURE.into(),
+                vec![
+                    ([6, 0, -6], [8, 1, -4], "dirt"),
+                    ([12, 2, 2], [13, 2, 3], "stone"),
+                ],
+            ));
+        }
         // The floor laid already (see `scenes_redstone`): the garden's is plain grass, cleared where it differs.
-        "rs-rails" => (scenes_redstone::rails(), vec![(at([0, 0, 0]), at([7, 0, 5]), scenes_redstone::FLOORS[0].1)]),
-        "rs-garden" => (scenes_redstone::garden(), vec![(at([0, 0, 0]), at([6, 0, 5]), scenes_redstone::FLOORS[1].1)]),
+        "rs-rails" => (
+            scenes_redstone::rails(),
+            vec![(at([0, 0, 0]), at([7, 0, 5]), scenes_redstone::FLOORS[0].1)],
+        ),
+        "rs-garden" => (
+            scenes_redstone::garden(),
+            vec![(at([0, 0, 0]), at([6, 0, 5]), scenes_redstone::FLOORS[1].1)],
+        ),
         "wall" => {
             let mut s = Structure::new([8, 6, 1]);
             for x in 0..8 {
@@ -101,11 +141,21 @@ fn scene(name: &str) -> Result<(PathBuf, Vec<Fill<'static>>), Error> {
                     put(&mut s, [x, 1, z], "air", "");
                 }
             }
-            put(&mut s, [1, 1, 1], "furnace", "minecraft:cardinal_direction=south");
+            put(
+                &mut s,
+                [1, 1, 1],
+                "furnace",
+                "minecraft:cardinal_direction=south",
+            );
             (s, vec![(at([0, 0, 0]), at([2, 1, 2]), "dirt")])
         }
-        n if n.starts_with("interact-") => super::interact_scenes::scene(n, AT).ok_or_else(|| format!("unknown scene {name}"))?,
-        _ => match (super::scenes_twocell::scene(name, at), super::oneclick::scene(name)) {
+        n if n.starts_with("interact-") => {
+            super::interact_scenes::scene(n, AT).ok_or_else(|| format!("unknown scene {name}"))?
+        }
+        _ => match (
+            super::scenes_twocell::scene(name, at),
+            super::oneclick::scene(name),
+        ) {
             (Some((s, junk, _)), _) => (s, junk),
             (None, Some(s)) => (s, vec![]),
             (None, None) => return Err(format!("unknown scene {name}").into()),
@@ -123,7 +173,11 @@ pub async fn setup(a: &mut Bot, pad: &Pad, name: &str) -> Result<BuildJob, Error
     pad.build(a, &junk, 5).await?;
     // The redstone scenes stock exact counts, one slot each (buckets do not stack); the others whole stacks.
     let exact = name.starts_with("rs-");
-    let stock = if exact { [scenes_redstone::STOCK, &[]] } else { super::oneclick::stock(name).map_or(STOCK, |s| [s, &[]]) };
+    let stock = if exact {
+        [scenes_redstone::STOCK, &[]]
+    } else {
+        super::oneclick::stock(name).map_or(STOCK, |s| [s, &[]])
+    };
     for (station, items) in STATIONS.iter().zip(stock) {
         let [x, y, z] = pad.block(*station);
         pad.run(a, &format!("/setblock {x} {y} {z} barrel"));
@@ -133,7 +187,10 @@ pub async fn setup(a: &mut Bot, pad: &Pad, name: &str) -> Result<BuildJob, Error
         for (item, n) in items {
             let (slots, count) = if exact { (1, *n) } else { (*n, 64) };
             for _ in 0..slots {
-                pad.run(a, &format!("/replaceitem block {x} {y} {z} slot.container {slot} {item} {count}"));
+                pad.run(
+                    a,
+                    &format!("/replaceitem block {x} {y} {z} slot.container {slot} {item} {count}"),
+                );
                 slot += 1;
             }
         }
@@ -142,10 +199,17 @@ pub async fn setup(a: &mut Bot, pad: &Pad, name: &str) -> Result<BuildJob, Error
     if !exact {
         super::interact_scenes::stock(a, pad, &STATIONS).await?;
     }
-    let mut job = BuildJob::new(structure, Transform { origin: pad.block(AT), ..Transform::default() });
+    let mut job = BuildJob::new(
+        structure,
+        Transform {
+            origin: pad.block(AT),
+            ..Transform::default()
+        },
+    );
     job.stations = STATIONS.iter().map(|&s| pad.block(s)).collect();
     if let Some((_, _, stock)) = super::scenes_twocell::scene(name, |p| p) {
-        job.stations.push(pad.block(super::scenes_twocell::station(a, pad, stock).await?));
+        job.stations
+            .push(pad.block(super::scenes_twocell::station(a, pad, stock).await?));
     }
     Ok(job)
 }
@@ -154,7 +218,14 @@ pub async fn setup(a: &mut Bot, pad: &Pad, name: &str) -> Result<BuildJob, Error
 /// the shovel each scaffold dirt took the hand's ~780 ms to break (34 a house, live); without the axe each wrong
 /// plank or log took the hand's seconds (mansion slice, 118 breaks).
 pub async fn kit(bot: &mut Bot, pad: &Pad) -> Result<(), Error> {
-    for c in ["/clear @s", "/give @s diamond_pickaxe", "/give @s diamond_shovel", "/give @s diamond_axe", "/give @s diamond_hoe", "/give @s dirt 64"] {
+    for c in [
+        "/clear @s",
+        "/give @s diamond_pickaxe",
+        "/give @s diamond_shovel",
+        "/give @s diamond_axe",
+        "/give @s diamond_hoe",
+        "/give @s dirt 64",
+    ] {
         pad.run(bot, c);
         bot.wait_ticks(4).await?;
     }
@@ -163,22 +234,39 @@ pub async fn kit(bot: &mut Bot, pad: &Pad) -> Result<(), Error> {
 
 /// Runs `builder` until done, `kill_at` placements (0: never), the tick cap or a long stall; returns ticks, the
 /// last status and corrections. `label` prefixes the progress lines.
-pub async fn drive(bot: &mut Bot, builder: Builder, kill_at: u32, label: &str) -> Result<(u32, BuildStatus, u32), Error> {
+pub async fn drive(
+    bot: &mut Bot,
+    builder: Builder,
+    kill_at: u32,
+    label: &str,
+) -> Result<(u32, BuildStatus, u32), Error> {
     let before = super::corrections(bot);
     let diag = Builder::new(builder.job().clone())?;
     let (mut last_done, mut still) = (0, 0);
-    let stall_ticks = std::env::var("STALL_TICKS").ok().and_then(|v| v.parse().ok()).unwrap_or(STALL_TICKS);
+    let stall_ticks = std::env::var("STALL_TICKS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(STALL_TICKS);
     let status = builder.status();
     let mut procs = Processes::new();
     let id = procs.add(builder, 10);
     let mut ticks = 0;
-    let max_ticks = std::env::var("MAX_TICKS").ok().and_then(|v| v.parse().ok()).unwrap_or(MAX_TICKS);
+    let max_ticks = std::env::var("MAX_TICKS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(MAX_TICKS);
     // Wall time by what the tick did (status / build phase): where a build's time goes.
     let mut split: std::collections::BTreeMap<String, std::time::Duration> = Default::default();
     let profile = |split: &std::collections::BTreeMap<String, std::time::Duration>| {
         let mut v: Vec<_> = split.iter().collect();
         v.sort_by(|a, b| b.1.cmp(a.1));
-        println!("{label} time: {}", v.iter().map(|(k, d)| format!("{k} {:.0}s", d.as_secs_f32())).collect::<Vec<_>>().join(", "));
+        println!(
+            "{label} time: {}",
+            v.iter()
+                .map(|(k, d)| format!("{k} {:.0}s", d.as_secs_f32()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     };
     loop {
         let t0 = std::time::Instant::now();
@@ -194,13 +282,28 @@ pub async fn drive(bot: &mut Bot, builder: Builder, kill_at: u32, label: &str) -
         };
         *split.entry(format!("{key}/{:?}", s.phase)).or_default() += t0.elapsed();
         if ticks % 400 == 0 {
-            println!("{label} tick {ticks}: {:?} done {}/{} place {} break {} placed {} restocks {} missing {:?}", s.phase, s.done, s.cells, s.to_place, s.to_break, s.placed, s.restocks, s.missing);
+            println!(
+                "{label} tick {ticks}: {:?} done {}/{} place {} break {} placed {} restocks {} missing {:?}",
+                s.phase, s.done, s.cells, s.to_place, s.to_break, s.placed, s.restocks, s.missing
+            );
         }
-        (still, last_done) = if s.done == last_done { (still + 1, last_done) } else { (0, s.done) };
+        (still, last_done) = if s.done == last_done {
+            (still + 1, last_done)
+        } else {
+            (0, s.done)
+        };
         if still > 0 && still % 1000 == 0 {
             let m = bot.bedrock().and_then(|b| b.movement());
-            println!("{label} STALL at {:?} ground {:?} status {st:?} failed {:?}", m.and_then(|m| m.position()), m.map(|m| m.on_ground()), s.failed);
-            diag.explain_for(bot).iter().take(12).for_each(|l| println!("  OPEN {l}"));
+            println!(
+                "{label} STALL at {:?} ground {:?} status {st:?} failed {:?}",
+                m.and_then(|m| m.position()),
+                m.map(|m| m.on_ground()),
+                s.failed
+            );
+            diag.explain_for(bot)
+                .iter()
+                .take(12)
+                .for_each(|l| println!("  OPEN {l}"));
         }
         if st == Status::Empty || procs.outcome(id).is_some() {
             println!("{label} outcome {:?}", procs.outcome(id));
@@ -236,20 +339,39 @@ pub fn journaled(builder: Builder, name: &str) -> Result<Builder, Error> {
 
 /// Prints the journals' summary and findings, and the history of every wrong cell.
 pub fn report(wrong: &[Mismatch]) {
-    match findings::report(&journal_dir(), &wrong.iter().take(20).map(|m| m.pos).collect::<Vec<_>>()) {
+    match findings::report(
+        &journal_dir(),
+        &wrong.iter().take(20).map(|m| m.pos).collect::<Vec<_>>(),
+    ) {
         Ok(lines) => lines.iter().for_each(|l| println!("{l}")),
         Err(e) => println!("no journal report: {e}"),
     }
 }
 
 /// Connects `observer` over the pad and compares every cell with the job's structure.
-pub async fn observe(server: &str, observer: &str, pad: &Pad, job: &BuildJob) -> Result<Vec<Mismatch>, Error> {
+pub async fn observe(
+    server: &str,
+    observer: &str,
+    pad: &Pad,
+    job: &BuildJob,
+) -> Result<Vec<Mismatch>, Error> {
     let structure = Structure::load(&std::fs::read(&job.structure)?)?;
     let (mut o, _) = super::connect(server, observer).await?;
     let spot = pad.block([12, 9.max(structure.size[1] + 2), 0]);
-    pad.run(&o, &format!("/tp @s {} {} {}", spot[0] as f32 + 0.5, spot[1], spot[2] as f32 + 0.5));
+    pad.run(
+        &o,
+        &format!(
+            "/tp @s {} {} {}",
+            spot[0] as f32 + 0.5,
+            spot[1],
+            spot[2] as f32 + 0.5
+        ),
+    );
     // Until every cell is loaded (at most 80 ticks), then a few more for block entities.
-    let cells: Vec<_> = structure.cells().map(|(local, _)| job.at.apply(structure.size, local)).collect();
+    let cells: Vec<_> = structure
+        .cells()
+        .map(|(local, _)| job.at.apply(structure.size, local))
+        .collect();
     for _ in 0..80 {
         if cells.iter().all(|p| o.block_state(*p).is_some()) {
             break;
@@ -258,11 +380,22 @@ pub async fn observe(server: &str, observer: &str, pad: &Pad, job: &BuildJob) ->
     }
     o.wait_ticks(10).await?;
     let mut wrong = check(&structure, &job.at, |p| o.block_state(p).map(BlockView::of));
-    wrong.extend(acacia_bot::build::colors(&structure, &job.at, |p| match o.state().block_entities.get(p)?.value.get("color") {
+    wrong.extend(acacia_bot::build::colors(&structure, &job.at, |p| match o
+        .state()
+        .block_entities
+        .get(p)?
+        .value
+        .get("color")
+    {
         Some(acacia_client::proto::nbt::Value::Byte(c)) => Some(*c as u8),
         _ => None,
     }));
-    wrong.extend(check_text(&structure, &job.at, |p, front| o.state().block_entities.sign_text(p, front).map(str::to_string)));
+    wrong.extend(check_text(&structure, &job.at, |p, front| {
+        o.state()
+            .block_entities
+            .sign_text(p, front)
+            .map(str::to_string)
+    }));
     o.disconnect().await;
     Ok(wrong)
 }

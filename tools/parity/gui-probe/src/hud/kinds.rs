@@ -26,7 +26,11 @@ pub fn screen(c: &Value) -> Gui {
 
 /// `Options.getBackgroundColor(default)` from the case's text background options.
 pub fn background(c: &Value, default: f32) -> u32 {
-    background_color(c["chatOnly"].as_bool().unwrap_or(true), float(c, "textOpacity", 0.5), default)
+    background_color(
+        c["chatOnly"].as_bool().unwrap_or(true),
+        float(c, "textOpacity", 0.5),
+        default,
+    )
 }
 
 pub fn effects(c: &Value, gui: &mut Gui) {
@@ -35,7 +39,12 @@ pub fn effects(c: &Value, gui: &mut Gui) {
         .into_iter()
         .flatten()
         .filter_map(|e| {
-            EffectIcon::vanilla(e["id"].as_str()?, int(e, "duration", 0), e["ambient"].as_bool().unwrap_or(false), e["icon"].as_bool().unwrap_or(true))
+            EffectIcon::vanilla(
+                e["id"].as_str()?,
+                int(e, "duration", 0),
+                e["ambient"].as_bool().unwrap_or(false),
+                e["icon"].as_bool().unwrap_or(true),
+            )
         })
         .collect();
     effects::effects(gui, c["demo"].as_bool().unwrap_or(false), &icons);
@@ -72,15 +81,25 @@ pub fn selected(c: &Value, assets: &Assets, gui: &mut Gui) {
             let custom = &step["custom"];
             HeldName {
                 item: step["item"].as_str().unwrap_or_default().to_owned(),
-                hover_name: if custom.is_null() { translate(assets, step["key"].as_str().unwrap_or_default()) } else { comp(assets, custom) },
-                rarity_color: named_color(step["rarity"].as_str().unwrap_or("white")).unwrap_or(0xFF_FFFF),
+                hover_name: if custom.is_null() {
+                    translate(assets, step["key"].as_str().unwrap_or_default())
+                } else {
+                    comp(assets, custom)
+                },
+                rarity_color: named_color(step["rarity"].as_str().unwrap_or("white"))
+                    .unwrap_or(0xFF_FFFF),
                 custom_name: !custom.is_null(),
             }
         });
         highlight.tick(held, time);
     }
     let mode = c["gameMode"].as_str().unwrap_or("survival");
-    highlight.draw(gui, assets.font.as_ref(), mode == "survival" || mode == "adventure", background(c, 0.0));
+    highlight.draw(
+        gui,
+        assets.font.as_ref(),
+        mode == "survival" || mode == "adventure",
+        background(c, 0.0),
+    );
 }
 
 pub fn boss(c: &Value, assets: &Assets, gui: &mut Gui) {
@@ -110,13 +129,31 @@ pub fn decor(c: &Value, assets: &Assets, gui: &mut Gui) {
         return;
     }
     let cd = &c["cooldown"];
-    let cooldown = if cd.is_null() { 0.0 } else { decor::cooldown_percent(int(cd, "duration", 0), int(cd, "elapsed", 0), float(c, "partial", 0.0)) };
-    let max_damage = if c["unbreakable"].as_bool().unwrap_or(false) { 0 } else { int(c, "maxDamage", 0) };
+    let cooldown = if cd.is_null() {
+        0.0
+    } else {
+        decor::cooldown_percent(
+            int(cd, "duration", 0),
+            int(cd, "elapsed", 0),
+            float(c, "partial", 0.0),
+        )
+    };
+    let max_damage = if c["unbreakable"].as_bool().unwrap_or(false) {
+        0
+    } else {
+        int(c, "maxDamage", 0)
+    };
     let d = ItemDecorations {
         count,
         count_text: c["countText"].as_str().map(str::to_owned),
         bar: decor::damage_bar(int(c, "damage", 0), max_damage),
         cooldown,
     };
-    decor::item_decorations(gui, assets.font.as_ref(), int(c, "x", 0), int(c, "y", 0), &d);
+    decor::item_decorations(
+        gui,
+        assets.font.as_ref(),
+        int(c, "x", 0),
+        int(c, "y", 0),
+        &d,
+    );
 }

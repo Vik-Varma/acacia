@@ -17,9 +17,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
-use acacia_proto::{packets, Packet, RawPacket};
+use acacia_proto::{Packet, RawPacket, packets};
 use bytes::Bytes;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Bodies above this are not test-decoded (chunks, registries, command trees).
 const MAX_DECODED: usize = 16 << 10;
@@ -27,10 +27,28 @@ const MAX_DECODED: usize = 16 << 10;
 /// Client-data claims that make up a skin. Every other player sees them, so unlike the device ids
 /// next to them they hold nothing secret.
 const SKIN_CLAIMS: &[&str] = &[
-    "AnimatedImageData", "ArmSize", "CapeData", "CapeId", "CapeImageHeight", "CapeImageWidth", "CapeOnClassicSkin",
-    "OverrideSkin", "PersonaPieces", "PersonaSkin", "PieceTintColors", "PremiumSkin", "SkinAnimationData", "SkinColor",
-    "SkinData", "SkinGeometryData", "SkinGeometryDataEngineVersion", "SkinId", "SkinImageHeight", "SkinImageWidth",
-    "SkinResourcePatch", "TrustedSkin",
+    "AnimatedImageData",
+    "ArmSize",
+    "CapeData",
+    "CapeId",
+    "CapeImageHeight",
+    "CapeImageWidth",
+    "CapeOnClassicSkin",
+    "OverrideSkin",
+    "PersonaPieces",
+    "PersonaSkin",
+    "PieceTintColors",
+    "PremiumSkin",
+    "SkinAnimationData",
+    "SkinColor",
+    "SkinData",
+    "SkinGeometryData",
+    "SkinGeometryDataEngineVersion",
+    "SkinId",
+    "SkinImageHeight",
+    "SkinImageWidth",
+    "SkinResourcePatch",
+    "TrustedSkin",
 ];
 
 /// One capture file shared by every player of a proxy.
@@ -51,7 +69,12 @@ impl Recorder {
     pub fn create(dir: &Path, name: &str) -> std::io::Result<Self> {
         std::fs::create_dir_all(dir)?;
         let path = dir.join(format!("{name}.jsonl"));
-        Ok(Self { dir: dir.to_owned(), out: File::create(&path)?, path, start: Instant::now() })
+        Ok(Self {
+            dir: dir.to_owned(),
+            out: File::create(&path)?,
+            path,
+            start: Instant::now(),
+        })
     }
 
     pub fn path(&self) -> &Path {
@@ -64,7 +87,10 @@ impl Recorder {
         let mut out = File::create(&path)?;
         out.write_all(b"t_ms\tdir\tpeer\tfirst_byte\tlen\n")?;
         println!("datagram timings to {}", path.display());
-        Ok(DatagramLog { out, start: self.start })
+        Ok(DatagramLog {
+            out,
+            start: self.start,
+        })
     }
 
     pub fn write(&mut self, mut entry: Value) {
@@ -78,13 +104,25 @@ impl Recorder {
 
     /// Writes the skin claims to `<dir>/skins/<SkinId>.json` for the bots' skin pool (acacia-auth/assets/skins).
     pub fn save_skin(&self, client_data: &Value) {
-        let skin: serde_json::Map<String, Value> = SKIN_CLAIMS.iter().map(|&k| (k.to_owned(), client_data[k].clone())).collect();
-        let id: String = client_data["SkinId"].as_str().unwrap_or("unknown").chars().map(|c| if "/\\:.".contains(c) { '_' } else { c }).collect();
+        let skin: serde_json::Map<String, Value> = SKIN_CLAIMS
+            .iter()
+            .map(|&k| (k.to_owned(), client_data[k].clone()))
+            .collect();
+        let id: String = client_data["SkinId"]
+            .as_str()
+            .unwrap_or("unknown")
+            .chars()
+            .map(|c| if "/\\:.".contains(c) { '_' } else { c })
+            .collect();
         let path = self.dir.join("skins").join(format!("{id}.json"));
         let mut out = Vec::new();
-        let mut ser = serde_json::Serializer::with_formatter(&mut out, serde_json::ser::PrettyFormatter::with_indent(b" "));
+        let mut ser = serde_json::Serializer::with_formatter(
+            &mut out,
+            serde_json::ser::PrettyFormatter::with_indent(b" "),
+        );
         serde::Serialize::serialize(&skin, &mut ser).expect("json values serialize");
-        let result = std::fs::create_dir_all(path.parent().expect("has parent")).and_then(|()| std::fs::write(&path, &out));
+        let result = std::fs::create_dir_all(path.parent().expect("has parent"))
+            .and_then(|()| std::fs::write(&path, &out));
         println!("skin {id} saved ({} bytes): {result:?}", out.len());
     }
 }
@@ -112,20 +150,30 @@ impl SessionLog {
             return;
         }
         if !out.contains(packet) {
-            self.write(named(json!({ "event": "dropped", "to": side(!from_game), "id": raw.id }), raw.id));
+            self.write(named(
+                json!({ "event": "dropped", "to": side(!from_game), "id": raw.id }),
+                raw.id,
+            ));
         }
-        out.iter().filter(|p| *p != packet).for_each(|p| self.sent(!from_game, "replace", p));
+        out.iter()
+            .filter(|p| *p != packet)
+            .for_each(|p| self.sent(!from_game, "replace", p));
     }
 
     /// A packet (header included) the proxy put on the wire that neither side sent.
     pub fn sent(&self, to_game: bool, why: &str, packet: &Bytes) {
-        let Ok(raw) = RawPacket::parse(packet.clone()) else { return };
+        let Ok(raw) = RawPacket::parse(packet.clone()) else {
+            return;
+        };
         let entry = json!({ "event": "sent", "to": side(to_game), "why": why, "id": raw.id, "len": raw.body.len(), "raw": hex::encode(&raw.body) });
         self.write(named(entry, raw.id));
     }
 
     pub fn packet(&self, from_game: bool, raw: &RawPacket) {
-        let mut entry = named(json!({ "dir": dir(from_game), "id": raw.id, "len": raw.body.len(), "raw": hex::encode(&raw.body) }), raw.id);
+        let mut entry = named(
+            json!({ "dir": dir(from_game), "id": raw.id, "len": raw.body.len(), "raw": hex::encode(&raw.body) }),
+            raw.id,
+        );
         if raw.body.len() <= MAX_DECODED
             && let Some(e) = decode_error(raw)
         {
@@ -152,7 +200,12 @@ pub struct DatagramLog {
 impl DatagramLog {
     pub fn write(&mut self, from_game: bool, peer: std::net::SocketAddr, datagram: &[u8]) {
         let t = self.start.elapsed().as_micros() as f64 / 1000.0;
-        let line = format!("{t:.3}\t{}\t{peer}\t{:#04x}\t{}\n", dir(from_game), datagram.first().copied().unwrap_or(0), datagram.len());
+        let line = format!(
+            "{t:.3}\t{}\t{peer}\t{:#04x}\t{}\n",
+            dir(from_game),
+            datagram.first().copied().unwrap_or(0),
+            datagram.len()
+        );
         if let Err(e) = self.out.write_all(line.as_bytes()) {
             eprintln!("datagram log write failed: {e}");
         }

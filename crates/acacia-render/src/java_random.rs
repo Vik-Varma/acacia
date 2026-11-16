@@ -12,7 +12,10 @@ pub struct JavaRandom {
 
 impl JavaRandom {
     pub fn new(seed: i64) -> JavaRandom {
-        JavaRandom { seed: (seed ^ MULTIPLIER) & MASK, gaussian: None }
+        JavaRandom {
+            seed: (seed ^ MULTIPLIER) & MASK,
+            gaussian: None,
+        }
     }
 
     /// `setSeed`, which also drops a cached gaussian.
@@ -83,14 +86,32 @@ mod tests {
     fn draws_match_java_util_random() {
         // java.util.Random's, printed by jshell.
         let mut r = JavaRandom::new(42);
-        assert_eq!([r.next_int(11), r.next_int(11), r.next_int(11), r.next_int(31), r.next_int(16)], [7, 4, 8, 23, 4]);
+        assert_eq!(
+            [
+                r.next_int(11),
+                r.next_int(11),
+                r.next_int(11),
+                r.next_int(31),
+                r.next_int(16)
+            ],
+            [7, 4, 8, 23, 4]
+        );
         let mut r = JavaRandom::new(0);
-        assert_eq!((r.next_long(), r.next_double(), r.next_float()), (-4962768465676381896, 0.24053641567148587, 0.6374174));
+        assert_eq!(
+            (r.next_long(), r.next_double(), r.next_float()),
+            (-4962768465676381896, 0.24053641567148587, 0.6374174)
+        );
         let mut r = JavaRandom::new(0);
-        assert_eq!((r.next_gaussian(), r.next_gaussian()), (0.8025330637390305, -0.9015460884175122));
+        assert_eq!(
+            (r.next_gaussian(), r.next_gaussian()),
+            (0.8025330637390305, -0.9015460884175122)
+        );
         // MarsagliaPolarGaussian takes Math.log, an ulp off java.util.Random's StrictMath.log here
         // (1.1419053154730547, 0.9194079489827879); the game's draw is this one.
         let mut r = JavaRandom::new(42);
-        assert_eq!((r.next_gaussian(), r.next_gaussian()), (1.141905315473055, 0.919407948982788));
+        assert_eq!(
+            (r.next_gaussian(), r.next_gaussian()),
+            (1.141905315473055, 0.919407948982788)
+        );
     }
 }

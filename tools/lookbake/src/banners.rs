@@ -10,6 +10,7 @@ use crate::ui::copy_tree;
 const COPIED: &str = "textures/entity/banner";
 
 pub fn copy(assets: &Path, out: &Path) -> Result<(), Error> {
-    copy_tree(&assets.join(COPIED), &out.join(COPIED)).map_err(|e| format!("{}: {e}", assets.join(COPIED).display()))?;
+    copy_tree(&assets.join(COPIED), &out.join(COPIED))
+        .map_err(|e| format!("{}: {e}", assets.join(COPIED).display()))?;
     Ok(())
 }

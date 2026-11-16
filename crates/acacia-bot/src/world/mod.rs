@@ -8,20 +8,20 @@ mod near;
 #[cfg(test)]
 mod tests;
 
-pub use adapter::PhysicsWorld;
 pub(crate) use acacia_physics::registry_world::block_physics;
+pub use adapter::PhysicsWorld;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, Weak};
 
 use acacia_client::proto::nbt::Value;
-use acacia_client::{BlobStore, Reason, Violation};
 use acacia_client::proto::packets::{
-    ChangeDimension, ClientCacheMissResponse, LevelChunk, NetworkChunkPublisherUpdate, StartGame, Subchunk, SubchunkRequest, UpdateBlock,
-    UpdateBlockSynced, UpdateSubchunkBlocks,
+    ChangeDimension, ClientCacheMissResponse, LevelChunk, NetworkChunkPublisherUpdate, StartGame,
+    Subchunk, SubchunkRequest, UpdateBlock, UpdateBlockSynced, UpdateSubchunkBlocks,
 };
 use acacia_client::proto::types::{BlockCoordinates, SubChunkEntryItemResult, Vec3i8, Vec3li};
 use acacia_client::proto::{DecodeError, Packet, RawPacket};
+use acacia_client::{BlobStore, Reason, Violation};
 use acacia_world::{BlockIds, BlockRegistry, ChunkView, CustomBlock, Dimension, World};
 use blobs::{Blobs, Ready};
 use bytes::Bytes;
@@ -79,13 +79,27 @@ impl WorldTracker {
     ];
 
     pub fn new(server: String, shared: SharedWorlds) -> Self {
-        Self { server, shared, registry: None, ids: BlockIds::Runtime, view: None, blobs: Blobs::default(), outgoing: Vec::new(), rejected: Vec::new(), near: None }
+        Self {
+            server,
+            shared,
+            registry: None,
+            ids: BlockIds::Runtime,
+            view: None,
+            blobs: Blobs::default(),
+            outgoing: Vec::new(),
+            rejected: Vec::new(),
+            near: None,
+        }
     }
 
     /// Idle bots: requests nothing (crate::subchunks does, like vanilla) and decodes only the columns
     /// around the player, as last given to [`WorldTracker::follow`] (near.rs).
     pub(crate) fn nearby(self) -> Self {
-        Self { near: Some(Near::default()), blobs: Blobs::remembering(near::RECENT_BLOBS), ..self }
+        Self {
+            near: Some(Near::default()),
+            blobs: Blobs::remembering(near::RECENT_BLOBS),
+            ..self
+        }
     }
 
     /// Nearby mode: centres the kept columns on the player's feet, dropping those left behind.
@@ -102,8 +116,13 @@ impl WorldTracker {
 
     /// Whether the block at a position is known: its chunk is loaded and, in nearby mode, its section arrived.
     pub fn knows_block(&self, x: i32, y: i32, z: i32) -> bool {
-        self.view.as_ref().is_some_and(|v| v.chunk(x >> 4, z >> 4).is_some())
-            && self.near.as_ref().is_none_or(|n| n.knows(x >> 4, y >> 4, z >> 4))
+        self.view
+            .as_ref()
+            .is_some_and(|v| v.chunk(x >> 4, z >> 4).is_some())
+            && self
+                .near
+                .as_ref()
+                .is_none_or(|n| n.knows(x >> 4, y >> 4, z >> 4))
     }
 
     /// The connection's blob store, for sections whose blobs it already held (blobs.rs).
@@ -123,18 +142,32 @@ impl WorldTracker {
         match packet.id {
             StartGame::ID => {
                 let sg: StartGame = packet.decode()?;
-                self.registry = Some(BlockRegistry::vanilla_with_custom_blocks(&custom_blocks(&sg)));
-                self.ids = if sg.block_network_ids_are_hashes { BlockIds::Hashed } else { BlockIds::Runtime };
+                self.registry = Some(BlockRegistry::vanilla_with_custom_blocks(&custom_blocks(
+                    &sg,
+                )));
+                self.ids = if sg.block_network_ids_are_hashes {
+                    BlockIds::Hashed
+                } else {
+                    BlockIds::Runtime
+                };
                 self.enter_dimension(sg.dimension.to_raw() as i32);
             }
-            ChangeDimension::ID => self.enter_dimension(packet.decode::<ChangeDimension>()?.dimension),
+            ChangeDimension::ID => {
+                self.enter_dimension(packet.decode::<ChangeDimension>()?.dimension)
+            }
             LevelChunk::ID => self.level_chunk(packet.decode()?),
             Subchunk::ID => {
                 let sc: Subchunk = packet.decode()?;
                 tracing::trace!(origin = ?sc.origin, entries = sc.entries.len(), results = ?sc.entries.iter().map(|e| e.result).collect::<Vec<_>>(), "sub-chunk response");
-                let Some(view) = &mut self.view else { return Ok(()) };
+                let Some(view) = &mut self.view else {
+                    return Ok(());
+                };
                 for e in sc.entries {
-                    let pos = (sc.origin.x + i32::from(e.dx), sc.origin.y + i32::from(e.dy), sc.origin.z + i32::from(e.dz));
+                    let pos = (
+                        sc.origin.x + i32::from(e.dx),
+                        sc.origin.y + i32::from(e.dy),
+                        sc.origin.z + i32::from(e.dz),
+                    );
                     if self.near.as_ref().is_some_and(|n| !n.covers(pos.0, pos.2)) {
                         continue;
                     }
@@ -154,16 +187,32 @@ impl WorldTracker {
                         _ => Some(payload),
                     };
                     if let Some(section) = section {
-                        insert_section(view, self.near.as_mut(), &mut self.rejected, packet.id, pos, &section);
+                        insert_section(
+                            view,
+                            self.near.as_mut(),
+                            &mut self.rejected,
+                            packet.id,
+                            pos,
+                            &section,
+                        );
                     }
                 }
             }
             ClientCacheMissResponse::ID => {
-                let Some(view) = &mut self.view else { return Ok(()) };
+                let Some(view) = &mut self.view else {
+                    return Ok(());
+                };
                 for blob in packet.decode::<ClientCacheMissResponse>()?.blobs {
                     for ready in self.blobs.delivered(blob.hash, &blob.payload) {
                         match ready {
-                            Ready::Section(pos, section) => insert_section(view, self.near.as_mut(), &mut self.rejected, packet.id, pos, &section),
+                            Ready::Section(pos, section) => insert_section(
+                                view,
+                                self.near.as_mut(),
+                                &mut self.rejected,
+                                packet.id,
+                                pos,
+                                &section,
+                            ),
                             Ready::Biomes((x, z), biomes) => view.insert_biomes(x, z, &biomes),
                         }
                     }
@@ -189,7 +238,11 @@ impl WorldTracker {
                 let p: NetworkChunkPublisherUpdate = packet.decode()?;
                 if let Some(view) = &mut self.view {
                     // +1 so chunks at the edge of the publisher radius are not dropped and re-sent.
-                    view.retain_within(p.coordinates.x >> 4, p.coordinates.z >> 4, (p.radius as i32 >> 4) + 1);
+                    view.retain_within(
+                        p.coordinates.x >> 4,
+                        p.coordinates.z >> 4,
+                        (p.radius as i32 >> 4) + 1,
+                    );
                 }
             }
             _ => {}
@@ -200,13 +253,27 @@ impl WorldTracker {
     fn set_block(&self, p: BlockCoordinates, layer: u32, wire_id: u32) {
         let Some(view) = &self.view else { return };
         let known = view.set_block(p.x, p.y, p.z, layer, wire_id);
-        tracing::trace!(x = p.x, y = p.y, z = p.z, layer, wire_id, known, "block update");
+        tracing::trace!(
+            x = p.x,
+            y = p.y,
+            z = p.z,
+            layer,
+            wire_id,
+            known,
+            "block update"
+        );
     }
 
     fn enter_dimension(&mut self, dimension: i32) {
-        let Some(registry) = &self.registry else { return };
+        let Some(registry) = &self.registry else {
+            return;
+        };
         let (registry, ids) = (registry.clone(), self.ids);
-        let world = self.shared.get_or_create((self.server.clone(), dimension), || World::new(registry, dimension, ids));
+        let world = self
+            .shared
+            .get_or_create((self.server.clone(), dimension), || {
+                World::new(registry, dimension, ids)
+            });
         self.view = Some(ChunkView::new(world));
         self.blobs.clear();
         if let Some(near) = &mut self.near {
@@ -237,8 +304,22 @@ impl WorldTracker {
                 let full = (dim.height >> 4) as i32;
                 let count = if limit < 0 { full } else { limit.min(full) };
                 view.insert_sub_chunk_limit(c.x, c.z, count as usize);
-                let requests = (0..count).map(|i| Vec3i8 { x: 0, y: (lowest + i) as i8, z: 0 }).collect();
-                self.outgoing.push(SubchunkRequest { dimension: c.dimension, requests, origin: Vec3li { x: c.x, y: 0, z: c.z } });
+                let requests = (0..count)
+                    .map(|i| Vec3i8 {
+                        x: 0,
+                        y: (lowest + i) as i8,
+                        z: 0,
+                    })
+                    .collect();
+                self.outgoing.push(SubchunkRequest {
+                    dimension: c.dimension,
+                    requests,
+                    origin: Vec3li {
+                        x: c.x,
+                        y: 0,
+                        z: c.z,
+                    },
+                });
             }
             // Layout from gophertunnel (unverified on BDS, which uses request mode): one blob per section,
             // bottom first, then the biome blob; the payload is border blocks + block entities.
@@ -250,26 +331,52 @@ impl WorldTracker {
                 for (i, &id) in c.blobs[..sections].iter().enumerate() {
                     let pos = (c.x, lowest + i as i32, c.z);
                     if let Some(section) = self.blobs.section(pos, id, Bytes::new()) {
-                        insert_section(view, self.near.as_mut(), &mut self.rejected, LevelChunk::ID, pos, &section);
+                        insert_section(
+                            view,
+                            self.near.as_mut(),
+                            &mut self.rejected,
+                            LevelChunk::ID,
+                            pos,
+                            &section,
+                        );
                     }
                 }
-                if let Some(biomes) = c.blobs.get(sections).and_then(|&id| self.blobs.biomes((c.x, c.z), id)) {
+                if let Some(biomes) = c
+                    .blobs
+                    .get(sections)
+                    .and_then(|&id| self.blobs.biomes((c.x, c.z), id))
+                {
                     view.insert_biomes(c.x, c.z, &biomes);
                 }
             }
             None => {
-                let inserted = view.insert_level_chunk(c.x, c.z, c.sub_chunk_count, &c.payload).map(drop);
+                let inserted = view
+                    .insert_level_chunk(c.x, c.z, c.sub_chunk_count, &c.payload)
+                    .map(drop);
                 if let (Ok(()), Some(near)) = (&inserted, &mut self.near) {
                     let dim = Dimension::from_id(c.dimension, 0);
-                    ((dim.min_y >> 4)..((dim.min_y + dim.height as i32) >> 4)).for_each(|y| near.mark(c.x, y, c.z));
+                    ((dim.min_y >> 4)..((dim.min_y + dim.height as i32) >> 4))
+                        .for_each(|y| near.mark(c.x, y, c.z));
                 }
-                note_rejected(&mut self.rejected, LevelChunk::ID, (c.x, None, c.z), inserted);
+                note_rejected(
+                    &mut self.rejected,
+                    LevelChunk::ID,
+                    (c.x, None, c.z),
+                    inserted,
+                );
             }
         }
     }
 }
 
-fn insert_section(view: &mut ChunkView, near: Option<&mut Near>, rejected: &mut Vec<Violation>, packet: u32, (x, y, z): (i32, i32, i32), section: &[u8]) {
+fn insert_section(
+    view: &mut ChunkView,
+    near: Option<&mut Near>,
+    rejected: &mut Vec<Violation>,
+    packet: u32,
+    (x, y, z): (i32, i32, i32),
+    section: &[u8],
+) {
     let inserted = view.insert_sub_chunk(x, y, z, section);
     if let (Ok(()), Some(near)) = (&inserted, near) {
         near.mark(x, y, z);
@@ -279,22 +386,45 @@ fn insert_section(view: &mut ChunkView, near: Option<&mut Near>, rejected: &mut 
 
 /// Whether the chunk at `feet` is loaded and a solid block lies within 3 blocks below it.
 pub(crate) fn is_chunk_loaded(view: &ChunkView, feet: [f32; 3]) -> bool {
-    view.chunk((feet[0].floor() as i32) >> 4, (feet[2].floor() as i32) >> 4).is_some()
+    view.chunk((feet[0].floor() as i32) >> 4, (feet[2].floor() as i32) >> 4)
+        .is_some()
 }
 
 /// Solid ground or liquid within three blocks below the feet.
-pub(crate) fn has_support_below(view: &ChunkView, registry: &BlockRegistry, feet: [f32; 3]) -> bool {
+pub(crate) fn has_support_below(
+    view: &ChunkView,
+    registry: &BlockRegistry,
+    feet: [f32; 3],
+) -> bool {
     use acacia_world::BlockAccess;
-    let (x, y, z) = (feet[0].floor() as i32, feet[1].floor() as i32, feet[2].floor() as i32);
-    (y - 3..=y).any(|y| registry.get(view.block(x, y, z)).is_some_and(|s| s.is_solid() || s.is_water() || s.is_lava()))
+    let (x, y, z) = (
+        feet[0].floor() as i32,
+        feet[1].floor() as i32,
+        feet[2].floor() as i32,
+    );
+    (y - 3..=y).any(|y| {
+        registry
+            .get(view.block(x, y, z))
+            .is_some_and(|s| s.is_solid() || s.is_water() || s.is_lava())
+    })
 }
 
 /// Keeps chunk data that does not decode for strict mode; `y` is the section, `None` for a whole column.
-fn note_rejected(rejected: &mut Vec<Violation>, packet: u32, (x, y, z): (i32, Option<i32>, i32), r: Result<(), acacia_world::Error>) {
+fn note_rejected(
+    rejected: &mut Vec<Violation>,
+    packet: u32,
+    (x, y, z): (i32, Option<i32>, i32),
+    r: Result<(), acacia_world::Error>,
+) {
     if let Err(e) = r {
         tracing::debug!(error = %e, "chunk data rejected");
-        let at = y.map_or(format!("column ({x}, {z})"), |y| format!("sub-chunk ({x}, {y}, {z})"));
-        rejected.push(Violation { packet, reason: Reason::Content(format!("{at}: {e}")) });
+        let at = y.map_or(format!("column ({x}, {z})"), |y| {
+            format!("sub-chunk ({x}, {y}, {z})")
+        });
+        rejected.push(Violation {
+            packet,
+            reason: Reason::Content(format!("{at}: {e}")),
+        });
     }
 }
 
@@ -317,11 +447,20 @@ fn custom_blocks(sg: &StartGame) -> Vec<CustomBlock> {
     sg.block_properties
         .iter()
         .map(|b| {
-            let state_count = match b.state.decode().ok().as_ref().and_then(|s| s.value.get("properties")) {
+            let state_count = match b
+                .state
+                .decode()
+                .ok()
+                .as_ref()
+                .and_then(|s| s.value.get("properties"))
+            {
                 Some(Value::List(l)) => l.items.iter().map(enum_len).product(),
                 _ => 1,
             };
-            CustomBlock { name: b.name.clone(), state_count }
+            CustomBlock {
+                name: b.name.clone(),
+                state_count,
+            }
         })
         .collect()
 }

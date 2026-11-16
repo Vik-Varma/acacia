@@ -24,7 +24,11 @@ fn config() -> ServerConfig {
 
 /// The event for a client from [`Net::join`] on `port`.
 fn joined(port: u16) -> ServerEvent {
-    ServerEvent::Connected { addr: addr(port), guid: port.into(), mtu: 1492 }
+    ServerEvent::Connected {
+        addr: addr(port),
+        guid: port.into(),
+        mtu: 1492,
+    }
 }
 
 fn request_1(mtu: u16) -> BytesMut {
@@ -54,12 +58,22 @@ struct Net {
 impl Net {
     fn new(cfg: ServerConfig) -> Self {
         let now = Instant::now();
-        Self { now, server: Server::new(cfg, now), clients: Vec::new(), events: Vec::new(), sent: 0, lose_every: None }
+        Self {
+            now,
+            server: Server::new(cfg, now),
+            clients: Vec::new(),
+            events: Vec::new(),
+            sent: 0,
+            lose_every: None,
+        }
     }
 
     /// Starts a client on `port` (also its GUID) and returns its index.
     fn join(&mut self, port: u16) -> usize {
-        self.clients.push((addr(port), Client::new(Config::new(port.into()), addr(SERVER_PORT), self.now)));
+        self.clients.push((
+            addr(port),
+            Client::new(Config::new(port.into()), addr(SERVER_PORT), self.now),
+        ));
         self.clients.len() - 1
     }
 
@@ -80,7 +94,8 @@ impl Net {
                     client.handle_datagram(self.now, d);
                 }
             }
-            self.events.extend(std::iter::from_fn(|| self.server.poll_event()));
+            self.events
+                .extend(std::iter::from_fn(|| self.server.poll_event()));
             self.now += TICK;
             self.server.handle_timeout(self.now);
             for (_, client) in &mut self.clients {
@@ -95,12 +110,18 @@ impl Net {
 
     /// The cookie reply 1 would hand `from` right now.
     fn cookie(&self, from: SocketAddr) -> u32 {
-        self.server.cookies.issue(from, self.now - self.server.epoch)
+        self.server
+            .cookies
+            .issue(from, self.now - self.server.epoch)
     }
 
     /// What the server answers `from` for one raw datagram. Call it while nothing else is in transit.
     fn raw(&mut self, from: SocketAddr, datagram: BytesMut) -> Vec<Bytes> {
-        self.server.handle_datagram(self.now, from, datagram.freeze());
-        std::iter::from_fn(|| self.server.poll_transmit(self.now)).filter(|(to, _)| *to == from).map(|(_, d)| d).collect()
+        self.server
+            .handle_datagram(self.now, from, datagram.freeze());
+        std::iter::from_fn(|| self.server.poll_transmit(self.now))
+            .filter(|(to, _)| *to == from)
+            .map(|(_, d)| d)
+            .collect()
     }
 }

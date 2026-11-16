@@ -42,11 +42,23 @@ impl EntityInfo {
     /// Takes `e`'s position, motion, rotation and health; true when any of them changed.
     pub(crate) fn update_numbers(&mut self, e: &Entity) -> bool {
         let fresh = numbers(e);
-        let held = (self.position, self.velocity, self.yaw, self.pitch, self.health);
+        let held = (
+            self.position,
+            self.velocity,
+            self.yaw,
+            self.pitch,
+            self.health,
+        );
         if fresh == held {
             return false;
         }
-        (self.position, self.velocity, self.yaw, self.pitch, self.health) = fresh;
+        (
+            self.position,
+            self.velocity,
+            self.yaw,
+            self.pitch,
+            self.health,
+        ) = fresh;
         true
     }
 
@@ -57,17 +69,34 @@ impl EntityInfo {
 
     /// Its kind or username when it equals `s`.
     pub(crate) fn string(&self, s: &str) -> Option<Arc<str>> {
-        std::iter::once(&self.kind).chain(&self.username).find(|k| ***k == *s).cloned()
+        std::iter::once(&self.kind)
+            .chain(&self.username)
+            .find(|k| ***k == *s)
+            .cloned()
     }
 
     /// The same entity: ids, kind and name match (its numbers may differ).
     pub fn same_member(&self, other: &EntityInfo) -> bool {
-        (self.runtime_id, self.unique_id) == (other.runtime_id, other.unique_id) && self.kind == other.kind && self.username == other.username
+        (self.runtime_id, self.unique_id) == (other.runtime_id, other.unique_id)
+            && self.kind == other.kind
+            && self.username == other.username
     }
 
     /// Position, motion, rotation and health match.
     pub fn same_numbers(&self, other: &EntityInfo) -> bool {
-        (self.position, self.velocity, self.yaw, self.pitch, self.health) == (other.position, other.velocity, other.yaw, other.pitch, other.health)
+        (
+            self.position,
+            self.velocity,
+            self.yaw,
+            self.pitch,
+            self.health,
+        ) == (
+            other.position,
+            other.velocity,
+            other.yaw,
+            other.pitch,
+            other.health,
+        )
     }
 }
 
@@ -96,12 +125,24 @@ impl EntityList {
     const FREE: u32 = u32::MAX;
 
     /// `capacity` bounds the slots: every one in `slots` is below it.
-    pub(crate) fn new(version: u64, members_version: u64, entities: Vec<EntityInfo>, slots: Vec<u32>, capacity: u32) -> Self {
+    pub(crate) fn new(
+        version: u64,
+        members_version: u64,
+        entities: Vec<EntityInfo>,
+        slots: Vec<u32>,
+        capacity: u32,
+    ) -> Self {
         let mut by_slot = vec![Self::FREE; capacity as usize];
         for (i, &slot) in slots.iter().enumerate() {
             by_slot[slot as usize] = i as u32;
         }
-        EntityList { version, members_version, entities, slots, by_slot }
+        EntityList {
+            version,
+            members_version,
+            entities,
+            slots,
+            by_slot,
+        }
     }
 
     /// The same entities in the same order: only positions, motion, rotation or health may differ.
@@ -116,7 +157,10 @@ impl EntityList {
 
     /// The index into `entities` of the entity in `slot`.
     pub fn index_of_slot(&self, slot: u32) -> Option<usize> {
-        self.by_slot.get(slot as usize).filter(|&&i| i != Self::FREE).map(|&i| i as usize)
+        self.by_slot
+            .get(slot as usize)
+            .filter(|&&i| i != Self::FREE)
+            .map(|&i| i as usize)
     }
 }
 

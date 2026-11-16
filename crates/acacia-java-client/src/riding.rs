@@ -3,7 +3,9 @@
 //! `sendChanges`. A vehicle the client doesn't control (a minecart, an unsaddled horse) only carries the player.
 
 use acacia_java_physics::{Boat, Keys, MountKind, Placement, Rider};
-use acacia_java_proto::packets::{COMMAND_START_RIDING_JUMP, MovePlayerRot, PaddleBoat, PositionMoveRotation, VehiclePose};
+use acacia_java_proto::packets::{
+    COMMAND_START_RIDING_JUMP, MovePlayerRot, PaddleBoat, PositionMoveRotation, VehiclePose,
+};
 use acacia_java_proto::{Wire, ids, read_varint};
 
 use crate::driven::Driven;
@@ -38,7 +40,18 @@ fn is_boat(name: &str) -> bool {
 
 /// `AbstractHorse.addPassenger` turns the rider's view to the horse's.
 fn snaps_view(name: &str) -> bool {
-    matches!(name, "horse" | "donkey" | "mule" | "skeleton_horse" | "zombie_horse" | "llama" | "trader_llama" | "camel" | "camel_husk")
+    matches!(
+        name,
+        "horse"
+            | "donkey"
+            | "mule"
+            | "skeleton_horse"
+            | "zombie_horse"
+            | "llama"
+            | "trader_llama"
+            | "camel"
+            | "camel_husk"
+    )
 }
 
 impl Client {
@@ -46,7 +59,9 @@ impl Client {
     pub(crate) fn apply_riding(&mut self, id: i32, body: &[u8]) -> Result<(), Error> {
         let input = &mut &body[..];
         match id {
-            from::SET_PASSENGERS | from::REMOVE_ENTITIES | from::RESPAWN | from::LOGIN => self.update_seat(),
+            from::SET_PASSENGERS | from::REMOVE_ENTITIES | from::RESPAWN | from::LOGIN => {
+                self.update_seat()
+            }
             from::MOVE_VEHICLE => self.vehicle_moved(input)?,
             from::TELEPORT_ENTITY => self.vehicle_teleported(input)?,
             // `lerpMotion` sets any entity's motion, the driven vehicle's too.
@@ -65,9 +80,15 @@ impl Client {
             }
             from::SET_ENTITY_DATA | from::UPDATE_ATTRIBUTES => {
                 let id2 = read_varint(input)?;
-                let Some(e) = self.world.entities.get(&id2) else { return Ok(()) };
+                let Some(e) = self.world.entities.get(&id2) else {
+                    return Ok(());
+                };
                 let (kind, data) = (e.kind, e.mount.clone());
-                let synced = if id == from::SET_ENTITY_DATA { Some(Synced::read(kind, input)?) } else { None };
+                let synced = if id == from::SET_ENTITY_DATA {
+                    Some(Synced::read(kind, input)?)
+                } else {
+                    None
+                };
                 if let Some(Driven::Mount(mount)) = self.driven_mut(id2) {
                     match synced {
                         Some(synced) => apply_synced(mount, synced),
@@ -81,13 +102,22 @@ impl Client {
     }
 
     fn driven_mut(&mut self, id: i32) -> Option<&mut Driven> {
-        self.movement.riding.as_mut().and_then(|r| r.driven.as_mut()).filter(|_| self.world.driven == Some(id))
+        self.movement
+            .riding
+            .as_mut()
+            .and_then(|r| r.driven.as_mut())
+            .filter(|_| self.world.driven == Some(id))
     }
 
     /// Takes the seat the passenger lists give the player. A new boat or horse seat turns the player to the vehicle.
     fn update_seat(&mut self) {
         let me = self.world.player_id;
-        let seat = self.world.entities.iter().find(|(_, e)| e.passengers.contains(&me)).map(|(&id, e)| (id, e.passengers[0] == me));
+        let seat = self
+            .world
+            .entities
+            .iter()
+            .find(|(_, e)| e.passengers.contains(&me))
+            .map(|(&id, e)| (id, e.passengers[0] == me));
         let riding = &mut self.movement.riding;
         if seat == riding.as_ref().map(|r| (r.vehicle, r.driver)) {
             return;
@@ -115,19 +145,30 @@ impl Client {
             })
         });
         self.world.driven = driven.is_some().then_some(vehicle);
-        *riding = Some(Riding { vehicle, driver, driven, keys: Keys::default(), rider: Rider::default(), jump_bar: JumpBar::default() });
+        *riding = Some(Riding {
+            vehicle,
+            driver,
+            driven,
+            keys: Keys::default(),
+            rider: Rider::default(),
+            jump_bar: JumpBar::default(),
+        });
     }
 
     /// Starts or stops simulating the mount under the player as control comes and goes (a pig's rider switching away
     /// from the carrot on a stick, a horse losing its saddle).
     fn update_mount(&mut self) {
-        let Some(riding) = self.movement.riding.as_mut().filter(|r| r.driver) else { return };
+        let Some(riding) = self.movement.riding.as_mut().filter(|r| r.driver) else {
+            return;
+        };
         if matches!(riding.driven, Some(Driven::Boat(_))) {
             return;
         }
         let vehicle = riding.vehicle;
         let kept = riding.driven.take().and_then(|d| d.mount().cloned());
-        let driven = self.controlled_mount(vehicle, kept).map(|m| Driven::Mount(Box::new(m)));
+        let driven = self
+            .controlled_mount(vehicle, kept)
+            .map(|m| Driven::Mount(Box::new(m)));
         self.world.driven = driven.is_some().then_some(vehicle);
         if let Some(riding) = self.movement.riding.as_mut() {
             riding.driven = driven;
@@ -137,14 +178,31 @@ impl Client {
     /// `handleMoveVehicle`: the server's pose for the driven vehicle, which the client answers with its own.
     fn vehicle_moved(&mut self, input: &mut &[u8]) -> Result<(), Error> {
         let pose = VehiclePose::read(input)?;
-        let Some(driven) = self.movement.riding.as_mut().and_then(|r| r.driven.as_mut()) else { return Ok(()) };
+        let Some(driven) = self
+            .movement
+            .riding
+            .as_mut()
+            .and_then(|r| r.driven.as_mut())
+        else {
+            return Ok(());
+        };
         let (pos, yaw, _) = driven.pose();
         let target = [pose.x, pose.y, pose.z];
-        let off: f64 = (0..3).map(|a| (target[a] - pos[a]).powi(2)).sum::<f64>().sqrt();
+        let off: f64 = (0..3)
+            .map(|a| (target[a] - pos[a]).powi(2))
+            .sum::<f64>()
+            .sqrt();
         if off > SNAP_DISTANCE {
-            let horizontal = [0, 2].iter().any(|&a| (target[a] - pos[a]).abs() > SNAP_DISTANCE) || pose.y_rot % 360.0 != yaw;
+            let horizontal = [0, 2]
+                .iter()
+                .any(|&a| (target[a] - pos[a]).abs() > SNAP_DISTANCE)
+                || pose.y_rot % 360.0 != yaw;
             self.movement.vehicle_corrections[usize::from(horizontal)] += 1;
-            driven.set_pose(target, pose.y_rot % 360.0, pose.x_rot.clamp(-90.0, 90.0) % 360.0);
+            driven.set_pose(
+                target,
+                pose.y_rot % 360.0,
+                pose.x_rot.clamp(-90.0, 90.0) % 360.0,
+            );
         }
         let echo = driven.vehicle_move();
         self.send(to::MOVE_VEHICLE, &echo)
@@ -154,11 +212,23 @@ impl Client {
     /// carries the rider and is reported at once.
     fn vehicle_teleported(&mut self, input: &mut &[u8]) -> Result<(), Error> {
         let id = read_varint(input)?;
-        let Some(driven) = self.driven_mut(id) else { return Ok(()) };
+        let Some(driven) = self.driven_mut(id) else {
+            return Ok(());
+        };
         let change = placement(&PositionMoveRotation::read(input)?);
         let (now, y_rot, x_rot) = driven.pose();
-        let source = Placement { pos: now, delta: *driven.delta_mut(), y_rot, x_rot };
-        let Placement { pos, delta, y_rot, x_rot } = source.teleported(&change, i32::read(input)?);
+        let source = Placement {
+            pos: now,
+            delta: *driven.delta_mut(),
+            y_rot,
+            x_rot,
+        };
+        let Placement {
+            pos,
+            delta,
+            y_rot,
+            x_rot,
+        } = source.teleported(&change, i32::read(input)?);
         *driven.delta_mut() = delta;
         let snap = (0..3).map(|a| (pos[a] - now[a]).powi(2)).sum::<f64>() > 4096.0;
         if snap {
@@ -180,11 +250,22 @@ impl Client {
     /// then `sendChanges`' input, look and vehicle.
     pub(crate) fn ride_step(&mut self, keys: Keys) -> Result<(), Error> {
         self.update_mount();
-        let Some(vehicle) = self.movement.riding.as_ref().map(|r| r.vehicle) else { return Ok(()) };
+        let Some(vehicle) = self.movement.riding.as_ref().map(|r| r.vehicle) else {
+            return Ok(());
+        };
         let carried = self.passenger_feet(vehicle);
-        let passengers = self.world.entities.get(&vehicle).map_or(&[][..], |e| &e.passengers);
-        let solid = self.world.collision_boxes(Mover::Vehicle, &[&[vehicle][..], passengers].concat());
-        let (Some(riding), player) = (self.movement.riding.as_mut(), &mut self.movement.player) else { return Ok(()) };
+        let passengers = self
+            .world
+            .entities
+            .get(&vehicle)
+            .map_or(&[][..], |e| &e.passengers);
+        let solid = self
+            .world
+            .collision_boxes(Mover::Vehicle, &[&[vehicle][..], passengers].concat());
+        let (Some(riding), player) = (self.movement.riding.as_mut(), &mut self.movement.player)
+        else {
+            return Ok(());
+        };
         let mut paddles = None;
         match riding.driven.as_mut() {
             Some(Driven::Boat(boat)) => {
@@ -211,7 +292,11 @@ impl Client {
             player.pos = feet;
         }
         let was_jumping = std::mem::replace(&mut riding.keys, keys).jump;
-        let camel = riding.driven.as_ref().and_then(Driven::mount).is_some_and(|m| m.kind == MountKind::Camel);
+        let camel = riding
+            .driven
+            .as_ref()
+            .and_then(Driven::mount)
+            .is_some_and(|m| m.kind == MountKind::Camel);
         // TODO: vanilla's sprint rules (double tap, collisions) aren't run for a camel's rider; the key alone sprints.
         player.sprinting = camel && keys.sprint && keys.forward && !keys.backward;
         riding.rider = player.rider(keys);
@@ -227,7 +312,14 @@ impl Client {
             self.send_command_with(COMMAND_START_RIDING_JUMP, charge)?;
         }
         self.send_keys()?;
-        self.send(to::MOVE_PLAYER_ROT, &MovePlayerRot { y_rot, x_rot, flags: 0 })?;
+        self.send(
+            to::MOVE_PLAYER_ROT,
+            &MovePlayerRot {
+                y_rot,
+                x_rot,
+                flags: 0,
+            },
+        )?;
         if let Some(moved) = &moved {
             self.send(to::MOVE_VEHICLE, moved)?;
         }

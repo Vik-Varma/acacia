@@ -4,9 +4,9 @@
 mod creative;
 mod events;
 mod fluid;
-mod java_screen;
 mod form;
 mod java_menu;
+mod java_screen;
 mod java_under;
 mod keys;
 mod menu;
@@ -120,11 +120,21 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(net: Net, radius: i32, sky: Option<SkyTextures>, settings: Settings, looks: Looks) -> Self {
+    pub fn new(
+        net: Net,
+        radius: i32,
+        sky: Option<SkyTextures>,
+        settings: Settings,
+        looks: Looks,
+    ) -> Self {
         let play = Play::new(net.commands.clone());
         // Unattended screenshots place the camera themselves.
         let shot = Shot::from_env();
-        let mode = if shot.is_some() && std::env::var_os("ACACIA_PLAY").is_none() { Mode::Fly } else { Mode::Play };
+        let mode = if shot.is_some() && std::env::var_os("ACACIA_PLAY").is_none() {
+            Mode::Fly
+        } else {
+            Mode::Play
+        };
         let (ui, audio) = (Ui::new(&looks), Audio::new(&looks));
         // Form button images name textures of the Bedrock pack, whichever look is shown.
         let bedrock_pack = looks.get(LookChoice::Bedrock).files().to_owned();
@@ -146,7 +156,9 @@ impl App {
             shift: false,
             auto_attack: std::env::var_os("ACACIA_ATTACK").is_some(),
             key_script: KeyScript::from_env(),
-            auto_use: std::env::var("ACACIA_USE").ok().map(|s| s.parse().unwrap_or(0.0)),
+            auto_use: std::env::var("ACACIA_USE")
+                .ok()
+                .map(|s| s.parse().unwrap_or(0.0)),
             use_at: None,
             stats: FrameStats::default(),
             fps: 0.0,
@@ -185,7 +197,9 @@ impl App {
 
     /// Returns true once the unattended screenshot was taken and the viewer should exit.
     fn drive_shot(&mut self) -> bool {
-        let (Some(shot), Some(r)) = (&mut self.shot, &mut self.renderer) else { return false };
+        let (Some(shot), Some(r)) = (&mut self.shot, &mut self.renderer) else {
+            return false;
+        };
         if shot.taken {
             return true;
         }
@@ -193,7 +207,10 @@ impl App {
             if let Some(p) = self.player {
                 Shot::place(&mut self.camera, p);
             }
-            tracing::info!(entities = self.entities.instances(self.camera.position).len(), "shot");
+            tracing::info!(
+                entities = self.entities.instances(self.camera.position).len(),
+                "shot"
+            );
             r.screenshot(shot.path.clone());
             shot.taken = true;
         }
@@ -209,7 +226,13 @@ impl App {
         let outline = self.steer(now, dt);
         let fov = self.settings.fov.clamp(30, 110) as f32;
         match self.mode {
-            Mode::Play => self.bob.apply(fov, self.settings.view_bobbing, &mut self.camera.fov_y, &mut self.camera.bob, now),
+            Mode::Play => self.bob.apply(
+                fov,
+                self.settings.view_bobbing,
+                &mut self.camera.fov_y,
+                &mut self.camera.bob,
+                now,
+            ),
             _ => (self.camera.fov_y, self.camera.bob) = (fov.to_radians(), glam::Mat4::IDENTITY),
         }
         let steered = Instant::now();
@@ -222,18 +245,35 @@ impl App {
         self.feed_fluid(dt);
         let Some(r) = &mut self.renderer else { return };
         r.shadows = self.entities.shadows(self.camera.position);
-        self.signs.feed(self.settings.look, self.ui.theme(self.settings.look), r);
+        self.signs
+            .feed(self.settings.look, self.ui.theme(self.settings.look), r);
         r.set_outline(outline);
         r.fog_distance = self.fog_distance;
         r.cave_culling = self.settings.cave_culling;
         self.camera.aspect = r.aspect();
         let mut instances = self.entities.scene(&self.camera);
-        instances.extend(hand.into_iter().chain(crate::frames::instances(&mut self.entities, self.camera.position, f64::from(self.fog_distance))));
+        instances.extend(hand.into_iter().chain(crate::frames::instances(
+            &mut self.entities,
+            self.camera.position,
+            f64::from(self.fog_distance),
+        )));
         r.set_entities(instances);
         let world = r.world().cloned();
         let debug = self.show_debug.then(|| {
-            let target = self.play.target.as_ref().filter(|_| self.mode == Mode::Play);
-            let facts = Facts { camera: &self.camera, fps: self.fps, stats: &self.stats, look: self.settings.look, mode: self.mode, target, world: world.as_deref() };
+            let target = self
+                .play
+                .target
+                .as_ref()
+                .filter(|_| self.mode == Mode::Play);
+            let facts = Facts {
+                camera: &self.camera,
+                fps: self.fps,
+                stats: &self.stats,
+                look: self.settings.look,
+                mode: self.mode,
+                target,
+                world: world.as_deref(),
+            };
             debug_lines::lines(&facts)
         });
         self.update_form();
@@ -242,26 +282,95 @@ impl App {
         self.close_finished_credits(now);
         let (size, scale) = self.gui();
         let mouse = self.gui_mouse();
-        let name = self.names().then(|| (self.shown.name.before_caret(), self.shown.name.text()));
-        let name = name.as_ref().map(|(before, all)| (before.as_str(), &all[before.len()..]));
+        let name = self
+            .names()
+            .then(|| (self.shown.name.before_caret(), self.shown.name.text()));
+        let name = name
+            .as_ref()
+            .map(|(before, all)| (before.as_str(), &all[before.len()..]));
         let creative = self.creative_view();
-        let creative = creative.as_ref().map(|(stacks, tab, scrolled)| (stacks.as_slice(), *tab, *scrolled));
-        let screen = self.screen_open.then_some(crate::ui::Screen { inventory: &self.inventory, layout: self.layout(), picked: self.shown.pick, first: self.first_pick(), name, creative, java: (crate::ui::JavaScreen { entries: &self.shown.items, creative: self.shown.creative.map(|c| c.0), name: &self.shown.name }, &self.shown.java) });
+        let creative = creative
+            .as_ref()
+            .map(|(stacks, tab, scrolled)| (stacks.as_slice(), *tab, *scrolled));
+        let screen = self.screen_open.then_some(crate::ui::Screen {
+            inventory: &self.inventory,
+            layout: self.layout(),
+            picked: self.shown.pick,
+            first: self.first_pick(),
+            name,
+            creative,
+            java: (
+                crate::ui::JavaScreen {
+                    entries: &self.shown.items,
+                    creative: self.shown.creative.map(|c| c.0),
+                    name: &self.shown.name,
+                },
+                &self.shown.java,
+            ),
+        });
         let java = self.java_look();
         let menu = self.menu.filter(|_| !java).map(|m| self.menu_content(m));
-        let menu = menu.as_ref().map(|(title, buttons)| (*title, buttons.as_slice()));
-        let tags = self.name_tags([(size[0] / scale) as f32, (size[1] / scale) as f32], scale as f32);
+        let menu = menu
+            .as_ref()
+            .map(|(title, buttons)| (*title, buttons.as_slice()));
+        let tags = self.name_tags(
+            [(size[0] / scale) as f32, (size[1] / scale) as f32],
+            scale as f32,
+        );
         let under = self.java_under().filter(|_| java);
-        let java_screens = java.then(|| java_menu::shown(&mut self.java, self.menu, under, &self.settings, &self.players, now));
+        let java_screens = java.then(|| {
+            java_menu::shown(
+                &mut self.java,
+                self.menu,
+                under,
+                &self.settings,
+                &self.players,
+                now,
+            )
+        });
         let Some(r) = &mut self.renderer else { return };
         let players = self.show_players.then_some(self.players.as_slice());
-        let frame = Frame { look: self.settings.look, me: self.play.me.as_ref(), debug, screen, menu, java_screens, form: self.form.as_ref(), book: self.shown.book.as_ref().zip(self.play.me.as_ref().and_then(|m| m.book.as_ref())).map(|(open, held)| open.shown(&held.0)), sign: self.shown.sign.as_ref().map(|s| acacia_ui::sign_editor::Editing { lines: &s.lines, line: s.line, hanging: s.hanging }), players, tags, mouse, size, scale, now, menu_blur: self.settings.menu_blur };
+        let frame = Frame {
+            look: self.settings.look,
+            me: self.play.me.as_ref(),
+            debug,
+            screen,
+            menu,
+            java_screens,
+            form: self.form.as_ref(),
+            book: self
+                .shown
+                .book
+                .as_ref()
+                .zip(self.play.me.as_ref().and_then(|m| m.book.as_ref()))
+                .map(|(open, held)| open.shown(&held.0)),
+            sign: self
+                .shown
+                .sign
+                .as_ref()
+                .map(|s| acacia_ui::sign_editor::Editing {
+                    lines: &s.lines,
+                    line: s.line,
+                    hanging: s.hanging,
+                }),
+            players,
+            tags,
+            mouse,
+            size,
+            scale,
+            now,
+            menu_blur: self.settings.menu_blur,
+        };
         let (atlas, quads, blur, pictures) = self.ui.draw(frame);
         r.ui_entities = portrait::instances(&self.entities, pictures, self.camera.position);
         r.ui_blur = blur;
         let ui = (atlas, quads);
         let view = match self.mode == Mode::Play && self.play.view_turned() {
-            true => Camera { yaw: self.camera.yaw + std::f32::consts::PI, pitch: -self.camera.pitch, ..self.camera },
+            true => Camera {
+                yaw: self.camera.yaw + std::f32::consts::PI,
+                pitch: -self.camera.pitch,
+                ..self.camera
+            },
             false => self.camera,
         };
         let drawing = Instant::now();
@@ -275,8 +384,15 @@ impl App {
 
     fn grab(&mut self, on: bool) {
         let Some(w) = &self.window else { return };
-        let mode = if on { CursorGrabMode::Locked } else { CursorGrabMode::None };
-        let grabbed = w.set_cursor_grab(mode).or_else(|_| w.set_cursor_grab(if on { CursorGrabMode::Confined } else { mode })).is_ok();
+        let mode = if on {
+            CursorGrabMode::Locked
+        } else {
+            CursorGrabMode::None
+        };
+        let grabbed = w
+            .set_cursor_grab(mode)
+            .or_else(|_| w.set_cursor_grab(if on { CursorGrabMode::Confined } else { mode }))
+            .is_ok();
         w.set_cursor_visible(!on);
         self.grabbed = on && grabbed;
         if !on {

@@ -3,9 +3,9 @@
 use std::sync::Arc;
 
 use super::Follower;
-use crate::pathfind::hazard::Hazards;
 use crate::cadence::splitmix;
 use crate::movement::{SimWorld, StepIn};
+use crate::pathfind::hazard::Hazards;
 use crate::pathfind::rollout::Spend;
 use crate::pathfind::shortcut;
 
@@ -27,14 +27,30 @@ impl Follower {
     }
 
     /// Once per node, with nothing running: start a shortcut to a node further on if one beats the nodes between.
-    pub(super) fn try_shortcut<S: StepIn<W>, W: SimWorld + ?Sized>(&mut self, live: Option<&S>, w: &W, spend: &mut Spend) {
-        let Some(live) = live.filter(|_| self.shortcuts) else { return };
+    pub(super) fn try_shortcut<S: StepIn<W>, W: SimWorld + ?Sized>(
+        &mut self,
+        live: Option<&S>,
+        w: &W,
+        spend: &mut Spend,
+    ) {
+        let Some(live) = live.filter(|_| self.shortcuts) else {
+            return;
+        };
         if self.macros.active() || self.tried.replace(self.index) == Some(self.index) {
             return;
         }
         let aim = self.aim.reseeded(splitmix(&mut self.rng));
         let hazards = self.hazards.as_deref();
-        if let Some((ctl, predicted, last)) = shortcut::find(&self.path, self.index, live, w, aim, self.ends_at_goal, hazards, spend) {
+        if let Some((ctl, predicted, last)) = shortcut::find(
+            &self.path,
+            self.index,
+            live,
+            w,
+            aim,
+            self.ends_at_goal,
+            hazards,
+            spend,
+        ) {
             self.macros.begin(ctl, predicted, last);
         }
     }

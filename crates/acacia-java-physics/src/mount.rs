@@ -8,7 +8,7 @@ use crate::collide::Blocks;
 use crate::fluid::fluid_at;
 use crate::lerp::Lerp;
 use crate::mount_body::MountBody;
-use crate::mth::{cos, sin, DEG_TO_RAD};
+use crate::mth::{DEG_TO_RAD, cos, sin};
 use crate::player::Player;
 
 /// `Avatar.DEFAULT_VEHICLE_ATTACHMENT`.
@@ -19,7 +19,11 @@ pub fn seat_feet(pos: [f64; 3], seat: [f64; 3], yaw: f32) -> [f64; 3] {
     let radians = f64::from(-yaw * DEG_TO_RAD);
     let (s, c) = (f64::from(sin(radians)), f64::from(cos(radians)));
     let [x, y, z] = seat;
-    [pos[0] + x * c + z * s, pos[1] + y - PLAYER_ATTACHMENT, pos[2] + z * c - x * s]
+    [
+        pos[0] + x * c + z * s,
+        pos[1] + y - PLAYER_ATTACHMENT,
+        pos[2] + z * c - x * s,
+    ]
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,7 +84,13 @@ pub struct Mount {
 impl Mount {
     /// The mount an entity type drives as, with its default attributes; `None` for one the client doesn't drive.
     /// `seat` is the type's first passenger attachment.
-    pub fn new(name: &str, size: (f32, f32), seat: [f32; 3], pos: [f64; 3], yaw: f32) -> Option<Mount> {
+    pub fn new(
+        name: &str,
+        size: (f32, f32),
+        seat: [f32; 3],
+        pos: [f64; 3],
+        yaw: f32,
+    ) -> Option<Mount> {
         use MountKind::*;
         let (kind, speed, jump) = match name {
             "horse" | "zombie_horse" => (Horse, 0.225_f32, 0.7),
@@ -95,8 +105,16 @@ impl Mount {
             _ => return None,
         };
         // A lone camel rider sits on its standing body anchor, half a block forward.
-        let seat = if kind == Camel { [0.0, size.1 - 0.375, 0.5] } else { seat };
-        let mut body = Player { pos, yaw, ..Player::default() };
+        let seat = if kind == Camel {
+            [0.0, size.1 - 0.375, 0.5]
+        } else {
+            seat
+        };
+        let mut body = Player {
+            pos,
+            yaw,
+            ..Player::default()
+        };
         body.mount = Some(MountBody {
             width: size.0,
             height: size.1,
@@ -147,7 +165,10 @@ impl Mount {
             self.suffocating = !self.warm(world);
         }
         self.body.base_tick(world);
-        self.body.delta = self.body.delta.map(|v| if v.abs() < 0.003 { 0.0 } else { v });
+        self.body.delta = self
+            .body
+            .delta
+            .map(|v| if v.abs() < 0.003 { 0.0 } else { v });
         let input = self.ridden_input(rider);
         self.tick_ridden(world, rider, input);
         let speed = self.ridden_speed(rider);
@@ -162,14 +183,23 @@ impl Mount {
         let mut pose = (self.body.pos, self.body.yaw, self.body.pitch);
         let (width, height) = self.body.size();
         let colliders = self.body.colliders(world);
-        self.lerp.step(&mut pose, |at| colliders.no_collision(&Aabb::of_entity(at, width, height)));
+        self.lerp.step(&mut pose, |at| {
+            colliders.no_collision(&Aabb::of_entity(at, width, height))
+        });
         (self.body.pos, self.body.yaw, self.body.pitch) = pose;
     }
 
     /// `Strider.tick`'s warmth: lava in or under it.
     fn warm(&self, world: &impl Blocks) -> bool {
-        let warm = |pos| world.block_state(pos).block().is(BlockTag::StriderWarmBlocks);
-        warm(self.body.block_pos()) || warm(self.body.on_pos(world, crate::support::LEGACY_ON_POS)) || self.body.in_lava()
+        let warm = |pos| {
+            world
+                .block_state(pos)
+                .block()
+                .is(BlockTag::StriderWarmBlocks)
+        };
+        warm(self.body.block_pos())
+            || warm(self.body.on_pos(world, crate::support::LEGACY_ON_POS))
+            || self.body.in_lava()
     }
 
     /// `LivingEntity.travel`, or the flying and swimming overrides.
@@ -180,7 +210,8 @@ impl Mount {
             body.input = [0.0, body.input[1], 0.0];
         }
         let body = &mut self.body;
-        let stands_here = self.kind == MountKind::Strider && fluid_at(world, body.block_pos()).is_some_and(|f| f.lava);
+        let stands_here = self.kind == MountKind::Strider
+            && fluid_at(world, body.block_pos()).is_some_and(|f| f.lava);
         let in_fluid = (body.in_water || body.in_lava()) && !stands_here;
         match self.kind {
             MountKind::HappyGhast => self.travel_flying(world),
@@ -204,7 +235,13 @@ impl Mount {
     fn travel_flying(&mut self, world: &impl Blocks) {
         let speed = (self.flying_speed as f32) * 5.0 / 3.0;
         let body = &mut self.body;
-        let drag = if body.in_water { 0.8_f32 as f64 } else if body.in_lava() { 0.5 } else { 0.91_f32 as f64 };
+        let drag = if body.in_water {
+            0.8_f32 as f64
+        } else if body.in_lava() {
+            0.5
+        } else {
+            0.91_f32 as f64
+        };
         body.move_relative(speed);
         body.move_self(world);
         body.delta = body.delta.map(|v| v * drag);
@@ -256,7 +293,11 @@ impl Mount {
         if body.pos[1] > here[1] as f64 + 0.5 - 1.0E-5_f32 as f64 && !above {
             body.on_ground = true;
         } else {
-            body.delta = [body.delta[0] * 0.5 + 0.0, body.delta[1] * 0.5 + 0.05, body.delta[2] * 0.5 + 0.0];
+            body.delta = [
+                body.delta[0] * 0.5 + 0.0,
+                body.delta[1] * 0.5 + 0.05,
+                body.delta[2] * 0.5 + 0.0,
+            ];
         }
     }
 }

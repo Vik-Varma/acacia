@@ -45,20 +45,47 @@ pub fn java_float(v: f32) -> String {
     // Scientific: shortest digits, `d.dddE±n`.
     let s = format!("{v:e}");
     let (mantissa, exp) = s.split_once('e').unwrap_or((&s, "0"));
-    let mantissa = if mantissa.contains('.') { mantissa.to_owned() } else { format!("{mantissa}.0") };
+    let mantissa = if mantissa.contains('.') {
+        mantissa.to_owned()
+    } else {
+        format!("{mantissa}.0")
+    };
     format!("{mantissa}E{exp}")
 }
 
 impl Kind {
     /// The `BrigadierExceptions` component: a key and its arguments.
     fn message(&self, lang: Lang) -> Text {
-        let t = |key: &str, args: &[String]| Text::translate(key, &args.iter().map(|a| Text::literal(a.as_str())).collect::<Vec<_>>(), lang);
+        let t = |key: &str, args: &[String]| {
+            Text::translate(
+                key,
+                &args
+                    .iter()
+                    .map(|a| Text::literal(a.as_str()))
+                    .collect::<Vec<_>>(),
+                lang,
+            )
+        };
         match self {
-            Kind::IntegerTooLow { found, min } => t("argument.integer.low", &[min.to_string(), found.to_string()]),
-            Kind::IntegerTooHigh { found, max } => t("argument.integer.big", &[max.to_string(), found.to_string()]),
-            Kind::FloatTooLow { found, min } => t("argument.float.low", &[java_float(*min), java_float(*found)]),
-            Kind::FloatTooHigh { found, max } => t("argument.float.big", &[java_float(*max), java_float(*found)]),
-            Kind::LiteralIncorrect(expected) => t("argument.literal.incorrect", std::slice::from_ref(expected)),
+            Kind::IntegerTooLow { found, min } => t(
+                "argument.integer.low",
+                &[min.to_string(), found.to_string()],
+            ),
+            Kind::IntegerTooHigh { found, max } => t(
+                "argument.integer.big",
+                &[max.to_string(), found.to_string()],
+            ),
+            Kind::FloatTooLow { found, min } => t(
+                "argument.float.low",
+                &[java_float(*min), java_float(*found)],
+            ),
+            Kind::FloatTooHigh { found, max } => t(
+                "argument.float.big",
+                &[java_float(*max), java_float(*found)],
+            ),
+            Kind::LiteralIncorrect(expected) => {
+                t("argument.literal.incorrect", std::slice::from_ref(expected))
+            }
             Kind::ExpectedEndOfQuote => t("parsing.quote.expected.end", &[]),
             Kind::InvalidEscape(c) => t("parsing.quote.escape", std::slice::from_ref(c)),
             Kind::InvalidBool(v) => t("parsing.bool.invalid", std::slice::from_ref(v)),
@@ -100,7 +127,11 @@ const KEYS: [&str; 17] = [
 
 impl Messages {
     pub fn new(lang: Lang) -> Messages {
-        Messages(KEYS.iter().filter_map(|&k| lang(k).map(|v| (k, v))).collect())
+        Messages(
+            KEYS.iter()
+                .filter_map(|&k| lang(k).map(|v| (k, v)))
+                .collect(),
+        )
     }
 
     pub fn get(&self, key: &str) -> Option<String> {
@@ -117,7 +148,9 @@ impl Error {
         if cursor > 10 {
             out.push_str("...");
         }
-        out.push_str(&String::from_utf16_lossy(&input[cursor.saturating_sub(10)..cursor]));
+        out.push_str(&String::from_utf16_lossy(
+            &input[cursor.saturating_sub(10)..cursor],
+        ));
         out.push_str("<--[HERE]");
         Some(out)
     }
@@ -127,7 +160,15 @@ impl Error {
         let message = self.kind.message(lang);
         match self.context() {
             None => message,
-            Some(context) => Text::translate("command.context.parse_error", &[message, Text::literal(self.cursor.to_string()), Text::literal(context)], lang),
+            Some(context) => Text::translate(
+                "command.context.parse_error",
+                &[
+                    message,
+                    Text::literal(self.cursor.to_string()),
+                    Text::literal(context),
+                ],
+                lang,
+            ),
         }
     }
 }

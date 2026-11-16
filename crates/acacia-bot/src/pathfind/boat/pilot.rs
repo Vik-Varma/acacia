@@ -82,8 +82,14 @@ impl BoatPilot {
 
     /// Follows `leg` from now on (planned from where the boat is), keeping the keys held and the clock.
     pub fn reroute(&mut self, leg: &Leg) {
-        (self.line, self.y, self.pad) = (Polyline::new(leg.route.points.clone()), leg.route.y, leg.pad);
-        self.arrival = leg.exit.map(|exit| Arrival::new(exit, leg.target, self.seat));
+        (self.line, self.y, self.pad) = (
+            Polyline::new(leg.route.points.clone()),
+            leg.route.y,
+            leg.pad,
+        );
+        self.arrival = leg
+            .exit
+            .map(|exit| Arrival::new(exit, leg.target, self.seat));
         (self.seg, self.best) = (0, (f32::MIN, self.tick));
     }
 
@@ -98,7 +104,12 @@ impl BoatPilot {
     }
 
     /// Sets `c` for the boat's next tick from `st`, its state now.
-    pub fn tick<V: WorldView + ?Sized>(&mut self, st: &BoatState, world: &V, c: &mut Controls) -> BoatOrder {
+    pub fn tick<V: WorldView + ?Sized>(
+        &mut self,
+        st: &BoatState,
+        world: &V,
+        c: &mut Controls,
+    ) -> BoatOrder {
         self.tick += 1;
         let p = [st.pos[0], st.pos[2]];
         let place = self.line.locate(p, self.seg, WINDOW);
@@ -118,7 +129,17 @@ impl BoatPilot {
             return BoatOrder::Fail(format!("no progress for {STUCK_TICKS} ticks at {p:?}"));
         }
         match self.profile {
-            MovementProfile::Optimal => self.held = solve(st, self.seg, self.held, 0, [1, 1], &self.course(&grid), world),
+            MovementProfile::Optimal => {
+                self.held = solve(
+                    st,
+                    self.seg,
+                    self.held,
+                    0,
+                    [1, 1],
+                    &self.course(&grid),
+                    world,
+                )
+            }
             MovementProfile::Human => self.human_keys(st, &grid, world),
         }
         [c.strafe, c.forward] = self.held;
@@ -126,25 +147,59 @@ impl BoatPilot {
         BoatOrder::Paddle
     }
 
-    fn course<'a, 'w, V: WorldView + ?Sized>(&'a self, grid: &'a WaterGrid<'w, V>) -> Course<'a, 'w, V> {
+    fn course<'a, 'w, V: WorldView + ?Sized>(
+        &'a self,
+        grid: &'a WaterGrid<'w, V>,
+    ) -> Course<'a, 'w, V> {
         let human = self.profile == MovementProfile::Human;
         let tolerance = TOLERANCE[usize::from(human)] + self.pad;
         // Human brakes a reaction late at worst.
-        let lag = if human { human::BOAT_TURN_REACTION.1 } else { 0 };
-        Course { line: &self.line, grid, tolerance, stop: self.arrival, lag }
+        let lag = if human {
+            human::BOAT_TURN_REACTION.1
+        } else {
+            0
+        };
+        Course {
+            line: &self.line,
+            grid,
+            tolerance,
+            stop: self.arrival,
+            lag,
+        }
     }
 
     /// Keys held for a window, and new ones pressed a reaction time after they are chosen.
-    fn human_keys<V: WorldView + ?Sized>(&mut self, st: &BoatState, grid: &WaterGrid<'_, V>, world: &V) {
+    fn human_keys<V: WorldView + ?Sized>(
+        &mut self,
+        st: &BoatState,
+        grid: &WaterGrid<'_, V>,
+        world: &V,
+    ) {
         if let Some((at, keys, hold)) = self.pending.filter(|&(at, ..)| self.tick >= at) {
             (self.held, self.until, self.pending) = (keys, at + u64::from(hold), None);
         }
         if self.pending.is_none() && self.tick >= self.until {
             let reaction = self.draw(human::BOAT_TURN_REACTION);
-            let near = self.arrival.is_some() && self.left([st.pos[0], st.pos[2]]) < human::BOAT_TAP_REACH;
+            let near =
+                self.arrival.is_some() && self.left([st.pos[0], st.pos[2]]) < human::BOAT_TAP_REACH;
             let tap = self.draw(human::BOAT_TAP_HOLD);
-            let holds = [if near { tap } else { self.draw(human::BOAT_KEY_HOLD) }, tap];
-            let keys = solve(st, self.seg, self.held, reaction, holds, &self.course(grid), world);
+            let holds = [
+                if near {
+                    tap
+                } else {
+                    self.draw(human::BOAT_KEY_HOLD)
+                },
+                tap,
+            ];
+            let keys = solve(
+                st,
+                self.seg,
+                self.held,
+                reaction,
+                holds,
+                &self.course(grid),
+                world,
+            );
             let hold = hold_for(keys, holds);
             self.pending = Some((self.tick + u64::from(reaction), keys, hold));
         }
@@ -164,10 +219,17 @@ impl BoatPilot {
             MovementProfile::Human => {
                 let p = [st.pos[0], st.pos[2]];
                 let ahead = self.line.at(s + human::BOAT_LOOK_LEAD);
-                let want = if dist(ahead, p) > 0.5 { (p[0] - ahead[0]).atan2(ahead[1] - p[1]).to_degrees() } else { bow_yaw };
+                let want = if dist(ahead, p) > 0.5 {
+                    (p[0] - ahead[0]).atan2(ahead[1] - p[1]).to_degrees()
+                } else {
+                    bow_yaw
+                };
                 let off = wrap(want - bow_yaw).clamp(-LOOK_LIMIT, LOOK_LIMIT);
                 let yaw = self.aim.turn(c.yaw, bow_yaw + off);
-                (wrap(yaw), c.pitch + (HUMAN_PITCH - c.pitch) * human::AIM_EASE)
+                (
+                    wrap(yaw),
+                    c.pitch + (HUMAN_PITCH - c.pitch) * human::AIM_EASE,
+                )
             }
         };
         (c.yaw, c.pitch) = (yaw, pitch);

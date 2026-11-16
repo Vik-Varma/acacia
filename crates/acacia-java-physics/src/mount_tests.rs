@@ -21,7 +21,14 @@ impl Blocks for Ground {
     }
 }
 
-const AHEAD: Rider = Rider { xxa: 0.0, zza: 0.98, jumping: false, sprinting: false, yaw: 0.0, pitch: 0.0 };
+const AHEAD: Rider = Rider {
+    xxa: 0.0,
+    zza: 0.98,
+    jumping: false,
+    sprinting: false,
+    yaw: 0.0,
+    pitch: 0.0,
+};
 
 fn mount(name: &str, size: (f32, f32), pos: [f64; 3]) -> Mount {
     let mut mount = Mount::new(name, size, [0.0, size.1, 0.0], pos, 0.0).expect("drivable");
@@ -50,7 +57,13 @@ fn a_horse_reaches_its_ground_speed() {
 fn a_pig_walks_on_with_no_keys() {
     let mut pig = mount("pig", (0.9, 0.9), [0.5, 0.0, 0.5]);
     for _ in 0..10 {
-        pig.tick(&Ground, Rider { yaw: 90.0, ..Rider::default() });
+        pig.tick(
+            &Ground,
+            Rider {
+                yaw: 90.0,
+                ..Rider::default()
+            },
+        );
     }
     assert!(pig.body.pos[0] < 0.0, "pig at {:?}", pig.body.pos);
     assert_eq!(pig.body.yaw, 90.0);
@@ -71,7 +84,11 @@ fn a_strider_stands_on_lava() {
     for _ in 0..40 {
         strider.tick(&Ground, Rider::default());
     }
-    assert!((strider.body.pos[1] + 0.5).abs() < 1.0E-6, "strider at {}", strider.body.pos[1]);
+    assert!(
+        (strider.body.pos[1] + 0.5).abs() < 1.0E-6,
+        "strider at {}",
+        strider.body.pos[1]
+    );
     assert!(strider.body.on_ground);
 }
 
@@ -91,6 +108,9 @@ fn the_ghast_seats_its_driver_in_front() {
     let mut ghast = Mount::new("happy_ghast", (4.0, 4.0), [0.0, 4.0, 1.7], [0.0; 3], 0.0).unwrap();
     ghast.body.yaw = 90.0;
     let feet = ghast.rider_feet();
-    assert!((feet[0] + 1.7).abs() < 1.0E-4 && feet[2].abs() < 1.0E-4, "{feet:?}");
+    assert!(
+        (feet[0] + 1.7).abs() < 1.0E-4 && feet[2].abs() < 1.0E-4,
+        "{feet:?}"
+    );
     assert!((feet[1] - 3.4).abs() < 1.0E-9);
 }

@@ -229,7 +229,11 @@ impl PlayerState {
         } else {
             DEFAULT_PLAYER_HEIGHT_OFFSET
         };
-        let scale = if self.size[2] <= 0.0 { 1.0 } else { self.size[2] };
+        let scale = if self.size[2] <= 0.0 {
+            1.0
+        } else {
+            self.size[2]
+        };
         add(self.pos, [0.0, offset * scale, 0.0])
     }
 
@@ -258,8 +262,11 @@ impl PlayerState {
 
     pub(crate) fn refresh_movement_speed(&mut self) {
         self.default_movement_speed = self.movement_attribute + FREEZE_SPEED_MODIFIER * self.freeze;
-        self.movement_speed =
-            if self.sprinting { self.default_movement_speed * SPRINT_SPEED_MULTIPLIER } else { self.default_movement_speed };
+        self.movement_speed = if self.sprinting {
+            self.default_movement_speed * SPRINT_SPEED_MULTIPLIER
+        } else {
+            self.default_movement_speed
+        };
     }
 
     /// Rewinds to a server-corrected state (`CorrectPlayerMovePrediction`).

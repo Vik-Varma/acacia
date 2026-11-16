@@ -55,7 +55,10 @@ impl Variables {
     /// Sets `variable.a.b` for the path `[a, b]`, making the structs on the way.
     pub fn set_member(&mut self, variable: Variable, path: &[Symbol], value: impl Into<Value>) {
         let value = value.into();
-        assert!(!matches!(value, Value::Struct(_)) || self.0.owns(value), "struct from another store");
+        assert!(
+            !matches!(value, Value::Struct(_)) || self.0.owns(value),
+            "struct from another store"
+        );
         let value = self.0.import(value, None);
         self.0.set_symbols(variable.0, path, value);
     }
@@ -80,7 +83,10 @@ pub struct Scratch {
 
 impl Default for Scratch {
     fn default() -> Scratch {
-        Scratch { temps: Store::scratch(), stack: Vec::new() }
+        Scratch {
+            temps: Store::scratch(),
+            stack: Vec::new(),
+        }
     }
 }
 
@@ -91,7 +97,10 @@ impl Scratch {
 
     /// A member of a struct the last evaluation returned.
     pub fn member(&self, of: Value, name: Symbol) -> Option<Value> {
-        self.temps.owns(of).then(|| self.temps.member(of, name)).flatten()
+        self.temps
+            .owns(of)
+            .then(|| self.temps.member(of, name))
+            .flatten()
     }
 }
 

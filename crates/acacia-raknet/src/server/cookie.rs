@@ -22,7 +22,9 @@ pub(crate) struct Cookies {
 
 impl Cookies {
     pub fn new(secret: u128) -> Self {
-        Self { key: [secret as u64, (secret >> 64) as u64] }
+        Self {
+            key: [secret as u64, (secret >> 64) as u64],
+        }
     }
 
     fn at(&self, addr: SocketAddr, period: u64) -> u32 {
@@ -44,7 +46,10 @@ impl Cookies {
 
     pub fn verify(&self, addr: SocketAddr, age: Duration, cookie: u32) -> bool {
         let period = age.as_secs() / PERIOD.as_secs();
-        cookie == self.at(addr, period) || period.checked_sub(1).is_some_and(|p| cookie == self.at(addr, p))
+        cookie == self.at(addr, period)
+            || period
+                .checked_sub(1)
+                .is_some_and(|p| cookie == self.at(addr, p))
     }
 }
 
@@ -63,7 +68,12 @@ fn sip_round(v: &mut [u64; 4]) {
 
 /// SipHash-2-4 (Aumasson and Bernstein), a keyed PRF; std exposes none with a caller-chosen key.
 fn siphash24(key: [u64; 2], data: &[u8]) -> u64 {
-    let mut v = [key[0] ^ 0x736f_6d65_7073_6575, key[1] ^ 0x646f_7261_6e64_6f6d, key[0] ^ 0x6c79_6765_6e65_7261, key[1] ^ 0x7465_6462_7974_6573];
+    let mut v = [
+        key[0] ^ 0x736f_6d65_7073_6575,
+        key[1] ^ 0x646f_7261_6e64_6f6d,
+        key[0] ^ 0x6c79_6765_6e65_7261,
+        key[1] ^ 0x7465_6462_7974_6573,
+    ];
     let mut absorb = |m: u64| {
         v[3] ^= m;
         sip_round(&mut v);
@@ -92,21 +102,36 @@ mod tests {
     #[test]
     fn siphash_matches_the_reference_vector() {
         let bytes: Vec<u8> = (0..16).collect();
-        let key = [u64::from_le_bytes(bytes[..8].try_into().unwrap()), u64::from_le_bytes(bytes[8..].try_into().unwrap())];
+        let key = [
+            u64::from_le_bytes(bytes[..8].try_into().unwrap()),
+            u64::from_le_bytes(bytes[8..].try_into().unwrap()),
+        ];
         assert_eq!(siphash24(key, &bytes[..15]), 0xa129_ca61_49be_45e5);
     }
 
     #[test]
     fn cookies_bind_the_address_and_expire() {
         let cookies = Cookies::new(1);
-        let (a, b): (SocketAddr, SocketAddr) = ("10.0.0.2:5000".parse().unwrap(), "10.0.0.2:5001".parse().unwrap());
+        let (a, b): (SocketAddr, SocketAddr) = (
+            "10.0.0.2:5000".parse().unwrap(),
+            "10.0.0.2:5001".parse().unwrap(),
+        );
         let issued = Duration::from_secs(25);
         let cookie = cookies.issue(a, issued);
         assert!(cookies.verify(a, issued, cookie));
-        assert!(cookies.verify(a, issued + PERIOD, cookie), "still good in the next period");
+        assert!(
+            cookies.verify(a, issued + PERIOD, cookie),
+            "still good in the next period"
+        );
         assert!(!cookies.verify(a, issued + PERIOD * 2, cookie));
-        assert!(!cookies.verify(b, issued, cookie), "another port is another address");
-        assert!(!Cookies::new(2).verify(a, issued, cookie), "another server's secret");
+        assert!(
+            !cookies.verify(b, issued, cookie),
+            "another port is another address"
+        );
+        assert!(
+            !Cookies::new(2).verify(a, issued, cookie),
+            "another server's secret"
+        );
         assert_ne!(random_secret(), random_secret());
     }
 }

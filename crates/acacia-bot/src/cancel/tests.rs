@@ -10,7 +10,10 @@ fn a_cancel_ends_only_the_action_in_flight() {
     handle.cancel();
     assert!(state.requested());
     state.begin();
-    assert!(state.requested(), "every later wait of the cancelled action fails too");
+    assert!(
+        state.requested(),
+        "every later wait of the cancelled action fails too"
+    );
     assert!(state.end());
     assert!(!state.end(), "ending twice is a no-op");
     state.begin();

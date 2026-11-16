@@ -16,8 +16,16 @@ fn flyer(at: [f32; 3], creative: bool) -> PlayerState {
 }
 
 const IDLE: Input = Input {
-    move_vector: [0.0, 0.0], yaw: 0.0, pitch: 0.0, jump: false, sneak: false, want_down: false, sprint: false, swim: false,
-    glide: false, using_item: false,
+    move_vector: [0.0, 0.0],
+    yaw: 0.0,
+    pitch: 0.0,
+    jump: false,
+    sneak: false,
+    want_down: false,
+    sprint: false,
+    swim: false,
+    glide: false,
+    using_item: false,
 };
 
 #[test]
@@ -26,7 +34,13 @@ fn double_tap_toggles_flight() {
     let mut st = PlayerState::new([0.5, 0.0, 0.5]);
     st.flight.may_fly = true;
     let jump = Input { jump: true, ..IDLE };
-    for (input, flying) in [(jump, false), (IDLE, false), (jump, true), (IDLE, true), (jump, false)] {
+    for (input, flying) in [
+        (jump, false),
+        (IDLE, false),
+        (jump, true),
+        (IDLE, true),
+        (jump, false),
+    ] {
         tick(&mut st, &input, &w);
         assert_eq!(st.flight.flying, flying);
     }
@@ -92,7 +106,15 @@ fn creative_hover_brakes_vertically() {
 #[test]
 fn sneak_descends_without_crouching() {
     let (w, mut st) = (world(), flyer([0.5, 5.0, 0.5], true));
-    let out = tick(&mut st, &Input { sneak: true, want_down: true, ..IDLE }, &w);
+    let out = tick(
+        &mut st,
+        &Input {
+            sneak: true,
+            want_down: true,
+            ..IDLE
+        },
+        &w,
+    );
     assert_eq!(out.delta[1], -0.22 * 0.6);
     assert!(!st.sneaking);
 }
@@ -101,8 +123,21 @@ fn sneak_descends_without_crouching() {
 fn sprint_doubles_the_fly_speed() {
     let (w, mut st) = (world(), flyer([0.5, 5.0, 0.5], false));
     // Yaw -90 faces +X.
-    let out = tick(&mut st, &Input { sprint: true, move_vector: [0.0, 1.0], yaw: -90.0, ..IDLE }, &w);
+    let out = tick(
+        &mut st,
+        &Input {
+            sprint: true,
+            move_vector: [0.0, 1.0],
+            yaw: -90.0,
+            ..IDLE
+        },
+        &w,
+    );
     assert!(st.sprinting);
-    assert!((out.delta[0] - 0.05 * 2.0 * 0.98 * 0.91).abs() < 1e-6, "{:?}", out.delta);
+    assert!(
+        (out.delta[0] - 0.05 * 2.0 * 0.98 * 0.91).abs() < 1e-6,
+        "{:?}",
+        out.delta
+    );
     assert_eq!(out.delta[1], 0.0);
 }

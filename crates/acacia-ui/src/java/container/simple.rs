@@ -20,7 +20,14 @@ pub struct Simple {
 
 impl Simple {
     /// The screen opened `width` × `height` big; `inventory` is the player inventory's name.
-    pub fn new(kind: Kind, width: i32, height: i32, title: Text, inventory: Text, font: &dyn Metrics) -> Simple {
+    pub fn new(
+        kind: Kind,
+        width: i32,
+        height: i32,
+        title: Text,
+        inventory: Text,
+        font: &dyn Metrics,
+    ) -> Simple {
         let (image, slots) = match kind {
             Kind::Chest { rows } => ([176, 114 + rows * 18], menus::chest(rows)),
             Kind::Shulker => ([176, 167], menus::shulker()),
@@ -47,17 +54,44 @@ impl Screen for Simple {
     fn background(&mut self, gui: &mut Gui, _env: &Env, _mouse: [i32; 2], _partial: f32) {
         transparent_background(gui);
         let b = &self.base;
-        let (x, y) = ((b.width - b.image_width) / 2, (b.height - b.image_height) / 2);
+        let (x, y) = (
+            (b.width - b.image_width) / 2,
+            (b.height - b.image_height) / 2,
+        );
         let texture = match self.kind {
             Kind::Chest { rows } => {
-                blit(gui, "gui/container/generic_54", x, y, [0.0, 0.0], b.image_width, rows * 18 + 17);
-                blit(gui, "gui/container/generic_54", x, y + rows * 18 + 17, [0.0, 126.0], b.image_width, 96);
+                blit(
+                    gui,
+                    "gui/container/generic_54",
+                    x,
+                    y,
+                    [0.0, 0.0],
+                    b.image_width,
+                    rows * 18 + 17,
+                );
+                blit(
+                    gui,
+                    "gui/container/generic_54",
+                    x,
+                    y + rows * 18 + 17,
+                    [0.0, 126.0],
+                    b.image_width,
+                    96,
+                );
                 return;
             }
             Kind::Shulker => "gui/container/shulker_box",
             Kind::Dispenser => "gui/container/dispenser",
             Kind::Hopper => "gui/container/hopper",
         };
-        blit(gui, texture, x, y, [0.0, 0.0], b.image_width, b.image_height);
+        blit(
+            gui,
+            texture,
+            x,
+            y,
+            [0.0, 0.0],
+            b.image_width,
+            b.image_height,
+        );
     }
 }

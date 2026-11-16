@@ -45,7 +45,10 @@ pub enum Entry {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         err: Option<String>,
     },
-    WalkStart { task: BlockPos, stands: Vec<BlockPos> },
+    WalkStart {
+        task: BlockPos,
+        stands: Vec<BlockPos>,
+    },
     /// `acts`: acts done while the walk was under way (clicks in reach before arriving).
     WalkEnd {
         task: BlockPos,
@@ -64,7 +67,11 @@ pub enum Entry {
     /// A placement handed over to be made while walking on (its outcome comes as an `Acted` later).
     EnRoute { cell: BlockPos },
     /// What a restock brought of each item asked for, and the free inventory slots after it.
-    Restocked { station: BlockPos, got: Vec<(String, u32)>, free_slots: u32 },
+    Restocked {
+        station: BlockPos,
+        got: Vec<(String, u32)>,
+        free_slots: u32,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -137,8 +144,17 @@ pub struct Journal {
 impl Journal {
     /// A journal for `bot` written to `out`; `wall`: timestamps from the clock, else from the tick.
     pub fn new(bot: impl Into<String>, out: Box<dyn Write + Send>, wall: bool) -> Self {
-        let inner = Mutex::new(Inner { out: BufWriter::new(out), walk: None, feet: [0.0; 3] });
-        Self { bot: bot.into(), t0: wall.then(Instant::now), clock: None, inner }
+        let inner = Mutex::new(Inner {
+            out: BufWriter::new(out),
+            walk: None,
+            feet: [0.0; 3],
+        });
+        Self {
+            bot: bot.into(),
+            t0: wall.then(Instant::now),
+            clock: None,
+            inner,
+        }
     }
 
     /// Timestamps from `clock` (ticks) instead.
@@ -150,7 +166,11 @@ impl Journal {
     /// `dir/<bot>.jsonl`, wall-clock timestamps.
     pub fn create(dir: &Path, bot: &str) -> std::io::Result<Self> {
         std::fs::create_dir_all(dir)?;
-        Ok(Self::new(bot, Box::new(std::fs::File::create(dir.join(format!("{bot}.jsonl")))?), true))
+        Ok(Self::new(
+            bot,
+            Box::new(std::fs::File::create(dir.join(format!("{bot}.jsonl")))?),
+            true,
+        ))
     }
 
     fn t(&self, tick: u64) -> u64 {
@@ -162,7 +182,12 @@ impl Journal {
     }
 
     pub fn write(&self, tick: u64, e: Entry) {
-        let line = Line { t: self.t(tick), tick, bot: self.bot.clone(), e };
+        let line = Line {
+            t: self.t(tick),
+            tick,
+            bot: self.bot.clone(),
+            e,
+        };
         let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         match &line.e {
             Entry::Tick { feet, .. } => inner.feet = *feet,
@@ -177,7 +202,13 @@ impl Journal {
     /// Ends any walk under way (as `Switched`), then starts one for `task`.
     pub fn walk_start(&self, tick: u64, feet: Vec3, task: BlockPos, stands: Vec<BlockPos>) {
         self.walk_end(tick, WalkEnd::Switched);
-        self.inner.lock().unwrap_or_else(|e| e.into_inner()).walk = Some(Walk { task, tick, t: self.t(tick), from: feet, acts: 0 });
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).walk = Some(Walk {
+            task,
+            tick,
+            t: self.t(tick),
+            from: feet,
+            acts: 0,
+        });
         self.write(tick, Entry::WalkStart { task, stands });
     }
 
@@ -193,9 +224,24 @@ impl Journal {
             (inner.walk.take(), inner.feet)
         };
         let Some(w) = walk else { return };
-        let d = [feet[0] - w.from[0], feet[1] - w.from[1], feet[2] - w.from[2]];
+        let d = [
+            feet[0] - w.from[0],
+            feet[1] - w.from[1],
+            feet[2] - w.from[2],
+        ];
         let dist = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
-        self.write(tick, Entry::WalkEnd { task: w.task, end, ticks: tick - w.tick, ms: self.t(tick).saturating_sub(w.t), dist, acts: w.acts, err });
+        self.write(
+            tick,
+            Entry::WalkEnd {
+                task: w.task,
+                end,
+                ticks: tick - w.tick,
+                ms: self.t(tick).saturating_sub(w.t),
+                dist,
+                acts: w.acts,
+                err,
+            },
+        );
     }
 }
 
@@ -219,7 +265,11 @@ pub fn read_dir(dir: &Path) -> std::io::Result<Vec<Line>> {
     for f in std::fs::read_dir(dir)? {
         let path = f?.path();
         if path.extension().is_some_and(|x| x == "jsonl") {
-            lines.extend(std::fs::read_to_string(&path)?.lines().filter_map(|l| serde_json::from_str::<Line>(l).ok()));
+            lines.extend(
+                std::fs::read_to_string(&path)?
+                    .lines()
+                    .filter_map(|l| serde_json::from_str::<Line>(l).ok()),
+            );
         }
     }
     lines.sort_by_key(|l| (l.t, l.tick));

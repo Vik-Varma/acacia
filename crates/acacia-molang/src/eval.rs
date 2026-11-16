@@ -85,14 +85,21 @@ impl Machine<'_> {
             Node::Post { of, post } => self.posted(of, post),
             Node::Sum(terms) => {
                 let (&first, rest) = program.list(terms).split_first().expect("a sum has terms");
-                rest.iter().fold(self.num(first), |sum, &term| sum + self.num(term))
+                rest.iter()
+                    .fold(self.num(first), |sum, &term| sum + self.num(term))
             }
             Node::Binary(op @ (Op::Add | Op::Sub | Op::Mul), left, right) => {
                 let (x, y) = (self.num(left), self.num(right));
                 op.arithmetic(x, y)
             }
-            Node::Binary(op @ (Op::Div | Op::DivByMagnitude), left, right) => self.divide(op, left, right).unwrap_or(0.0),
-            Node::Math { function, args, count } => self.math(function, args, count),
+            Node::Binary(op @ (Op::Div | Op::DivByMagnitude), left, right) => {
+                self.divide(op, left, right).unwrap_or(0.0)
+            }
+            Node::Math {
+                function,
+                args,
+                count,
+            } => self.math(function, args, count),
             Node::Var { slot, path } => {
                 let read = self.variable(slot, self.program.list(path));
                 self.set(read).num()
@@ -103,7 +110,11 @@ impl Machine<'_> {
             }
             Node::Query { id, args } => self.query(id, self.program.list(args)).num(),
             Node::Ternary(condition, then, otherwise) => {
-                if self.truthy(condition) { self.num(then) } else { self.num(otherwise) }
+                if self.truthy(condition) {
+                    self.num(then)
+                } else {
+                    self.num(otherwise)
+                }
             }
             _ => self.value(node).num(),
         }
@@ -114,8 +125,12 @@ impl Machine<'_> {
         let program = self.program;
         match program.nodes[node as usize] {
             Node::Not(operand) => !self.truthy(operand),
-            Node::Logic { any: true, terms } => program.list(terms).iter().any(|&term| self.truthy(term)),
-            Node::Logic { any: false, terms } => program.list(terms).iter().all(|&term| self.truthy(term)),
+            Node::Logic { any: true, terms } => {
+                program.list(terms).iter().any(|&term| self.truthy(term))
+            }
+            Node::Logic { any: false, terms } => {
+                program.list(terms).iter().all(|&term| self.truthy(term))
+            }
             Node::Binary(op @ (Op::Lt | Op::Le | Op::Gt | Op::Ge), left, right) => {
                 let (x, y) = (self.num(left), self.num(right));
                 op.orders(x, y)
@@ -135,9 +150,19 @@ impl Machine<'_> {
     fn posted(&mut self, of: u32, post: Post) -> f32 {
         match self.program.nodes[of as usize] {
             Node::Const(value) => value.num(),
-            Node::Binary(op @ (Op::Div | Op::DivByMagnitude), left, right) => self.divide(op, left, right).map_or(0.0, |q| post.apply(q)),
-            Node::Not(_) | Node::Logic { .. } | Node::Binary(Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge, ..) => post.select(self.truthy(of)),
-            Node::Math { function: MathFn::Sign, args, .. } => {
+            Node::Binary(op @ (Op::Div | Op::DivByMagnitude), left, right) => {
+                self.divide(op, left, right).map_or(0.0, |q| post.apply(q))
+            }
+            Node::Not(_)
+            | Node::Logic { .. }
+            | Node::Binary(Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge, ..) => {
+                post.select(self.truthy(of))
+            }
+            Node::Math {
+                function: MathFn::Sign,
+                args,
+                ..
+            } => {
                 let k = post.scale + post.offset;
                 if self.num(args[0]) < 0.0 { -k } else { k }
             }
@@ -179,7 +204,9 @@ impl Machine<'_> {
             let value = self.value(arg);
             self.stack.push(value);
         }
-        let value = self.host.query(Query(id), &self.stack[base..], &mut Structs(self.temps));
+        let value = self
+            .host
+            .query(Query(id), &self.stack[base..], &mut Structs(self.temps));
         self.stack.truncate(base);
         value
     }
@@ -206,8 +233,12 @@ impl Machine<'_> {
         let program = self.program;
         match program.nodes[node as usize] {
             Node::Const(value) => value,
-            Node::This | Node::Math { .. } | Node::Post { .. } | Node::Sum(_) => Value::Num(self.num(node)),
-            Node::Binary(Op::Add | Op::Sub | Op::Mul | Op::Div | Op::DivByMagnitude, ..) => Value::Num(self.num(node)),
+            Node::This | Node::Math { .. } | Node::Post { .. } | Node::Sum(_) => {
+                Value::Num(self.num(node))
+            }
+            Node::Binary(Op::Add | Op::Sub | Op::Mul | Op::Div | Op::DivByMagnitude, ..) => {
+                Value::Num(self.num(node))
+            }
             Node::Not(_) | Node::Logic { .. } | Node::Binary(..) => Value::flag(self.truthy(node)),
             Node::Query { id, args } => self.query(id, program.list(args)),
             Node::Var { slot, path } => {
@@ -219,14 +250,26 @@ impl Machine<'_> {
                 self.set(read)
             }
             Node::Ternary(condition, then, otherwise) => {
-                if self.truthy(condition) { self.value(then) } else { self.value(otherwise) }
+                if self.truthy(condition) {
+                    self.value(then)
+                } else {
+                    self.value(otherwise)
+                }
             }
             Node::When(condition, then) => {
-                if self.truthy(condition) { self.value(then) } else { Value::ZERO }
+                if self.truthy(condition) {
+                    self.value(then)
+                } else {
+                    Value::ZERO
+                }
             }
-            Node::Assign { .. } | Node::Block(_) | Node::Loop { .. } | Node::ForEach { .. } | Node::Break | Node::Continue | Node::Return(_) => {
-                self.run(node)
-            }
+            Node::Assign { .. }
+            | Node::Block(_)
+            | Node::Loop { .. }
+            | Node::ForEach { .. }
+            | Node::Break
+            | Node::Continue
+            | Node::Return(_) => self.run(node),
             Node::Context(_) | Node::Member { .. } | Node::Coalesce(..) | Node::Index { .. } => {
                 let read = self.maybe(node);
                 self.set(read)
@@ -256,10 +299,18 @@ impl Machine<'_> {
                 set => set,
             },
             Node::Ternary(condition, then, otherwise) => {
-                if self.truthy(condition) { self.maybe(then) } else { self.maybe(otherwise) }
+                if self.truthy(condition) {
+                    self.maybe(then)
+                } else {
+                    self.maybe(otherwise)
+                }
             }
             Node::When(condition, then) => {
-                if self.truthy(condition) { self.maybe(then) } else { Some(Value::ZERO) }
+                if self.truthy(condition) {
+                    self.maybe(then)
+                } else {
+                    Some(Value::ZERO)
+                }
             }
             Node::Index { items, index } => {
                 let items = program.list(items);

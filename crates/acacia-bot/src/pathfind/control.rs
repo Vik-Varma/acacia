@@ -21,7 +21,12 @@ pub enum Phase {
 
 pub trait Controller {
     /// Sets `c` for the tick after body `b`. `peek` simulates that tick with other controls, committing nothing.
-    fn step(&mut self, b: &Body, peek: &mut dyn FnMut(&Controls) -> Body, c: &mut Controls) -> Phase;
+    fn step(
+        &mut self,
+        b: &Body,
+        peek: &mut dyn FnMut(&Controls) -> Body,
+        c: &mut Controls,
+    ) -> Phase;
 }
 
 pub(crate) fn centre(p: BlockPos) -> [f32; 2] {
@@ -49,7 +54,12 @@ pub struct RunCtl {
 
 impl RunCtl {
     pub fn new(target: BlockPos, feet: f32, aim: Aim) -> Self {
-        Self { target, feet, aim, t: 0 }
+        Self {
+            target,
+            feet,
+            aim,
+            t: 0,
+        }
     }
 }
 
@@ -62,7 +72,8 @@ impl Controller for RunCtl {
             return Phase::Failed;
         }
         self.t += 1;
-        (c.strafe, c.sneak, c.jump, c.pitch, c.forward, c.sprint) = (0.0, false, false, 0.0, 1.0, true);
+        (c.strafe, c.sneak, c.jump, c.pitch, c.forward, c.sprint) =
+            (0.0, false, false, 0.0, 1.0, true);
         c.yaw = self.aim.turn(b.yaw, yaw_to(b, centre(self.target)));
         Phase::Going
     }

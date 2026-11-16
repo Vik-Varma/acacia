@@ -71,9 +71,18 @@ impl PacketTrace {
             *counts_by_name.entry(name(id)).or_insert(0) += 1;
         }
         let skip = ring.entries.len().saturating_sub(TAIL);
-        let tail = ring.ordered().skip(skip).map(|&(id, at)| format!("{}@-{}ms", name(id), ms(at))).collect();
+        let tail = ring
+            .ordered()
+            .skip(skip)
+            .map(|&(id, at)| format!("{}@-{}ms", name(id), ms(at)))
+            .collect();
         let silent_ms = ring.ordered().last().map(|&(_, at)| ms(at));
-        PacketTraceSummary { silent_ms, total: ring.total, counts_by_name, tail }
+        PacketTraceSummary {
+            silent_ms,
+            total: ring.total,
+            counts_by_name,
+            tail,
+        }
     }
 
     fn lock(&self) -> MutexGuard<'_, Ring> {
@@ -96,14 +105,17 @@ fn name(id: u32) -> String {
 mod tests {
     use std::time::Duration;
 
-    use crate::proto::packets::{SetTime, Text};
     use crate::proto::Packet;
+    use crate::proto::packets::{SetTime, Text};
 
     use super::*;
 
     #[test]
     fn empty_trace_has_no_silence() {
-        assert_eq!(PacketTrace::default().summary(), PacketTraceSummary::default());
+        assert_eq!(
+            PacketTrace::default().summary(),
+            PacketTraceSummary::default()
+        );
     }
 
     #[test]
@@ -119,7 +131,10 @@ mod tests {
         assert_eq!((s.total, s.silent_ms), (301, Some(50)));
         assert_eq!(s.counts_by_name.values().sum::<u32>(), RING as u32);
         assert_eq!(s.counts_by_name["Unknown9999"], 1);
-        assert_eq!((s.counts_by_name["SetTime"], s.counts_by_name["Text"]), (127, 128));
+        assert_eq!(
+            (s.counts_by_name["SetTime"], s.counts_by_name["Text"]),
+            (127, 128)
+        );
         assert_eq!(s.tail.len(), TAIL);
         assert_eq!(s.tail.last().map(String::as_str), Some("Unknown9999@-50ms"));
         assert_eq!(s.tail[TAIL - 2], "Text@-51ms");

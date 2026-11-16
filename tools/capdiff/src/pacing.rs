@@ -29,13 +29,20 @@ fn load(path: &str) -> Result<Vec<Datagram>, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
     let mut per_peer = std::collections::HashMap::<&str, usize>::new();
     for line in text.lines().skip(1) {
-        *per_peer.entry(line.split('\t').nth(2).unwrap_or_default()).or_default() += 1;
+        *per_peer
+            .entry(line.split('\t').nth(2).unwrap_or_default())
+            .or_default() += 1;
     }
-    let game = per_peer.into_iter().max_by_key(|&(_, n)| n).map(|(peer, _)| peer);
+    let game = per_peer
+        .into_iter()
+        .max_by_key(|&(_, n)| n)
+        .map(|(peer, _)| peer);
     let mut out = Vec::new();
     for line in text.lines().skip(1) {
         let f: Vec<&str> = line.split('\t').collect();
-        let [t, dir, peer, first_byte, len] = f[..] else { return Err(format!("{path}: bad line {line:?}")) };
+        let [t, dir, peer, first_byte, len] = f[..] else {
+            return Err(format!("{path}: bad line {line:?}"));
+        };
         if Some(peer) != game {
             continue;
         }
@@ -43,7 +50,8 @@ fn load(path: &str) -> Result<Vec<Datagram>, String> {
         out.push(Datagram {
             t: t.parse().map_err(|_| parse_err("time"))?,
             from_game: dir == "C>S",
-            first_byte: u8::from_str_radix(first_byte.trim_start_matches("0x"), 16).map_err(|_| parse_err("byte"))?,
+            first_byte: u8::from_str_radix(first_byte.trim_start_matches("0x"), 16)
+                .map_err(|_| parse_err("byte"))?,
             len: len.parse().map_err(|_| parse_err("length"))?,
         });
     }
@@ -58,7 +66,12 @@ pub fn run(left: &str, right: &str) -> Result<(), String> {
     for (name, d) in [("left", &a), ("right", &b)] {
         for (i, run) in bulk_runs(d).iter().take(RUNS_SHOWN).enumerate() {
             let (first, last) = (&d[run[0]], &d[*run.last().unwrap()]);
-            println!("{name} run {i}: {} datagrams over {:.1} ms, flights {:?}", run.len(), last.t - first.t, flights(d, run));
+            println!(
+                "{name} run {i}: {} datagrams over {:.1} ms, flights {:?}",
+                run.len(),
+                last.t - first.t,
+                flights(d, run)
+            );
         }
     }
     Ok(())
@@ -66,8 +79,17 @@ pub fn run(left: &str, right: &str) -> Result<(), String> {
 
 fn header_mix(a: &[Datagram], b: &[Datagram]) {
     println!("== game datagram header bytes (left / right)");
-    let count = |d: &[Datagram], byte| d.iter().filter(|x| x.from_game && x.first_byte == byte).count();
-    let mut bytes: Vec<u8> = a.iter().chain(b).filter(|x| x.from_game).map(|x| x.first_byte).collect();
+    let count = |d: &[Datagram], byte| {
+        d.iter()
+            .filter(|x| x.from_game && x.first_byte == byte)
+            .count()
+    };
+    let mut bytes: Vec<u8> = a
+        .iter()
+        .chain(b)
+        .filter(|x| x.from_game)
+        .map(|x| x.first_byte)
+        .collect();
     bytes.sort_unstable();
     bytes.dedup();
     for byte in bytes {
@@ -78,11 +100,24 @@ fn header_mix(a: &[Datagram], b: &[Datagram]) {
 fn ack_cadence(a: &[Datagram], b: &[Datagram]) {
     println!("\n== game ACK gaps, ms: median / p90 (left | right)");
     let stats = |d: &[Datagram]| {
-        let times: Vec<f64> = d.iter().filter(|x| x.from_game && is_ack(x.first_byte)).map(|x| x.t).collect();
+        let times: Vec<f64> = d
+            .iter()
+            .filter(|x| x.from_game && is_ack(x.first_byte))
+            .map(|x| x.t)
+            .collect();
         let mut gaps: Vec<f64> = times.windows(2).map(|w| w[1] - w[0]).collect();
         gaps.sort_by(f64::total_cmp);
-        let pick = |q: f64| gaps.get(((gaps.len() as f64 - 1.0) * q).round() as usize).copied().unwrap_or(f64::NAN);
-        format!("{:.1} / {:.1} over {} ACKs", pick(0.5), pick(0.9), times.len())
+        let pick = |q: f64| {
+            gaps.get(((gaps.len() as f64 - 1.0) * q).round() as usize)
+                .copied()
+                .unwrap_or(f64::NAN)
+        };
+        format!(
+            "{:.1} / {:.1} over {} ACKs",
+            pick(0.5),
+            pick(0.9),
+            times.len()
+        )
     };
     println!("{} | {}", stats(a), stats(b));
 }
@@ -90,7 +125,11 @@ fn ack_cadence(a: &[Datagram], b: &[Datagram]) {
 /// Indices of the game's bulk data datagrams, grouped into runs split at long pauses.
 fn bulk_runs(d: &[Datagram]) -> Vec<Vec<usize>> {
     let mut runs: Vec<Vec<usize>> = Vec::new();
-    for (i, x) in d.iter().enumerate().filter(|(_, x)| x.from_game && is_data(x.first_byte) && x.len >= BULK_LEN) {
+    for (i, x) in d
+        .iter()
+        .enumerate()
+        .filter(|(_, x)| x.from_game && is_data(x.first_byte) && x.len >= BULK_LEN)
+    {
         match runs.last_mut() {
             Some(run) if x.t - d[*run.last().unwrap()].t <= BULK_GAP_MS => run.push(i),
             _ => runs.push(vec![i]),

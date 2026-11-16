@@ -22,14 +22,24 @@ pub struct Trace {
 }
 
 /// Runs `ctl` on `r` from controls `c` until it finishes, fails or `max` ticks pass.
-pub fn run<S: StepIn<W>, W: ?Sized>(r: &mut S, ctl: &mut impl Controller, mut c: Controls, max: u32, w: &W) -> Trace {
+pub fn run<S: StepIn<W>, W: ?Sized>(
+    r: &mut S,
+    ctl: &mut impl Controller,
+    mut c: Controls,
+    max: u32,
+    w: &W,
+) -> Trace {
     let mut bodies = vec![r.body()];
     loop {
         let b = bodies[bodies.len() - 1];
         let phase = ctl.step(&b, &mut |pc: &Controls| peek(r, pc, w), &mut c);
         let ticks = bodies.len() as u32 - 1;
         if phase != Phase::Going || ticks >= max {
-            return Trace { bodies, landed: phase == Phase::Done, ticks };
+            return Trace {
+                bodies,
+                landed: phase == Phase::Done,
+                ticks,
+            };
         }
         r.step(&c, w);
         bodies.push(r.body());
@@ -47,7 +57,11 @@ pub struct Spend {
 
 impl Spend {
     pub fn new(limit: u64) -> Self {
-        Self { ticks: 0, limit, short: false }
+        Self {
+            ticks: 0,
+            limit,
+            short: false,
+        }
     }
 
     pub fn left(&self) -> u64 {

@@ -14,7 +14,7 @@ mod tests;
 
 pub use auto_eat::AutoEat;
 pub use equip::{Destination, EquipMethod};
-pub use food::{food, use_ticks, Food, FoodChoice};
+pub use food::{Food, FoodChoice, food, use_ticks};
 
 use crate::{ActionError, Bot};
 use auto_eat::AutoEater;

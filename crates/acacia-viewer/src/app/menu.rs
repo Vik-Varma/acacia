@@ -52,23 +52,48 @@ impl App {
         let on = |b: bool| if b { "On" } else { "Off" };
         match menu {
             // The pause screen has the logo for a title (an empty one, acacia_ui::menu).
-            Menu::Pause => ("", vec!["Resume Game".into(), "Settings".into(), "Save & Quit".into()]),
-            Menu::Death | Menu::TitleConfirm => ("You Died!", vec!["Respawn".into(), "Disconnect".into()]),
+            Menu::Pause => (
+                "",
+                vec![
+                    "Resume Game".into(),
+                    "Settings".into(),
+                    "Save & Quit".into(),
+                ],
+            ),
+            Menu::Death | Menu::TitleConfirm => {
+                ("You Died!", vec!["Respawn".into(), "Disconnect".into()])
+            }
             Menu::Disconnected => ("Disconnected", vec!["Quit".into()]),
             Menu::Options => {
                 let s = &self.settings;
-                let scale = if s.gui_scale == 0 { "Auto".to_owned() } else { s.gui_scale.to_string() };
-                ("Options", vec![
-                    format!("Look: {:?}", s.look),
-                    format!("GUI Scale: {scale}"),
-                    format!("VSync: {}", on(s.vsync)),
-                    format!("Cave Culling: {}", on(s.cave_culling)),
-                    format!("Sound: {}%", s.volume),
-                    format!("FOV: {}", s.fov),
-                    format!("View Bobbing: {}", on(s.view_bobbing)),
-                    format!("Clouds: {}", if !s.clouds { "OFF" } else if s.fancy_clouds { "Fancy" } else { "Fast" }),
-                    "Done".into(),
-                ])
+                let scale = if s.gui_scale == 0 {
+                    "Auto".to_owned()
+                } else {
+                    s.gui_scale.to_string()
+                };
+                (
+                    "Options",
+                    vec![
+                        format!("Look: {:?}", s.look),
+                        format!("GUI Scale: {scale}"),
+                        format!("VSync: {}", on(s.vsync)),
+                        format!("Cave Culling: {}", on(s.cave_culling)),
+                        format!("Sound: {}%", s.volume),
+                        format!("FOV: {}", s.fov),
+                        format!("View Bobbing: {}", on(s.view_bobbing)),
+                        format!(
+                            "Clouds: {}",
+                            if !s.clouds {
+                                "OFF"
+                            } else if s.fancy_clouds {
+                                "Fancy"
+                            } else {
+                                "Fast"
+                            }
+                        ),
+                        "Done".into(),
+                    ],
+                )
             }
         }
     }
@@ -80,26 +105,42 @@ impl App {
         let ([w, h], scale) = self.gui();
         let size = [(w / scale) as f32, (h / scale) as f32];
         let theme = self.ui.theme(LookChoice::Bedrock);
-        let Some(i) = menu::hit(theme, title, buttons.len(), size, self.gui_mouse()) else { return };
+        let Some(i) = menu::hit(theme, title, buttons.len(), size, self.gui_mouse()) else {
+            return;
+        };
         match (open, i) {
             (Menu::Pause, 0) => self.menu_back(),
             (Menu::Pause, 1) => self.menu = Some(Menu::Options),
-            (Menu::Pause | Menu::Disconnected, _) | (Menu::Death | Menu::TitleConfirm, 1) => self.quit = true,
+            (Menu::Pause | Menu::Disconnected, _) | (Menu::Death | Menu::TitleConfirm, 1) => {
+                self.quit = true
+            }
             // The screen stays until the server has the player alive again (events.rs).
             (Menu::Death | Menu::TitleConfirm, _) => self.respawn(),
             (Menu::Options, 0) => self.switch_look(),
-            (Menu::Options, 1) => self.settings.change_and_save(|s| s.gui_scale = (s.gui_scale + 1) % (MAX_GUI_SCALE + 1)),
+            (Menu::Options, 1) => self
+                .settings
+                .change_and_save(|s| s.gui_scale = (s.gui_scale + 1) % (MAX_GUI_SCALE + 1)),
             (Menu::Options, 2) => self.toggle_vsync(),
-            (Menu::Options, 3) => self.settings.change_and_save(|s| s.cave_culling = !s.cave_culling),
-            (Menu::Options, 4) => self.settings.change_and_save(|s| s.volume = (s.volume / 25 * 25 + 25) % 125),
+            (Menu::Options, 3) => self
+                .settings
+                .change_and_save(|s| s.cave_culling = !s.cave_culling),
+            (Menu::Options, 4) => self
+                .settings
+                .change_and_save(|s| s.volume = (s.volume / 25 * 25 + 25) % 125),
             // Java's range, 30 to 110, in steps of 10.
-            (Menu::Options, 5) => self.settings.change_and_save(|s| s.fov = (s.fov.clamp(30, 110) / 10 * 10 - 20) % 90 + 30),
-            (Menu::Options, 6) => self.settings.change_and_save(|s| s.view_bobbing = !s.view_bobbing),
-            (Menu::Options, 7) => self.settings.change_and_save(|s| (s.clouds, s.fancy_clouds) = match (s.clouds, s.fancy_clouds) {
-                // Java's order: fancy, fast, off.
-                (true, true) => (true, false),
-                (true, false) => (false, true),
-                (false, _) => (true, true),
+            (Menu::Options, 5) => self
+                .settings
+                .change_and_save(|s| s.fov = (s.fov.clamp(30, 110) / 10 * 10 - 20) % 90 + 30),
+            (Menu::Options, 6) => self
+                .settings
+                .change_and_save(|s| s.view_bobbing = !s.view_bobbing),
+            (Menu::Options, 7) => self.settings.change_and_save(|s| {
+                (s.clouds, s.fancy_clouds) = match (s.clouds, s.fancy_clouds) {
+                    // Java's order: fancy, fast, off.
+                    (true, true) => (true, false),
+                    (true, false) => (false, true),
+                    (false, _) => (true, true),
+                }
             }),
             (Menu::Options, _) => self.menu = Some(Menu::Pause),
         }

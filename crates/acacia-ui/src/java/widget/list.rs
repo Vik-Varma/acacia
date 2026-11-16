@@ -78,13 +78,21 @@ impl SelectionList {
 
     /// An entry's `getWidth`.
     pub fn entry_width(&self) -> i32 {
-        self.row_width - if self.narrow_entries && self.max_scroll() > 0 { 6 } else { 0 }
+        self.row_width
+            - if self.narrow_entries && self.max_scroll() > 0 {
+                6
+            } else {
+                0
+            }
     }
 
     /// `getEntryAtPosition`: the entry whose box holds the point.
     pub fn row_at(&self, x: i32, y: i32) -> Option<usize> {
         let (left, width) = (self.row_left(), self.entry_width());
-        self.row_tops().into_iter().zip(&self.rows).position(|(t, r)| x >= left && x < left + width && y >= t && y < t + r.h)
+        self.row_tops()
+            .into_iter()
+            .zip(&self.rows)
+            .position(|(t, r)| x >= left && x < left + width && y >= t && y < t + r.h)
     }
 
     /// `centerScrollOn`: the row's middle at the list's middle.
@@ -108,11 +116,14 @@ impl SelectionList {
     /// Each row's top, `repositionEntries` from the scroll amount.
     pub fn row_tops(&self) -> Vec<i32> {
         let mut y = self.base.y + 2 - self.scroll as i32;
-        self.rows.iter().map(|r| {
-            let top = y;
-            y += r.h;
-            top
-        }).collect()
+        self.rows
+            .iter()
+            .map(|r| {
+                let top = y;
+                y += r.h;
+                top
+            })
+            .collect()
     }
 
     pub fn content_height(&self) -> i32 {
@@ -153,11 +164,17 @@ impl SelectionList {
     fn scroller_height(&self) -> i32 {
         let h = self.base.h;
         // Mth.clamp: max then min, so a list under 40 high gets h - 8.
-        (((h * h) as f32 / self.content_height() as f32) as i32).max(32).min(h - 8)
+        (((h * h) as f32 / self.content_height() as f32) as i32)
+            .max(32)
+            .min(h - 8)
     }
 
     pub fn scroll_bar_x(&self) -> i32 {
-        if self.bar_at_right { self.base.x + self.base.w - 6 } else { self.row_right() + 6 + 2 }
+        if self.bar_at_right {
+            self.base.x + self.base.w - 6
+        } else {
+            self.row_right() + 6 + 2
+        }
     }
 
     /// Every row's widgets placed for the scroll amount, as the next frame draws them.
@@ -173,19 +190,31 @@ impl SelectionList {
     pub fn children(&mut self) -> Vec<Child<'_>> {
         let b = &self.base;
         let clip = Some([b.x, b.y, b.x + b.w, b.y + b.h]);
-        self.rows.iter_mut().flat_map(|r| r.entry.children()).map(|widget| Child { widget, clip }).collect()
+        self.rows
+            .iter_mut()
+            .flat_map(|r| r.entry.children())
+            .map(|widget| Child { widget, clip })
+            .collect()
     }
 
     /// `isMouseOver`.
     pub fn over(&self, x: f64, y: f64) -> bool {
         let b = &self.base;
-        b.is_active() && x >= f64::from(b.x) && y >= f64::from(b.y) && x < f64::from(b.x + b.w) && y < f64::from(b.y + b.h)
+        b.is_active()
+            && x >= f64::from(b.x)
+            && y >= f64::from(b.y)
+            && x < f64::from(b.x + b.w)
+            && y < f64::from(b.y + b.h)
     }
 
     /// `updateScrolling`: a click on the bar of a list that scrolls.
     pub fn over_scrollbar(&self, x: f64, y: f64) -> bool {
         let (bx, b) = (f64::from(self.scroll_bar_x()), &self.base);
-        self.max_scroll() > 0 && x >= bx && x <= bx + 6.0 && y >= f64::from(b.y) && y < f64::from(b.y + b.h)
+        self.max_scroll() > 0
+            && x >= bx
+            && x <= bx + 6.0
+            && y >= f64::from(b.y)
+            && y < f64::from(b.y + b.h)
     }
 
     /// `AbstractScrollArea.mouseDragged` while the bar is held: the mouse at `y`, moved `dy`.
@@ -207,7 +236,9 @@ impl SelectionList {
         if max == 0 {
             self.base.y
         } else {
-            self.base.y.max(self.scroll as i32 * (self.base.h - self.scroller_height()) / max + self.base.y)
+            self.base.y.max(
+                self.scroll as i32 * (self.base.h - self.scroller_height()) / max + self.base.y,
+            )
         }
     }
 
@@ -216,7 +247,13 @@ impl SelectionList {
         if self.max_scroll() > 0 {
             let (x, b) = (self.scroll_bar_x(), &self.base);
             ctx.gui.sprite("widget/scroller_background", x, b.y, 6, b.h);
-            ctx.gui.sprite("widget/scroller", x, self.scroll_bar_y(), 6, self.scroller_height());
+            ctx.gui.sprite(
+                "widget/scroller",
+                x,
+                self.scroll_bar_y(),
+                6,
+                self.scroller_height(),
+            );
         }
     }
 }
@@ -236,24 +273,63 @@ impl Widget for SelectionList {
         let over = b.is_active() && b.contains(mx, my);
         let hovered = if over { self.row_at(mx, my) } else { None };
         let scrollable = self.max_scroll() > 0;
-        let bg = if self.in_world { "gui/inworld_menu_list_background" } else { "gui/menu_list_background" };
-        ctx.blit(bg, b.x, b.y, [(b.x + b.w) as f32, (b.y + b.h + self.scroll as i32) as f32], b.w, b.h, [32, 32]);
+        let bg = if self.in_world {
+            "gui/inworld_menu_list_background"
+        } else {
+            "gui/menu_list_background"
+        };
+        ctx.blit(
+            bg,
+            b.x,
+            b.y,
+            [(b.x + b.w) as f32, (b.y + b.h + self.scroll as i32) as f32],
+            b.w,
+            b.h,
+            [32, 32],
+        );
         let (gw, gh) = (ctx.gui.width, ctx.gui.height);
-        ctx.enable_scissor(b.x.clamp(0, gw), b.y.clamp(0, gh), (b.x + b.w).clamp(0, gw), (b.y + b.h).clamp(0, gh));
+        ctx.enable_scissor(
+            b.x.clamp(0, gw),
+            b.y.clamp(0, gh),
+            (b.x + b.w).clamp(0, gw),
+            (b.y + b.h).clamp(0, gh),
+        );
         for (i, row) in self.rows.iter_mut().enumerate() {
             let top = tops[i];
             if top + row.h >= b.y && top <= b.y + b.h {
                 if self.selectable && self.selected == Some(i) {
-                    let outline = if self.focused { 0xFFFF_FFFF } else { 0xFF80_8080 };
+                    let outline = if self.focused {
+                        0xFFFF_FFFF
+                    } else {
+                        0xFF80_8080
+                    };
                     ctx.gui.fill(left, top, left + width, top + row.h, outline);
-                    ctx.gui.fill(left + 1, top + 1, left + width - 1, top + row.h - 1, 0xFF00_0000);
+                    ctx.gui.fill(
+                        left + 1,
+                        top + 1,
+                        left + width - 1,
+                        top + row.h - 1,
+                        0xFF00_0000,
+                    );
                 }
-                row.entry.list_state(ListState { selected: self.selected == Some(i), focused: self.focused, scrollable });
-                row.entry.extract_content(ctx, [left, top, width, row.h], hovered == Some(i));
+                row.entry.list_state(ListState {
+                    selected: self.selected == Some(i),
+                    focused: self.focused,
+                    scrollable,
+                });
+                row.entry
+                    .extract_content(ctx, [left, top, width, row.h], hovered == Some(i));
             }
         }
         ctx.disable_scissor();
-        let (head, foot) = if self.in_world { ("gui/inworld_header_separator", "gui/inworld_footer_separator") } else { ("gui/header_separator", "gui/footer_separator") };
+        let (head, foot) = if self.in_world {
+            (
+                "gui/inworld_header_separator",
+                "gui/inworld_footer_separator",
+            )
+        } else {
+            ("gui/header_separator", "gui/footer_separator")
+        };
         ctx.blit(head, b.x, b.y - 2, [0.0, 0.0], b.w, 2, [32, 2]);
         ctx.blit(foot, b.x, b.y + b.h, [0.0, 0.0], b.w, 2, [32, 2]);
         self.scrollbar(ctx);

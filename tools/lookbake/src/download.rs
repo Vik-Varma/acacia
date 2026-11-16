@@ -9,7 +9,11 @@ pub type Error = Box<dyn std::error::Error>;
 
 pub fn get(url: &str) -> Result<Vec<u8>, Error> {
     let mut bytes = Vec::new();
-    ureq::get(url).call()?.into_body().into_reader().read_to_end(&mut bytes)?;
+    ureq::get(url)
+        .call()?
+        .into_body()
+        .into_reader()
+        .read_to_end(&mut bytes)?;
     Ok(bytes)
 }
 
@@ -18,7 +22,11 @@ fn sha1_of(bytes: &[u8]) -> String {
 }
 
 /// The file at `path` when it has `sha1`; otherwise what `fetch` returns, checked and written there.
-pub fn pinned(path: &Path, sha1: &str, fetch: impl FnOnce() -> Result<Vec<u8>, Error>) -> Result<Vec<u8>, Error> {
+pub fn pinned(
+    path: &Path,
+    sha1: &str,
+    fetch: impl FnOnce() -> Result<Vec<u8>, Error>,
+) -> Result<Vec<u8>, Error> {
     if let Some(bytes) = std::fs::read(path).ok().filter(|b| sha1_of(b) == sha1) {
         return Ok(bytes);
     }
@@ -47,7 +55,10 @@ mod tests {
         assert!(pinned(&path, ABC, || Ok(b"abd".to_vec())).is_err());
         assert!(!path.exists(), "a refused download is not kept");
         assert_eq!(pinned(&path, ABC, || Ok(b"abc".to_vec())).unwrap(), b"abc");
-        assert_eq!(pinned(&path, ABC, || Err("not fetched again".into())).unwrap(), b"abc");
+        assert_eq!(
+            pinned(&path, ABC, || Err("not fetched again".into())).unwrap(),
+            b"abc"
+        );
         std::fs::remove_file(&path).unwrap();
     }
 }

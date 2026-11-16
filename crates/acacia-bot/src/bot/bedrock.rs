@@ -3,7 +3,9 @@
 use std::sync::Arc;
 
 use acacia_client::proto::types::InputData;
-use acacia_client::{Client, ClientBuilder, ConnectError, MemoryBlobStore, PacketFilter, PacketTraceSummary};
+use acacia_client::{
+    Client, ClientBuilder, ConnectError, MemoryBlobStore, PacketFilter, PacketTraceSummary,
+};
 
 use super::Assembly;
 use super::dimension::{self, Travel};
@@ -54,29 +56,58 @@ pub struct Bedrock {
 
 impl Bedrock {
     /// Connects and spawns. Tracked packets are added to `builder`'s subscription automatically.
-    pub(super) async fn connect(builder: ClientBuilder, mut config: BotConfig) -> Result<Bot, ConnectError> {
+    pub(super) async fn connect(
+        builder: ClientBuilder,
+        mut config: BotConfig,
+    ) -> Result<Bot, ConnectError> {
         config.trackers.block_entities = config.trackers.block_entities.resolve(config.physics);
         let mut tracked: PacketFilter = config.trackers.packet_ids().into_iter().collect();
-        tracked = PredictionSync::PACKETS.iter().chain(crate::sleep::PACKETS).chain(dimension::PACKETS).fold(tracked, |f, &id| f.with(id));
-        tracked = WorldTracker::PACKETS.iter().fold(tracked, |f, &id| f.with(id));
-        let mode = if config.physics { Movement::PACKETS } else { SubChunkRequester::PACKETS };
+        tracked = PredictionSync::PACKETS
+            .iter()
+            .chain(crate::sleep::PACKETS)
+            .chain(dimension::PACKETS)
+            .fold(tracked, |f, &id| f.with(id));
+        tracked = WorldTracker::PACKETS
+            .iter()
+            .fold(tracked, |f, &id| f.with(id));
+        let mode = if config.physics {
+            Movement::PACKETS
+        } else {
+            SubChunkRequester::PACKETS
+        };
         tracked = mode.iter().fold(tracked, |f, &id| f.with(id));
         if config.physics && config.record.is_some() {
-            tracked = trace::ANALYSIS_PACKETS.iter().fold(tracked, |f, &id| f.with(id));
+            tracked = trace::ANALYSIS_PACKETS
+                .iter()
+                .fold(tracked, |f, &id| f.with(id));
         }
         let server = builder.server().to_owned();
         // Physics reads terrain from blobs; a trace must hold every blob it uses, so it gets a fresh store.
-        let mut builder = builder.keep_blob_payloads(config.physics).mouse_input(config.mouse_input);
+        let mut builder = builder
+            .keep_blob_payloads(config.physics)
+            .mouse_input(config.mouse_input);
         if config.physics && config.record.is_some() {
             builder = builder.blob_store(Arc::new(MemoryBlobStore::with_payloads()));
         }
         // The bot sends SetLocalPlayerAsInitialized itself, when it leaves the loading screen (spawn.rs).
-        let events = EventSource::new(config.events, config.chat_patterns).with_base(tracked.union(&config.subscribe));
-        let client = builder.filter(events.filter()).initialize_on_spawn(false).strict(config.strict).connect().await?;
+        let events = EventSource::new(config.events, config.chat_patterns)
+            .with_base(tracked.union(&config.subscribe));
+        let client = builder
+            .filter(events.filter())
+            .initialize_on_spawn(false)
+            .strict(config.strict)
+            .connect()
+            .await?;
         let state = GameState::new(config.trackers, client.runtime_entity_id());
-        let recorder = config.record.as_deref().filter(|_| config.physics).and_then(|path| {
-            Recorder::create(path).inspect_err(|e| tracing::warn!(error = %e, "cannot record trace")).ok()
-        });
+        let recorder = config
+            .record
+            .as_deref()
+            .filter(|_| config.physics)
+            .and_then(|path| {
+                Recorder::create(path)
+                    .inspect_err(|e| tracing::warn!(error = %e, "cannot record trace"))
+                    .ok()
+            });
         let mut world = WorldTracker::new(server, config.shared_worlds);
         if let Some(store) = client.blob_store() {
             world.set_blob_store(store.clone());
@@ -84,10 +115,15 @@ impl Bedrock {
         let (world, movement, idle) = if config.physics {
             let mut movement = Movement::new();
             movement.mouse_input = config.mouse_input;
-            movement.rotation_noise = Some(crate::movement::RotationNoise::new(crate::cadence::seed()));
+            movement.rotation_noise =
+                Some(crate::movement::RotationNoise::new(crate::cadence::seed()));
             (world, Some(movement), None)
         } else {
-            (world.nearby(), None, Some((Idle::default(), SpawnSequence::default())))
+            (
+                world.nearby(),
+                None,
+                Some((Idle::default(), SpawnSequence::default())),
+            )
         };
         let bedrock = Bedrock {
             client,
@@ -109,8 +145,18 @@ impl Bedrock {
             closing: None,
             lag: config.lag.map(LagLine::new),
         };
-        let assembly = Assembly { auto_respawn: config.auto_respawn, auto_eat: config.auto_eat, snapshots: config.snapshots };
-        Ok(Bot::assemble(Backend::Bedrock(Box::new(bedrock)), state, events, EventOut::new(config.event_sink), assembly))
+        let assembly = Assembly {
+            auto_respawn: config.auto_respawn,
+            auto_eat: config.auto_eat,
+            snapshots: config.snapshots,
+        };
+        Ok(Bot::assemble(
+            Backend::Bedrock(Box::new(bedrock)),
+            state,
+            events,
+            EventOut::new(config.event_sink),
+            assembly,
+        ))
     }
 
     pub fn client(&self) -> &Client {

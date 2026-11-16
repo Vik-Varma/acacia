@@ -57,20 +57,33 @@ impl ChatMessage {
         let (kind, sender, message, params) = match p.content {
             TextContent::Chat(c) => (K::Chat, Some(c.source_name), c.message, Vec::new()),
             TextContent::Whisper(c) => (K::Whisper, Some(c.source_name), c.message, Vec::new()),
-            TextContent::Announcement(c) => (K::Announcement, Some(c.source_name), c.message, Vec::new()),
+            TextContent::Announcement(c) => {
+                (K::Announcement, Some(c.source_name), c.message, Vec::new())
+            }
             TextContent::Raw(c) => (K::Raw, None, c.message, Vec::new()),
             TextContent::Tip(c) => (K::Tip, None, c.message, Vec::new()),
             TextContent::System(c) => (K::System, None, c.message, Vec::new()),
             TextContent::Json(c) => (K::Raw, None, rawtext(&c.message), Vec::new()),
             TextContent::JsonWhisper(c) => (K::Whisper, None, rawtext(&c.message), Vec::new()),
-            TextContent::JsonAnnouncement(c) => (K::Announcement, None, rawtext(&c.message), Vec::new()),
+            TextContent::JsonAnnouncement(c) => {
+                (K::Announcement, None, rawtext(&c.message), Vec::new())
+            }
             TextContent::Translation(c) => (K::Translation, None, c.message, c.parameters),
             TextContent::Popup(c) => (K::Popup, None, c.message, c.parameters),
             TextContent::JukeboxPopup(c) => (K::JukeboxPopup, None, c.message, c.parameters),
             TextContent::Default => return None,
         };
-        let sender = sender.map(|s| strip_formatting(&s)).filter(|s| !s.is_empty());
-        Some(Self { kind, sender, message, params, rawtext: json, xuid: p.xuid })
+        let sender = sender
+            .map(|s| strip_formatting(&s))
+            .filter(|s| !s.is_empty());
+        Some(Self {
+            kind,
+            sender,
+            message,
+            params,
+            rawtext: json,
+            xuid: p.xuid,
+        })
     }
 
     /// The message without formatting codes.
@@ -88,13 +101,21 @@ pub struct ChatPattern {
 
 impl ChatPattern {
     pub fn new(name: impl Into<String>, regex: &str) -> Result<Self, regex::Error> {
-        Ok(Self { name: name.into(), regex: Regex::new(regex)? })
+        Ok(Self {
+            name: name.into(),
+            regex: Regex::new(regex)?,
+        })
     }
 
     /// Capture groups 1.. of the first match (an unmatched optional group is empty).
     pub fn captures(&self, plain: &str) -> Option<Vec<String>> {
         let caps = self.regex.captures(plain)?;
-        Some(caps.iter().skip(1).map(|g| g.map_or(String::new(), |m| m.as_str().to_owned())).collect())
+        Some(
+            caps.iter()
+                .skip(1)
+                .map(|g| g.map_or(String::new(), |m| m.as_str().to_owned()))
+                .collect(),
+        )
     }
 }
 
@@ -127,7 +148,10 @@ pub(crate) fn flatten(v: &Value) -> String {
             }
             if let Some(Value::String(key)) = o.get("translate") {
                 let args: Vec<String> = match o.get("with") {
-                    Some(Value::Array(a)) => a.iter().map(|x| x.as_str().map_or_else(|| flatten(x), str::to_owned)).collect(),
+                    Some(Value::Array(a)) => a
+                        .iter()
+                        .map(|x| x.as_str().map_or_else(|| flatten(x), str::to_owned))
+                        .collect(),
                     Some(w @ Value::Object(_)) => match w.get("rawtext") {
                         Some(Value::Array(a)) => a.iter().map(flatten).collect(),
                         _ => Vec::new(),
@@ -191,26 +215,59 @@ mod tests {
 
     #[test]
     fn player_chat_names_the_sender() {
-        let p = text(TextType::Chat, TextContent::Chat(TextContentChat { source_name: "Steve§r".into(), message: "§ahi".into() }));
+        let p = text(
+            TextType::Chat,
+            TextContent::Chat(TextContentChat {
+                source_name: "Steve§r".into(),
+                message: "§ahi".into(),
+            }),
+        );
         let m = ChatMessage::from_packet(p).unwrap();
-        assert_eq!((m.kind, m.sender.as_deref(), m.plain().as_str(), m.xuid.as_str()), (ChatKind::Chat, Some("Steve"), "hi", "123"));
+        assert_eq!(
+            (
+                m.kind,
+                m.sender.as_deref(),
+                m.plain().as_str(),
+                m.xuid.as_str()
+            ),
+            (ChatKind::Chat, Some("Steve"), "hi", "123")
+        );
     }
 
     #[test]
     fn raw_lines_match_patterns() {
-        let p = text(TextType::Raw, TextContent::Raw(TextContentRaw { message: "§7[§6VIP§7] §fAlex§7: §fsell me dirt".into() }));
+        let p = text(
+            TextType::Raw,
+            TextContent::Raw(TextContentRaw {
+                message: "§7[§6VIP§7] §fAlex§7: §fsell me dirt".into(),
+            }),
+        );
         let m = ChatMessage::from_packet(p).unwrap();
         assert_eq!(m.sender, None);
         let pattern = ChatPattern::new("chat", r"^(?:\[\w+\] )?(\w+): (.*)$").unwrap();
-        assert_eq!(pattern.captures(&m.plain()), Some(vec!["Alex".into(), "sell me dirt".into()]));
+        assert_eq!(
+            pattern.captures(&m.plain()),
+            Some(vec!["Alex".into(), "sell me dirt".into()])
+        );
         assert_eq!(pattern.captures("joined the game"), None);
     }
 
     #[test]
     fn rawtext_flattens_text_and_translations() {
-        assert_eq!(rawtext(r#"{"rawtext":[{"text":"§eHello "},{"text":"world"}]}"#), "§eHello world");
-        assert_eq!(rawtext(r#"{"rawtext":[{"translate":"%s joined, %s left","with":["A","B"]}]}"#), "A joined, B left");
-        assert_eq!(rawtext(r#"{"rawtext":[{"translate":"%2 then %1","with":{"rawtext":[{"text":"x"},{"text":"y"}]}}]}"#), "y then x");
+        assert_eq!(
+            rawtext(r#"{"rawtext":[{"text":"§eHello "},{"text":"world"}]}"#),
+            "§eHello world"
+        );
+        assert_eq!(
+            rawtext(r#"{"rawtext":[{"translate":"%s joined, %s left","with":["A","B"]}]}"#),
+            "A joined, B left"
+        );
+        assert_eq!(
+            rawtext(
+                r#"{"rawtext":[{"translate":"%2 then %1","with":{"rawtext":[{"text":"x"},{"text":"y"}]}}]}"#
+            ),
+            "y then x"
+        );
         assert_eq!(rawtext("not json"), "not json");
         assert_eq!(fill("100%", &[]), "100%");
     }

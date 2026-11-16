@@ -49,8 +49,14 @@ pub fn sheep_eat_scales(eat_tick: i32, partial: f32, x_rot: f32) -> (f32, f32) {
 /// `ChickenModel.setupAnim`; `AdultChickenModel`'s also turns the head, `BabyChickenModel`'s not.
 pub(super) fn chicken(p: &mut Poses, s: &RenderState, adult: bool) {
     let angle = (sin(s.num("flap")) + 1.0) * s.num("flapSpeed");
-    p.x_rot("right_leg", cos(s.walk_pos() * 0.6662) * 1.4 * s.walk_speed());
-    p.x_rot("left_leg", cos(s.walk_pos() * 0.6662 + PI) * 1.4 * s.walk_speed());
+    p.x_rot(
+        "right_leg",
+        cos(s.walk_pos() * 0.6662) * 1.4 * s.walk_speed(),
+    );
+    p.x_rot(
+        "left_leg",
+        cos(s.walk_pos() * 0.6662 + PI) * 1.4 * s.walk_speed(),
+    );
     p.z_rot("right_wing", angle);
     p.z_rot("left_wing", -angle);
     if adult {
@@ -76,7 +82,12 @@ pub(super) fn spider(p: &mut Poses, s: &RenderState) {
     let swing = |o: f32| -(cos(pos * 2.0 + o) * 0.4) * sp;
     let step = |o: f32| (sin(pos + o) * 0.4).abs() * sp;
     let three_quarters = (std::f64::consts::PI * 3.0 / 2.0) as f32;
-    for (legs, offset) in [("hind", 0.0), ("middle_hind", PI), ("middle_front", PI / 2.0), ("front", three_quarters)] {
+    for (legs, offset) in [
+        ("hind", 0.0),
+        ("middle_hind", PI),
+        ("middle_front", PI / 2.0),
+        ("front", three_quarters),
+    ] {
         let (sw, st) = (swing(offset), step(offset));
         let right = p.get(&format!("right_{legs}_leg"));
         right.y_rot += sw;

@@ -44,7 +44,9 @@ pub enum DisconnectReason {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
-    Connected { mtu: u16 },
+    Connected {
+        mtu: u16,
+    },
     /// A message from the server (the first byte is its ID; Bedrock game batches start with 0xfe).
     Message(Bytes),
     Disconnected(DisconnectReason),

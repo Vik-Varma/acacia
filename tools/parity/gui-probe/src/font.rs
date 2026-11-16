@@ -18,13 +18,20 @@ static OTHERS: [OnceLock<Fonts>; 3] = [OnceLock::new(), OnceLock::new(), OnceLoc
 
 fn fonts<'a>(case: &Value, assets: &'a Assets) -> &'a Fonts {
     let flag = |k: &str| case[k].as_bool().unwrap_or(false);
-    let options = FontOptions { uniform: flag("uniform"), japanese: flag("jp") };
+    let options = FontOptions {
+        uniform: flag("uniform"),
+        japanese: flag("jp"),
+    };
     let i = usize::from(options.uniform) + 2 * usize::from(options.japanese);
     if i == 0 {
         return &assets.fonts;
     }
     OTHERS[i - 1].get_or_init(|| {
-        let mut f = Fonts::java(&assets.root, assets.root.parent().and_then(|p| p.parent()), options);
+        let mut f = Fonts::java(
+            &assets.root,
+            assets.root.parent().and_then(|p| p.parent()),
+            options,
+        );
         f.warnings.clear();
         f
     })
@@ -36,7 +43,10 @@ fn texture(fonts: &Fonts, t: &GlyphTexture) -> String {
         GlyphTexture::Sheet(id) => id.to_string(),
         GlyphTexture::Unihex(_, c) => {
             let (_, _, rgba) = fonts.texels(t).unwrap_or_default();
-            let hash = rgba.chunks(4).fold(1i32, |h, p| h.wrapping_mul(31).wrapping_add(if p[3] != 0 { -1 } else { 0 }));
+            let hash = rgba.chunks(4).fold(1i32, |h, p| {
+                h.wrapping_mul(31)
+                    .wrapping_add(if p[3] != 0 { -1 } else { 0 })
+            });
             format!("unihex:{c:x}:{hash}")
         }
         GlyphTexture::Missing => "missing".into(),
@@ -55,14 +65,29 @@ pub fn replay(case: &Value, assets: &Assets, state: &mut Map<String, Value>) -> 
         Some("glyphs") => {
             let set = fonts.set(case["font"].as_str());
             let fishy = case["fishy"].as_bool().unwrap_or(false);
-            let (from, to) = (case["from"].as_u64().unwrap_or(0) as u32, case["to"].as_u64().unwrap_or(0) as u32);
+            let (from, to) = (
+                case["from"].as_u64().unwrap_or(0) as u32,
+                case["to"].as_u64().unwrap_or(0) as u32,
+            );
             let mut list = Vec::new();
             for c in from..=to {
                 let g = set.glyph(c, fishy);
-                let mut e = vec![json!(c), json!(g.advance), json!(g.bold_offset), json!(g.shadow_offset)];
+                let mut e = vec![
+                    json!(c),
+                    json!(g.advance),
+                    json!(g.bold_offset),
+                    json!(g.shadow_offset),
+                ];
                 match &g.bitmap {
                     Some(b) if b.texture == GlyphTexture::Missing => continue,
-                    Some(b) => e.extend([json!(texture(fonts, &b.texture)), json!(b.colored), json!(b.left), json!(b.right), json!(b.up), json!(b.down)]),
+                    Some(b) => e.extend([
+                        json!(texture(fonts, &b.texture)),
+                        json!(b.colored),
+                        json!(b.left),
+                        json!(b.right),
+                        json!(b.up),
+                        json!(b.down),
+                    ]),
                     None => e.push(Value::Null),
                 }
                 list.push(Value::Array(e));
@@ -72,7 +97,11 @@ pub fn replay(case: &Value, assets: &Assets, state: &mut Map<String, Value>) -> 
         }
         Some("bywidth") => {
             let set = fonts.set(case["font"].as_str());
-            let by: Map<String, Value> = set.by_width().iter().map(|(w, l)| (w.to_string(), json!(l))).collect();
+            let by: Map<String, Value> = set
+                .by_width()
+                .iter()
+                .map(|(w, l)| (w.to_string(), json!(l)))
+                .collect();
             state.insert("by_width".into(), Value::Object(by));
             Vec::new()
         }
@@ -80,14 +109,20 @@ pub fn replay(case: &Value, assets: &Assets, state: &mut Map<String, Value>) -> 
         Some("split") => {
             let text = Text::from_json(&case["text"], &|_| None);
             let lines = split(fonts, &text, case["width"].as_i64().unwrap_or(0) as i32);
-            lines.iter().flat_map(|line| {
-                let mut out = vec![json!({"type": "line", "width": fonts.visual_width(line)})];
-                out.extend(chars(&visual_order(line)));
-                out
-            }).collect()
+            lines
+                .iter()
+                .flat_map(|line| {
+                    let mut out = vec![json!({"type": "line", "width": fonts.visual_width(line)})];
+                    out.extend(chars(&visual_order(line)));
+                    out
+                })
+                .collect()
         }
         Some("props") => {
-            let (from, to) = (case["from"].as_u64().unwrap_or(0) as u32, case["to"].as_u64().unwrap_or(0) as u32);
+            let (from, to) = (
+                case["from"].as_u64().unwrap_or(0) as u32,
+                case["to"].as_u64().unwrap_or(0) as u32,
+            );
             let list: Vec<Value> = (from..=to)
                 .map(|c| (c, props::class(c), props::mirror(c), props::bracket_type(c)))
                 .filter(|&(c, class, mirror, bracket)| class != 0 || mirror != c || bracket != 0)
@@ -103,7 +138,12 @@ pub fn replay(case: &Value, assets: &Assets, state: &mut Map<String, Value>) -> 
             let pen = Pen {
                 background: case["bg"].as_i64().unwrap_or(0) as u32,
                 filter_fishy: case["fishy"].as_bool().unwrap_or(false),
-                ..Pen::gui(f("x"), f("y"), case["color"].as_i64().unwrap_or(-1) as u32, case["shadow"].as_bool().unwrap_or(false))
+                ..Pen::gui(
+                    f("x"),
+                    f("y"),
+                    case["color"].as_i64().unwrap_or(-1) as u32,
+                    case["shadow"].as_bool().unwrap_or(false),
+                )
             };
             let mut random = JavaRandom::new(case["seed"].as_i64().unwrap_or(0));
             let prepared = fonts.prepare(&text, pen, &mut random);
@@ -118,7 +158,16 @@ pub fn replay(case: &Value, assets: &Assets, state: &mut Map<String, Value>) -> 
 /// `FontOracle.styleKey`.
 fn style_key(s: &Style) -> Value {
     let font = s.font.as_deref().filter(|f| *f != "minecraft:default");
-    json!([s.color, s.is_bold(), s.is_italic(), s.is_underlined(), s.is_strikethrough(), s.is_obfuscated(), font, s.shadow_color.map(|c| c as i32)])
+    json!([
+        s.color,
+        s.is_bold(),
+        s.is_italic(),
+        s.is_underlined(),
+        s.is_strikethrough(),
+        s.is_obfuscated(),
+        font,
+        s.shadow_color.map(|c| c as i32)
+    ])
 }
 
 /// `FontOracle.chars`.
@@ -134,7 +183,14 @@ impl Metrics for Shared {
         self.0.advance(c, style)
     }
 
-    fn active_areas(&self, text: &Text, x: f32, y: f32, color: u32, shadow: bool) -> acacia_ui::java::active::TextAreas {
+    fn active_areas(
+        &self,
+        text: &Text,
+        x: f32,
+        y: f32,
+        color: u32,
+        shadow: bool,
+    ) -> acacia_ui::java::active::TextAreas {
         self.0.active_areas(text, x, y, color, shadow)
     }
 }

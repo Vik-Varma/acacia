@@ -2,12 +2,12 @@
 //! the stonecutter offers for the stack in its slot and the click on the result, and the
 //! enchanting table's options, and a beacon's powers.
 
+use super::BeaconEffect;
 use super::beacon::beacon_plan;
 use super::enchant::enchant_plan;
-use super::BeaconEffect;
 use super::occupied;
 use super::smithing::stonecut_plan;
-use crate::items::{onto_cursor, ui, SlotRef};
+use crate::items::{SlotRef, onto_cursor, ui};
 use crate::state::ItemStack;
 use crate::{ActionError, Bot};
 
@@ -16,18 +16,36 @@ impl Bot {
     /// cut's result, in the server's order.
     pub fn stonecutter_choices(&self) -> Vec<(u32, ItemStack)> {
         let state = &self.state;
-        let Ok(input) = occupied(state, SlotRef::Ui(ui::STONECUTTER_INPUT)) else { return Vec::new() };
-        let Some(name) = state.items.name(input.network_id) else { return Vec::new() };
-        let cuts = state.recipes.book().iter().filter(|r| r.block == "stonecutter" && r.inputs.len() == 1 && r.inputs[0].accepts(name, input.metadata));
-        cuts.filter_map(|r| Some((r.network_id, r.outputs.first()?.clone()))).collect()
+        let Ok(input) = occupied(state, SlotRef::Ui(ui::STONECUTTER_INPUT)) else {
+            return Vec::new();
+        };
+        let Some(name) = state.items.name(input.network_id) else {
+            return Vec::new();
+        };
+        let cuts = state.recipes.book().iter().filter(|r| {
+            r.block == "stonecutter"
+                && r.inputs.len() == 1
+                && r.inputs[0].accepts(name, input.metadata)
+        });
+        cuts.filter_map(|r| Some((r.network_id, r.outputs.first()?.clone())))
+            .collect()
     }
 
     /// The click on the stonecutter's result for recipe `network_id`: one cut onto the cursor, or
     /// with `all` as many as the input and a stack allow into the inventory.
     pub async fn take_stonecut(&mut self, network_id: u32, all: bool) -> Result<(), ActionError> {
-        let recipe = self.state.recipes.book().get(network_id).ok_or_else(|| ActionError::NotPossible("the recipe is gone".into()))?;
+        let recipe = self
+            .state
+            .recipes
+            .book()
+            .get(network_id)
+            .ok_or_else(|| ActionError::NotPossible("the recipe is gone".into()))?;
         let (craft, ops) = stonecut_plan(&self.state, recipe, if all { u32::MAX } else { 1 })?;
-        let ops = if all { ops } else { onto_cursor(&self.state, &craft.created(), ops) };
+        let ops = if all {
+            ops
+        } else {
+            onto_cursor(&self.state, &craft.created(), ops)
+        };
         self.craft_request(&craft, &ops).await
     }
 
@@ -36,14 +54,25 @@ impl Bot {
     /// Each with its hint: the first enchantment the option gives, as `(id, level)`.
     pub fn enchant_costs(&self) -> Vec<(u8, Option<(u8, u8)>)> {
         match occupied(&self.state, SlotRef::Ui(ui::ENCHANTING_INPUT)) {
-            Ok(_) => self.state.stations.enchant_options.iter().map(|o| (o.cost, o.enchants.first().copied())).collect(),
+            Ok(_) => self
+                .state
+                .stations
+                .enchant_options
+                .iter()
+                .map(|o| (o.cost, o.enchants.first().copied()))
+                .collect(),
             Err(_) => Vec::new(),
         }
     }
 
     /// The words the server gave each of those options, which the game writes in galactic.
     pub fn enchant_names(&self) -> Vec<String> {
-        self.state.stations.enchant_options.iter().map(|o| o.name.clone()).collect()
+        self.state
+            .stations
+            .enchant_options
+            .iter()
+            .map(|o| o.name.clone())
+            .collect()
     }
 
     /// The click on enchanting option `option`: the item in the table's slot is enchanted there.
@@ -57,7 +86,11 @@ impl Bot {
 
     /// The beacon screen's confirm button: sets the open beacon's powers, paid with the item in
     /// its slot.
-    pub async fn take_beacon(&mut self, primary: BeaconEffect, secondary: Option<BeaconEffect>) -> Result<(), ActionError> {
+    pub async fn take_beacon(
+        &mut self,
+        primary: BeaconEffect,
+        secondary: Option<BeaconEffect>,
+    ) -> Result<(), ActionError> {
         let (head, ops) = beacon_plan(&self.state, primary, secondary)?;
         self.headed_request(head, &ops).await
     }

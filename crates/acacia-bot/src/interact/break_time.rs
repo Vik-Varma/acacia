@@ -75,7 +75,9 @@ fn damage(mining: &Mining, c: &BreakConditions) -> Option<Damage> {
         return None;
     }
     let harvestable = mining.can_harvest(c.tool);
-    let Some(mut speed) = tool_speed(mining.material, c.tool) else { return Some(Damage::Instant) };
+    let Some(mut speed) = tool_speed(mining.material, c.tool) else {
+        return Some(Damage::Instant);
+    };
     if !harvestable {
         speed = 1.0;
     }
@@ -99,7 +101,10 @@ fn damage(mining: &Mining, c: &BreakConditions) -> Option<Damage> {
     if hardness == 0.0 {
         return Some(Damage::Instant);
     }
-    Some(Damage::Per { speed, divisor: if harvestable { 30.0 } else { 100.0 } })
+    Some(Damage::Per {
+        speed,
+        divisor: if harvestable { 30.0 } else { 100.0 },
+    })
 }
 
 /// Mining speed of `tool` on `material`, `None` when it breaks the block instantly.
@@ -167,11 +172,20 @@ mod tests {
     }
 
     fn mining(name: &str) -> Mining {
-        BlockRegistry::vanilla().states_of(name).next().unwrap().1.mining
+        BlockRegistry::vanilla()
+            .states_of(name)
+            .next()
+            .unwrap()
+            .1
+            .mining
     }
 
     fn ticks(block: &str, tool: &str, tweak: impl FnOnce(&mut BreakConditions)) -> Option<u32> {
-        let mut c = BreakConditions { tool: Tool::from_identifier(tool), on_ground: true, ..BreakConditions::default() };
+        let mut c = BreakConditions {
+            tool: Tool::from_identifier(tool),
+            on_ground: true,
+            ..BreakConditions::default()
+        };
         tweak(&mut c);
         break_ticks(&mining(block), &c)
     }
@@ -181,16 +195,37 @@ mod tests {
         // Bedrock wiki / in-game: stone by hand 7.5 s, wooden pickaxe 1.15 s; dirt by hand 0.75 s;
         // obsidian with a diamond pickaxe 9.4 s.
         assert_eq!(ticks("minecraft:stone", "", |_| {}), Some(150));
-        assert_eq!(ticks("minecraft:stone", "minecraft:wooden_pickaxe", |_| {}), Some(23));
+        assert_eq!(
+            ticks("minecraft:stone", "minecraft:wooden_pickaxe", |_| {}),
+            Some(23)
+        );
         assert_eq!(ticks("minecraft:dirt", "", |_| {}), Some(15));
-        assert_eq!(ticks("minecraft:obsidian", "minecraft:diamond_pickaxe", |_| {}), Some(188));
-        assert_eq!(ticks("minecraft:oak_log", "minecraft:stone_axe", |_| {}), Some(15));
-        assert_eq!(ticks("minecraft:dirt", "minecraft:iron_shovel", |_| {}), Some(3));
+        assert_eq!(
+            ticks("minecraft:obsidian", "minecraft:diamond_pickaxe", |_| {}),
+            Some(188)
+        );
+        assert_eq!(
+            ticks("minecraft:oak_log", "minecraft:stone_axe", |_| {}),
+            Some(15)
+        );
+        assert_eq!(
+            ticks("minecraft:dirt", "minecraft:iron_shovel", |_| {}),
+            Some(3)
+        );
     }
 
     #[test]
     fn java_sums_progress_in_f32() {
-        let java = |block: &str, tool: &str| java_dig_ticks(&mining(block), &BreakConditions { tool: Tool::from_identifier(tool), on_ground: true, ..BreakConditions::default() });
+        let java = |block: &str, tool: &str| {
+            java_dig_ticks(
+                &mining(block),
+                &BreakConditions {
+                    tool: Tool::from_identifier(tool),
+                    on_ground: true,
+                    ..BreakConditions::default()
+                },
+            )
+        };
         assert_eq!(java("minecraft:dirt", ""), Some(15));
         assert_eq!(java("minecraft:grass_block", ""), Some(18));
         assert_eq!(java("minecraft:stone", ""), Some(151));
@@ -200,31 +235,87 @@ mod tests {
     #[test]
     fn harvest_tier_and_wrong_tool() {
         // Wooden pickaxe cannot harvest iron ore: no tier bonus and the ×100 divisor (Bedrock).
-        assert_eq!(ticks("minecraft:iron_ore", "minecraft:wooden_pickaxe", |_| {}), Some(300));
-        assert_eq!(ticks("minecraft:iron_ore", "minecraft:stone_pickaxe", |_| {}), Some(23));
-        assert_eq!(ticks("minecraft:stone", "minecraft:diamond_shovel", |_| {}), Some(150));
-        assert_eq!(ticks("minecraft:stone", "minecraft:apple", |_| {}), Some(150));
+        assert_eq!(
+            ticks("minecraft:iron_ore", "minecraft:wooden_pickaxe", |_| {}),
+            Some(300)
+        );
+        assert_eq!(
+            ticks("minecraft:iron_ore", "minecraft:stone_pickaxe", |_| {}),
+            Some(23)
+        );
+        assert_eq!(
+            ticks("minecraft:stone", "minecraft:diamond_shovel", |_| {}),
+            Some(150)
+        );
+        assert_eq!(
+            ticks("minecraft:stone", "minecraft:apple", |_| {}),
+            Some(150)
+        );
     }
 
     #[test]
     fn modifiers() {
-        assert_eq!(ticks("minecraft:stone", "minecraft:diamond_pickaxe", |c| c.efficiency = 5), Some(2));
-        assert_eq!(ticks("minecraft:stone", "minecraft:wooden_pickaxe", |c| c.on_ground = false), Some(113));
-        assert_eq!(ticks("minecraft:stone", "minecraft:wooden_pickaxe", |c| c.underwater = true), Some(113));
-        assert_eq!(ticks("minecraft:stone", "minecraft:wooden_pickaxe", |c| c.haste = 2), Some(17));
-        assert_eq!(ticks("minecraft:stone", "minecraft:wooden_pickaxe", |c| c.mining_fatigue = 1), Some(75));
+        assert_eq!(
+            ticks("minecraft:stone", "minecraft:diamond_pickaxe", |c| c
+                .efficiency =
+                5),
+            Some(2)
+        );
+        assert_eq!(
+            ticks("minecraft:stone", "minecraft:wooden_pickaxe", |c| c
+                .on_ground =
+                false),
+            Some(113)
+        );
+        assert_eq!(
+            ticks("minecraft:stone", "minecraft:wooden_pickaxe", |c| c
+                .underwater =
+                true),
+            Some(113)
+        );
+        assert_eq!(
+            ticks("minecraft:stone", "minecraft:wooden_pickaxe", |c| c.haste =
+                2),
+            Some(17)
+        );
+        assert_eq!(
+            ticks("minecraft:stone", "minecraft:wooden_pickaxe", |c| c
+                .mining_fatigue =
+                1),
+            Some(75)
+        );
         // Efficiency does nothing for a tool that is not effective on the block.
-        assert_eq!(ticks("minecraft:stone", "minecraft:diamond_axe", |c| c.efficiency = 5), Some(150));
+        assert_eq!(
+            ticks("minecraft:stone", "minecraft:diamond_axe", |c| c
+                .efficiency =
+                5),
+            Some(150)
+        );
     }
 
     #[test]
     fn special_tools_and_blocks() {
-        assert_eq!(ticks("minecraft:web", "minecraft:iron_sword", |_| {}), Some(8));
+        assert_eq!(
+            ticks("minecraft:web", "minecraft:iron_sword", |_| {}),
+            Some(8)
+        );
         assert_eq!(ticks("minecraft:web", "", |_| {}), Some(400));
-        assert_eq!(ticks("minecraft:white_wool", "minecraft:shears", |_| {}), Some(5));
-        assert_eq!(ticks("minecraft:oak_leaves", "minecraft:shears", |_| {}), Some(1));
-        assert_eq!(ticks("minecraft:bamboo", "minecraft:wooden_sword", |_| {}), Some(1));
+        assert_eq!(
+            ticks("minecraft:white_wool", "minecraft:shears", |_| {}),
+            Some(5)
+        );
+        assert_eq!(
+            ticks("minecraft:oak_leaves", "minecraft:shears", |_| {}),
+            Some(1)
+        );
+        assert_eq!(
+            ticks("minecraft:bamboo", "minecraft:wooden_sword", |_| {}),
+            Some(1)
+        );
         assert_eq!(ticks("minecraft:short_grass", "", |_| {}), Some(1));
-        assert_eq!(ticks("minecraft:bedrock", "minecraft:netherite_pickaxe", |_| {}), None);
+        assert_eq!(
+            ticks("minecraft:bedrock", "minecraft:netherite_pickaxe", |_| {}),
+            None
+        );
     }
 }

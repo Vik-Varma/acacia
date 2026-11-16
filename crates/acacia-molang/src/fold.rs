@@ -32,21 +32,33 @@ pub(crate) fn fold(nodes: &[Node], node: Node) -> Option<Folded> {
         Node::Binary(op, left, right) => {
             let (a, b) = (literal(left)?, literal(right)?);
             match op {
-                Op::Add | Op::Sub | Op::Mul | Op::Div | Op::DivByMagnitude => Value::Num(op.arithmetic(a.num(), b.num())),
+                Op::Add | Op::Sub | Op::Mul | Op::Div | Op::DivByMagnitude => {
+                    Value::Num(op.arithmetic(a.num(), b.num()))
+                }
                 // Built as `Node::Logic`.
                 Op::Or | Op::And => return None,
                 Op::Eq | Op::Ne => Value::flag(op.equates(a, b)),
                 Op::Lt | Op::Le | Op::Gt | Op::Ge => Value::flag(op.orders(a.num(), b.num())),
             }
         }
-        Node::Math { function, args, count } if !function.is_random() => {
+        Node::Math {
+            function,
+            args,
+            count,
+        } if !function.is_random() => {
             let mut values = [0.0; 3];
             for (value, &arg) in values.iter_mut().zip(&args[..usize::from(count)]) {
                 *value = literal(arg)?.num();
             }
             Value::Num(MathFn::call(function, values, &|| 0.0))
         }
-        Node::Ternary(condition, then, otherwise) => return branch(if literal(condition)?.truthy() { then } else { otherwise }),
+        Node::Ternary(condition, then, otherwise) => {
+            return branch(if literal(condition)?.truthy() {
+                then
+            } else {
+                otherwise
+            });
+        }
         Node::When(condition, then) if literal(condition)?.truthy() => return branch(then),
         Node::When(..) => Value::ZERO,
         _ => return None,

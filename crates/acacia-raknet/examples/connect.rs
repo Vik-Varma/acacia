@@ -12,12 +12,21 @@ const REQUEST_NETWORK_SETTINGS: &[u8] = &[0xfe, 0x06, 0xc1, 0x01, 0x00, 0x00, 0x
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> std::io::Result<()> {
-    let addr: SocketAddr = std::env::args().nth(1).as_deref().unwrap_or("127.0.0.1:19140").parse().expect("server address");
+    let addr: SocketAddr = std::env::args()
+        .nth(1)
+        .as_deref()
+        .unwrap_or("127.0.0.1:19140")
+        .parse()
+        .expect("server address");
     let sock = UdpSocket::bind("0.0.0.0:0").await?;
     sock.connect(addr).await?;
 
     let start = Instant::now();
-    let guid = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64 ^ u64::from(std::process::id());
+    let guid = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos() as u64
+        ^ u64::from(std::process::id());
     let mut client = Client::new(Config::new(guid), addr, start);
     let mut buf = vec![0u8; 2048];
     loop {
@@ -29,11 +38,22 @@ async fn main() -> std::io::Result<()> {
             match event {
                 Event::Connected { mtu } => {
                     println!("connected in {:?} (mtu {mtu})", start.elapsed());
-                    client.send(Bytes::from_static(REQUEST_NETWORK_SETTINGS), Reliability::ReliableOrdered);
+                    client.send(
+                        Bytes::from_static(REQUEST_NETWORK_SETTINGS),
+                        Reliability::ReliableOrdered,
+                    );
                 }
-                Event::Message(m) => println!("message ({} bytes): {:02x?}", m.len(), &m[..m.len().min(24)]),
+                Event::Message(m) => println!(
+                    "message ({} bytes): {:02x?}",
+                    m.len(),
+                    &m[..m.len().min(24)]
+                ),
                 Event::Disconnected(reason) => {
-                    println!("disconnected after {:?}: {reason:?} (rtt {:?})", start.elapsed(), client.rtt());
+                    println!(
+                        "disconnected after {:?}: {reason:?} (rtt {:?})",
+                        start.elapsed(),
+                        client.rtt()
+                    );
                     return Ok(());
                 }
             }
@@ -42,7 +62,9 @@ async fn main() -> std::io::Result<()> {
             client.close(Instant::now());
             continue;
         }
-        let deadline = client.poll_timeout().unwrap_or(now + Duration::from_secs(1));
+        let deadline = client
+            .poll_timeout()
+            .unwrap_or(now + Duration::from_secs(1));
         tokio::select! {
             r = sock.recv(&mut buf) => match r {
                 Ok(n) => client.handle_datagram(Instant::now(), Bytes::copy_from_slice(&buf[..n])),

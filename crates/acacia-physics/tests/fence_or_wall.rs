@@ -8,7 +8,10 @@ fn by_name(name: &str) -> bool {
     let base = name.trim_start_matches("minecraft:");
     base.ends_with("_fence")
         || base.ends_with("_fence_gate")
-        || (base.ends_with("_wall") && !["sign", "banner", "torch", "head", "skull", "fan"].iter().any(|w| base.contains(w)))
+        || (base.ends_with("_wall")
+            && !["sign", "banner", "torch", "head", "skull", "fan"]
+                .iter()
+                .any(|w| base.contains(w)))
 }
 
 #[test]

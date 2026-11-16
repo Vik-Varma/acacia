@@ -30,17 +30,36 @@ pub struct LightConditions {
 
 impl Default for LightConditions {
     fn default() -> Self {
-        LightConditions { gamma: 0.5, night_vision: 0.0, darkness: 0.0, darkness_scale: 1.0, age: 0.0, boss_darkening: 0.0, end_flash: (0.0, false), flicker: 0.0 }
+        LightConditions {
+            gamma: 0.5,
+            night_vision: 0.0,
+            darkness: 0.0,
+            darkness_scale: 1.0,
+            age: 0.0,
+            boss_darkening: 0.0,
+            end_flash: (0.0, false),
+            flicker: 0.0,
+        }
     }
 }
 
 /// Brightness of unlit blocks under the renderer's own curve, with and without sky light.
 const CURVE_AMBIENT: (f32, f32) = (0.02, 0.1);
 
-pub fn frame_lightmap(lighting: Lighting, realm: Realm, time: f32, weather: Weather, c: &LightConditions) -> Table {
+pub fn frame_lightmap(
+    lighting: Lighting,
+    realm: Realm,
+    time: f32,
+    weather: Weather,
+    c: &LightConditions,
+) -> Table {
     match lighting {
         Lighting::Volume => {
-            let ambient = if realm == Realm::Overworld { CURVE_AMBIENT.0 } else { CURVE_AMBIENT.1 };
+            let ambient = if realm == Realm::Overworld {
+                CURVE_AMBIENT.0
+            } else {
+                CURVE_AMBIENT.1
+            };
             curve_table(ambient, Sky::of(realm, time, weather).darken())
         }
         Lighting::Java => java_state(realm, time, weather, c).table(),
@@ -49,7 +68,11 @@ pub fn frame_lightmap(lighting: Lighting, realm: Realm, time: f32, weather: Weat
 
 /// `ARGB.vector3fFromRGB24`.
 const fn rgb(c: u32) -> [f32; 3] {
-    [(c >> 16 & 255) as f32 / 255.0, (c >> 8 & 255) as f32 / 255.0, (c & 255) as f32 / 255.0]
+    [
+        (c >> 16 & 255) as f32 / 255.0,
+        (c >> 8 & 255) as f32 / 255.0,
+        (c & 255) as f32 / 255.0,
+    ]
 }
 
 /// The light attributes the lightmap reads.
@@ -65,11 +88,27 @@ pub struct LightAttributes {
 impl LightAttributes {
     /// The attributes' defaults with the dimension type's own (`dimension_type/*.json`).
     pub fn of_dimension(realm: Realm) -> LightAttributes {
-        let base = LightAttributes { sky_factor: 1.0, sky_color: rgb(0xffffff), block_tint: rgb(0xffd88c), ambient: rgb(0x0a0a0a), night_vision_color: rgb(0x999999) };
+        let base = LightAttributes {
+            sky_factor: 1.0,
+            sky_color: rgb(0xffffff),
+            block_tint: rgb(0xffd88c),
+            ambient: rgb(0x0a0a0a),
+            night_vision_color: rgb(0x999999),
+        };
         match realm {
             Realm::Overworld => base,
-            Realm::Nether => LightAttributes { sky_factor: 0.0, sky_color: rgb(0x7a7aff), ambient: rgb(0x302821), ..base },
-            Realm::End => LightAttributes { sky_factor: 0.0, sky_color: rgb(0xac60cd), ambient: rgb(0x3f473f), ..base },
+            Realm::Nether => LightAttributes {
+                sky_factor: 0.0,
+                sky_color: rgb(0x7a7aff),
+                ambient: rgb(0x302821),
+                ..base
+            },
+            Realm::End => LightAttributes {
+                sky_factor: 0.0,
+                sky_color: rgb(0xac60cd),
+                ambient: rgb(0x3f473f),
+                ..base
+            },
         }
     }
 
@@ -79,8 +118,12 @@ impl LightAttributes {
         let mut a = LightAttributes::of_dimension(realm);
         if realm == Realm::Overworld {
             let ticks = (time.floor() as i64).rem_euclid(DAY_PERIOD);
-            a.sky_factor *= sample(&SKY_FACTOR_TRACK, ticks, |t, x: &f32, y: &f32| lerp(t, *x, *y));
-            let color = sample(&SKY_COLOR_TRACK, ticks, |t, x: &[f32; 3], y: &[f32; 3]| lerp3(t, *x, *y));
+            a.sky_factor *= sample(&SKY_FACTOR_TRACK, ticks, |t, x: &f32, y: &f32| {
+                lerp(t, *x, *y)
+            });
+            let color = sample(&SKY_COLOR_TRACK, ticks, |t, x: &[f32; 3], y: &[f32; 3]| {
+                lerp3(t, *x, *y)
+            });
             a.sky_color = [0, 1, 2].map(|i| a.sky_color[i] * color[i]);
             a.apply_weather(weather.rain, weather.thunder);
         }
@@ -113,7 +156,12 @@ const DAY_PERIOD: i64 = 24000;
 /// The `day` timeline's `visual/sky_light_factor` and `visual/sky_light_color`, both multiplying
 /// and eased linearly.
 const SKY_FACTOR_TRACK: [(i64, f32); 4] = [(730, 1.0), (11270, 1.0), (13140, 0.24), (22860, 0.24)];
-const SKY_COLOR_TRACK: [(i64, [f32; 3]); 4] = [(730, rgb(0xffffff)), (11270, rgb(0xffffff)), (13140, NIGHT_SKY_COLOR), (22860, NIGHT_SKY_COLOR)];
+const SKY_COLOR_TRACK: [(i64, [f32; 3]); 4] = [
+    (730, rgb(0xffffff)),
+    (11270, rgb(0xffffff)),
+    (13140, NIGHT_SKY_COLOR),
+    (22860, NIGHT_SKY_COLOR),
+];
 
 /// `KeyframeTrackSampler.sample` of a looping track with a linear ease.
 fn sample<T: Copy>(keys: &[(i64, T)], ticks: i64, lerp: impl Fn(f32, &T, &T) -> T) -> T {
@@ -121,14 +169,21 @@ fn sample<T: Copy>(keys: &[(i64, T)], ticks: i64, lerp: impl Fn(f32, &T, &T) -> 
     let mut segments = vec![(last, last.0 - DAY_PERIOD, first, first.0)];
     segments.extend(keys.windows(2).map(|w| (w[0], w[0].0, w[1], w[1].0)));
     segments.push((last, last.0, first, first.0 + DAY_PERIOD));
-    let &(from, from_ticks, to, to_ticks) = segments.iter().find(|s| ticks < s.3).unwrap_or(&segments[segments.len() - 1]);
+    let &(from, from_ticks, to, to_ticks) = segments
+        .iter()
+        .find(|s| ticks < s.3)
+        .unwrap_or(&segments[segments.len() - 1]);
     if ticks <= from_ticks {
         return from.1;
     }
     if ticks >= to_ticks {
         return to.1;
     }
-    lerp((ticks - from_ticks) as f32 / (to_ticks - from_ticks) as f32, &from.1, &to.1)
+    lerp(
+        (ticks - from_ticks) as f32 / (to_ticks - from_ticks) as f32,
+        &from.1,
+        &to.1,
+    )
 }
 
 fn lerp(t: f32, a: f32, b: f32) -> f32 {
@@ -220,11 +275,35 @@ mod tests {
 
     #[test]
     fn rain_and_lightning_change_the_sky_light() {
-        let rain = LightAttributes::at(Realm::Overworld, 6000.0, Weather { rain: 1.0, thunder: 0.0, flash: 0.0 });
+        let rain = LightAttributes::at(
+            Realm::Overworld,
+            6000.0,
+            Weather {
+                rain: 1.0,
+                thunder: 0.0,
+                flash: 0.0,
+            },
+        );
         assert!((rain.sky_factor - lerp(0.3125, 1.0, 0.24)).abs() < 1e-6);
-        let flash = LightAttributes::at(Realm::Overworld, 18000.0, Weather { rain: 1.0, thunder: 1.0, flash: 0.5 });
+        let flash = LightAttributes::at(
+            Realm::Overworld,
+            18000.0,
+            Weather {
+                rain: 1.0,
+                thunder: 1.0,
+                flash: 0.5,
+            },
+        );
         assert_eq!(flash.sky_factor, 1.0);
-        let nether = LightAttributes::at(Realm::Nether, 6000.0, Weather { rain: 1.0, thunder: 1.0, flash: 0.0 });
+        let nether = LightAttributes::at(
+            Realm::Nether,
+            6000.0,
+            Weather {
+                rain: 1.0,
+                thunder: 1.0,
+                flash: 0.0,
+            },
+        );
         assert_eq!((nether.sky_factor, nether.ambient), (0.0, rgb(0x302821)));
     }
 

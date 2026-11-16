@@ -41,9 +41,15 @@ pub enum Action {
     RunCommand(String),
     /// A command template with `$(key)` macros for the inputs.
     DynamicRunCommand(String),
-    Custom { id: String, payload: Option<Tag> },
+    Custom {
+        id: String,
+        payload: Option<Tag>,
+    },
     /// Sends `additions` plus every input's value.
-    DynamicCustom { id: String, additions: Option<Tag> },
+    DynamicCustom {
+        id: String,
+        additions: Option<Tag>,
+    },
     /// Opens a dialog locally; nothing is sent.
     ShowDialog(Box<Dialog>),
     /// Links, clipboard, suggestions and registry dialogs the bot cannot open: nothing is sent.
@@ -59,11 +65,26 @@ pub struct Input {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Control {
-    Text { initial: String, max_length: usize },
-    Boolean { initial: bool, on_true: String, on_false: String },
+    Text {
+        initial: String,
+        max_length: usize,
+    },
+    Boolean {
+        initial: bool,
+        on_true: String,
+        on_false: String,
+    },
     /// `(id, shown text)` per option.
-    SingleOption { options: Vec<(String, String)>, initial: usize },
-    NumberRange { start: f32, end: f32, initial: f32, step: Option<f32> },
+    SingleOption {
+        options: Vec<(String, String)>,
+        initial: usize,
+    },
+    NumberRange {
+        start: f32,
+        end: f32,
+        initial: f32,
+        step: Option<f32>,
+    },
 }
 
 /// `ServerboundCustomClickActionPacket`: the payload goes as a length-prefixed root tag, 0 for none.
@@ -78,7 +99,14 @@ impl Wire for CustomClickAction {
         let id = String::read(input)?;
         let len = crate::wire::read_len(input)?;
         let mut payload = crate::wire::take(input, len)?;
-        Ok(Self { id, payload: if len == 0 { None } else { Tag::read_root(&mut payload)? } })
+        Ok(Self {
+            id,
+            payload: if len == 0 {
+                None
+            } else {
+                Tag::read_root(&mut payload)?
+            },
+        })
     }
 
     fn write(&self, out: &mut Vec<u8>) {
@@ -103,7 +131,9 @@ pub enum Shown {
 pub fn read_show_dialog(input: &mut &[u8]) -> Result<Shown, Error> {
     match read_varint(input)? {
         0 => read_inline(input).map(Shown::Inline),
-        n => usize::try_from(n - 1).map(Shown::Registry).map_err(|_| Error::Invalid("dialog holder")),
+        n => usize::try_from(n - 1)
+            .map(Shown::Registry)
+            .map_err(|_| Error::Invalid("dialog holder")),
     }
 }
 
@@ -119,15 +149,26 @@ impl Dialog {
         let exit = field("exit_action");
         let (kind, buttons, cancel) = match kind {
             "notice" => {
-                let ok = field("action").unwrap_or(Button { label: "OK".into(), action: None });
+                let ok = field("action").unwrap_or(Button {
+                    label: "OK".into(),
+                    action: None,
+                });
                 (DialogKind::Notice, vec![ok.clone()], Some(ok))
             }
             "confirmation" => {
                 let (yes, no) = (field("yes")?, field("no")?);
                 (DialogKind::Confirmation, vec![yes, no.clone()], Some(no))
             }
-            "multi_action" => (DialogKind::MultiAction, list(tag.get("actions")).iter().filter_map(button).collect(), exit),
-            "dialog_list" => (DialogKind::DialogList, list(tag.get("dialogs")).iter().map(sub_dialog).collect(), exit),
+            "multi_action" => (
+                DialogKind::MultiAction,
+                list(tag.get("actions")).iter().filter_map(button).collect(),
+                exit,
+            ),
+            "dialog_list" => (
+                DialogKind::DialogList,
+                list(tag.get("dialogs")).iter().map(sub_dialog).collect(),
+                exit,
+            ),
             "server_links" => (DialogKind::ServerLinks, Vec::new(), exit),
             _ => return None,
         };
@@ -138,7 +179,10 @@ impl Dialog {
             inputs: list(tag.get("inputs")).iter().filter_map(input).collect(),
             buttons,
             cancel,
-            can_close_with_escape: tag.get("can_close_with_escape").and_then(Tag::as_bool).unwrap_or(true),
+            can_close_with_escape: tag
+                .get("can_close_with_escape")
+                .and_then(Tag::as_bool)
+                .unwrap_or(true),
             stays_open: tag.get("after_action").and_then(Tag::as_str) == Some("none"),
         })
     }
@@ -150,7 +194,11 @@ pub fn text(tag: &Tag) -> String {
         Tag::String(s) => s.clone(),
         Tag::List(parts) => parts.iter().map(text).collect(),
         Tag::Compound(_) => {
-            let own = tag.get("text").or_else(|| tag.get("translate")).and_then(Tag::as_str).unwrap_or_default();
+            let own = tag
+                .get("text")
+                .or_else(|| tag.get("translate"))
+                .and_then(Tag::as_str)
+                .unwrap_or_default();
             own.to_owned() + &list(tag.get("extra")).iter().map(text).collect::<String>()
         }
         other => other.as_f64().map(|v| v.to_string()).unwrap_or_default(),
@@ -168,7 +216,9 @@ fn list(tag: Option<&Tag>) -> &[Tag] {
 fn bodies(tag: Option<&Tag>) -> Vec<String> {
     let one = |b: &Tag| match b.get("type").and_then(Tag::as_str) {
         Some(t) if t.ends_with("plain_message") => b.get("contents").map(text),
-        Some(_) => b.get("description").map(|d| d.get("contents").map_or_else(|| text(d), text)),
+        Some(_) => b
+            .get("description")
+            .map(|d| d.get("contents").map_or_else(|| text(d), text)),
         None => Some(text(b)),
     };
     match tag {
@@ -179,35 +229,65 @@ fn bodies(tag: Option<&Tag>) -> Vec<String> {
 }
 
 fn button(tag: &Tag) -> Option<Button> {
-    Some(Button { label: text(tag.get("label")?), action: tag.get("action").map(action) })
+    Some(Button {
+        label: text(tag.get("label")?),
+        action: tag.get("action").map(action),
+    })
 }
 
 fn sub_dialog(tag: &Tag) -> Button {
     match Dialog::from_tag(tag) {
-        Some(d) => Button { label: d.title.clone(), action: Some(Action::ShowDialog(Box::new(d))) },
-        None => Button { label: tag.as_str().unwrap_or_default().to_owned(), action: Some(Action::ClientOnly) },
+        Some(d) => Button {
+            label: d.title.clone(),
+            action: Some(Action::ShowDialog(Box::new(d))),
+        },
+        None => Button {
+            label: tag.as_str().unwrap_or_default().to_owned(),
+            action: Some(Action::ClientOnly),
+        },
     }
 }
 
 fn action(tag: &Tag) -> Action {
     let string = |key: &str| tag.get(key).and_then(Tag::as_str).map(str::to_owned);
-    let kind = tag.get("type").and_then(Tag::as_str).unwrap_or_default().trim_start_matches("minecraft:");
+    let kind = tag
+        .get("type")
+        .and_then(Tag::as_str)
+        .unwrap_or_default()
+        .trim_start_matches("minecraft:");
     let made = match kind {
         "run_command" => string("command").map(Action::RunCommand),
         "dynamic/run_command" => string("template").map(Action::DynamicRunCommand),
-        "custom" => string("id").map(|id| Action::Custom { id, payload: tag.get("payload").cloned() }),
-        "dynamic/custom" => string("id").map(|id| Action::DynamicCustom { id, additions: tag.get("additions").cloned() }),
-        "show_dialog" => tag.get("dialog").and_then(Dialog::from_tag).map(|d| Action::ShowDialog(Box::new(d))),
+        "custom" => string("id").map(|id| Action::Custom {
+            id,
+            payload: tag.get("payload").cloned(),
+        }),
+        "dynamic/custom" => string("id").map(|id| Action::DynamicCustom {
+            id,
+            additions: tag.get("additions").cloned(),
+        }),
+        "show_dialog" => tag
+            .get("dialog")
+            .and_then(Dialog::from_tag)
+            .map(|d| Action::ShowDialog(Box::new(d))),
         _ => None,
     };
     made.unwrap_or(Action::ClientOnly)
 }
 
 fn input(tag: &Tag) -> Option<Input> {
-    let string = |key: &str, default: &str| tag.get(key).and_then(Tag::as_str).unwrap_or(default).to_owned();
+    let string = |key: &str, default: &str| {
+        tag.get(key)
+            .and_then(Tag::as_str)
+            .unwrap_or(default)
+            .to_owned()
+    };
     let number = |key: &str| tag.get(key).and_then(Tag::as_f64).map(|v| v as f32);
     let control = match tag.get("type")?.as_str()?.trim_start_matches("minecraft:") {
-        "text" => Control::Text { initial: string("initial", ""), max_length: number("max_length").map_or(32, |n| n as usize) },
+        "text" => Control::Text {
+            initial: string("initial", ""),
+            max_length: number("max_length").map_or(32, |n| n as usize),
+        },
         "boolean" => Control::Boolean {
             initial: tag.get("initial").and_then(Tag::as_bool).unwrap_or(false),
             on_true: string("on_true", "true"),
@@ -222,14 +302,29 @@ fn input(tag: &Tag) -> Option<Input> {
                     Some((id.clone(), o.get("display").map_or(id, text)))
                 }
             };
-            let initial = options.iter().position(|o| o.get("initial").and_then(Tag::as_bool) == Some(true)).unwrap_or(0);
-            Control::SingleOption { options: options.iter().filter_map(entry).collect(), initial }
+            let initial = options
+                .iter()
+                .position(|o| o.get("initial").and_then(Tag::as_bool) == Some(true))
+                .unwrap_or(0);
+            Control::SingleOption {
+                options: options.iter().filter_map(entry).collect(),
+                initial,
+            }
         }
         "number_range" => {
             let (start, end) = (number("start")?, number("end")?);
-            Control::NumberRange { start, end, initial: number("initial").unwrap_or((start + end) / 2.0), step: number("step") }
+            Control::NumberRange {
+                start,
+                end,
+                initial: number("initial").unwrap_or((start + end) / 2.0),
+                step: number("step"),
+            }
         }
         _ => return None,
     };
-    Some(Input { key: tag.get("key")?.as_str()?.to_owned(), label: tag.get("label").map(text).unwrap_or_default(), control })
+    Some(Input {
+        key: tag.get("key")?.as_str()?.to_owned(),
+        label: tag.get("label").map(text).unwrap_or_default(),
+        control,
+    })
 }

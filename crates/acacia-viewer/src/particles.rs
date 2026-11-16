@@ -1,9 +1,9 @@
 //! Particles the server asks for: `SpawnParticleEffect` (by Bedrock identifier, what `/particle`
 //! sends) and the particle level events, as the renderer's kinds.
 
-use acacia_bot::proto::{Packet, RawPacket};
 use acacia_bot::proto::packets::{LevelEvent, LevelEventEvent, SpawnParticleEffect};
 use acacia_bot::proto::types::Vec3f;
+use acacia_bot::proto::{Packet, RawPacket};
 use acacia_render::particles::Kind;
 use glam::{DVec3, Vec3};
 
@@ -19,11 +19,21 @@ pub struct Spawn {
 
 impl Spawn {
     fn one(kind: Kind, at: DVec3) -> Spawn {
-        Spawn { kind, at, velocity: Vec3::ZERO, count: 1, spread: 0.0 }
+        Spawn {
+            kind,
+            at,
+            velocity: Vec3::ZERO,
+            count: 1,
+            spread: 0.0,
+        }
     }
 
     fn many(kind: Kind, at: DVec3, count: u32, spread: f32) -> Spawn {
-        Spawn { count, spread, ..Spawn::one(kind, at) }
+        Spawn {
+            count,
+            spread,
+            ..Spawn::one(kind, at)
+        }
     }
 }
 
@@ -34,14 +44,23 @@ fn position(p: Vec3f) -> DVec3 {
 pub fn spawns(packet: &RawPacket) -> Vec<Spawn> {
     match packet.id {
         SpawnParticleEffect::ID => {
-            let Ok(p) = packet.decode::<SpawnParticleEffect>() else { return Vec::new() };
+            let Ok(p) = packet.decode::<SpawnParticleEffect>() else {
+                return Vec::new();
+            };
             let kind = Kind::from_identifier(&p.particle_name);
             if kind.is_none() {
                 tracing::debug!(name = p.particle_name, "particle effect not drawn");
             }
-            kind.map(|k| Spawn::one(k, position(p.position))).into_iter().collect()
+            kind.map(|k| Spawn::one(k, position(p.position)))
+                .into_iter()
+                .collect()
         }
-        LevelEvent::ID => packet.decode::<LevelEvent>().ok().and_then(|p| level_event(p.event, position(p.position), p.data)).into_iter().collect(),
+        LevelEvent::ID => packet
+            .decode::<LevelEvent>()
+            .ok()
+            .and_then(|p| level_event(p.event, position(p.position), p.data))
+            .into_iter()
+            .collect(),
         _ => Vec::new(),
     }
 }
@@ -56,7 +75,9 @@ fn level_event(event: LevelEventEvent, at: DVec3, data: i32) -> Option<Spawn> {
         E::ParticleDeathSmoke => return Some(Spawn::many(Kind::Poof, at, 20, 0.5)),
         E::ParticleSpawn => return Some(Spawn::many(Kind::Flame, at, 20, 0.5)),
         E::ParticleCropGrowth => return Some(Spawn::many(Kind::HappyVillager, at + 0.5, 15, 0.5)),
-        E::ParticleEvaporate | E::ParticleEvaporateWater | E::ParticleFizzEffect => return Some(Spawn::many(Kind::LargeSmoke, at + 0.5, 8, 0.5)),
+        E::ParticleEvaporate | E::ParticleEvaporateWater | E::ParticleFizzEffect => {
+            return Some(Spawn::many(Kind::LargeSmoke, at + 0.5, 8, 0.5));
+        }
         E::ParticleSplash => return Some(Spawn::many(Kind::Splash, at, 16, 0.3)),
         E::ParticleBubble | E::AddParticleBubble | E::AddParticleBubbleManual => Kind::Bubble,
         E::AddParticleSmoke => Kind::Smoke,
@@ -66,7 +87,9 @@ fn level_event(event: LevelEventEvent, at: DVec3, data: i32) -> Option<Spawn> {
         E::AddParticleCandleFlame => Kind::SmallFlame,
         E::AddParticleBlueFlame | E::AddParticleSoul => Kind::SoulFlame,
         E::AddParticleLava => Kind::Lava,
-        E::AddParticleRedstone | E::AddParticleRisingRedDust | E::AddParticleFallingRedDust => Kind::REDSTONE,
+        E::AddParticleRedstone | E::AddParticleRisingRedDust | E::AddParticleFallingRedDust => {
+            Kind::REDSTONE
+        }
         E::AddParticleHeart => Kind::Heart,
         E::AddParticleVillagerAngry => Kind::AngryVillager,
         E::AddParticleVillagerHappy | E::AddParticleTownAura => Kind::HappyVillager,
@@ -91,8 +114,14 @@ mod tests {
     #[test]
     fn level_events_map_to_kinds() {
         let at = DVec3::ZERO;
-        assert_eq!(level_event(LevelEventEvent::AddParticleFlame, at, 0).map(|s| s.kind), Some(Kind::Flame));
-        assert_eq!(level_event(LevelEventEvent::ParticleDeathSmoke, at, 0).map(|s| (s.kind, s.count)), Some((Kind::Poof, 20)));
+        assert_eq!(
+            level_event(LevelEventEvent::AddParticleFlame, at, 0).map(|s| s.kind),
+            Some(Kind::Flame)
+        );
+        assert_eq!(
+            level_event(LevelEventEvent::ParticleDeathSmoke, at, 0).map(|s| (s.kind, s.count)),
+            Some((Kind::Poof, 20))
+        );
         assert_eq!(level_event(LevelEventEvent::SoundClick, at, 0), None);
     }
 }

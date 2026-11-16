@@ -6,18 +6,44 @@ use crate::java::gui::{Blend, Gui, GuiDraw, PoseOp};
 use crate::java::mth::{BLACK, WHITE, clamp, color_from_float, floor, lerp, white};
 
 /// A full-screen `blit` of `textures/<texture>.png`.
-fn screen_blit(gui: &mut Gui, texture: impl Into<std::borrow::Cow<'static, str>>, blend: Blend, color: u32) {
+fn screen_blit(
+    gui: &mut Gui,
+    texture: impl Into<std::borrow::Cow<'static, str>>,
+    blend: Blend,
+    color: u32,
+) {
     let (w, h) = (gui.width, gui.height);
-    gui.draws.push(GuiDraw::Blit { texture: texture.into(), blend, x: 0, y: 0, w, h, uv: [0.0, 0.0], src: [w, h], tex: [w, h], color });
+    gui.draws.push(GuiDraw::Blit {
+        texture: texture.into(),
+        blend,
+        x: 0,
+        y: 0,
+        w,
+        h,
+        uv: [0.0, 0.0],
+        src: [w, h],
+        tex: [w, h],
+        color,
+    });
 }
 
 /// `extractVignette`'s border warning strength for a camera `distance` from the border
 /// (`getDistanceToBorder`), its warning blocks and time, `getLerpSpeed` and how far its size still
 /// moves (`getLerpTarget - getSize`).
-pub fn border_warning(distance: f32, warning_blocks: i32, warning_time: i32, lerp_speed: f64, size_left: f64) -> f32 {
+pub fn border_warning(
+    distance: f32,
+    warning_blocks: i32,
+    warning_time: i32,
+    lerp_speed: f64,
+    size_left: f64,
+) -> f32 {
     let moving = (lerp_speed * f64::from(warning_time)).min(size_left.abs());
     let warning = f64::from(warning_blocks).max(moving);
-    if f64::from(distance) < warning { 1.0 - (f64::from(distance) / warning) as f32 } else { 0.0 }
+    if f64::from(distance) < warning {
+        1.0 - (f64::from(distance) / warning) as f32
+    } else {
+        0.0
+    }
 }
 
 /// `Hud.extractVignette`: `brightness` is `vignetteBrightness`, `warning` per [`border_warning`].
@@ -67,15 +93,31 @@ pub fn portal(gui: &mut Gui, mut alpha: f32) {
         alpha = alpha * 0.8 + 0.2;
     }
     let (w, h) = (gui.width, gui.height);
-    gui.draws.push(GuiDraw::AtlasSprite { sprite: "block/nether_portal".into(), x: 0, y: 0, w, h, color: white(alpha) });
+    gui.draws.push(GuiDraw::AtlasSprite {
+        sprite: "block/nether_portal".into(),
+        x: 0,
+        y: 0,
+        w,
+        h,
+        color: white(alpha),
+    });
 }
 
 /// `Hud.extractConfusionOverlay`: the nausea swirl scaled about the centre.
 pub fn confusion(gui: &mut Gui, strength: f32) {
     let size = lerp(strength, 2.0, 1.0);
     let (cx, cy) = (gui.width as f32 / 2.0, gui.height as f32 / 2.0);
-    gui.push(vec![PoseOp::Translate(cx, cy), PoseOp::Scale(size, size), PoseOp::Translate(-cx, -cy)]);
-    screen_blit(gui, "misc/nausea", Blend::Nausea, color_from_float(1.0, 0.2 * strength, 0.4 * strength, 0.2 * strength));
+    gui.push(vec![
+        PoseOp::Translate(cx, cy),
+        PoseOp::Scale(size, size),
+        PoseOp::Translate(-cx, -cy),
+    ]);
+    screen_blit(
+        gui,
+        "misc/nausea",
+        Blend::Nausea,
+        color_from_float(1.0, 0.2 * strength, 0.4 * strength, 0.2 * strength),
+    );
     gui.pop();
 }
 
@@ -121,7 +163,12 @@ pub fn camera_overlays(gui: &mut Gui, i: &CameraOverlays, scope_scale: &mut f32)
         }
     }
     if i.ticks_frozen > 0 {
-        screen_blit(gui, "misc/powder_snow_outline", Blend::Textured, white(i.percent_frozen));
+        screen_blit(
+            gui,
+            "misc/powder_snow_outline",
+            Blend::Textured,
+            white(i.percent_frozen),
+        );
     }
     let intensity = lerp(i.partial, i.portal[0], i.portal[1]);
     if intensity > 0.0 {
@@ -143,7 +190,13 @@ pub fn sleep_overlay(gui: &mut Gui, sleep_timer: i32) {
     }
     let (w, h) = (gui.width, gui.height);
     gui.next_stratum();
-    gui.fill(0, 0, w, h, (((220.0 * amount) as i32) << 24) as u32 | 0x10_1020);
+    gui.fill(
+        0,
+        0,
+        w,
+        h,
+        (((220.0 * amount) as i32) << 24) as u32 | 0x10_1020,
+    );
 }
 
 #[cfg(test)]
@@ -160,10 +213,26 @@ mod tests {
     fn scope_eases_while_scoping_and_resets_otherwise() {
         let mut gui = Gui::new(320, 240);
         let mut scale = 0.5;
-        camera_overlays(&mut gui, &CameraOverlays { first_person: true, scoping: true, game_time_delta: 1.0, ..Default::default() }, &mut scale);
+        camera_overlays(
+            &mut gui,
+            &CameraOverlays {
+                first_person: true,
+                scoping: true,
+                game_time_delta: 1.0,
+                ..Default::default()
+            },
+            &mut scale,
+        );
         assert_eq!(scale, 0.8125);
         assert_eq!(gui.draws.len(), 5);
-        camera_overlays(&mut gui, &CameraOverlays { first_person: true, ..Default::default() }, &mut scale);
+        camera_overlays(
+            &mut gui,
+            &CameraOverlays {
+                first_person: true,
+                ..Default::default()
+            },
+            &mut scale,
+        );
         assert_eq!(scale, 0.5);
     }
 
@@ -171,6 +240,15 @@ mod tests {
     fn sleep_fades_out_after_100_ticks() {
         let mut gui = Gui::new(10, 10);
         sleep_overlay(&mut gui, 105);
-        assert_eq!(gui.draws[1], GuiDraw::Fill { x0: 0, y0: 0, x1: 10, y1: 10, color: 0x6E10_1020 });
+        assert_eq!(
+            gui.draws[1],
+            GuiDraw::Fill {
+                x0: 0,
+                y0: 0,
+                x1: 10,
+                y1: 10,
+                color: 0x6E10_1020
+            }
+        );
     }
 }

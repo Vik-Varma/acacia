@@ -27,7 +27,11 @@ impl JoinQueue {
     pub const JITTER: Duration = Duration::from_millis(250);
 
     pub fn new(delay: Duration, jitter: Duration) -> Self {
-        Self { delay, jitter: jitter.min(delay), next: Mutex::new(HashMap::new()) }
+        Self {
+            delay,
+            jitter: jitter.min(delay),
+            next: Mutex::new(HashMap::new()),
+        }
     }
 
     /// Reserves the next free slot for `target`; the caller sleeps until it.
@@ -62,6 +66,9 @@ mod tests {
         assert_eq!(a1, start);
         assert_eq!(b1, start);
         let gap = a2 - a1;
-        assert!(gap >= Duration::from_millis(250) && gap <= Duration::from_millis(750), "{gap:?}");
+        assert!(
+            gap >= Duration::from_millis(250) && gap <= Duration::from_millis(750),
+            "{gap:?}"
+        );
     }
 }

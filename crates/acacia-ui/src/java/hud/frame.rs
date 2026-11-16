@@ -189,7 +189,8 @@ impl Hud {
         if !i.hidden {
             self.sidebar(gui, font, i);
             let background = background_color(i.chat_only, i.text_opacity, 0.0);
-            self.titles.overlay_message(gui, font, i.partial, background);
+            self.titles
+                .overlay_message(gui, font, i.partial, background);
             self.titles.title(gui, font, i.partial, background);
             if !i.chat_focused {
                 gui.next_stratum();
@@ -215,7 +216,8 @@ impl Hud {
             return;
         }
         let attack = (i.attack_indicator == AttackIndicator::Crosshair).then_some(i.attack_scale);
-        let full = attack.is_some_and(|a| hotbar::full_attack_indicator(a, i.attack_delay, i.attack_target));
+        let full = attack
+            .is_some_and(|a| hotbar::full_attack_indicator(a, i.attack_delay, i.attack_target));
         hotbar::crosshair(gui, attack, full);
     }
 
@@ -226,11 +228,24 @@ impl Hud {
         let survival = i.game_mode.survival_like();
         if !spectator {
             let attack = (i.attack_indicator == AttackIndicator::Hotbar).then_some(i.attack_scale);
-            hotbar::hotbar(gui, &Hotbar { attack, ..i.hotbar.clone() });
+            hotbar::hotbar(
+                gui,
+                &Hotbar {
+                    attack,
+                    ..i.hotbar.clone()
+                },
+            );
         }
-        let vehicle_hearts = i.vehicle.map_or(0, |v| hotbar::vehicle_max_hearts(v.max_health));
+        let vehicle_hearts = i
+            .vehicle
+            .map_or(0, |v| hotbar::vehicle_max_hearts(v.max_health));
         if survival {
-            let health = Health { tick: self.tick_count, millis: i.millis, vehicle_hearts, ..i.health.clone() };
+            let health = Health {
+                tick: self.tick_count,
+                millis: i.millis,
+                vehicle_hearts,
+                ..i.health.clone()
+            };
             self.health.extract(gui, &health);
         }
         if let Some(v) = i.vehicle.filter(|_| vehicle_hearts != 0) {
@@ -240,15 +255,28 @@ impl Hud {
             bars::jump_bar(gui, cooldown, scale);
         }
         let level = if survival { i.xp_level } else { 0 };
-        hotbar::experience(gui, font, i.xp_progress, level, survival && i.jump.is_none());
+        hotbar::experience(
+            gui,
+            font,
+            i.xp_progress,
+            level,
+            survival && i.jump.is_none(),
+        );
         if !spectator {
-            self.highlight.draw(gui, font, survival, background_color(i.chat_only, i.text_opacity, 0.0));
+            self.highlight.draw(
+                gui,
+                font,
+                survival,
+                background_color(i.chat_only, i.text_opacity, 0.0),
+            );
         }
     }
 
     /// `extractScoreboardSidebar`: the team colour slot's objective before the sidebar's.
     fn sidebar(&self, gui: &mut Gui, font: &dyn Metrics, i: &HudInputs) {
-        let Some(o) = i.team_sidebar.as_ref().or(i.sidebar.as_ref()) else { return };
+        let Some(o) = i.team_sidebar.as_ref().or(i.sidebar.as_ref()) else {
+            return;
+        };
         gui.next_stratum();
         let team = |name: &str| i.teams.get(name);
         let s = Sidebar {
@@ -265,7 +293,8 @@ impl Hud {
     /// `extractTabList`.
     fn tab_list(&mut self, gui: &mut Gui, font: &dyn Metrics, lang: Lang, i: &HudInputs) {
         let t = &i.tab;
-        let visible = t.key_down && !(t.local_server && t.players.len() <= 1 && t.objective.is_none());
+        let visible =
+            t.key_down && !(t.local_server && t.players.len() <= 1 && t.objective.is_none());
         self.tab.set_visible(visible);
         if !visible {
             return;
@@ -289,7 +318,10 @@ impl Hud {
 
     /// `extractSubtitleOverlay`.
     fn subtitle_overlay(&mut self, gui: &mut Gui, font: &dyn Metrics, i: &HudInputs, defer: bool) {
-        let frame = SubtitleFrame { background: background_color(i.chat_only, i.text_opacity, 0.8), ..i.subtitles };
+        let frame = SubtitleFrame {
+            background: background_color(i.chat_only, i.text_opacity, 0.8),
+            ..i.subtitles
+        };
         if defer {
             self.deferred = Some((frame, i.millis));
         } else {

@@ -38,8 +38,14 @@ pub struct Humanoid {
 impl Humanoid {
     pub fn of(s: &RenderState) -> Humanoid {
         let main_right = s.text("mainArm") != Some("LEFT");
-        let main_hand_item = if main_right { "rightHandItemStack" } else { "leftHandItemStack" };
-        let swing_right = s.text("currentSwing").map(|hand| (hand == "MAIN_HAND") == main_right);
+        let main_hand_item = if main_right {
+            "rightHandItemStack"
+        } else {
+            "leftHandItemStack"
+        };
+        let swing_right = s
+            .text("currentSwing")
+            .map(|hand| (hand == "MAIN_HAND") == main_right);
         Humanoid {
             right: ArmPose::named(s.text("rightArmPose")),
             left: ArmPose::named(s.text("leftArmPose")),
@@ -48,11 +54,17 @@ impl Humanoid {
             crouching: s.flag("isCrouching"),
             passenger: s.flag("isPassenger"),
             fall_flying: s.flag("isFallFlying"),
-            speed_value: if s.has("speedValue") { s.num("speedValue") } else { 1.0 },
+            speed_value: if s.has("speedValue") {
+                s.num("speedValue")
+            } else {
+                1.0
+            },
             using_item: s.flag("isUsingItem"),
             swim: s.num("swimAmount"),
             charge: (s.num("maxCrossbowChargeDuration"), s.num("ticksUsingItem")),
-            holding: s.text(main_hand_item).is_some_and(|item| item != "minecraft:air"),
+            holding: s
+                .text(main_hand_item)
+                .is_some_and(|item| item != "minecraft:air"),
             swing_right,
         }
     }
@@ -74,10 +86,19 @@ pub fn humanoid(p: &mut Poses, s: &RenderState, h: &Humanoid, model: Model) {
         p.x_rot("head", -FRAC_PI_4);
     }
     let (pos, speed) = (s.walk_pos(), s.walk_speed());
-    p.x_rot("right_arm", cos(pos * 0.6662 + PI) * 2.0 * speed * 0.5 / h.speed_value);
-    p.x_rot("left_arm", cos(pos * 0.6662) * 2.0 * speed * 0.5 / h.speed_value);
+    p.x_rot(
+        "right_arm",
+        cos(pos * 0.6662 + PI) * 2.0 * speed * 0.5 / h.speed_value,
+    );
+    p.x_rot(
+        "left_arm",
+        cos(pos * 0.6662) * 2.0 * speed * 0.5 / h.speed_value,
+    );
     p.x_rot("right_leg", cos(pos * 0.6662) * 1.4 * speed / h.speed_value);
-    p.x_rot("left_leg", cos(pos * 0.6662 + PI) * 1.4 * speed / h.speed_value);
+    p.x_rot(
+        "left_leg",
+        cos(pos * 0.6662 + PI) * 1.4 * speed / h.speed_value,
+    );
     p.y_rot("right_leg", 0.005);
     p.y_rot("left_leg", -0.005);
     p.z_rot("right_leg", 0.005);
@@ -85,17 +106,35 @@ pub fn humanoid(p: &mut Poses, s: &RenderState, h: &Humanoid, model: Model) {
     if h.passenger {
         p.get("right_arm").x_rot += pi_div(-5.0);
         p.get("left_arm").x_rot += pi_div(-5.0);
-        *p.get("right_leg") = PartPose { x_rot: -1.413_716_7, y_rot: pi_div(10.0), z_rot: 0.078_539_82, ..p.read("right_leg") };
-        *p.get("left_leg") = PartPose { x_rot: -1.413_716_7, y_rot: pi_div(-10.0), z_rot: -0.078_539_82, ..p.read("left_leg") };
+        *p.get("right_leg") = PartPose {
+            x_rot: -1.413_716_7,
+            y_rot: pi_div(10.0),
+            z_rot: 0.078_539_82,
+            ..p.read("right_leg")
+        };
+        *p.get("left_leg") = PartPose {
+            x_rot: -1.413_716_7,
+            y_rot: pi_div(-10.0),
+            z_rot: -0.078_539_82,
+            ..p.read("left_leg")
+        };
     }
     let first_right = if h.using_item {
         h.use_main_hand == h.main_right
     } else {
         let off_hand_right = !h.main_right;
         let off_pose = if off_hand_right { h.right } else { h.left };
-        if off_pose.two_handed() { h.main_right } else { off_hand_right }
+        if off_pose.two_handed() {
+            h.main_right
+        } else {
+            off_hand_right
+        }
     };
-    let (first, second) = if first_right { ((h.right, true), (h.left, false)) } else { ((h.left, false), (h.right, true)) };
+    let (first, second) = if first_right {
+        ((h.right, true), (h.left, false))
+    } else {
+        ((h.left, false), (h.right, true))
+    };
     pose_arm(p, first.0, first.1, h.crouching, h.charge);
     if !first.0.affects_offhand() {
         pose_arm(p, second.0, second.1, h.crouching, h.charge);
@@ -150,7 +189,9 @@ fn drowned_swim(p: &mut Poses, age: f32, amount: f32) {
 // TODO: STAB swings (SpearAnimations.thirdPersonAttackHand).
 fn attack(p: &mut Poses, s: &RenderState, h: &Humanoid) {
     let swing = s.swing();
-    let Some(swing_right) = h.swing_right.filter(|_| swing > 0.0) else { return };
+    let Some(swing_right) = h.swing_right.filter(|_| swing > 0.0) else {
+        return;
+    };
     let mut body_y = sin(swing.sqrt() * (PI * 2.0)) * 0.2;
     if !swing_right {
         body_y *= -1.0;
@@ -182,7 +223,11 @@ pub(super) fn zombie_arms(p: &mut Poses, s: &RenderState, h: &Humanoid, aggressi
     }
     let swing = s.swing();
     let raise = !s.baby() || !h.holding;
-    let drop = if raise { -PI / if aggressive { 1.5 } else { 2.25 } } else { 0.0 };
+    let drop = if raise {
+        -PI / if aggressive { 1.5 } else { 2.25 }
+    } else {
+        0.0
+    };
     let ym = if raise { 1.0 } else { -1.0 } * sin(swing * PI);
     let xm = sin((1.0 - (1.0 - swing) * (1.0 - swing)) * PI);
     let x = drop + ym * 1.2 - xm * 0.4;
@@ -208,8 +253,16 @@ fn swim(p: &mut Poses, pos: f32, h: &Humanoid) {
         p.x_rot("head", rot_lerp_rad(amount, x, -FRAC_PI_4));
     }
     let swim_pos = pos % 26.0;
-    let right_amount = if h.right != ArmPose::Spear && h.swing_right != Some(true) { amount } else { 0.0 };
-    let left_amount = if h.left != ArmPose::Spear && h.swing_right != Some(false) { amount } else { 0.0 };
+    let right_amount = if h.right != ArmPose::Spear && h.swing_right != Some(true) {
+        amount
+    } else {
+        0.0
+    };
+    let left_amount = if h.left != ArmPose::Spear && h.swing_right != Some(false) {
+        amount
+    } else {
+        0.0
+    };
     let quadratic = |x: f32| -65.0 * x + x * x;
     // Targets (x, y, z) for the left and right arm.
     let targets = if h.using_item {
@@ -219,7 +272,10 @@ fn swim(p: &mut Poses, pos: f32, h: &Humanoid) {
         Some(([0.0, PI, PI + stroke], [0.0, PI, PI - stroke]))
     } else if swim_pos < 22.0 {
         let t = (swim_pos - 14.0) / 8.0;
-        Some(([PI / 2.0 * t, PI, 5.012_389 - 1.870_796_4 * t], [PI / 2.0 * t, PI, 1.270_796_3 + 1.870_796_4 * t]))
+        Some((
+            [PI / 2.0 * t, PI, 5.012_389 - 1.870_796_4 * t],
+            [PI / 2.0 * t, PI, 1.270_796_3 + 1.870_796_4 * t],
+        ))
     } else if swim_pos < 26.0 {
         let x = PI / 2.0 - PI / 2.0 * ((swim_pos - 22.0) / 4.0);
         Some(([x, PI, PI], [x, PI, PI]))
@@ -228,16 +284,25 @@ fn swim(p: &mut Poses, pos: f32, h: &Humanoid) {
     };
     if let Some((left, right)) = targets {
         let l = p.get("left_arm");
-        for (angle, target) in [&mut l.x_rot, &mut l.y_rot, &mut l.z_rot].into_iter().zip(left) {
+        for (angle, target) in [&mut l.x_rot, &mut l.y_rot, &mut l.z_rot]
+            .into_iter()
+            .zip(left)
+        {
             *angle = rot_lerp_rad(left_amount, *angle, target);
         }
         let r = p.get("right_arm");
-        for (angle, target) in [&mut r.x_rot, &mut r.y_rot, &mut r.z_rot].into_iter().zip(right) {
+        for (angle, target) in [&mut r.x_rot, &mut r.y_rot, &mut r.z_rot]
+            .into_iter()
+            .zip(right)
+        {
             *angle = lerp(right_amount, *angle, target);
         }
     }
     let x = p.read("left_leg").x_rot;
-    p.x_rot("left_leg", lerp(amount, x, 0.3 * cos(pos * 0.333_333_34 + PI)));
+    p.x_rot(
+        "left_leg",
+        lerp(amount, x, 0.3 * cos(pos * 0.333_333_34 + PI)),
+    );
     let x = p.read("right_leg").x_rot;
     p.x_rot("right_leg", lerp(amount, x, 0.3 * cos(pos * 0.333_333_34)));
 }

@@ -34,8 +34,11 @@ const FILES: [(&str, &str); 11] = [
 ];
 
 /// Rectangles of `textures/gui/icons.png`: x, y, width, height.
-const ICONS: [(&str, [u32; 4]); 3] =
-    [(sprite::CROSSHAIR, [0, 0, 15, 15]), (sprite::XP_BACKGROUND, [0, 64, 182, 5]), (sprite::XP_PROGRESS, [0, 69, 182, 5])];
+const ICONS: [(&str, [u32; 4]); 3] = [
+    (sprite::CROSSHAIR, [0, 0, 15, 15]),
+    (sprite::XP_BACKGROUND, [0, 64, 182, 5]),
+    (sprite::XP_PROGRESS, [0, 69, 182, 5]),
+];
 
 /// The end caps are drawn at this opacity (`hud_screen.json`, `start_cap_image`).
 const CAP_ALPHA: f32 = 0.65;
@@ -57,13 +60,22 @@ pub fn load(root: &Path, java_root: Option<&Path>) -> Theme {
             atlas.add(name, &imageops::crop_imm(&icons, x, y, w, h).to_image());
         }
         // The sheet has one boss bar (the pink one); every colour draws it.
-        let (bg, fill) = (imageops::crop_imm(&icons, 0, 74, 182, 5).to_image(), imageops::crop_imm(&icons, 0, 79, 182, 5).to_image());
+        let (bg, fill) = (
+            imageops::crop_imm(&icons, 0, 74, 182, 5).to_image(),
+            imageops::crop_imm(&icons, 0, 79, 182, 5).to_image(),
+        );
         for colour in BOSS_COLOURS {
             atlas.add(&format!("boss_bar/{colour}_background"), &bg);
             atlas.add(&format!("boss_bar/{colour}_progress"), &fill);
         }
     }
-    for (name, file) in [(effects::BACKGROUND, "hud_mob_effect_background"), (effects::BACKGROUND_AMBIENT, "hud_mob_ambient_effect_background")] {
+    for (name, file) in [
+        (effects::BACKGROUND, "hud_mob_effect_background"),
+        (
+            effects::BACKGROUND_AMBIENT,
+            "hud_mob_ambient_effect_background",
+        ),
+    ] {
         if let Some(image) = ui(file) {
             atlas.add(name, &image);
         }
@@ -79,12 +91,21 @@ pub fn load(root: &Path, java_root: Option<&Path>) -> Theme {
     // 1937×333 does not fit the atlas; drawn about 150 GUI pixels wide.
     if let Some(logo) = ui("title") {
         let height = logo.height() * 512 / logo.width().max(1);
-        atlas.add(crate::menu::LOGO, &imageops::resize(&logo, 512, height, imageops::FilterType::Triangle));
+        atlas.add(
+            crate::menu::LOGO,
+            &imageops::resize(&logo, 512, height, imageops::FilterType::Triangle),
+        );
     }
     let font = java_root.and_then(|r| java_font(r, &mut atlas));
     let galactic = java_root.and_then(|r| super::java_galactic(r, &mut atlas));
     let widgets = Widgets::Bedrock(Box::new(Kit::load(root, &mut atlas)));
-    Theme { atlas, font, galactic, style: STYLE, widgets }
+    Theme {
+        atlas,
+        font,
+        galactic,
+        style: STYLE,
+        widgets,
+    }
 }
 
 /// The 182×22 bar: start cap, nine 20×22 slots, end cap.
@@ -92,7 +113,9 @@ fn hotbar(ui: &dyn Fn(&str) -> Option<RgbaImage>) -> Option<RgbaImage> {
     let mut bar = RgbaImage::new(182, 22);
     let mut cap = |name: &str, x: i64| -> Option<()> {
         let mut image = ui(name)?;
-        image.pixels_mut().for_each(|p| p.0[3] = (f32::from(p.0[3]) * CAP_ALPHA) as u8);
+        image
+            .pixels_mut()
+            .for_each(|p| p.0[3] = (f32::from(p.0[3]) * CAP_ALPHA) as u8);
         imageops::replace(&mut bar, &image, x, 0);
         Some(())
     };

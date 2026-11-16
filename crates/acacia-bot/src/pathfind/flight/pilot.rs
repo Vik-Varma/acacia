@@ -2,9 +2,9 @@
 
 use acacia_physics::{BlockPos, Vec3, WorldView};
 
+use super::FlyOpts;
 use super::solve::{Line, MAX_SINK, glide_reach, skid, solve};
 use super::surface::{Surface, corridor, corridor_top, known_ahead};
-use super::FlyOpts;
 use crate::cadence::splitmix;
 use crate::movement::{Controls, Rollout};
 use crate::pathfind::profile::{Aim, MovementProfile};
@@ -75,8 +75,25 @@ pub struct FlightPilot {
 impl FlightPilot {
     pub fn new(target: BlockPos, opts: FlyOpts, seed: u64) -> Self {
         let mut rng = seed;
-        let (yaw_aim, pitch_aim) = (Aim::new(opts.profile, splitmix(&mut rng)), Aim::new(opts.profile, splitmix(&mut rng)));
-        Self { target, spot: None, opts, phase: Phase::Ground, yaw_aim, pitch_aim, rng, tick: 0, rocket_at: None, cruise_y: f32::MIN, pitch: 0.0, opens: 0, reach_checked: false }
+        let (yaw_aim, pitch_aim) = (
+            Aim::new(opts.profile, splitmix(&mut rng)),
+            Aim::new(opts.profile, splitmix(&mut rng)),
+        );
+        Self {
+            target,
+            spot: None,
+            opts,
+            phase: Phase::Ground,
+            yaw_aim,
+            pitch_aim,
+            rng,
+            tick: 0,
+            rocket_at: None,
+            cruise_y: f32::MIN,
+            pitch: 0.0,
+            opens: 0,
+            reach_checked: false,
+        }
     }
 
     /// Feet of the landing spot, once one is found.
@@ -85,7 +102,14 @@ impl FlightPilot {
     }
 
     /// Sets `c` for the tick after `r` (the live simulation forked) with `rockets` in the hotbar.
-    pub fn tick(&mut self, r: &Rollout, w: &(impl WorldView + ?Sized), s: &mut dyn Surface, rockets: u32, c: &mut Controls) -> Order {
+    pub fn tick(
+        &mut self,
+        r: &Rollout,
+        w: &(impl WorldView + ?Sized),
+        s: &mut dyn Surface,
+        rockets: u32,
+        c: &mut Controls,
+    ) -> Order {
         self.tick += 1;
         if self.tick > self.opts.max_ticks {
             return Order::Fail(format!("no landing after {} ticks", self.opts.max_ticks));
@@ -106,7 +130,12 @@ impl FlightPilot {
                 }
                 // A standing jump: an off-axis running jump drifts an ulp from strict BDS and the glide carries it
                 // (DESIGN.md "Off-axis ulp corrections"); a glide ignores movement keys.
-                *c = Controls { jump: true, yaw, pitch: self.pitch_aim.turn(st.pitch, -15.0), ..Controls::default() };
+                *c = Controls {
+                    jump: true,
+                    yaw,
+                    pitch: self.pitch_aim.turn(st.pitch, -15.0),
+                    ..Controls::default()
+                };
                 self.phase = Phase::Rising;
                 return Order::Fly;
             }
@@ -147,47 +176,100 @@ impl FlightPilot {
         self.glide(r, w, s, rockets, yaw, c)
     }
 
-    fn glide(&mut self, r: &Rollout, w: &(impl WorldView + ?Sized), s: &mut dyn Surface, rockets: u32, yaw: f32, c: &mut Controls) -> Order {
+    fn glide(
+        &mut self,
+        r: &Rollout,
+        w: &(impl WorldView + ?Sized),
+        s: &mut dyn Surface,
+        rockets: u32,
+        yaw: f32,
+        c: &mut Controls,
+    ) -> Order {
         let st = &r.st;
         let pos = st.pos;
         // Re-picked until the landing starts: a block can change under it, and blocks around the target arrive late.
         let hz = st.vel[0].hypot(st.vel[2]);
         let landing_dist = LANDING_DIST * (hz / APPROACH_SPEED).max(1.0);
-        let near = self.spot.is_some_and(|p| (p[0] - pos[0]).hypot(p[2] - pos[2]) < landing_dist);
+        let near = self
+            .spot
+            .is_some_and(|p| (p[0] - pos[0]).hypot(p[2] - pos[2]) < landing_dist);
         if !near {
             self.spot = find_spot(s, self.target, self.opts.land_radius);
         }
-        let target = self.spot.unwrap_or([self.target[0] as f32 + 0.5, self.target[1] as f32, self.target[2] as f32 + 0.5]);
+        let target = self.spot.unwrap_or([
+            self.target[0] as f32 + 0.5,
+            self.target[1] as f32,
+            self.target[2] as f32 + 0.5,
+        ]);
         let d = (target[0] - pos[0]).hypot(target[2] - pos[2]);
-        let dir = if d > 0.0 { [(target[0] - pos[0]) / d, (target[2] - pos[2]) / d] } else { [0.0, 0.0] };
-        let ahead = [pos[0] + dir[0] * d.min(CORRIDOR), pos[2] + dir[1] * d.min(CORRIDOR)];
+        let dir = if d > 0.0 {
+            [(target[0] - pos[0]) / d, (target[2] - pos[2]) / d]
+        } else {
+            [0.0, 0.0]
+        };
+        let ahead = [
+            pos[0] + dir[0] * d.min(CORRIDOR),
+            pos[2] + dir[1] * d.min(CORRIDOR),
+        ];
         let samples = corridor(s, [pos[0], pos[2]], ahead, 3.0);
-        let top = samples.iter().filter_map(|&(_, top)| top).max().unwrap_or(i32::MIN);
+        let top = samples
+            .iter()
+            .filter_map(|&(_, top)| top)
+            .max()
+            .unwrap_or(i32::MIN);
         // Never lowered while far out: terrain behind the known edge may be as high as what was crossed.
-        self.cruise_y = self.cruise_y.max((top + self.opts.cruise_margin) as f32).max(target[1] + self.opts.cruise_margin as f32);
+        self.cruise_y = self
+            .cruise_y
+            .max((top + self.opts.cruise_margin) as f32)
+            .max(target[1] + self.opts.cruise_margin as f32);
         if rockets == 0 && !self.reach_checked {
             self.reach_checked = true;
             if glide_reach(r, yaw, target[1], w) + self.opts.land_radius as f32 * 2.0 < d {
-                return Order::Fail(format!("no rockets, and a glide from y {:.0} does not reach {d:.0} blocks", pos[1]));
+                return Order::Fail(format!(
+                    "no rockets, and a glide from y {:.0} does not reach {d:.0} blocks",
+                    pos[1]
+                ));
             }
         }
         let landing = self.spot.is_some() && d < landing_dist;
         let slope = SLOPE.min(SINK_ROOM * MAX_SINK / hz.max(0.1));
-        let mut line = Line { target, cruise_y: self.cruise_y, slope, margin: self.opts.cruise_margin as f32 / 2.0, landing, hold: Vec::new(), skid: skid(hz) };
-        line.hold = line.holds(samples.into_iter().filter_map(|(t, top)| Some((d - t, top?))));
+        let mut line = Line {
+            target,
+            cruise_y: self.cruise_y,
+            slope,
+            margin: self.opts.cruise_margin as f32 / 2.0,
+            landing,
+            hold: Vec::new(),
+            skid: skid(hz),
+        };
+        line.hold = line.holds(
+            samples
+                .into_iter()
+                .filter_map(|(t, top)| Some((d - t, top?))),
+        );
         let speed = st.vel.iter().map(|v| v * v).sum::<f32>().sqrt();
         let known = known_ahead(s, [pos[0], pos[2]], dir, (speed * HORIZON_TICKS).max(48.0));
         let horizon = known >= (speed * HORIZON_TICKS).max(48.0) || known >= d;
         let low = pos[1] < line.height_at(d) - 4.0;
-        let want = !landing && st.glide_boost_ticks == 0 && horizon && (low || speed < CRUISE_SPEED) && d > landing_dist;
+        let want = !landing
+            && st.glide_boost_ticks == 0
+            && horizon
+            && (low || speed < CRUISE_SPEED)
+            && d > landing_dist;
         // Short of the spot's height near it, a reserve rocket saves the landing.
         let save = st.glide_boost_ticks == 0 && landing && pos[1] < target[1] + 1.0 && d > 8.0;
         // Just off the ground (the takeoff) a rocket must come quickly; one into the ground is not boosted by the server.
-        let low_down = pos[1] - (corridor_top(s, [pos[0], pos[2]], [pos[0], pos[2]], 0.0).0 + 1) as f32;
+        let low_down =
+            pos[1] - (corridor_top(s, [pos[0], pos[2]], [pos[0], pos[2]], 0.0).0 + 1) as f32;
         let takeoff = low_down < TAKEOFF_HEIGHT;
         let touching = low_down < 0.5 && st.vel[1] < 0.0;
-        let wanted = !touching && ((want && rockets > self.opts.rocket_reserve) || (save && rockets > 0));
-        let order = if wanted { self.rocket_when_ready(takeoff) } else { Order::Fly };
+        let wanted =
+            !touching && ((want && rockets > self.opts.rocket_reserve) || (save && rockets > 0));
+        let order = if wanted {
+            self.rocket_when_ready(takeoff)
+        } else {
+            Order::Fly
+        };
         if !wanted {
             self.rocket_at = None;
         }
@@ -204,9 +286,19 @@ impl FlightPilot {
         self.pitch = solve(from, yaw, self.pitch, &line, w, s);
         tracing::trace!(tick = self.tick, ?pos, d, known, cruise_y = self.cruise_y, spot = ?self.spot, pitch = self.pitch, rockets, ?order, "glide");
         // The landing rollouts' sink limit, flown for real (`solve::MAX_SINK`).
-        let aim = if landing && st.vel[1] < -MAX_SINK { self.pitch.min(0.0) } else { self.pitch };
+        let aim = if landing && st.vel[1] < -MAX_SINK {
+            self.pitch.min(0.0)
+        } else {
+            self.pitch
+        };
         let pitch = self.pitch_aim.turn(st.pitch, aim).clamp(-90.0, 90.0);
-        *c = Controls { forward: 1.0, glide: true, yaw, pitch, ..Controls::default() };
+        *c = Controls {
+            forward: 1.0,
+            glide: true,
+            yaw,
+            pitch,
+            ..Controls::default()
+        };
         order
     }
 
@@ -214,8 +306,14 @@ impl FlightPilot {
         if self.opts.profile == MovementProfile::Optimal {
             return Order::Rocket;
         }
-        let (lo, hi) = if takeoff { HUMAN_TAKEOFF_DELAY } else { HUMAN_ROCKET_DELAY };
-        let at = *self.rocket_at.get_or_insert(self.tick + lo + splitmix(&mut self.rng) % (hi - lo));
+        let (lo, hi) = if takeoff {
+            HUMAN_TAKEOFF_DELAY
+        } else {
+            HUMAN_ROCKET_DELAY
+        };
+        let at = *self
+            .rocket_at
+            .get_or_insert(self.tick + lo + splitmix(&mut self.rng) % (hi - lo));
         if self.tick < at {
             return Order::Fly;
         }
@@ -224,7 +322,10 @@ impl FlightPilot {
     }
 
     fn course_yaw(&self, pos: Vec3) -> f32 {
-        let to = self.spot.map_or([self.target[0] as f32 + 0.5, self.target[2] as f32 + 0.5], |s| [s[0], s[2]]);
+        let to = self.spot.map_or(
+            [self.target[0] as f32 + 0.5, self.target[2] as f32 + 0.5],
+            |s| [s[0], s[2]],
+        );
         (pos[0] - to[0]).atan2(to[1] - pos[2]).to_degrees()
     }
 }

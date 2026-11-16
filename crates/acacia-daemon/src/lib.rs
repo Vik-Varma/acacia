@@ -90,7 +90,12 @@ pub struct DaemonConfig {
 
 impl Default for DaemonConfig {
     fn default() -> Self {
-        Self { host: HostConfig::default(), token: None, mirror_every: Duration::from_millis(50), queue: 4096 }
+        Self {
+            host: HostConfig::default(),
+            token: None,
+            mirror_every: Duration::from_millis(50),
+            queue: 4096,
+        }
     }
 }
 
@@ -114,7 +119,12 @@ impl Daemon {
         let router = Router::new(host.clone(), config.token);
         let router = tokio::spawn(router.run(outbound, rx, config.mirror_every));
         let accept = tokio::spawn(conn::accept(listener, tx, config.queue.max(1), has_token));
-        Ok(Self { addr, host, router, accept })
+        Ok(Self {
+            addr,
+            host,
+            router,
+            accept,
+        })
     }
 
     pub fn local_addr(&self) -> SocketAddr {

@@ -18,12 +18,34 @@ pub struct BossBar {
 }
 
 const COLORS: [&str; 7] = ["pink", "blue", "red", "green", "yellow", "purple", "white"];
-const OVERLAYS: [&str; 5] = ["progress", "notched_6", "notched_10", "notched_12", "notched_20"];
+const OVERLAYS: [&str; 5] = [
+    "progress",
+    "notched_6",
+    "notched_10",
+    "notched_12",
+    "notched_20",
+];
 
 fn boss_part(gui: &mut Gui, bar: &BossBar, x: i32, y: i32, width: i32, part: &str) {
-    gui.region(format!("boss_bar/{}_{part}", COLORS[bar.color]), [182, 5], [0, 0], x, y, width, 5);
+    gui.region(
+        format!("boss_bar/{}_{part}", COLORS[bar.color]),
+        [182, 5],
+        [0, 0],
+        x,
+        y,
+        width,
+        5,
+    );
     if bar.overlay != 0 {
-        gui.region(format!("boss_bar/{}_{part}", OVERLAYS[bar.overlay]), [182, 5], [0, 0], x, y, width, 5);
+        gui.region(
+            format!("boss_bar/{}_{part}", OVERLAYS[bar.overlay]),
+            [182, 5],
+            [0, 0],
+            x,
+            y,
+            width,
+            5,
+        );
     }
 }
 
@@ -43,7 +65,13 @@ pub fn boss_overlay(gui: &mut Gui, font: &dyn Metrics, bars: &[BossBar]) {
             boss_part(gui, bar, x, y, progress, "progress");
         }
         let width = font.width(&bar.name);
-        gui.text(bar.name.clone(), gui.width / 2 - width / 2, y - 9, WHITE, true);
+        gui.text(
+            bar.name.clone(),
+            gui.width / 2 - width / 2,
+            y - 9,
+            WHITE,
+            true,
+        );
         y += 10 + 9;
         if y >= gui.height / 3 {
             break;
@@ -61,7 +89,15 @@ pub fn jump_bar(gui: &mut Gui, cooldown: i32, scale: f32) {
     } else {
         let progress = lerp_discrete(scale, 0, 182);
         if progress > 0 {
-            gui.region("hud/jump_bar_progress", [182, 5], [0, 0], left, top, progress, 5);
+            gui.region(
+                "hud/jump_bar_progress",
+                [182, 5],
+                [0, 0],
+                left,
+                top,
+                progress,
+                5,
+            );
         }
     }
 }
@@ -73,11 +109,18 @@ mod tests {
 
     #[test]
     fn bars_stop_at_a_third_of_the_screen() {
-        let bar = BossBar { name: Text::literal("Boss"), progress: 0.5, color: 2, overlay: 1 };
+        let bar = BossBar {
+            name: Text::literal("Boss"),
+            progress: 0.5,
+            color: 2,
+            overlay: 1,
+        };
         let mut gui = Gui::new(320, 90);
         boss_overlay(&mut gui, &Fixed(6.0), &[bar.clone(), bar]);
         assert_eq!(gui.draws.len(), 6);
-        assert!(matches!(&gui.draws[3], GuiDraw::Sprite { sprite, w: 91, .. } if sprite == "boss_bar/red_progress"));
+        assert!(
+            matches!(&gui.draws[3], GuiDraw::Sprite { sprite, w: 91, .. } if sprite == "boss_bar/red_progress")
+        );
     }
 
     #[test]
@@ -86,6 +129,13 @@ mod tests {
         jump_bar(&mut gui, 0, 0.0);
         assert_eq!(gui.draws.len(), 1);
         jump_bar(&mut gui, 0, 1.0);
-        assert!(matches!(&gui.draws[2], GuiDraw::Sprite { w: 182, region: Some(_), .. }));
+        assert!(matches!(
+            &gui.draws[2],
+            GuiDraw::Sprite {
+                w: 182,
+                region: Some(_),
+                ..
+            }
+        ));
     }
 }

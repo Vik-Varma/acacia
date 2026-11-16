@@ -35,7 +35,12 @@ impl App {
                     if !me.alive && self.menu.is_none() && self.mode == super::Mode::Play {
                         self.open_menu(super::menu::Menu::Death);
                     }
-                    if me.alive && matches!(self.menu, Some(super::menu::Menu::Death | super::menu::Menu::TitleConfirm)) {
+                    if me.alive
+                        && matches!(
+                            self.menu,
+                            Some(super::menu::Menu::Death | super::menu::Menu::TitleConfirm)
+                        )
+                    {
                         self.menu = None;
                         self.grab(true);
                     }
@@ -57,10 +62,22 @@ impl App {
                         r.spawn_particles(s.kind, s.at, s.velocity, s.count, s.spread);
                     }
                 }
-                NetEvent::Sound(cue) => self.audio.play(self.settings.look, &cue, &self.camera, self.settings.volume as f32 / 100.0),
+                NetEvent::Sound(cue) => self.audio.play(
+                    self.settings.look,
+                    &cue,
+                    &self.camera,
+                    self.settings.volume as f32 / 100.0,
+                ),
                 NetEvent::Form(form) => self.show_form(form),
                 NetEvent::Sidebar(sidebar) => self.ui.sidebar = sidebar,
-                NetEvent::Chat { sender, message, params, rawtext } => self.ui.push_chat(sender.as_deref(), &message, &params, rawtext.as_deref()),
+                NetEvent::Chat {
+                    sender,
+                    message,
+                    params,
+                    rawtext,
+                } => self
+                    .ui
+                    .push_chat(sender.as_deref(), &message, &params, rawtext.as_deref()),
                 NetEvent::EntityModels(models) => {
                     self.entities.set_models(models.clone());
                     if let Some(r) = &mut self.renderer {
@@ -104,9 +121,11 @@ impl App {
         let looked = start.elapsed();
         let table = Arc::new(pack.block_table(world.registry()));
         let tabled = start.elapsed();
-        self.entities.set_items(ItemModels::new(pack.clone(), table.clone()));
+        self.entities
+            .set_items(ItemModels::new(pack.clone(), table.clone()));
         self.table = Some(table.clone());
-        self.ui.set_world(self.settings.look, pack.clone(), table.clone());
+        self.ui
+            .set_world(self.settings.look, pack.clone(), table.clone());
         let ui = start.elapsed();
         if let Some(sheet) = acacia_render::particles::Sheet::load(pack.files()) {
             r.set_particle_sheet(sheet);

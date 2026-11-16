@@ -24,7 +24,10 @@ const C: [f64; 5] = [
 ];
 const TABLE: [SinCos; 2] = [
     SinCos { c: C, s: S },
-    SinCos { c: [-C[0], -C[1], -C[2], -C[3], -C[4]], s: S },
+    SinCos {
+        c: [-C[0], -C[1], -C[2], -C[3], -C[4]],
+        s: S,
+    },
 ];
 
 const PIO4: f32 = f32::from_bits(0x3F49_0FDB);
@@ -56,7 +59,12 @@ fn reduce(y: f32) -> (f64, f64, i32, &'static SinCos) {
     let x = f64::from(y);
     let n = (((x * HPI_INV) as i32).wrapping_add(0x80_0000)) >> 24;
     let r = x - f64::from(n) * HPI;
-    (r * SIGN[(n & 3) as usize], r * r, n, &TABLE[usize::from(n & 2 != 0)])
+    (
+        r * SIGN[(n & 3) as usize],
+        r * r,
+        n,
+        &TABLE[usize::from(n & 2 != 0)],
+    )
 }
 
 pub(crate) fn sinf(y: f32) -> f32 {

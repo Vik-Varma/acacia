@@ -27,7 +27,11 @@ fn build_world(fills: &Value) -> TestWorld {
     let mut w = TestWorld::new();
     for fill in fills.as_array().unwrap() {
         let kind = fill["kind"].as_str().unwrap();
-        let block = if kind == "air" { None } else { Some(TestBlock::from_kind(kind).expect(kind)) };
+        let block = if kind == "air" {
+            None
+        } else {
+            Some(TestBlock::from_kind(kind).expect(kind))
+        };
         let p = |k: &str| [int(&fill[k][0]), int(&fill[k][1]), int(&fill[k][2])];
         w.fill(block, p("min"), p("max"));
     }
@@ -88,7 +92,9 @@ fn run(sc: &Value) -> Result<f32, String> {
             let e = &expected[t];
             let (pos, vel) = (vec3(&e["pos"]), vec3(&e["vel"]));
             for a in 0..3 {
-                max_dev = max_dev.max((pos[a] - st.pos[a]).abs()).max((vel[a] - st.vel[a]).abs());
+                max_dev = max_dev
+                    .max((pos[a] - st.pos[a]).abs())
+                    .max((vel[a] - st.vel[a]).abs());
             }
             max_dev = max_dev.max((f(&e["fall_distance"]) - st.fall_distance).abs());
             let flags_ok = e["on_ground"] == st.on_ground
@@ -103,8 +109,18 @@ fn run(sc: &Value) -> Result<f32, String> {
             if max_dev > TOLERANCE || !flags_ok {
                 return Err(format!(
                     "tick {t}: expected {e}\n got pos={:?} vel={:?} ground={} collide=[{},{},{}] sneak={} sprint={} swim={} glide={} fall={} outcome={:?}",
-                    st.pos, st.vel, st.on_ground, st.collide_x, st.collide_y, st.collide_z, st.sneaking,
-                    st.sprinting, st.swimming, st.gliding, st.fall_distance, out.outcome
+                    st.pos,
+                    st.vel,
+                    st.on_ground,
+                    st.collide_x,
+                    st.collide_y,
+                    st.collide_z,
+                    st.sneaking,
+                    st.sprinting,
+                    st.swimming,
+                    st.gliding,
+                    st.fall_distance,
+                    out.outcome
                 ));
             }
             t += 1;
@@ -130,23 +146,39 @@ const DELIBERATE: &[(&str, usize)] = &[
 
 #[test]
 fn matches_bedsim_fixtures() {
-    let data = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/bedsim.json")).unwrap();
+    let data = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/bedsim.json"
+    ))
+    .unwrap();
     let scenarios: Value = serde_json::from_str(&data).unwrap();
     let mut failures = Vec::new();
     let mut overall = 0f32;
     for sc in scenarios.as_array().unwrap() {
         let name = sc["name"].as_str().unwrap();
-        let deliberate = DELIBERATE.iter().find(|(n, _)| *n == name).map(|&(_, tick)| tick);
+        let deliberate = DELIBERATE
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map(|&(_, tick)| tick);
         match (run(sc), deliberate) {
             (Ok(dev), None) => {
                 overall = overall.max(dev);
                 println!("{name:<26} ok  max deviation {dev:e}");
             }
-            (Err(msg), Some(tick)) if msg.starts_with(&format!("tick {tick}:")) => println!("{name:<26} deviates from tick {tick} as intended"),
-            (Ok(_), Some(tick)) => failures.push(format!("{name}: no longer deviates at tick {tick}; drop it from DELIBERATE")),
+            (Err(msg), Some(tick)) if msg.starts_with(&format!("tick {tick}:")) => {
+                println!("{name:<26} deviates from tick {tick} as intended")
+            }
+            (Ok(_), Some(tick)) => failures.push(format!(
+                "{name}: no longer deviates at tick {tick}; drop it from DELIBERATE"
+            )),
             (Err(msg), _) => failures.push(format!("{name}: {msg}")),
         }
     }
     println!("overall max deviation {overall:e}");
-    assert!(failures.is_empty(), "{} scenario(s) diverged:\n{}", failures.len(), failures.join("\n\n"));
+    assert!(
+        failures.is_empty(),
+        "{} scenario(s) diverged:\n{}",
+        failures.len(),
+        failures.join("\n\n")
+    );
 }

@@ -35,13 +35,28 @@ pub struct Dimension {
 
 impl Dimension {
     pub const fn overworld(air: u32) -> Self {
-        Dimension { min_y: -64, height: 384, air, sky: true }
+        Dimension {
+            min_y: -64,
+            height: 384,
+            air,
+            sky: true,
+        }
     }
     pub const fn nether(air: u32) -> Self {
-        Dimension { min_y: 0, height: 128, air, sky: false }
+        Dimension {
+            min_y: 0,
+            height: 128,
+            air,
+            sky: false,
+        }
     }
     pub const fn end(air: u32) -> Self {
-        Dimension { min_y: 0, height: 256, air, sky: false }
+        Dimension {
+            min_y: 0,
+            height: 256,
+            air,
+            sky: false,
+        }
     }
     /// From the protocol dimension id (0 overworld, 1 nether, 2 end).
     pub const fn from_id(id: i32, air: u32) -> Self {
@@ -78,13 +93,26 @@ impl Chunk {
     /// A column with no known sections (request mode, before its sub-chunks arrive).
     pub fn empty(x: i32, z: i32, dim: Dimension) -> Self {
         assert!(dim.sections() <= 64, "known-section mask holds 64 sections");
-        Chunk { x, z, dim, sections: vec![None; dim.sections()].into(), known: 0, biomes: Vec::new() }
+        Chunk {
+            x,
+            z,
+            dim,
+            sections: vec![None; dim.sections()].into(),
+            known: 0,
+            biomes: Vec::new(),
+        }
     }
 
     /// Decodes a full `LevelChunk` payload (client cache disabled). `sub_chunk_count` sections come
     /// first; whatever follows (biomes, border, block entities) is ignored. Every section is known:
     /// those above the count are air.
-    pub fn decode(x: i32, z: i32, dim: Dimension, sub_chunk_count: u32, payload: &[u8]) -> Result<Self, Error> {
+    pub fn decode(
+        x: i32,
+        z: i32,
+        dim: Dimension,
+        sub_chunk_count: u32,
+        payload: &[u8],
+    ) -> Result<Self, Error> {
         Self::decode_mapped(x, z, dim, sub_chunk_count, payload, &|id| id)
     }
 
@@ -117,7 +145,9 @@ impl Chunk {
 
     /// Unpacks the biome ids of section `index` (0 = lowest) in XZY order. False when unknown.
     pub fn copy_biomes(&self, index: usize, out: &mut [u32; SECTION_VOLUME]) -> bool {
-        let Some(storage) = self.biomes.get(index) else { return false };
+        let Some(storage) = self.biomes.get(index) else {
+            return false;
+        };
         storage.copy_into(out);
         true
     }
@@ -132,7 +162,12 @@ impl Chunk {
         self.set_sub_chunk_mapped(section_y, payload, &|id| id)
     }
 
-    pub fn set_sub_chunk_mapped(&mut self, section_y: i32, payload: &[u8], map: &dyn Fn(u32) -> u32) -> Result<(), Error> {
+    pub fn set_sub_chunk_mapped(
+        &mut self,
+        section_y: i32,
+        payload: &[u8],
+        map: &dyn Fn(u32) -> u32,
+    ) -> Result<(), Error> {
         let (_, section) = decode_section(&mut Reader::new(payload), self.dim.air, map)?;
         self.put_section(section_y - (self.dim.min_y >> 4), section);
         Ok(())
@@ -140,7 +175,10 @@ impl Chunk {
 
     /// Records section `section_y` (world y >> 4) as all air (`SubChunk` result `SuccessAllAir`).
     pub fn set_sub_chunk_air(&mut self, section_y: i32) {
-        if let Some(i) = usize::try_from(section_y - (self.dim.min_y >> 4)).ok().filter(|&i| i < self.sections.len()) {
+        if let Some(i) = usize::try_from(section_y - (self.dim.min_y >> 4))
+            .ok()
+            .filter(|&i| i < self.sections.len())
+        {
             self.sections[i] = None;
             self.known |= 1 << i;
         }
@@ -167,20 +205,26 @@ impl Chunk {
 
     /// Layer-0 runtime id at a world position (x/z are taken modulo 16).
     pub fn block(&self, x: i32, y: i32, z: i32) -> u32 {
-        self.section(y).map_or(self.dim.air, |s| s.blocks.get(index(x, y, z)))
+        self.section(y)
+            .map_or(self.dim.air, |s| s.blocks.get(index(x, y, z)))
     }
 
     /// Layer-1 (liquid) runtime id at a world position; air when not waterlogged.
     pub fn liquid(&self, x: i32, y: i32, z: i32) -> u32 {
-        self.section(y).map_or(self.dim.air, |s| s.liquid.get(index(x, y, z)))
+        self.section(y)
+            .map_or(self.dim.air, |s| s.liquid.get(index(x, y, z)))
     }
 
     /// Applies `UpdateBlock` / `UpdateSubChunkBlocks`. Layers other than 0/1 and out-of-range y are ignored.
     pub fn set(&mut self, x: i32, y: i32, z: i32, layer: u32, id: u32) {
         let Some(slot) = self.slot(y) else { return };
         let air = self.dim.air;
-        let s = self.sections[slot]
-            .get_or_insert_with(|| Box::new(Section { blocks: Storage::Single(air), liquid: Storage::Single(air) }));
+        let s = self.sections[slot].get_or_insert_with(|| {
+            Box::new(Section {
+                blocks: Storage::Single(air),
+                liquid: Storage::Single(air),
+            })
+        });
         match layer {
             0 => s.blocks.set(index(x, y, z), id),
             1 => s.liquid.set(index(x, y, z), id),
@@ -196,8 +240,15 @@ impl Chunk {
     /// Unpacks section `index` (0 = lowest) into XZY-ordered runtime ids, `(x << 8) | (z << 4) | y`.
     /// Returns false, leaving the buffers untouched, when the section holds no data: all air, or
     /// unknown ([`Chunk::section_known`]).
-    pub fn copy_section(&self, index: usize, blocks: &mut [u32; SECTION_VOLUME], liquid: &mut [u32; SECTION_VOLUME]) -> bool {
-        let Some(s) = self.sections.get(index).and_then(Option::as_deref) else { return false };
+    pub fn copy_section(
+        &self,
+        index: usize,
+        blocks: &mut [u32; SECTION_VOLUME],
+        liquid: &mut [u32; SECTION_VOLUME],
+    ) -> bool {
+        let Some(s) = self.sections.get(index).and_then(Option::as_deref) else {
+            return false;
+        };
         s.blocks.copy_into(blocks);
         s.liquid.copy_into(liquid);
         true
@@ -207,7 +258,10 @@ impl Chunk {
     pub fn section_uniform(&self, index: usize) -> Option<u32> {
         match self.sections.get(index)? {
             None => Some(self.dim.air),
-            Some(s) => s.blocks.single().filter(|_| s.liquid.single() == Some(self.dim.air)),
+            Some(s) => s
+                .blocks
+                .single()
+                .filter(|_| s.liquid.single() == Some(self.dim.air)),
         }
     }
 
@@ -230,7 +284,9 @@ impl Chunk {
 
     fn slot(&self, y: i32) -> Option<usize> {
         let rel = y - self.dim.min_y;
-        (0..self.dim.height as i32).contains(&rel).then_some((rel >> 4) as usize)
+        (0..self.dim.height as i32)
+            .contains(&rel)
+            .then_some((rel >> 4) as usize)
     }
 
     fn section(&self, y: i32) -> Option<&Section> {
@@ -238,7 +294,10 @@ impl Chunk {
     }
 
     fn put_section(&mut self, slot: i32, section: Section) {
-        if let Some(i) = usize::try_from(slot).ok().filter(|&i| i < self.sections.len()) {
+        if let Some(i) = usize::try_from(slot)
+            .ok()
+            .filter(|&i| i < self.sections.len())
+        {
             self.sections[i] = Some(Box::new(section));
             self.known |= 1 << i;
         }
@@ -255,9 +314,16 @@ fn section_header(r: &mut Reader) -> Result<(u8, Option<i8>), Error> {
     }
 }
 
-fn decode_section(r: &mut Reader, air: u32, map: &dyn Fn(u32) -> u32) -> Result<(Option<i8>, Section), Error> {
+fn decode_section(
+    r: &mut Reader,
+    air: u32,
+    map: &dyn Fn(u32) -> u32,
+) -> Result<(Option<i8>, Section), Error> {
     let (count, y_index) = section_header(r)?;
-    let mut section = Section { blocks: Storage::Single(air), liquid: Storage::Single(air) };
+    let mut section = Section {
+        blocks: Storage::Single(air),
+        liquid: Storage::Single(air),
+    };
     for layer in 0..count {
         let mut storage = Storage::decode(r)?;
         storage.map_ids(map);

@@ -63,9 +63,14 @@ pub enum Behaviour {
     /// Crit colours: green and blue fade each tick.
     Crit,
     /// Hangs under a block, then becomes `next`; lava's cools (its colour) as it hangs.
-    Hang { next: Kind, cooling: bool },
+    Hang {
+        next: Kind,
+        cooling: bool,
+    },
     /// Falls until it lands, then becomes `land`.
-    Fall { land: Kind },
+    Fall {
+        land: Kind,
+    },
     /// Rain and splash drops: half vanish on landing, all inside a block or liquid.
     Drop,
     /// Gone once out of water.
@@ -77,7 +82,9 @@ pub enum Behaviour {
     /// Draws nothing; scatters explosion puffs each tick.
     Seed,
     /// Drawn in from where it started along its velocity, rising one block.
-    Portal { start: DVec3 },
+    Portal {
+        start: DVec3,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -146,7 +153,12 @@ impl Sprite {
     }
 
     /// One game tick; false once it is gone. What it turns into or leaves behind goes to `spawn`.
-    pub fn tick(&mut self, blocks: &impl Blocks, rng: &mut Rng, spawn: &mut Vec<(Kind, DVec3, Vec3)>) -> bool {
+    pub fn tick(
+        &mut self,
+        blocks: &impl Blocks,
+        rng: &mut Rng,
+        spawn: &mut Vec<(Kind, DVec3, Vec3)>,
+    ) -> bool {
         self.previous = self.position;
         if self.age >= self.lifetime {
             if let Behaviour::Hang { next, .. } = self.behaviour {
@@ -160,15 +172,24 @@ impl Sprite {
             Behaviour::Seed => {
                 let x = self.age as f32 / self.lifetime as f32;
                 for _ in 0..6 {
-                    let offset = DVec3::new(f64::from(rng.f32() - rng.f32()), f64::from(rng.f32() - rng.f32()), f64::from(rng.f32() - rng.f32())) * 4.0;
-                    spawn.push((Kind::Explosion, self.position + offset, Vec3::new(x, 0.0, 0.0)));
+                    let offset = DVec3::new(
+                        f64::from(rng.f32() - rng.f32()),
+                        f64::from(rng.f32() - rng.f32()),
+                        f64::from(rng.f32() - rng.f32()),
+                    ) * 4.0;
+                    spawn.push((
+                        Kind::Explosion,
+                        self.position + offset,
+                        Vec3::new(x, 0.0, 0.0),
+                    ));
                 }
                 return true;
             }
             Behaviour::Portal { start } => {
                 let p = self.life();
                 let t = f64::from(1.0 - (-p + p * p * 2.0));
-                self.position = start + self.velocity.as_dvec3() * t + DVec3::new(0.0, f64::from(1.0 - p), 0.0);
+                self.position =
+                    start + self.velocity.as_dvec3() * t + DVec3::new(0.0, f64::from(1.0 - p), 0.0);
                 return true;
             }
             Behaviour::Campfire => {
@@ -179,7 +200,12 @@ impl Sprite {
                 }
             }
             Behaviour::Hang { cooling: true, .. } => {
-                self.color = [1.0, 16.0 / (self.age as f32 + 16.0), 4.0 / (self.age as f32 + 8.0), 1.0];
+                self.color = [
+                    1.0,
+                    16.0 / (self.age as f32 + 16.0),
+                    4.0 / (self.age as f32 + 8.0),
+                    1.0,
+                ];
             }
             _ => {}
         }
@@ -207,7 +233,12 @@ impl Sprite {
             true => {
                 let half = f64::from(self.width) / 2.0;
                 let min = self.position - DVec3::new(half, 0.0, half);
-                sweep(blocks, min, min + DVec3::new(half * 2.0, half * 2.0, half * 2.0), wanted)
+                sweep(
+                    blocks,
+                    min,
+                    min + DVec3::new(half * 2.0, half * 2.0, half * 2.0),
+                    wanted,
+                )
             }
             false => wanted,
         };
@@ -223,10 +254,17 @@ impl Sprite {
         moved
     }
 
-    fn after_move(&mut self, blocks: &impl Blocks, rng: &mut Rng, spawn: &mut Vec<(Kind, DVec3, Vec3)>) -> bool {
+    fn after_move(
+        &mut self,
+        blocks: &impl Blocks,
+        rng: &mut Rng,
+        spawn: &mut Vec<(Kind, DVec3, Vec3)>,
+    ) -> bool {
         let cell = self.position.floor().as_ivec3();
         match self.behaviour {
-            Behaviour::Lava if rng.f32() > self.life() => spawn.push((Kind::Smoke, self.position, self.velocity)),
+            Behaviour::Lava if rng.f32() > self.life() => {
+                spawn.push((Kind::Smoke, self.position, self.velocity))
+            }
             Behaviour::Crit => {
                 self.color[1] *= 0.96;
                 self.color[2] *= 0.9;
@@ -244,7 +282,12 @@ impl Sprite {
                     return false;
                 }
             }
-            Behaviour::Bubble => return [blocks.block(cell), blocks.liquid(cell)].into_iter().flatten().any(|s| s.is_water()),
+            Behaviour::Bubble => {
+                return [blocks.block(cell), blocks.liquid(cell)]
+                    .into_iter()
+                    .flatten()
+                    .any(|s| s.is_water());
+            }
             Behaviour::Campfire => return self.color[3] > 0.0,
             _ => {}
         }
@@ -268,10 +311,17 @@ impl Sprite {
 
     /// The colour now, with its gradient applied.
     pub fn tint(&self) -> [f32; 4] {
-        let Some(end) = self.fade else { return self.color };
+        let Some(end) = self.fade else {
+            return self.color;
+        };
         let f = self.life();
         let [r, g, b, a] = self.color;
-        [r + (end[0] - r) * f, g + (end[1] - g) * f, b + (end[2] - b) * f, a]
+        [
+            r + (end[0] - r) * f,
+            g + (end[1] - g) * f,
+            b + (end[2] - b) * f,
+            a,
+        ]
     }
 
     /// Index into the set's `count` frames.
@@ -292,7 +342,16 @@ impl Sprite {
 
 /// Inside the solid part or the liquid of the block at `cell` (Java's `WaterDropParticle`).
 fn inside(blocks: &impl Blocks, cell: IVec3, y: f64) -> bool {
-    let top = |s: &acacia_world::BlockState| s.boxes.iter().map(|b| b.max[1]).fold(s.fluid_height(), f32::max);
-    let height = [blocks.block(cell), blocks.liquid(cell)].into_iter().flatten().map(top).fold(0.0, f32::max);
+    let top = |s: &acacia_world::BlockState| {
+        s.boxes
+            .iter()
+            .map(|b| b.max[1])
+            .fold(s.fluid_height(), f32::max)
+    };
+    let height = [blocks.block(cell), blocks.liquid(cell)]
+        .into_iter()
+        .flatten()
+        .map(top)
+        .fold(0.0, f32::max);
     height > 0.0 && y < f64::from(cell.y) + f64::from(height)
 }

@@ -20,7 +20,11 @@ pub struct Identity {
 
 impl Identity {
     pub fn multiplayer(key: SigningKey, token: String) -> Self {
-        Self { key, token, domain: AUTH_DOMAIN.to_owned() }
+        Self {
+            key,
+            token,
+            domain: AUTH_DOMAIN.to_owned(),
+        }
     }
 }
 
@@ -46,9 +50,12 @@ pub(crate) fn fingerprint_payload<'a>(sdp_lines: impl IntoIterator<Item = &'a st
 fn envelope(sdp: &str, identity: &Identity) -> String {
     let payload = fingerprint_payload(sdp.lines());
     let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"ES384"}"#);
-    let sig: Signature = identity.key.sign(format!("{header}.{}", URL_SAFE_NO_PAD.encode(&payload)).as_bytes());
+    let sig: Signature = identity
+        .key
+        .sign(format!("{header}.{}", URL_SAFE_NO_PAD.encode(&payload)).as_bytes());
     let detached = format!("{header}..{}", URL_SAFE_NO_PAD.encode(sig.to_bytes()));
-    let assertion = serde_json::json!({ "token": identity.token, "fingerprints": detached }).to_string();
+    let assertion =
+        serde_json::json!({ "token": identity.token, "fingerprints": detached }).to_string();
     let envelope = serde_json::json!({
         "idp": { "domain": identity.domain, "protocol": "default" },
         "assertion": assertion,
@@ -72,12 +79,21 @@ mod tests {
         let key = SigningKey::from_slice(&[7; 48]).unwrap();
         let sdp = "v=0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\na=fingerprint:sha-256 ab:cd\r\n";
         let line = identity_line(sdp, &Identity::multiplayer(key.clone(), "tok".into()));
-        let env: serde_json::Value = serde_json::from_slice(&STANDARD.decode(&line[IDENTITY.len()..]).unwrap()).unwrap();
-        let assertion: serde_json::Value = serde_json::from_str(env["assertion"].as_str().unwrap()).unwrap();
+        let env: serde_json::Value =
+            serde_json::from_slice(&STANDARD.decode(&line[IDENTITY.len()..]).unwrap()).unwrap();
+        let assertion: serde_json::Value =
+            serde_json::from_str(env["assertion"].as_str().unwrap()).unwrap();
         assert_eq!(assertion["token"], "tok");
-        let (header, sig) = assertion["fingerprints"].as_str().unwrap().split_once("..").unwrap();
-        let payload = URL_SAFE_NO_PAD.encode(r#"{"fingerprint":[{"algorithm":"sha-256","digest":"AB:CD"}]}"#);
+        let (header, sig) = assertion["fingerprints"]
+            .as_str()
+            .unwrap()
+            .split_once("..")
+            .unwrap();
+        let payload =
+            URL_SAFE_NO_PAD.encode(r#"{"fingerprint":[{"algorithm":"sha-256","digest":"AB:CD"}]}"#);
         let sig = Signature::from_slice(&URL_SAFE_NO_PAD.decode(sig).unwrap()).unwrap();
-        key.verifying_key().verify(format!("{header}.{payload}").as_bytes(), &sig).unwrap();
+        key.verifying_key()
+            .verify(format!("{header}.{payload}").as_bytes(), &sig)
+            .unwrap();
     }
 }

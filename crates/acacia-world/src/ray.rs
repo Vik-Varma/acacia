@@ -23,20 +23,46 @@ pub fn cast(
     mut shape: impl FnMut([i32; 3], u32, &mut Vec<Aabb>),
 ) -> Option<RayHit> {
     let mut cell = origin.map(|c| c.floor() as i32);
-    let step = dir.map(|d| if d > 0.0 { 1 } else if d < 0.0 { -1 } else { 0 });
-    let delta = dir.map(|d| if d == 0.0 { f64::INFINITY } else { 1.0 / d.abs() });
+    let step = dir.map(|d| {
+        if d > 0.0 {
+            1
+        } else if d < 0.0 {
+            -1
+        } else {
+            0
+        }
+    });
+    let delta = dir.map(|d| {
+        if d == 0.0 {
+            f64::INFINITY
+        } else {
+            1.0 / d.abs()
+        }
+    });
     let mut t_max: [f64; 3] = std::array::from_fn(|i| {
         let p = origin[i];
-        let edge = if dir[i] > 0.0 { p.floor() + 1.0 - p } else { p - p.floor() };
+        let edge = if dir[i] > 0.0 {
+            p.floor() + 1.0 - p
+        } else {
+            p - p.floor()
+        };
         edge * delta[i]
     });
     let mut boxes = Vec::new();
     let mut travelled = 0.0;
     while travelled <= reach {
-        if let Some(hit) = hit_in(world, cell, origin, dir, &mut boxes, &mut shape).filter(|h| h.distance <= reach) {
+        if let Some(hit) =
+            hit_in(world, cell, origin, dir, &mut boxes, &mut shape).filter(|h| h.distance <= reach)
+        {
             return Some(hit);
         }
-        let axis = if t_max[0] < t_max[1] && t_max[0] < t_max[2] { 0 } else if t_max[1] < t_max[2] { 1 } else { 2 };
+        let axis = if t_max[0] < t_max[1] && t_max[0] < t_max[2] {
+            0
+        } else if t_max[1] < t_max[2] {
+            1
+        } else {
+            2
+        };
         travelled = t_max[axis];
         cell[axis] += step[axis];
         t_max[axis] += delta[axis];
@@ -61,10 +87,17 @@ fn hit_in(
         shape(owner, world.block(owner[0], owner[1], owner[2]), boxes);
         let local: [f64; 3] = std::array::from_fn(|i| origin[i] - f64::from(owner[i]));
         for b in boxes.iter().filter(|b| !tall_only || b.max[1] > 1.0) {
-            let Some((t, axis)) = enter(local, dir, b) else { continue };
+            let Some((t, axis)) = enter(local, dir, b) else {
+                continue;
+            };
             if best.is_none_or(|h| t < h.distance) {
                 let point = std::array::from_fn(|i| origin[i] + dir[i] * t);
-                best = Some(RayHit { block: owner, face: face(axis, dir[axis]), distance: t, point });
+                best = Some(RayHit {
+                    block: owner,
+                    face: face(axis, dir[axis]),
+                    distance: t,
+                    point,
+                });
             }
         }
     }
@@ -145,7 +178,10 @@ mod tests {
     #[test]
     fn misses_beyond_reach_and_through_empty_shapes() {
         let w = world(&[([3, 0, 0], 1), ([1, 0, 0], 7)]);
-        assert_eq!(cast(&w, [0.5, 0.5, 0.5], [1.0, 0.0, 0.0], 2.4, shapes), None);
+        assert_eq!(
+            cast(&w, [0.5, 0.5, 0.5], [1.0, 0.0, 0.0], 2.4, shapes),
+            None
+        );
     }
 
     #[test]
@@ -167,12 +203,27 @@ mod tests {
     #[test]
     fn starting_inside_a_shape_hits_at_zero() {
         let w = world(&[([0, 0, 0], 1)]);
-        assert_eq!(cast(&w, [0.5, 0.5, 0.5], [0.0, 1.0, 0.0], 5.0, shapes).unwrap().distance, 0.0);
+        assert_eq!(
+            cast(&w, [0.5, 0.5, 0.5], [0.0, 1.0, 0.0], 5.0, shapes)
+                .unwrap()
+                .distance,
+            0.0
+        );
     }
 
     #[test]
     fn a_ray_along_a_face_plane_enters_the_box() {
-        assert_eq!(enter([-1.0, 1.0, 0.5], [1.0, 0.0, 0.0], &Aabb::FULL), Some((1.0, 0)));
-        assert_eq!(enter([0.0; 3], [-1.0, 0.0, 0.0], &Aabb::new([2.0, -1.0, -1.0], [3.0, 1.0, 1.0])), None);
+        assert_eq!(
+            enter([-1.0, 1.0, 0.5], [1.0, 0.0, 0.0], &Aabb::FULL),
+            Some((1.0, 0))
+        );
+        assert_eq!(
+            enter(
+                [0.0; 3],
+                [-1.0, 0.0, 0.0],
+                &Aabb::new([2.0, -1.0, -1.0], [3.0, 1.0, 1.0])
+            ),
+            None
+        );
     }
 }

@@ -1396,200 +1396,75 @@ impl crate::Packet for ServerPresenceInfo {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClientboundUpdateSoundData {
     pub server_sound_handle: u64,
-    pub stop: Option<ClientboundUpdateSoundDataStop>,
-    pub volume: Option<ClientboundUpdateSoundDataVolume>,
-    pub pitch: Option<ClientboundUpdateSoundDataPitch>,
-    pub fade: Option<ClientboundUpdateSoundDataFade>,
-    pub seek_to: Option<ClientboundUpdateSoundDataSeekTo>,
-    pub pause: Option<ClientboundUpdateSoundDataPause>,
-    pub resume: Option<ClientboundUpdateSoundDataResume>,
+    pub r#type: ClientboundUpdateSoundDataType,
+    pub content: ClientboundUpdateSoundDataContent,
 }
 impl ClientboundUpdateSoundData {
     pub fn read(r: &mut &[u8]) -> Result<Self> {
         let f_server_sound_handle = (|| -> Result<_> { Ok(read_lu64(r)?) })()
             .map_err(|e| e.at("ClientboundUpdateSoundData.server_sound_handle"))?;
-        let f_stop = (|| -> Result<_> {
-            Ok(if read_bool(r)? {
-                Some({
-                    let f1_unused = read_varint(r)?;
-                    ClientboundUpdateSoundDataStop { unused: f1_unused }
-                })
-            } else {
-                None
-            })
-        })()
-        .map_err(|e| e.at("ClientboundUpdateSoundData.stop"))?;
-        let f_volume = (|| -> Result<_> {
-            Ok(if read_bool(r)? {
-                Some({
-                    let f1_unused = read_varint(r)?;
+        let f_type = (|| -> Result<_> { Ok(ClientboundUpdateSoundDataType::read(r)?) })()
+            .map_err(|e| e.at("ClientboundUpdateSoundData.type"))?;
+        let f_content = (|| -> Result<_> {
+            Ok(if f_type == ClientboundUpdateSoundDataType::SetVolume {
+                ClientboundUpdateSoundDataContent::SetVolume({
                     let f1_volume = read_lf32(r)?;
-                    ClientboundUpdateSoundDataVolume {
-                        unused: f1_unused,
-                        volume: f1_volume,
-                    }
+                    ClientboundUpdateSoundDataContentSetVolume { volume: f1_volume }
                 })
-            } else {
-                None
-            })
-        })()
-        .map_err(|e| e.at("ClientboundUpdateSoundData.volume"))?;
-        let f_pitch = (|| -> Result<_> {
-            Ok(if read_bool(r)? {
-                Some({
-                    let f1_unused = read_varint(r)?;
+            } else if f_type == ClientboundUpdateSoundDataType::SetPitch {
+                ClientboundUpdateSoundDataContent::SetPitch({
                     let f1_pitch = read_lf32(r)?;
-                    ClientboundUpdateSoundDataPitch {
-                        unused: f1_unused,
-                        pitch: f1_pitch,
-                    }
+                    ClientboundUpdateSoundDataContentSetPitch { pitch: f1_pitch }
                 })
-            } else {
-                None
-            })
-        })()
-        .map_err(|e| e.at("ClientboundUpdateSoundData.pitch"))?;
-        let f_fade = (|| -> Result<_> {
-            Ok(if read_bool(r)? {
-                Some({
-                    let f1_unused = read_varint(r)?;
-                    let f1_target_volume = read_lf32(r)?;
+            } else if f_type == ClientboundUpdateSoundDataType::Fade {
+                ClientboundUpdateSoundDataContent::Fade({
                     let f1_duration = read_lf32(r)?;
-                    ClientboundUpdateSoundDataFade {
-                        unused: f1_unused,
-                        target_volume: f1_target_volume,
+                    let f1_target_volume = read_lf32(r)?;
+                    ClientboundUpdateSoundDataContentFade {
                         duration: f1_duration,
+                        target_volume: f1_target_volume,
                     }
                 })
-            } else {
-                None
-            })
-        })()
-        .map_err(|e| e.at("ClientboundUpdateSoundData.fade"))?;
-        let f_seek_to = (|| -> Result<_> {
-            Ok(if read_bool(r)? {
-                Some({
-                    let f1_unused = read_varint(r)?;
+            } else if f_type == ClientboundUpdateSoundDataType::SeekTo {
+                ClientboundUpdateSoundDataContent::SeekTo({
                     let f1_seconds = read_lf32(r)?;
-                    ClientboundUpdateSoundDataSeekTo {
-                        unused: f1_unused,
+                    ClientboundUpdateSoundDataContentSeekTo {
                         seconds: f1_seconds,
                     }
                 })
             } else {
-                None
+                ClientboundUpdateSoundDataContent::Default
             })
         })()
-        .map_err(|e| e.at("ClientboundUpdateSoundData.seek_to"))?;
-        let f_pause = (|| -> Result<_> {
-            Ok(if read_bool(r)? {
-                Some({
-                    let f1_unused = read_varint(r)?;
-                    ClientboundUpdateSoundDataPause { unused: f1_unused }
-                })
-            } else {
-                None
-            })
-        })()
-        .map_err(|e| e.at("ClientboundUpdateSoundData.pause"))?;
-        let f_resume = (|| -> Result<_> {
-            Ok(if read_bool(r)? {
-                Some({
-                    let f1_unused = read_varint(r)?;
-                    ClientboundUpdateSoundDataResume { unused: f1_unused }
-                })
-            } else {
-                None
-            })
-        })()
-        .map_err(|e| e.at("ClientboundUpdateSoundData.resume"))?;
+        .map_err(|e| e.at("ClientboundUpdateSoundData.content"))?;
         Ok(Self {
             server_sound_handle: f_server_sound_handle,
-            stop: f_stop,
-            volume: f_volume,
-            pitch: f_pitch,
-            fade: f_fade,
-            seek_to: f_seek_to,
-            pause: f_pause,
-            resume: f_resume,
+            r#type: f_type,
+            content: f_content,
         })
     }
     pub fn write(&self, w: &mut BytesMut) {
         write_lu64(w, self.server_sound_handle);
-        match &self.stop {
-            Some(x0) => {
-                write_bool(w, true);
-                {
-                    let x1 = x0;
-                    write_varint(w, x1.unused);
-                }
+        self.r#type.write(w);
+        match &self.content {
+            ClientboundUpdateSoundDataContent::SetVolume(x0) => {
+                let x1 = x0;
+                write_lf32(w, x1.volume);
             }
-            None => write_bool(w, false),
-        }
-        match &self.volume {
-            Some(x0) => {
-                write_bool(w, true);
-                {
-                    let x1 = x0;
-                    write_varint(w, x1.unused);
-                    write_lf32(w, x1.volume);
-                }
+            ClientboundUpdateSoundDataContent::SetPitch(x0) => {
+                let x1 = x0;
+                write_lf32(w, x1.pitch);
             }
-            None => write_bool(w, false),
-        }
-        match &self.pitch {
-            Some(x0) => {
-                write_bool(w, true);
-                {
-                    let x1 = x0;
-                    write_varint(w, x1.unused);
-                    write_lf32(w, x1.pitch);
-                }
+            ClientboundUpdateSoundDataContent::Fade(x0) => {
+                let x1 = x0;
+                write_lf32(w, x1.duration);
+                write_lf32(w, x1.target_volume);
             }
-            None => write_bool(w, false),
-        }
-        match &self.fade {
-            Some(x0) => {
-                write_bool(w, true);
-                {
-                    let x1 = x0;
-                    write_varint(w, x1.unused);
-                    write_lf32(w, x1.target_volume);
-                    write_lf32(w, x1.duration);
-                }
+            ClientboundUpdateSoundDataContent::SeekTo(x0) => {
+                let x1 = x0;
+                write_lf32(w, x1.seconds);
             }
-            None => write_bool(w, false),
-        }
-        match &self.seek_to {
-            Some(x0) => {
-                write_bool(w, true);
-                {
-                    let x1 = x0;
-                    write_varint(w, x1.unused);
-                    write_lf32(w, x1.seconds);
-                }
-            }
-            None => write_bool(w, false),
-        }
-        match &self.pause {
-            Some(x0) => {
-                write_bool(w, true);
-                {
-                    let x1 = x0;
-                    write_varint(w, x1.unused);
-                }
-            }
-            None => write_bool(w, false),
-        }
-        match &self.resume {
-            Some(x0) => {
-                write_bool(w, true);
-                {
-                    let x1 = x0;
-                    write_varint(w, x1.unused);
-                }
-            }
-            None => write_bool(w, false),
+            ClientboundUpdateSoundDataContent::Default => {}
         }
     }
 }
@@ -1604,44 +1479,85 @@ impl crate::Packet for ClientboundUpdateSoundData {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct ClientboundUpdateSoundDataStop {
-    pub unused: u32,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ClientboundUpdateSoundDataType {
+    Stop,
+    SetVolume,
+    SetPitch,
+    Fade,
+    SeekTo,
+    Pause,
+    Resume,
+    Unknown(i64),
+}
+impl ClientboundUpdateSoundDataType {
+    pub fn from_raw(v: i64) -> Self {
+        match v {
+            0 => Self::Stop,
+            1 => Self::SetVolume,
+            2 => Self::SetPitch,
+            3 => Self::Fade,
+            4 => Self::SeekTo,
+            5 => Self::Pause,
+            6 => Self::Resume,
+            v => Self::Unknown(v),
+        }
+    }
+    pub fn to_raw(self) -> i64 {
+        match self {
+            Self::Stop => 0,
+            Self::SetVolume => 1,
+            Self::SetPitch => 2,
+            Self::Fade => 3,
+            Self::SeekTo => 4,
+            Self::Pause => 5,
+            Self::Resume => 6,
+            Self::Unknown(v) => v,
+        }
+    }
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let v = Self::from_raw(read_u8(r)? as i64);
+        if let Self::Unknown(value) = v {
+            crate::strict::note(crate::strict::Leniency::UnknownEnum {
+                ty: "ClientboundUpdateSoundDataType",
+                value,
+            });
+        }
+        Ok(v)
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        write_u8(w, self.to_raw() as u8)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ClientboundUpdateSoundDataVolume {
-    pub unused: u32,
+pub enum ClientboundUpdateSoundDataContent {
+    SetVolume(ClientboundUpdateSoundDataContentSetVolume),
+    SetPitch(ClientboundUpdateSoundDataContentSetPitch),
+    Fade(ClientboundUpdateSoundDataContentFade),
+    SeekTo(ClientboundUpdateSoundDataContentSeekTo),
+    Default,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClientboundUpdateSoundDataContentSetVolume {
     pub volume: f32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ClientboundUpdateSoundDataPitch {
-    pub unused: u32,
+pub struct ClientboundUpdateSoundDataContentSetPitch {
     pub pitch: f32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ClientboundUpdateSoundDataFade {
-    pub unused: u32,
-    pub target_volume: f32,
+pub struct ClientboundUpdateSoundDataContentFade {
     pub duration: f32,
+    pub target_volume: f32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ClientboundUpdateSoundDataSeekTo {
-    pub unused: u32,
+pub struct ClientboundUpdateSoundDataContentSeekTo {
     pub seconds: f32,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ClientboundUpdateSoundDataPause {
-    pub unused: u32,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ClientboundUpdateSoundDataResume {
-    pub unused: u32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1854,4 +1770,585 @@ impl crate::Packet for RecordStarted {
     fn decode(r: &mut &[u8]) -> Result<Self> {
         Self::read(r)
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClientboundMatchmakingState {
+    pub state: ClientboundMatchmakingStateState,
+    pub destination_name: String,
+    pub options: Option<ClientboundMatchmakingStateOptions>,
+}
+impl ClientboundMatchmakingState {
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let f_state = (|| -> Result<_> { Ok(ClientboundMatchmakingStateState::read(r)?) })()
+            .map_err(|e| e.at("ClientboundMatchmakingState.state"))?;
+        let f_destination_name = (|| -> Result<_> {
+            Ok({
+                let n = to_len(read_varint(r)?)?;
+                read_utf8(r, n)?
+            })
+        })()
+        .map_err(|e| e.at("ClientboundMatchmakingState.destination_name"))?;
+        let f_options = (|| -> Result<_> {
+            Ok(if read_bool(r)? {
+                Some({
+                    let f1_triggering_player_name = if read_bool(r)? {
+                        Some({
+                            let n = to_len(read_varint(r)?)?;
+                            read_utf8(r, n)?
+                        })
+                    } else {
+                        None
+                    };
+                    let f1_triggered_by_local_player = if read_bool(r)? {
+                        Some(read_bool(r)?)
+                    } else {
+                        None
+                    };
+                    ClientboundMatchmakingStateOptions {
+                        triggering_player_name: f1_triggering_player_name,
+                        triggered_by_local_player: f1_triggered_by_local_player,
+                    }
+                })
+            } else {
+                None
+            })
+        })()
+        .map_err(|e| e.at("ClientboundMatchmakingState.options"))?;
+        Ok(Self {
+            state: f_state,
+            destination_name: f_destination_name,
+            options: f_options,
+        })
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        self.state.write(w);
+        {
+            let b = self.destination_name.as_bytes();
+            write_varint(w, b.len() as u32);
+            write_slice(w, b);
+        }
+        match &self.options {
+            Some(x0) => {
+                write_bool(w, true);
+                {
+                    let x1 = x0;
+                    match &x1.triggering_player_name {
+                        Some(x2) => {
+                            write_bool(w, true);
+                            {
+                                let b = x2.as_bytes();
+                                write_varint(w, b.len() as u32);
+                                write_slice(w, b);
+                            }
+                        }
+                        None => write_bool(w, false),
+                    }
+                    match &x1.triggered_by_local_player {
+                        Some(x2) => {
+                            write_bool(w, true);
+                            write_bool(w, *x2);
+                        }
+                        None => write_bool(w, false),
+                    }
+                }
+            }
+            None => write_bool(w, false),
+        }
+    }
+}
+impl crate::Packet for ClientboundMatchmakingState {
+    const ID: u32 = 353;
+    const NAME: &'static str = "clientbound_matchmaking_state";
+    fn encode(&self, w: &mut BytesMut) {
+        self.write(w)
+    }
+    fn decode(r: &mut &[u8]) -> Result<Self> {
+        Self::read(r)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ClientboundMatchmakingStateState {
+    Idle,
+    Matchmaking,
+    MatchFound,
+    Canceled,
+    PlayerLeftParty,
+    PlayerLeftServer,
+    ServerShutdown,
+    TimedOut,
+    RequeueAsParty,
+    Unknown(i64),
+}
+impl ClientboundMatchmakingStateState {
+    pub fn from_raw(v: i64) -> Self {
+        match v {
+            0 => Self::Idle,
+            1 => Self::Matchmaking,
+            2 => Self::MatchFound,
+            3 => Self::Canceled,
+            4 => Self::PlayerLeftParty,
+            5 => Self::PlayerLeftServer,
+            6 => Self::ServerShutdown,
+            7 => Self::TimedOut,
+            8 => Self::RequeueAsParty,
+            v => Self::Unknown(v),
+        }
+    }
+    pub fn to_raw(self) -> i64 {
+        match self {
+            Self::Idle => 0,
+            Self::Matchmaking => 1,
+            Self::MatchFound => 2,
+            Self::Canceled => 3,
+            Self::PlayerLeftParty => 4,
+            Self::PlayerLeftServer => 5,
+            Self::ServerShutdown => 6,
+            Self::TimedOut => 7,
+            Self::RequeueAsParty => 8,
+            Self::Unknown(v) => v,
+        }
+    }
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let v = Self::from_raw(read_u8(r)? as i64);
+        if let Self::Unknown(value) = v {
+            crate::strict::note(crate::strict::Leniency::UnknownEnum {
+                ty: "ClientboundMatchmakingStateState",
+                value,
+            });
+        }
+        Ok(v)
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        write_u8(w, self.to_raw() as u8)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClientboundMatchmakingStateOptions {
+    pub triggering_player_name: Option<String>,
+    pub triggered_by_local_player: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ServerboundStonecutterSetRecipe {
+    pub container_id: u8,
+    pub recipe_index: u32,
+}
+impl ServerboundStonecutterSetRecipe {
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let f_container_id = (|| -> Result<_> { Ok(read_u8(r)?) })()
+            .map_err(|e| e.at("ServerboundStonecutterSetRecipe.container_id"))?;
+        let f_recipe_index = (|| -> Result<_> { Ok(read_varint(r)?) })()
+            .map_err(|e| e.at("ServerboundStonecutterSetRecipe.recipe_index"))?;
+        Ok(Self {
+            container_id: f_container_id,
+            recipe_index: f_recipe_index,
+        })
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        write_u8(w, self.container_id);
+        write_varint(w, self.recipe_index);
+    }
+}
+impl crate::Packet for ServerboundStonecutterSetRecipe {
+    const ID: u32 = 354;
+    const NAME: &'static str = "serverbound_stonecutter_set_recipe";
+    fn encode(&self, w: &mut BytesMut) {
+        self.write(w)
+    }
+    fn decode(r: &mut &[u8]) -> Result<Self> {
+        Self::read(r)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClientboundStonecutterSetRecipe {
+    pub player_unique_id: i64,
+    pub container_id: u8,
+    pub recipe_index: u32,
+}
+impl ClientboundStonecutterSetRecipe {
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let f_player_unique_id = (|| -> Result<_> { Ok(read_zigzag64(r)?) })()
+            .map_err(|e| e.at("ClientboundStonecutterSetRecipe.player_unique_id"))?;
+        let f_container_id = (|| -> Result<_> { Ok(read_u8(r)?) })()
+            .map_err(|e| e.at("ClientboundStonecutterSetRecipe.container_id"))?;
+        let f_recipe_index = (|| -> Result<_> { Ok(read_varint(r)?) })()
+            .map_err(|e| e.at("ClientboundStonecutterSetRecipe.recipe_index"))?;
+        Ok(Self {
+            player_unique_id: f_player_unique_id,
+            container_id: f_container_id,
+            recipe_index: f_recipe_index,
+        })
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        write_zigzag64(w, self.player_unique_id);
+        write_u8(w, self.container_id);
+        write_varint(w, self.recipe_index);
+    }
+}
+impl crate::Packet for ClientboundStonecutterSetRecipe {
+    const ID: u32 = 355;
+    const NAME: &'static str = "clientbound_stonecutter_set_recipe";
+    fn encode(&self, w: &mut BytesMut) {
+        self.write(w)
+    }
+    fn decode(r: &mut &[u8]) -> Result<Self> {
+        Self::read(r)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ServerboundMatchmakingCancel {}
+impl ServerboundMatchmakingCancel {
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        Ok(Self {})
+    }
+    pub fn write(&self, w: &mut BytesMut) {}
+}
+impl crate::Packet for ServerboundMatchmakingCancel {
+    const ID: u32 = 356;
+    const NAME: &'static str = "serverbound_matchmaking_cancel";
+    fn encode(&self, w: &mut BytesMut) {
+        self.write(w)
+    }
+    fn decode(r: &mut &[u8]) -> Result<Self> {
+        Self::read(r)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetPassengerOfBlock {
+    pub entity_unique_id: i64,
+    pub data: Option<types::PassengerOfBlockData>,
+}
+impl SetPassengerOfBlock {
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let f_entity_unique_id = (|| -> Result<_> { Ok(read_zigzag64(r)?) })()
+            .map_err(|e| e.at("SetPassengerOfBlock.entity_unique_id"))?;
+        let f_data = (|| -> Result<_> {
+            Ok(if read_bool(r)? {
+                Some(types::PassengerOfBlockData::read(r)?)
+            } else {
+                None
+            })
+        })()
+        .map_err(|e| e.at("SetPassengerOfBlock.data"))?;
+        Ok(Self {
+            entity_unique_id: f_entity_unique_id,
+            data: f_data,
+        })
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        write_zigzag64(w, self.entity_unique_id);
+        match &self.data {
+            Some(x0) => {
+                write_bool(w, true);
+                x0.write(w);
+            }
+            None => write_bool(w, false),
+        }
+    }
+}
+impl crate::Packet for SetPassengerOfBlock {
+    const ID: u32 = 357;
+    const NAME: &'static str = "set_passenger_of_block";
+    fn encode(&self, w: &mut BytesMut) {
+        self.write(w)
+    }
+    fn decode(r: &mut &[u8]) -> Result<Self> {
+        Self::read(r)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ServerboundCursorItemDrag {
+    pub state: ServerboundCursorItemDragState,
+}
+impl ServerboundCursorItemDrag {
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let f_state = (|| -> Result<_> { Ok(ServerboundCursorItemDragState::read(r)?) })()
+            .map_err(|e| e.at("ServerboundCursorItemDrag.state"))?;
+        Ok(Self { state: f_state })
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        self.state.write(w);
+    }
+}
+impl crate::Packet for ServerboundCursorItemDrag {
+    const ID: u32 = 358;
+    const NAME: &'static str = "serverbound_cursor_item_drag";
+    fn encode(&self, w: &mut BytesMut) {
+        self.write(w)
+    }
+    fn decode(r: &mut &[u8]) -> Result<Self> {
+        Self::read(r)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ServerboundCursorItemDragState {
+    Start,
+    Stop,
+    Unknown(i64),
+}
+impl ServerboundCursorItemDragState {
+    pub fn from_raw(v: i64) -> Self {
+        match v {
+            0 => Self::Start,
+            1 => Self::Stop,
+            v => Self::Unknown(v),
+        }
+    }
+    pub fn to_raw(self) -> i64 {
+        match self {
+            Self::Start => 0,
+            Self::Stop => 1,
+            Self::Unknown(v) => v,
+        }
+    }
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let v = Self::from_raw(read_u8(r)? as i64);
+        if let Self::Unknown(value) = v {
+            crate::strict::note(crate::strict::Leniency::UnknownEnum {
+                ty: "ServerboundCursorItemDragState",
+                value,
+            });
+        }
+        Ok(v)
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        write_u8(w, self.to_raw() as u8)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClientboundPlayAudioContent {
+    pub shared_metadata: String,
+    pub playback_content: String,
+    pub playback_type: String,
+    pub name: String,
+    pub coordinates: types::BlockCoordinates,
+    pub volume: f32,
+    pub pitch: f32,
+    pub loop_count: u32,
+    pub bypass_listener_range_check: bool,
+    pub handle: Option<u64>,
+    pub playback_position_seconds: Option<f32>,
+}
+impl ClientboundPlayAudioContent {
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let f_shared_metadata = (|| -> Result<_> {
+            Ok({
+                let n = to_len(read_varint(r)?)?;
+                read_utf8(r, n)?
+            })
+        })()
+        .map_err(|e| e.at("ClientboundPlayAudioContent.shared_metadata"))?;
+        let f_playback_content = (|| -> Result<_> {
+            Ok({
+                let n = to_len(read_varint(r)?)?;
+                read_utf8(r, n)?
+            })
+        })()
+        .map_err(|e| e.at("ClientboundPlayAudioContent.playback_content"))?;
+        let f_playback_type = (|| -> Result<_> {
+            Ok({
+                let n = to_len(read_varint(r)?)?;
+                read_utf8(r, n)?
+            })
+        })()
+        .map_err(|e| e.at("ClientboundPlayAudioContent.playback_type"))?;
+        let f_name = (|| -> Result<_> {
+            Ok({
+                let n = to_len(read_varint(r)?)?;
+                read_utf8(r, n)?
+            })
+        })()
+        .map_err(|e| e.at("ClientboundPlayAudioContent.name"))?;
+        let f_coordinates = (|| -> Result<_> { Ok(types::BlockCoordinates::read(r)?) })()
+            .map_err(|e| e.at("ClientboundPlayAudioContent.coordinates"))?;
+        let f_volume = (|| -> Result<_> { Ok(read_lf32(r)?) })()
+            .map_err(|e| e.at("ClientboundPlayAudioContent.volume"))?;
+        let f_pitch = (|| -> Result<_> { Ok(read_lf32(r)?) })()
+            .map_err(|e| e.at("ClientboundPlayAudioContent.pitch"))?;
+        let f_loop_count = (|| -> Result<_> { Ok(read_varint(r)?) })()
+            .map_err(|e| e.at("ClientboundPlayAudioContent.loop_count"))?;
+        let f_bypass_listener_range_check = (|| -> Result<_> { Ok(read_bool(r)?) })()
+            .map_err(|e| e.at("ClientboundPlayAudioContent.bypass_listener_range_check"))?;
+        let f_handle = (|| -> Result<_> {
+            Ok(if read_bool(r)? {
+                Some(read_lu64(r)?)
+            } else {
+                None
+            })
+        })()
+        .map_err(|e| e.at("ClientboundPlayAudioContent.handle"))?;
+        let f_playback_position_seconds = (|| -> Result<_> {
+            Ok(if read_bool(r)? {
+                Some(read_lf32(r)?)
+            } else {
+                None
+            })
+        })()
+        .map_err(|e| e.at("ClientboundPlayAudioContent.playback_position_seconds"))?;
+        Ok(Self {
+            shared_metadata: f_shared_metadata,
+            playback_content: f_playback_content,
+            playback_type: f_playback_type,
+            name: f_name,
+            coordinates: f_coordinates,
+            volume: f_volume,
+            pitch: f_pitch,
+            loop_count: f_loop_count,
+            bypass_listener_range_check: f_bypass_listener_range_check,
+            handle: f_handle,
+            playback_position_seconds: f_playback_position_seconds,
+        })
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        {
+            let b = self.shared_metadata.as_bytes();
+            write_varint(w, b.len() as u32);
+            write_slice(w, b);
+        }
+        {
+            let b = self.playback_content.as_bytes();
+            write_varint(w, b.len() as u32);
+            write_slice(w, b);
+        }
+        {
+            let b = self.playback_type.as_bytes();
+            write_varint(w, b.len() as u32);
+            write_slice(w, b);
+        }
+        {
+            let b = self.name.as_bytes();
+            write_varint(w, b.len() as u32);
+            write_slice(w, b);
+        }
+        self.coordinates.write(w);
+        write_lf32(w, self.volume);
+        write_lf32(w, self.pitch);
+        write_varint(w, self.loop_count);
+        write_bool(w, self.bypass_listener_range_check);
+        match &self.handle {
+            Some(x0) => {
+                write_bool(w, true);
+                write_lu64(w, *x0);
+            }
+            None => write_bool(w, false),
+        }
+        match &self.playback_position_seconds {
+            Some(x0) => {
+                write_bool(w, true);
+                write_lf32(w, *x0);
+            }
+            None => write_bool(w, false),
+        }
+    }
+}
+impl crate::Packet for ClientboundPlayAudioContent {
+    const ID: u32 = 359;
+    const NAME: &'static str = "clientbound_play_audio_content";
+    fn encode(&self, w: &mut BytesMut) {
+        self.write(w)
+    }
+    fn decode(r: &mut &[u8]) -> Result<Self> {
+        Self::read(r)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ServerboundRegisterAudioContent {
+    pub registrations: Vec<ServerboundRegisterAudioContentRegistrationsItem>,
+}
+impl ServerboundRegisterAudioContent {
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let f_registrations = (|| -> Result<_> {
+            Ok({
+                let n = to_len(read_varint(r)?)?;
+                let mut v = Vec::with_capacity(cap(n, r));
+                for _ in 0..n {
+                    v.push({
+                        let f1_audio_content_id = {
+                            let n = to_len(read_varint(r)?)?;
+                            read_utf8(r, n)?
+                        };
+                        let f1_shared_metadata = {
+                            let n = to_len(read_varint(r)?)?;
+                            read_utf8(r, n)?
+                        };
+                        let f1_server_content = {
+                            let n = to_len(read_varint(r)?)?;
+                            read_utf8(r, n)?
+                        };
+                        let f1_playback_content = {
+                            let n = to_len(read_varint(r)?)?;
+                            read_utf8(r, n)?
+                        };
+                        ServerboundRegisterAudioContentRegistrationsItem {
+                            audio_content_id: f1_audio_content_id,
+                            shared_metadata: f1_shared_metadata,
+                            server_content: f1_server_content,
+                            playback_content: f1_playback_content,
+                        }
+                    });
+                }
+                v
+            })
+        })()
+        .map_err(|e| e.at("ServerboundRegisterAudioContent.registrations"))?;
+        Ok(Self {
+            registrations: f_registrations,
+        })
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        write_varint(w, self.registrations.len() as u32);
+        for x0 in self.registrations.iter() {
+            {
+                let x1 = x0;
+                {
+                    let b = x1.audio_content_id.as_bytes();
+                    write_varint(w, b.len() as u32);
+                    write_slice(w, b);
+                }
+                {
+                    let b = x1.shared_metadata.as_bytes();
+                    write_varint(w, b.len() as u32);
+                    write_slice(w, b);
+                }
+                {
+                    let b = x1.server_content.as_bytes();
+                    write_varint(w, b.len() as u32);
+                    write_slice(w, b);
+                }
+                {
+                    let b = x1.playback_content.as_bytes();
+                    write_varint(w, b.len() as u32);
+                    write_slice(w, b);
+                }
+            }
+        }
+    }
+}
+impl crate::Packet for ServerboundRegisterAudioContent {
+    const ID: u32 = 360;
+    const NAME: &'static str = "serverbound_register_audio_content";
+    fn encode(&self, w: &mut BytesMut) {
+        self.write(w)
+    }
+    fn decode(r: &mut &[u8]) -> Result<Self> {
+        Self::read(r)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ServerboundRegisterAudioContentRegistrationsItem {
+    pub audio_content_id: String,
+    pub shared_metadata: String,
+    pub server_content: String,
+    pub playback_content: String,
 }

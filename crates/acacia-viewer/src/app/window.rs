@@ -16,7 +16,9 @@ impl ApplicationHandler for App {
         if self.window.is_some() {
             return;
         }
-        let attrs = Window::default_attributes().with_title("Acacia").with_inner_size(winit::dpi::LogicalSize::new(1280, 720));
+        let attrs = Window::default_attributes()
+            .with_title("Acacia")
+            .with_inner_size(winit::dpi::LogicalSize::new(1280, 720));
         let window = Arc::new(event_loop.create_window(attrs).expect("create window"));
         let size = window.inner_size();
         match Renderer::new(window.clone(), (size.width, size.height)) {
@@ -68,9 +70,15 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::Focused(false) => self.grab(false),
-            WindowEvent::CursorMoved { position, .. } => self.cursor_moved([position.x, position.y]),
-            WindowEvent::ModifiersChanged(m) => (self.shift, self.java.ctrl) = (m.state().shift_key(), m.state().control_key()),
-            WindowEvent::MouseInput { state, button, .. } => self.button(button, state == ElementState::Pressed),
+            WindowEvent::CursorMoved { position, .. } => {
+                self.cursor_moved([position.x, position.y])
+            }
+            WindowEvent::ModifiersChanged(m) => {
+                (self.shift, self.java.ctrl) = (m.state().shift_key(), m.state().control_key())
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                self.button(button, state == ElementState::Pressed)
+            }
             WindowEvent::MouseWheel { delta, .. } => self.scroll(match delta {
                 MouseScrollDelta::LineDelta(_, y) => y,
                 MouseScrollDelta::PixelDelta(p) => p.y as f32 / 40.0,

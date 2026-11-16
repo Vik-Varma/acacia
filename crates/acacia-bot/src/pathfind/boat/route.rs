@@ -29,7 +29,10 @@ pub struct Route {
 
 impl Route {
     pub fn length(&self) -> f32 {
-        self.points.windows(2).map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1])).sum()
+        self.points
+            .windows(2)
+            .map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]))
+            .sum()
     }
 }
 
@@ -61,7 +64,12 @@ const MIN_GAIN: f32 = 8.0;
 /// A route for a boat at `from` to the stop `to` (boat centres, horizontal), keeping `pad` from the banks; the stop
 /// itself only needs the boat's own box clear. When the known water does not reach it, a partial route to the
 /// corner nearest it ([`Route::complete`] false), or `None` when that gains under `MIN_GAIN`.
-pub fn plan<W: WorldView + ?Sized>(grid: &WaterGrid<'_, W>, from: [f32; 2], to: [f32; 2], pad: f32) -> Option<Route> {
+pub fn plan<W: WorldView + ?Sized>(
+    grid: &WaterGrid<'_, W>,
+    from: [f32; 2],
+    to: [f32; 2],
+    pad: f32,
+) -> Option<Route> {
     let start = start_corner(grid, from, pad)?;
     let corner = |(x, z): (i32, i32)| [x as f32, z as f32];
     let dist = |a: [f32; 2], b: [f32; 2]| (a[0] - b[0]).hypot(a[1] - b[1]);
@@ -86,15 +94,34 @@ pub fn plan<W: WorldView + ?Sized>(grid: &WaterGrid<'_, W>, from: [f32; 2], to: 
         if expanded > MAX_EXPANSIONS {
             break;
         }
-        for (dx, dz) in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)] {
+        for (dx, dz) in [
+            (1, 0),
+            (-1, 0),
+            (0, 1),
+            (0, -1),
+            (1, 1),
+            (1, -1),
+            (-1, 1),
+            (-1, -1),
+        ] {
             let n = (c.0 + dx, c.1 + dz);
             // A diagonal needs both sides open, or its line would clip the corner between them.
-            let sides = dx == 0 || dz == 0 || (passable(grid, (c.0 + dx, c.1), pad) && passable(grid, (c.0, c.1 + dz), pad));
+            let sides = dx == 0
+                || dz == 0
+                || (passable(grid, (c.0 + dx, c.1), pad) && passable(grid, (c.0, c.1 + dz), pad));
             if !sides || !passable(grid, n, pad) {
                 continue;
             }
-            let step = if dx != 0 && dz != 0 { std::f32::consts::SQRT_2 } else { 1.0 };
-            let bank = if grid.clear(n.0 as f32, n.1 as f32, pad + BANK_ROOM) { 0.0 } else { NEAR_BANK };
+            let step = if dx != 0 && dz != 0 {
+                std::f32::consts::SQRT_2
+            } else {
+                1.0
+            };
+            let bank = if grid.clear(n.0 as f32, n.1 as f32, pad + BANK_ROOM) {
+                0.0
+            } else {
+                NEAR_BANK
+            };
             let ng = g + step * (1.0 + bank);
             if best.get(&n).is_none_or(|&(old, _)| ng < old) {
                 best.insert(n, (ng, c));
@@ -103,7 +130,18 @@ pub fn plan<W: WorldView + ?Sized>(grid: &WaterGrid<'_, W>, from: [f32; 2], to: 
         }
     }
     // Short of the stop (unknown water ahead, or none): as far towards it as the known water goes.
-    (h(start) - nearest.0 >= MIN_GAIN).then(|| smooth(grid, from, walk_back(&best, nearest.1).into_iter().map(corner).collect(), pad, false))
+    (h(start) - nearest.0 >= MIN_GAIN).then(|| {
+        smooth(
+            grid,
+            from,
+            walk_back(&best, nearest.1)
+                .into_iter()
+                .map(corner)
+                .collect(),
+            pad,
+            false,
+        )
+    })
 }
 
 fn passable<W: WorldView + ?Sized>(grid: &WaterGrid<'_, W>, (x, z): (i32, i32), pad: f32) -> bool {
@@ -116,7 +154,11 @@ fn octile(a: [f32; 2], b: [f32; 2]) -> f32 {
 }
 
 /// The nearest passable corner the boat sees from where it floats.
-fn start_corner<W: WorldView + ?Sized>(grid: &WaterGrid<'_, W>, from: [f32; 2], pad: f32) -> Option<(i32, i32)> {
+fn start_corner<W: WorldView + ?Sized>(
+    grid: &WaterGrid<'_, W>,
+    from: [f32; 2],
+    pad: f32,
+) -> Option<(i32, i32)> {
     let (cx, cz) = (from[0].round() as i32, from[1].round() as i32);
     let mut found: Option<(f32, (i32, i32))> = None;
     for x in cx - START_REACH..=cx + START_REACH {
@@ -144,7 +186,13 @@ fn walk_back(best: &HashMap<(i32, i32), (f32, (i32, i32))>, mut c: (i32, i32)) -
 }
 
 /// String-pulls the corner path from the boat: each point is the farthest one ahead still in clear sight.
-fn smooth<W: WorldView + ?Sized>(grid: &WaterGrid<'_, W>, from: [f32; 2], corners: Vec<[f32; 2]>, pad: f32, complete: bool) -> Route {
+fn smooth<W: WorldView + ?Sized>(
+    grid: &WaterGrid<'_, W>,
+    from: [f32; 2],
+    corners: Vec<[f32; 2]>,
+    pad: f32,
+    complete: bool,
+) -> Route {
     const LOOK: usize = 96;
     let mut all = Vec::with_capacity(corners.len() + 1);
     all.push(from);
@@ -154,10 +202,18 @@ fn smooth<W: WorldView + ?Sized>(grid: &WaterGrid<'_, W>, from: [f32; 2], corner
     while i + 1 < all.len() {
         let last = (i + LOOK).min(all.len() - 1);
         // Shortcuts keep `SMOOTH_ROOM` more where the water allows: a boat cannot turn on a vertex that grazes a bank.
-        let seen = |room: f32| (i + 2..=last).rev().find(|&k| grid.line_clear(all[i], all[k], pad + room));
+        let seen = |room: f32| {
+            (i + 2..=last)
+                .rev()
+                .find(|&k| grid.line_clear(all[i], all[k], pad + room))
+        };
         let j = seen(SMOOTH_ROOM).or_else(|| seen(0.0)).unwrap_or(i + 1);
         points.push(all[j]);
         i = j;
     }
-    Route { y: grid.y, points, complete }
+    Route {
+        y: grid.y,
+        points,
+        complete,
+    }
 }

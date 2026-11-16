@@ -38,7 +38,10 @@ const MUSIC: &str = "sounds/music/";
 
 /// The paths a sample may lie at: the definition's own, then Java's name for the track.
 pub(crate) fn candidates(path: &str) -> Vec<String> {
-    let java = path.strip_prefix(MUSIC).and_then(|track| TRACKS.iter().find(|(bedrock, _)| *bedrock == track)).map(|(_, java)| format!("{MUSIC}{java}"));
+    let java = path
+        .strip_prefix(MUSIC)
+        .and_then(|track| TRACKS.iter().find(|(bedrock, _)| *bedrock == track))
+        .map(|(_, java)| format!("{MUSIC}{java}"));
     std::iter::once(path.to_owned()).chain(java).collect()
 }
 
@@ -48,8 +51,14 @@ mod tests {
 
     #[test]
     fn a_numbered_track_is_also_looked_for_by_its_title() {
-        assert_eq!(candidates("sounds/music/game/calm3"), ["sounds/music/game/calm3", "sounds/music/game/sweden"]);
-        assert_eq!(candidates("sounds/music/game/shores"), ["sounds/music/game/shores"]);
+        assert_eq!(
+            candidates("sounds/music/game/calm3"),
+            ["sounds/music/game/calm3", "sounds/music/game/sweden"]
+        );
+        assert_eq!(
+            candidates("sounds/music/game/shores"),
+            ["sounds/music/game/shores"]
+        );
         assert_eq!(candidates("sounds/dig/stone1"), ["sounds/dig/stone1"]);
     }
 }

@@ -56,7 +56,9 @@ impl JavaScreens {
 
 /// Game ticks from `since` to `now`.
 fn ticks(since: Option<Instant>, now: Instant) -> u32 {
-    since.map_or(0, |s| (now.saturating_duration_since(s).as_millis() / 50) as u32)
+    since.map_or(0, |s| {
+        (now.saturating_duration_since(s).as_millis() / 50) as u32
+    })
 }
 
 /// The screen `menu` shows.
@@ -64,19 +66,41 @@ pub fn view(java: &JavaScreens, menu: Menu, settings: &Settings, now: Instant) -
     match menu {
         Menu::Pause => View::Pause,
         Menu::Options => match java.pages.last().copied().unwrap_or("options") {
-            "win" => View::Win { ticks: java.page_opened.map_or(0.0, |s| now.saturating_duration_since(s).as_secs_f32() * 20.0) },
-            page => View::Options { page, settings: settings.clone() },
+            "win" => View::Win {
+                ticks: java.page_opened.map_or(0.0, |s| {
+                    now.saturating_duration_since(s).as_secs_f32() * 20.0
+                }),
+            },
+            page => View::Options {
+                page,
+                settings: settings.clone(),
+            },
         },
-        Menu::Death => View::Death { ticks: ticks(java.died, now) },
-        Menu::TitleConfirm => View::TitleConfirm { ticks: ticks(java.confirm, now) },
-        Menu::Disconnected => View::Disconnected { reason: java.reason.clone() },
+        Menu::Death => View::Death {
+            ticks: ticks(java.died, now),
+        },
+        Menu::TitleConfirm => View::TitleConfirm {
+            ticks: ticks(java.confirm, now),
+        },
+        Menu::Disconnected => View::Disconnected {
+            reason: java.reason.clone(),
+        },
     }
 }
 
 /// What the Java look shows this frame: the chat input completing `players`' names, and the menu,
 /// or else the screen `under` it (`App::java_under`).
-pub fn shown<'a>(java: &'a mut JavaScreens, menu: Option<Menu>, under: Option<View>, settings: &Settings, players: &[String], now: Instant) -> Shown<'a> {
-    let menu = menu.map(|m| (view(java, m, settings, now), java.interaction)).or_else(|| under.map(|v| (v, Interaction::default())));
+pub fn shown<'a>(
+    java: &'a mut JavaScreens,
+    menu: Option<Menu>,
+    under: Option<View>,
+    settings: &Settings,
+    players: &[String],
+    now: Instant,
+) -> Shown<'a> {
+    let menu = menu
+        .map(|m| (view(java, m, settings, now), java.interaction))
+        .or_else(|| under.map(|v| (v, Interaction::default())));
     let chat = java.chat.as_mut().map(|(chat, at)| {
         chat.completion.names = players.to_vec();
         (chat, now.saturating_duration_since(*at).as_millis() as u64)
@@ -114,12 +138,18 @@ impl App {
     /// The mouse in GUI pixels, as Java's screens take it.
     fn java_mouse(&self) -> (f64, f64) {
         let (_, scale) = self.gui();
-        (self.mouse[0] / f64::from(scale), self.mouse[1] / f64::from(scale))
+        (
+            self.mouse[0] / f64::from(scale),
+            self.mouse[1] / f64::from(scale),
+        )
     }
 
     pub(super) fn java_menu_key(&mut self, code: KeyCode) {
         if let Some(key) = gui_key(code) {
-            self.java_menu_input(Input::Key { key, shift: self.shift });
+            self.java_menu_input(Input::Key {
+                key,
+                shift: self.shift,
+            });
         }
     }
 
@@ -127,12 +157,24 @@ impl App {
     pub(super) fn java_menu_button(&mut self, pressed: bool) {
         self.java.held = pressed;
         let (x, y) = self.java_mouse();
-        self.java_menu_input(if pressed { Input::Click { x, y, shift: self.shift } } else { Input::Release });
+        self.java_menu_input(if pressed {
+            Input::Click {
+                x,
+                y,
+                shift: self.shift,
+            }
+        } else {
+            Input::Release
+        });
     }
 
     pub(super) fn java_menu_scroll(&mut self, lines: f32) {
         let (x, y) = self.java_mouse();
-        self.java_menu_input(Input::Scroll { x, y, amount: f64::from(lines) });
+        self.java_menu_input(Input::Scroll {
+            x,
+            y,
+            amount: f64::from(lines),
+        });
     }
 
     /// The cursor moved to `to` (window pixels): a drag while the button is held in a menu.
@@ -144,7 +186,11 @@ impl App {
         if self.java.held && self.menu.is_some() && self.java_look() {
             let (_, scale) = self.gui();
             let (x, y) = self.java_mouse();
-            self.java_menu_input(Input::Drag { x, y, dy: dy / f64::from(scale) });
+            self.java_menu_input(Input::Drag {
+                x,
+                y,
+                dy: dy / f64::from(scale),
+            });
         }
     }
 
@@ -152,7 +198,12 @@ impl App {
         let Some(menu) = self.menu else { return };
         let view = view(&self.java, menu, &self.settings, Instant::now());
         let (size, scale) = self.gui();
-        let reply = self.ui.java_menu_input(&view, &mut self.java.interaction, java_screens::gui_size(size, scale), input);
+        let reply = self.ui.java_menu_input(
+            &view,
+            &mut self.java.interaction,
+            java_screens::gui_size(size, scale),
+            input,
+        );
         match reply {
             Some(Reply::Close) => self.menu_back(),
             Some(Reply::Fired(fired)) => self.java_fired(menu, &fired),
@@ -165,7 +216,9 @@ impl App {
         match (menu, &*fired.id) {
             (Menu::Pause, "menu.returnToGame") => self.menu_back(),
             (Menu::Pause, "menu.options") => self.open_menu(Menu::Options),
-            (Menu::Pause, "menu.disconnect" | "menu.returnToMenu") | (Menu::TitleConfirm, YES) | (Menu::Disconnected, "gui.toTitle") => self.quit = true,
+            (Menu::Pause, "menu.disconnect" | "menu.returnToMenu")
+            | (Menu::TitleConfirm, YES)
+            | (Menu::Disconnected, "gui.toTitle") => self.quit = true,
             (Menu::Options, _) => self.options_fired(fired),
             (Menu::Death, "deathScreen.respawn" | "deathScreen.spectate") => self.respawn(),
             (Menu::Death, "deathScreen.titleScreen") => self.open_menu(Menu::TitleConfirm),
@@ -208,7 +261,9 @@ impl App {
         let ([w, h], scale) = self.gui();
         let [w, h] = java_screens::gui_size([w, h], scale);
         let history = self.ui.chat.history().len();
-        let completion = self.ui.java_completion(self.players.clone(), Arc::clone(&self.java.commands));
+        let completion = self
+            .ui
+            .java_completion(self.players.clone(), Arc::clone(&self.java.commands));
         let chat = ChatScreen::new(self.ui.java_font(), initial, history, completion, w, h);
         self.java.chat = Some((chat, Instant::now()));
         self.ui.chat.open(initial);
@@ -226,7 +281,9 @@ impl App {
         let Some(key) = gui_key(code) else { return };
         let history = self.ui.chat.history();
         let (shift, ctrl) = (self.shift, self.java.ctrl);
-        let Some((chat, _)) = &mut self.java.chat else { return self.close_java_chat() };
+        let Some((chat, _)) = &mut self.java.chat else {
+            return self.close_java_chat();
+        };
         match chat.key(self.ui.java_font(), &history, key, shift, ctrl) {
             ChatAction::None => {}
             ChatAction::Close => self.close_java_chat(),
@@ -242,7 +299,8 @@ impl App {
 
     pub(super) fn java_chat_text(&mut self, text: &str) {
         if let Some((chat, _)) = &mut self.java.chat {
-            text.chars().for_each(|c| chat.char_typed(self.ui.java_font(), c));
+            text.chars()
+                .for_each(|c| chat.char_typed(self.ui.java_font(), c));
         }
     }
 
@@ -261,7 +319,14 @@ impl App {
         if let Some((chat, _)) = &mut self.java.chat
             && (chat.width, chat.height) != (w, h)
         {
-            *chat = ChatScreen::new(self.ui.java_font(), &chat.input.value(), history, chat.completion.clone(), w, h);
+            *chat = ChatScreen::new(
+                self.ui.java_font(),
+                &chat.input.value(),
+                history,
+                chat.completion.clone(),
+                w,
+                h,
+            );
         }
     }
 }
@@ -276,8 +341,14 @@ mod tests {
         java.opened(Menu::Death);
         let later = Instant::now() + std::time::Duration::from_millis(1500);
         java.opened(Menu::TitleConfirm);
-        assert_eq!(view(&java, Menu::Death, &Settings::default(), later), View::Death { ticks: 30 });
-        assert!(matches!(view(&java, Menu::TitleConfirm, &Settings::default(), later), View::TitleConfirm { ticks: 29..=30 }));
+        assert_eq!(
+            view(&java, Menu::Death, &Settings::default(), later),
+            View::Death { ticks: 30 }
+        );
+        assert!(matches!(
+            view(&java, Menu::TitleConfirm, &Settings::default(), later),
+            View::TitleConfirm { ticks: 29..=30 }
+        ));
     }
 
     #[test]
@@ -286,13 +357,24 @@ mod tests {
         java.opened(Menu::Options);
         java.pages.push("video");
         let settings = Settings::default();
-        assert_eq!(view(&java, Menu::Options, &settings, Instant::now()), View::Options { page: "video", settings: settings.clone() });
+        assert_eq!(
+            view(&java, Menu::Options, &settings, Instant::now()),
+            View::Options {
+                page: "video",
+                settings: settings.clone()
+            }
+        );
         java.opened(Menu::Options);
         assert_eq!(java.pages, ["options"]);
         java.pages.push("win");
         java.page_opened = Some(Instant::now());
         let later = Instant::now() + std::time::Duration::from_millis(1000);
-        assert!(matches!(view(&java, Menu::Options, &settings, later), View::Win { ticks } if (19.9..=20.1).contains(&ticks)));
-        assert_eq!((gui_key(KeyCode::NumpadEnter), gui_key(KeyCode::KeyQ)), (Some(Key::Enter), None));
+        assert!(
+            matches!(view(&java, Menu::Options, &settings, later), View::Win { ticks } if (19.9..=20.1).contains(&ticks))
+        );
+        assert_eq!(
+            (gui_key(KeyCode::NumpadEnter), gui_key(KeyCode::KeyQ)),
+            (Some(Key::Enter), None)
+        );
     }
 }

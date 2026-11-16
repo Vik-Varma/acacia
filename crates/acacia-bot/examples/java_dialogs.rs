@@ -16,15 +16,29 @@ const SHOW_TIMEOUT: Duration = Duration::from_secs(5);
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let [host, port] = &args[..2] else { return Err("usage: java_dialogs <host> <port> [name]".into()) };
+    let [host, port] = &args[..2] else {
+        return Err("usage: java_dialogs <host> <port> [name]".into());
+    };
     let name = args.get(2).map_or("Reader", String::as_str);
-    let mut bot = Bot::connect_java_offline(host, port.parse()?, name, BotConfig::default()).await?;
+    let mut bot =
+        Bot::connect_java_offline(host, port.parse()?, name, BotConfig::default()).await?;
     bot.wait_ticks(100).await?;
 
-    let input_values = vec![FormValue::Text("acacia".into()), FormValue::Toggle(true), FormValue::Choice(0), FormValue::Slider(6.6)];
+    let input_values = vec![
+        FormValue::Text("acacia".into()),
+        FormValue::Toggle(true),
+        FormValue::Choice(0),
+        FormValue::Slider(6.6),
+    ];
     let steps = [
         ("confirm", FormReply::Modal(true)),
-        ("inputs", FormReply::Dialog { button: 0, values: input_values }),
+        (
+            "inputs",
+            FormReply::Dialog {
+                button: 0,
+                values: input_values,
+            },
+        ),
         ("multi", FormReply::Button(1)),
         ("notice", FormReply::Close),
         ("registry", FormReply::Button(0)),
@@ -39,7 +53,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
         println!("form {} {:?}: {:?}", form.id, form.title, form.kind);
-        println!("  -> {reply:?}: {:?}", bot.answer_form(form.id, reply.clone()).await);
+        println!(
+            "  -> {reply:?}: {:?}",
+            bot.answer_form(form.id, reply.clone()).await
+        );
         bot.wait_ticks(10).await?;
     }
     bot.disconnect().await;

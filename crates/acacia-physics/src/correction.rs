@@ -53,19 +53,35 @@ fn fit(lo: f32, hi: f32, start: f32, moves: &[(f32, f32)]) -> Option<(f32, f32)>
 pub(crate) fn server_box(st: &PlayerState, feet: Vec3, earlier: &[&PlayerState]) -> Option<Aabb> {
     let shape = st.shape.filter(|s| s.pos == st.pos)?;
     // Against a wall the faces are the wall's: the rebuild recovers that contact (`pose`).
-    if (0..3).any(|i| (feet[i] - st.pos[i]).abs() > SMALL) || st.collide_x || st.collide_z || st.mov[0] == 0.0 || st.mov[2] == 0.0 {
+    if (0..3).any(|i| (feet[i] - st.pos[i]).abs() > SMALL)
+        || st.collide_x
+        || st.collide_z
+        || st.mov[0] == 0.0
+        || st.mov[2] == 0.0
+    {
         return None;
     }
     // The ticks back to the last one whose box we know, in the same pose.
-    let mut chain: Vec<&PlayerState> =
-        earlier.iter().rev().take(WINDOW).take_while(|e| e.shape.is_some_and(|s| s.pos == e.pos && s.dims == shape.dims)).copied().collect();
+    let mut chain: Vec<&PlayerState> = earlier
+        .iter()
+        .rev()
+        .take(WINDOW)
+        .take_while(|e| {
+            e.shape
+                .is_some_and(|s| s.pos == e.pos && s.dims == shape.dims)
+        })
+        .copied()
+        .collect();
     chain.reverse();
     let mut bb = shape.bb;
     for i in [0, 2] {
         let mut found = None;
         for from in 0..chain.len() {
             let base = chain[from].shape?.bb;
-            let mut moves: Vec<(f32, f32)> = chain[from + 1..].iter().map(|e| (e.mov[i], e.pos[i])).collect();
+            let mut moves: Vec<(f32, f32)> = chain[from + 1..]
+                .iter()
+                .map(|e| (e.mov[i], e.pos[i]))
+                .collect();
             moves.push((st.mov[i], feet[i]));
             found = fit(base.min[i], base.max[i], chain[from].pos[i], &moves);
             if found.is_some() {
@@ -88,12 +104,22 @@ pub(crate) fn server_box(st: &PlayerState, feet: Vec3, earlier: &[&PlayerState])
 impl PlayerState {
     /// [`PlayerState::apply_correction`] that keeps the server's box when the correction is an ulp-level one:
     /// `earlier` are our states on the ticks before the corrected one, oldest first (see `server_box`).
-    pub fn apply_small_correction(&mut self, feet: Vec3, delta: Vec3, on_ground: bool, earlier: &[&PlayerState]) {
+    pub fn apply_small_correction(
+        &mut self,
+        feet: Vec3,
+        delta: Vec3,
+        on_ground: bool,
+        earlier: &[&PlayerState],
+    ) {
         let bb = server_box(self, feet, earlier);
         let dims = self.collision_dims();
         self.apply_correction(feet, delta, on_ground);
         if let Some(bb) = bb {
-            self.shape = Some(CollisionShape { bb, pos: feet, dims });
+            self.shape = Some(CollisionShape {
+                bb,
+                pos: feet,
+                dims,
+            });
         }
     }
 }
@@ -109,7 +135,11 @@ mod tests {
         let mut out = vec![st.clone()];
         for _ in 0..ticks {
             let bb = st.bounding_box().translate([v, 0.0, v]);
-            st.pos = [centre(bb.min[0], bb.max[0]), 0.0, centre(bb.min[2], bb.max[2])];
+            st.pos = [
+                centre(bb.min[0], bb.max[0]),
+                0.0,
+                centre(bb.min[2], bb.max[2]),
+            ];
             st.mov = [v, 0.0, v];
             st.remember_box(bb);
             out.push(st.clone());

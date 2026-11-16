@@ -8,7 +8,7 @@
 
 use std::net::SocketAddr;
 
-use acacia_proto::{encode_packet, DecodeError, Packet, RawPacket};
+use acacia_proto::{DecodeError, Packet, RawPacket, encode_packet};
 use bytes::{Bytes, BytesMut};
 use tokio::sync::mpsc;
 
@@ -107,7 +107,13 @@ impl Injector {
 
     /// `packet` is a full packet, header included.
     pub fn raw(&self, dir: Direction, packet: Bytes) -> bool {
-        self.tx.send(Injection { game: self.game, dir, packet }).is_ok()
+        self.tx
+            .send(Injection {
+                game: self.game,
+                dir,
+                packet,
+            })
+            .is_ok()
     }
 }
 
@@ -130,7 +136,13 @@ impl Chain {
     }
 
     /// Runs `packet` (already parsed as `raw`) through the chain, appending what survives to `out`.
-    pub fn run(&mut self, from_game: bool, packet: Bytes, raw: &RawPacket, out: &mut Vec<Bytes>) -> Result<(), DecodeError> {
+    pub fn run(
+        &mut self,
+        from_game: bool,
+        packet: Bytes,
+        raw: &RawPacket,
+        out: &mut Vec<Bytes>,
+    ) -> Result<(), DecodeError> {
         let Some((first, rest)) = self.0.split_first_mut() else {
             out.push(packet);
             return Ok(());
@@ -149,8 +161,17 @@ impl Chain {
     }
 }
 
-fn apply(interceptor: &mut dyn Interceptor, from_game: bool, packet: Bytes, raw: &RawPacket) -> Vec<Bytes> {
-    let verdict = if from_game { interceptor.on_game_packet(raw) } else { interceptor.on_server_packet(raw) };
+fn apply(
+    interceptor: &mut dyn Interceptor,
+    from_game: bool,
+    packet: Bytes,
+    raw: &RawPacket,
+) -> Vec<Bytes> {
+    let verdict = if from_game {
+        interceptor.on_game_packet(raw)
+    } else {
+        interceptor.on_server_packet(raw)
+    };
     match verdict {
         Verdict::Forward => vec![packet],
         Verdict::Drop => Vec::new(),

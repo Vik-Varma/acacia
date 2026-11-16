@@ -43,7 +43,8 @@ pub struct Jar {
 
 /// `$ACACIA_JAVA_ASSETS`, else `assets/java` under the working directory.
 pub fn default_dir() -> PathBuf {
-    std::env::var_os("ACACIA_JAVA_ASSETS").map_or_else(|| PathBuf::from("assets/java"), PathBuf::from)
+    std::env::var_os("ACACIA_JAVA_ASSETS")
+        .map_or_else(|| PathBuf::from("assets/java"), PathBuf::from)
 }
 
 /// Downloads the pinned client jar into `dir` unless it is there already, and unpacks its assets,
@@ -58,20 +59,34 @@ pub fn fetch(dir: &Path) -> Result<Jar, Error> {
         std::fs::write(out.join("VERSION"), VERSION)?;
         println!("{}: {files} files", out.display());
     }
-    Ok(Jar { assets: out.join(ASSETS), data: out.join(DATA), biomes: out.join(BIOMES), block_tags: out.join(BLOCK_TAGS) })
+    Ok(Jar {
+        assets: out.join(ASSETS),
+        data: out.join(DATA),
+        biomes: out.join(BIOMES),
+        block_tags: out.join(BLOCK_TAGS),
+    })
 }
 
 /// The pinned version's package JSON (downloads, asset index).
 pub fn version_package() -> Result<Value, Error> {
     let manifest: Value = serde_json::from_slice(&get(MANIFEST)?)?;
-    let versions = manifest["versions"].as_array().ok_or("version manifest has no versions")?;
-    let version = versions.iter().find(|v| v["id"] == VERSION).ok_or_else(|| format!("no Java {VERSION} in the version manifest"))?;
-    Ok(serde_json::from_slice(&get(version["url"].as_str().ok_or("version has no url")?)?)?)
+    let versions = manifest["versions"]
+        .as_array()
+        .ok_or("version manifest has no versions")?;
+    let version = versions
+        .iter()
+        .find(|v| v["id"] == VERSION)
+        .ok_or_else(|| format!("no Java {VERSION} in the version manifest"))?;
+    Ok(serde_json::from_slice(&get(version["url"]
+        .as_str()
+        .ok_or("version has no url")?)?)?)
 }
 
 fn download_client() -> Result<Vec<u8>, Error> {
     let package = version_package()?;
-    let url = package["downloads"]["client"]["url"].as_str().ok_or("client download has no url")?;
+    let url = package["downloads"]["client"]["url"]
+        .as_str()
+        .ok_or("client download has no url")?;
     println!("downloading {url}");
     get(url)
 }
@@ -83,7 +98,12 @@ fn unpack(jar: &Path, out: &Path) -> Result<usize, Error> {
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i)?;
         // `enclosed_name` drops entries that would land outside `out`.
-        let Some(path) = entry.enclosed_name().filter(|p| entry.is_file() && PARTS.iter().any(|part| p.starts_with(part))) else { continue };
+        let Some(path) = entry
+            .enclosed_name()
+            .filter(|p| entry.is_file() && PARTS.iter().any(|part| p.starts_with(part)))
+        else {
+            continue;
+        };
         let to = out.join(path);
         std::fs::create_dir_all(to.parent().expect("an assets path has a parent"))?;
         std::io::copy(&mut entry, &mut File::create(to)?)?;
@@ -117,16 +137,23 @@ mod tests {
             ("../assets/minecraft/escape.json", "x"),
         ];
         for (name, body) in entries {
-            zip.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+            zip.start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
             zip.write_all(body.as_bytes()).unwrap();
         }
         zip.finish().unwrap();
 
         let out = dir.join("out");
         assert_eq!(unpack(&jar, &out).unwrap(), 6);
-        assert!(out.join(BIOMES).join("plains.json").is_file() && !out.join("data/minecraft/recipe").exists());
+        assert!(
+            out.join(BIOMES).join("plains.json").is_file()
+                && !out.join("data/minecraft/recipe").exists()
+        );
         assert!(out.join(BLOCK_TAGS).join("leaves.json").is_file());
-        assert_eq!(std::fs::read_to_string(out.join("assets/minecraft/blockstates/stone.json")).unwrap(), "{}");
+        assert_eq!(
+            std::fs::read_to_string(out.join("assets/minecraft/blockstates/stone.json")).unwrap(),
+            "{}"
+        );
         assert!(!dir.join("assets").exists() && !out.join("net").exists());
         std::fs::remove_dir_all(&dir).unwrap();
     }

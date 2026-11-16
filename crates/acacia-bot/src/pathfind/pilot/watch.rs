@@ -5,10 +5,10 @@
 use std::collections::HashMap;
 
 use super::Pilot;
+use crate::ActionError;
 use crate::governor::SETTLE_TICKS;
 use crate::movement::{Live, Sim};
 use crate::pathfind::{PathNode, Step};
-use crate::ActionError;
 
 impl Pilot {
     /// Server setbacks the pilot held still for.
@@ -80,7 +80,9 @@ impl Watch {
                 tracing::debug!(?step, times = *n, "path work issued again");
             }
             if *n >= MAX_SAME_WORK {
-                return Err(ActionError::NotPossible(format!("loop: {step:?} issued {n} times")));
+                return Err(ActionError::NotPossible(format!(
+                    "loop: {step:?} issued {n} times"
+                )));
             }
         }
         Ok(())

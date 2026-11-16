@@ -10,9 +10,15 @@ use acacia_render::glint::{self, Foil};
 use serde_json::Value;
 
 fn main() {
-    let path = std::env::args().nth(1).expect("usage: glint_probe <glint.jsonl>");
+    let path = std::env::args()
+        .nth(1)
+        .expect("usage: glint_probe <glint.jsonl>");
     let mut out = compare::Report::default();
-    for line in std::fs::read_to_string(path).expect("oracle records").lines().filter(|l| !l.trim().is_empty()) {
+    for line in std::fs::read_to_string(path)
+        .expect("oracle records")
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+    {
         let r: Value = serde_json::from_str(line).expect("oracle record");
         let name = r["case"].as_str().unwrap_or_default();
         let mut case = out.case(name);
@@ -32,8 +38,17 @@ fn main() {
             Some("ENTITY_GLINT_TEXTURING") => glint::ENTITY_SCALE,
             _ => glint::ARMOR_SCALE,
         };
-        let m = glint::texturing(r["millis"].as_u64().unwrap_or(0), r["speed"].as_f64().unwrap_or(0.0), scale);
-        case.numbers("matrix", &compare::floats(&r["matrix"]), &m.to_cols_array(), 0.0);
+        let m = glint::texturing(
+            r["millis"].as_u64().unwrap_or(0),
+            r["speed"].as_f64().unwrap_or(0.0),
+            scale,
+        );
+        case.numbers(
+            "matrix",
+            &compare::floats(&r["matrix"]),
+            &m.to_cols_array(),
+            0.0,
+        );
     }
     out.print();
 }

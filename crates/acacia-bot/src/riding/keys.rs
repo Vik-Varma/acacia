@@ -12,28 +12,62 @@ pub(super) fn keys(c: &Controls) -> [f32; 2] {
 }
 
 fn axis(v: f32) -> f32 {
-    if v > 0.0 { 1.0 } else if v < 0.0 { -1.0 } else { 0.0 }
+    if v > 0.0 {
+        1.0
+    } else if v < 0.0 {
+        -1.0
+    } else {
+        0.0
+    }
 }
 
 /// The rider's movement keys, as vanilla reports them while riding (the pig capture: plain WASD).
 pub(super) fn report_keys(input: &mut PlayerAuthInput, [strafe, forward]: [f32; 2]) {
-    let held = [(forward > 0.0, F::Up), (forward < 0.0, F::Down), (strafe > 0.0, F::Left), (strafe < 0.0, F::Right)];
+    let held = [
+        (forward > 0.0, F::Up),
+        (forward < 0.0, F::Down),
+        (strafe > 0.0, F::Left),
+        (strafe < 0.0, F::Right),
+    ];
     push_held(input, held);
-    input.move_vector = Vec2f { x: strafe, z: forward };
-    input.raw_move_vector = Vec2f { x: strafe, z: forward };
+    input.move_vector = Vec2f {
+        x: strafe,
+        z: forward,
+    };
+    input.raw_move_vector = Vec2f {
+        x: strafe,
+        z: forward,
+    };
 }
 
 /// A boat driver's paddles: the left one with Left, the right one with Right (the boat capture).
 pub(super) fn report_paddles(input: &mut PlayerAuthInput, strafe: f32) {
-    push_held(input, [(strafe > 0.0, F::PaddlingLeft), (strafe < 0.0, F::PaddlingRight)]);
+    push_held(
+        input,
+        [
+            (strafe > 0.0, F::PaddlingLeft),
+            (strafe < 0.0, F::PaddlingRight),
+        ],
+    );
 }
 
 /// The jump key as a walking input reports it (`movement/auth_input.rs`): BDS charges a horse's jump
 /// from `Jumping`.
 pub(super) fn report_jump(input: &mut PlayerAuthInput, held: bool, was_held: bool) {
-    let flags = [(held, F::Jumping), (held, F::JumpDown), (held, F::JumpCurrentRaw), (held, F::WantUp)];
+    let flags = [
+        (held, F::Jumping),
+        (held, F::JumpDown),
+        (held, F::JumpCurrentRaw),
+        (held, F::WantUp),
+    ];
     push_held(input, flags);
-    push_held(input, [(held && !was_held, F::JumpPressedRaw), (!held && was_held, F::JumpReleasedRaw)]);
+    push_held(
+        input,
+        [
+            (held && !was_held, F::JumpPressedRaw),
+            (!held && was_held, F::JumpReleasedRaw),
+        ],
+    );
 }
 
 fn push_held<const N: usize>(input: &mut PlayerAuthInput, held: [(bool, F); N]) {

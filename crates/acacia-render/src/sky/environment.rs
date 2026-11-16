@@ -43,37 +43,87 @@ const EMPTY: usize = usize::MAX;
 impl Environment {
     /// `None` without the file: the look predates it, or it is Bedrock's.
     pub fn load(files: &Path) -> Option<Environment> {
-        Some(Environment::parse(&json::read(&files.join("environment.json")).ok()?))
+        Some(Environment::parse(
+            &json::read(&files.join("environment.json")).ok()?,
+        ))
     }
 
     pub fn parse(doc: &Value) -> Environment {
-        let timelines: FxHashMap<&str, Timeline> =
-            doc["timelines"].as_object().into_iter().flatten().map(|(name, t)| (strip(name), Timeline::parse(t))).collect();
+        let timelines: FxHashMap<&str, Timeline> = doc["timelines"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(name, t)| (strip(name), Timeline::parse(t)))
+            .collect();
         let dimension = |name: &str, d: &Value| DimensionEnv {
-            values: d["attributes"].as_object().into_iter().flatten().filter_map(|(k, v)| Some((Attr::by_name(k)?, parse_value(v)?))).collect(),
-            timelines: d["timelines"].as_array().into_iter().flatten().filter_map(|t| timelines.get(strip(t.as_str()?)).cloned()).collect(),
+            values: d["attributes"]
+                .as_object()
+                .into_iter()
+                .flatten()
+                .filter_map(|(k, v)| Some((Attr::by_name(k)?, parse_value(v)?)))
+                .collect(),
+            timelines: d["timelines"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|t| timelines.get(strip(t.as_str()?)).cloned())
+                .collect(),
             // `Level.canHaveWeather`: the End's level never rains, whatever its type says.
-            weather: d["has_skylight"].as_bool().unwrap_or(false) && !d["has_ceiling"].as_bool().unwrap_or(false) && name != "the_end",
+            weather: d["has_skylight"].as_bool().unwrap_or(false)
+                && !d["has_ceiling"].as_bool().unwrap_or(false)
+                && name != "the_end",
             skybox: match d["skybox"].as_str().unwrap_or("overworld") {
                 "none" => Skybox::None,
                 "end" => Skybox::End,
                 _ => Skybox::Overworld,
             },
         };
-        let dimensions = doc["dimensions"].as_object().into_iter().flatten().map(|(name, d)| (strip(name).to_owned(), dimension(strip(name), d))).collect();
+        let dimensions = doc["dimensions"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(name, d)| (strip(name).to_owned(), dimension(strip(name), d)))
+            .collect();
         let layer = |(k, v): (&String, &Value)| -> Option<(Attr, Modifier, Value4)> {
             let attr = Attr::by_name(k)?;
             match parse_value(v) {
                 Some(value) => Some((attr, Modifier::Override, value)),
-                None => Some((attr, Modifier::parse(v["modifier"].as_str())?, parse_value(&v["argument"])?)),
+                None => Some((
+                    attr,
+                    Modifier::parse(v["modifier"].as_str())?,
+                    parse_value(&v["argument"])?,
+                )),
             }
         };
         let (mut biomes, mut layers) = (FxHashMap::default(), Vec::new());
-        for (index, b) in doc["biomes"].as_object().into_iter().flatten().map(|(_, b)| b).enumerate() {
-            layers.push(b["attributes"].as_object().into_iter().flatten().filter_map(layer).collect());
-            biomes.extend(b["bedrock"].as_array().into_iter().flatten().filter_map(|n| Some((strip(n.as_str()?).to_owned(), index))));
+        for (index, b) in doc["biomes"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(_, b)| b)
+            .enumerate()
+        {
+            layers.push(
+                b["attributes"]
+                    .as_object()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(layer)
+                    .collect(),
+            );
+            biomes.extend(
+                b["bedrock"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|n| Some((strip(n.as_str()?).to_owned(), index))),
+            );
         }
-        Environment { dimensions, biomes, layers }
+        Environment {
+            dimensions,
+            biomes,
+            layers,
+        }
     }
 
     /// By Java's name: `overworld`, `the_nether`, `the_end`.
@@ -84,7 +134,15 @@ impl Environment {
     /// The attributes at `ticks` of the dimension's clock, `weights` the camera's biomes (by
     /// Bedrock name) and their weights ([`super::blend::gaussian_weights`]), `rain` and
     /// `thunder` 0..1, `flash` while a lightning flash lasts.
-    pub fn sample(&self, dimension: &DimensionEnv, ticks: i64, weights: &[(&str, f64)], rain: f32, thunder: f32, flash: bool) -> Attributes {
+    pub fn sample(
+        &self,
+        dimension: &DimensionEnv,
+        ticks: i64,
+        weights: &[(&str, f64)],
+        rain: f32,
+        thunder: f32,
+        flash: bool,
+    ) -> Attributes {
         let mut sources: Vec<(usize, f64)> = Vec::new();
         for &(biome, w) in weights {
             let key = self.biomes.get(biome).copied().unwrap_or(EMPTY);
@@ -95,14 +153,29 @@ impl Environment {
         }
         let mut out = Attributes::default();
         for &attr in Attr::ALL {
-            let mut v = dimension.values.iter().find_map(|(a, v)| (*a == attr).then_some(*v)).unwrap_or(attr.default());
-            if !sources.is_empty() && self.layers.iter().any(|l| l.iter().any(|(a, ..)| *a == attr)) {
+            let mut v = dimension
+                .values
+                .iter()
+                .find_map(|(a, v)| (*a == attr).then_some(*v))
+                .unwrap_or(attr.default());
+            if !sources.is_empty()
+                && self
+                    .layers
+                    .iter()
+                    .any(|l| l.iter().any(|(a, ..)| *a == attr))
+            {
                 let base = v;
-                v = super::blend::blend(sources.iter().map(|&(key, w)| (self.biome_value(key, attr, base), w)));
+                v = super::blend::blend(
+                    sources
+                        .iter()
+                        .map(|&(key, w)| (self.biome_value(key, attr, base), w)),
+                );
             }
             for timeline in &dimension.timelines {
                 if let Some(track) = timeline.track(attr.name()) {
-                    v = track.modifier.apply(v, track.sample(ticks, timeline.period));
+                    v = track
+                        .modifier
+                        .apply(v, track.sample(ticks, timeline.period));
                 }
             }
             out.set(attr, v);
@@ -118,8 +191,13 @@ impl Environment {
     }
 
     fn biome_value(&self, key: usize, attr: Attr, base: Value4) -> Value4 {
-        let layer = self.layers.get(key).and_then(|l| l.iter().find(|(a, ..)| *a == attr));
-        layer.map_or(base, |(_, modifier, argument)| modifier.apply(base, *argument))
+        let layer = self
+            .layers
+            .get(key)
+            .and_then(|l| l.iter().find(|(a, ..)| *a == attr));
+        layer.map_or(base, |(_, modifier, argument)| {
+            modifier.apply(base, *argument)
+        })
     }
 }
 
@@ -153,26 +231,57 @@ mod tests {
         let env = Environment::parse(&sample_doc());
         let overworld = env.dimension("overworld").unwrap();
         let noon = env.sample(overworld, 6000, &[], 0.0, 0.0, false);
-        assert_eq!(noon.rgb(Attr::SkyColor), [0x78 as f32 / 255.0, 0xA7 as f32 / 255.0, 1.0]);
+        assert_eq!(
+            noon.rgb(Attr::SkyColor),
+            [0x78 as f32 / 255.0, 0xA7 as f32 / 255.0, 1.0]
+        );
         let midnight = env.sample(overworld, 18000 + 24000 * 5, &[], 0.0, 0.0, false);
         assert_eq!(midnight.rgb(Attr::SkyColor), [0.0; 3]);
         assert!((midnight.darken() - 11.0).abs() < 1e-4);
         let nether = env.dimension("the_nether").unwrap();
         assert_eq!((nether.skybox, nether.weather), (Skybox::None, false));
-        assert_eq!(env.sample(nether, 0, &[], 1.0, 1.0, false).number(Attr::FogEnd), 96.0);
+        assert_eq!(
+            env.sample(nether, 0, &[], 1.0, 1.0, false)
+                .number(Attr::FogEnd),
+            96.0
+        );
     }
 
     #[test]
     fn biomes_blend_by_weight_over_the_dimension() {
         let env = Environment::parse(&sample_doc());
         let overworld = env.dimension("overworld").unwrap();
-        let half = env.sample(overworld, 6000, &[("plains", 1.0), ("swampland", 1.0)], 0.0, 0.0, false);
+        let half = env.sample(
+            overworld,
+            6000,
+            &[("plains", 1.0), ("swampland", 1.0)],
+            0.0,
+            0.0,
+            false,
+        );
         assert!((half.rgb(Attr::SkyColor)[2] - 0.5).abs() < 1e-6);
         assert!((half.number(Attr::WaterFogEnd) - 96.0 * (1.0 + 0.85) / 2.0).abs() < 1e-4);
         // Two Bedrock names of one Java biome weigh as one source: a third of plains is left.
-        let third = env.sample(overworld, 6000, &[("plains", 1.0), ("swampland", 1.0), ("swampland_mutated", 1.0)], 0.0, 0.0, false);
+        let third = env.sample(
+            overworld,
+            6000,
+            &[
+                ("plains", 1.0),
+                ("swampland", 1.0),
+                ("swampland_mutated", 1.0),
+            ],
+            0.0,
+            0.0,
+            false,
+        );
         assert!((third.rgb(Attr::SkyColor)[2] - 1.0 / 3.0).abs() < 1e-6);
         let flash = env.sample(overworld, 18000, &[], 0.0, 0.0, true);
-        assert_eq!((flash.rgb(Attr::SkyColor), flash.number(Attr::SkyLightFactor)), ([0.8 * 0.22, 0.8 * 0.22, 0.22], 1.0));
+        assert_eq!(
+            (
+                flash.rgb(Attr::SkyColor),
+                flash.number(Attr::SkyLightFactor)
+            ),
+            ([0.8 * 0.22, 0.8 * 0.22, 0.22], 1.0)
+        );
     }
 }

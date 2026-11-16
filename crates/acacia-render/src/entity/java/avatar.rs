@@ -47,13 +47,20 @@ impl Cloak {
 
 /// `capeFlap`, `capeLean`, `capeLean2` for a player at `position` (interpolated), its body turned
 /// `body_yaw` degrees, `partial` into the tick, `fall_flying` its `fallFlyingScale`.
-pub fn cape(cloak: &Cloak, position: DVec3, body_yaw: f32, partial: f32, fall_flying: f32) -> [f32; 3] {
+pub fn cape(
+    cloak: &Cloak,
+    position: DVec3,
+    body_yaw: f32,
+    partial: f32,
+    fall_flying: f32,
+) -> [f32; 3] {
     let t = f64::from(partial);
     let d = cloak.old + (cloak.at - cloak.old) * t - position;
     let yaw = body_yaw * pi_div(180.0);
     let (forward_x, forward_z) = (f64::from(sin(yaw)), f64::from(-cos(yaw)));
     let flap = (d.y as f32 * 10.0).clamp(-6.0, 32.0);
-    let lean = ((d.x * forward_x + d.z * forward_z) as f32 * 100.0 * (1.0 - fall_flying)).clamp(0.0, 150.0);
+    let lean = ((d.x * forward_x + d.z * forward_z) as f32 * 100.0 * (1.0 - fall_flying))
+        .clamp(0.0, 150.0);
     let lean2 = ((d.x * forward_z - d.z * forward_x) as f32 * 100.0).clamp(-20.0, 20.0);
     let pow = lerp(partial, cloak.bob_old, cloak.bob);
     let walk = lerp(partial, cloak.walk_old, cloak.walk);
@@ -75,11 +82,27 @@ impl Wings {
         let (x, y, z) = match gliding {
             Some(movement) => {
                 // Vec3.normalize: anything shorter than 1e-5 is zero.
-                let down = if movement.length() < 1e-5 { 0.0 } else { -(movement / movement.length()).y };
-                let ratio = if movement.y < 0.0 { 1.0 - down.powf(1.5) as f32 } else { 1.0 };
-                (lerp(ratio, pi_div(12.0), pi_div(9.0)), 0.0, lerp(ratio, -pi_div(12.0), -pi_div(2.0)))
+                let down = if movement.length() < 1e-5 {
+                    0.0
+                } else {
+                    -(movement / movement.length()).y
+                };
+                let ratio = if movement.y < 0.0 {
+                    1.0 - down.powf(1.5) as f32
+                } else {
+                    1.0
+                };
+                (
+                    lerp(ratio, pi_div(12.0), pi_div(9.0)),
+                    0.0,
+                    lerp(ratio, -pi_div(12.0), -pi_div(2.0)),
+                )
             }
-            None if crouching => ((std::f64::consts::PI * 2.0 / 9.0) as f32, 0.087_266_46, -pi_div(4.0)),
+            None if crouching => (
+                (std::f64::consts::PI * 2.0 / 9.0) as f32,
+                0.087_266_46,
+                -pi_div(4.0),
+            ),
             None => rest,
         };
         for (r, target) in self.rot.iter_mut().zip([x, y, z]) {

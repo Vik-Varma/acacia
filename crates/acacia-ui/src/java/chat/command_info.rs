@@ -17,7 +17,9 @@ impl CommandSuggestions {
     /// `updateUsageInfo(currentParse, suggestions)`, then the list shown when suggestions are
     /// allowed and `autoSuggestions` is on.
     pub(super) fn update_usage(&mut self, s: &Sources, input: &mut EditBox, found: &Suggestions) {
-        let Some(parse) = self.parse.clone() else { return };
+        let Some(parse) = self.parse.clone() else {
+            return;
+        };
         let lang = |k: &str| s.c.messages.get(k);
         let mut trailing = false;
         if input.cursor == input.len() {
@@ -31,8 +33,12 @@ impl CommandSuggestions {
                     }
                 }
                 if literals > 0 {
-                    let r = Reader { string: &parse.input, cursor: parse.cursor };
-                    self.usage.push(r.error(Kind::UnknownArgument).display(&lang));
+                    let r = Reader {
+                        string: &parse.input,
+                        cursor: parse.cursor,
+                    };
+                    self.usage
+                        .push(r.error(Kind::UnknownArgument).display(&lang));
                 }
             } else if parse.can_read() {
                 trailing = true;
@@ -40,21 +46,34 @@ impl CommandSuggestions {
         }
         let (node, start) = parse.context.suggestion_context(input.cursor);
         if self.usage.is_empty() {
-            let entries: Vec<Text> = s
-                .c
-                .commands
-                .smart_usage(node)
-                .into_iter()
-                .filter(|&(child, _)| !s.c.commands.node(child).is_literal())
-                .map(|(_, usage)| Text::styled(usage, &Style::color(GRAY)).as_forward())
-                .collect();
+            let entries: Vec<Text> =
+                s.c.commands
+                    .smart_usage(node)
+                    .into_iter()
+                    .filter(|&(child, _)| !s.c.commands.node(child).is_literal())
+                    .map(|(_, usage)| Text::styled(usage, &Style::color(GRAY)).as_forward())
+                    .collect();
             if entries.is_empty() && trailing {
-                self.usage.extend(parse.parse_error().map(|e| e.display(&lang)));
+                self.usage
+                    .extend(parse.parse_error().map(|e| e.display(&lang)));
             }
             self.usage.extend(entries);
         }
-        self.usage_width = self.usage.iter().map(|l| s.m.visual_width(l)).max().unwrap_or(0);
-        self.usage_x = if self.usage.is_empty() { 0 } else { clamp(input.screen_x(s.m, start), 0, input.screen_x(s.m, 0) + input.inner_width() - self.usage_width) };
+        self.usage_width = self
+            .usage
+            .iter()
+            .map(|l| s.m.visual_width(l))
+            .max()
+            .unwrap_or(0);
+        self.usage_x = if self.usage.is_empty() {
+            0
+        } else {
+            clamp(
+                input.screen_x(s.m, start),
+                0,
+                input.screen_x(s.m, 0) + input.inner_width() - self.usage_width,
+            )
+        };
         self.list = None;
         if self.allow_suggestions && s.c.auto_suggest {
             self.show(s.m, input, s.screen_height);
@@ -72,7 +91,10 @@ pub fn format_text(parse: &Parse, text: &str, offset: usize) -> Text {
     let mut push = |a: i64, b: i64, color: u32| {
         if a < b {
             let piece = String::from_utf16_lossy(&t[a as usize..b as usize]);
-            out.spans.push(Span { text: piece, style: Style::color(color) });
+            out.spans.push(Span {
+                text: piece,
+                style: Style::color(color),
+            });
         }
     };
     let mut unformatted = 0i64;
@@ -84,7 +106,11 @@ pub fn format_text(parse: &Parse, text: &str, offset: usize) -> Text {
         let end = (range.end as i64 - offset).min(len);
         if end > 0 {
             push(unformatted, start, GRAY);
-            push(start.max(unformatted), end, ARGUMENT_COLORS[i % ARGUMENT_COLORS.len()]);
+            push(
+                start.max(unformatted),
+                end,
+                ARGUMENT_COLORS[i % ARGUMENT_COLORS.len()],
+            );
             unformatted = end;
         }
     }

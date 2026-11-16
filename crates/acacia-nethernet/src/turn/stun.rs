@@ -7,9 +7,9 @@ use md5::{Digest, Md5};
 use rand_core::{OsRng, RngCore};
 use sha1::Sha1;
 
-pub use super::attr::Attr;
-use super::attr::{decode_attr, encode_attr, push_attr, FINGERPRINT, MESSAGE_INTEGRITY};
 use super::TurnError;
+pub use super::attr::Attr;
+use super::attr::{FINGERPRINT, MESSAGE_INTEGRITY, decode_attr, encode_attr, push_attr};
 
 pub const MAGIC_COOKIE: u32 = 0x2112_A442;
 const HEADER: usize = 20;
@@ -51,7 +51,17 @@ pub enum Method {
 impl Method {
     fn from_u16(m: u16) -> Option<Self> {
         use Method::*;
-        [Binding, Allocate, Refresh, Send, Data, CreatePermission, ChannelBind].into_iter().find(|x| *x as u16 == m)
+        [
+            Binding,
+            Allocate,
+            Refresh,
+            Send,
+            Data,
+            CreatePermission,
+            ChannelBind,
+        ]
+        .into_iter()
+        .find(|x| *x as u16 == m)
     }
 }
 
@@ -77,7 +87,12 @@ macro_rules! getter {
 
 impl Message {
     pub fn new(class: Class, method: Method, transaction_id: TransactionId) -> Self {
-        Self { class, method, transaction_id, attrs: Vec::new() }
+        Self {
+            class,
+            method,
+            transaction_id,
+            attrs: Vec::new(),
+        }
     }
 
     pub fn with(mut self, attr: Attr) -> Self {
@@ -182,13 +197,16 @@ impl Message {
 /// Checks MESSAGE-INTEGRITY of an encoded message; false when it is missing or wrong.
 pub fn verify_integrity(buf: &[u8], key: &[u8]) -> bool {
     let Ok(body) = body(buf) else { return false };
-    attributes(body).map_while(Result::ok).find(|(_, kind, _)| *kind == MESSAGE_INTEGRITY).is_some_and(
-        |(offset, _, value)| {
+    attributes(body)
+        .map_while(Result::ok)
+        .find(|(_, kind, _)| *kind == MESSAGE_INTEGRITY)
+        .is_some_and(|(offset, _, value)| {
             let mut mac = Hmac::<Sha1>::new_from_slice(key).expect("HMAC takes any key length");
-            covered_digest(buf, offset, 24, |parts| parts.iter().for_each(|p| mac.update(p)));
+            covered_digest(buf, offset, 24, |parts| {
+                parts.iter().for_each(|p| mac.update(p))
+            });
             mac.verify_slice(value).is_ok()
-        },
-    )
+        })
 }
 
 /// True when `buf` looks like STUN (vs ChannelData or anything else on the socket).
@@ -206,7 +224,9 @@ pub fn channel_data(channel: u16, data: &[u8]) -> Vec<u8> {
 }
 
 pub fn parse_channel_data(buf: &[u8]) -> Option<(u16, &[u8])> {
-    let [a, b, c, d, rest @ ..] = buf else { return None };
+    let [a, b, c, d, rest @ ..] = buf else {
+        return None;
+    };
     let channel = u16::from_be_bytes([*a, *b]);
     let len = u16::from_be_bytes([*c, *d]) as usize;
     ((0x4000..=0x4FFF).contains(&channel) && len <= rest.len()).then(|| (channel, &rest[..len]))
@@ -253,7 +273,12 @@ fn attributes(body: &[u8]) -> impl Iterator<Item = Result<(usize, u16, &[u8]), T
 
 /// Feeds the bytes a MESSAGE-INTEGRITY or FINGERPRINT at body `offset` covers, with the header length
 /// rewritten to end just after that attribute (`attr_len` bytes including its header).
-fn covered_digest<R>(buf: &[u8], offset: usize, attr_len: usize, digest: impl FnOnce(&[&[u8]]) -> R) -> R {
+fn covered_digest<R>(
+    buf: &[u8],
+    offset: usize,
+    attr_len: usize,
+    digest: impl FnOnce(&[&[u8]]) -> R,
+) -> R {
     let len = ((offset + attr_len) as u16).to_be_bytes();
     digest(&[&buf[..2], &len, &buf[4..HEADER + offset]])
 }

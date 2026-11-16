@@ -16,18 +16,18 @@ mod drip;
 pub mod level;
 mod make;
 mod make_more;
+mod mth;
 pub mod particle;
 pub mod probe;
-mod mth;
 mod tick;
 pub mod types;
 
 use glam::{DVec3, IVec3};
 
+pub use crate::java_random::JavaRandom;
 use crate::particles::collide::Blocks;
 pub use behaviour::{Options, Request};
 pub use particle::Particle;
-pub use crate::java_random::JavaRandom;
 pub use types::Type;
 
 /// `ParticleGroup.MAX_PARTICLES`; one group here.
@@ -104,7 +104,10 @@ impl Engine {
     /// `ClientLevel.addParticle`: dropped beyond 32 blocks of the camera unless the type
     /// overrides the limiter.
     pub fn add(&mut self, o: &Options, p: DVec3, v: DVec3) {
-        if o.ty.override_limiter() || self.requested.is_some() || p.distance_squared(self.camera) <= 1024.0 {
+        if o.ty.override_limiter()
+            || self.requested.is_some()
+            || p.distance_squared(self.camera) <= 1024.0
+        {
             self.add_always(o, p, v);
         }
     }
@@ -120,7 +123,10 @@ impl Engine {
 
     /// `ParticleEngine.createParticle`: always made.
     pub fn create(&mut self, o: &Options, p: DVec3, v: DVec3) {
-        let given = self.given.as_ref().and_then(|g| g.get(&probe::key(o.ty, p, v)).copied());
+        let given = self
+            .given
+            .as_ref()
+            .and_then(|g| g.get(&probe::key(o.ty, p, v)).copied());
         let seed = given.unwrap_or_else(|| self.seeds.next_long());
         if let Some(log) = &mut self.spawned {
             log.push((*o, p, v));
@@ -132,11 +138,26 @@ impl Engine {
 
     /// `ParticleEngine.createTrackingEmitter` for an entity box (crits): a particle of its own
     /// that tries 16 spots inside a quarter of the box a tick for `ticks` ticks, the first at once.
-    pub fn tracking_emitter(&mut self, o: Options, feet: DVec3, width: f64, height: f64, ticks: u32) {
+    pub fn tracking_emitter(
+        &mut self,
+        o: Options,
+        feet: DVec3,
+        width: f64,
+        height: f64,
+        ticks: u32,
+    ) {
         let mut random = JavaRandom::new(self.seeds.next_long());
         // NoRenderParticle's constructor draws as any moving particle's does.
         Particle::base_moving(&mut random, o.ty, feet, DVec3::ZERO);
-        let mut emitter = Emitter { options: o, feet, width, height, life: 0, lifetime: ticks, random };
+        let mut emitter = Emitter {
+            options: o,
+            feet,
+            width,
+            height,
+            life: 0,
+            lifetime: ticks,
+            random,
+        };
         if self.emit(&mut emitter) {
             self.emitters.push(emitter);
         }
@@ -146,9 +167,18 @@ impl Engine {
     fn emit(&mut self, e: &mut Emitter) -> bool {
         for _ in 0..16 {
             let r = &mut e.random;
-            let (xa, ya, za) = (f64::from(r.next_float() * 2.0 - 1.0), f64::from(r.next_float() * 2.0 - 1.0), f64::from(r.next_float() * 2.0 - 1.0));
+            let (xa, ya, za) = (
+                f64::from(r.next_float() * 2.0 - 1.0),
+                f64::from(r.next_float() * 2.0 - 1.0),
+                f64::from(r.next_float() * 2.0 - 1.0),
+            );
             if xa * xa + ya * ya + za * za <= 1.0 {
-                let p = e.feet + DVec3::new(e.width * xa / 4.0, e.height * (0.5 + ya / 4.0), e.width * za / 4.0);
+                let p = e.feet
+                    + DVec3::new(
+                        e.width * xa / 4.0,
+                        e.height * (0.5 + ya / 4.0),
+                        e.width * za / 4.0,
+                    );
                 self.add(&e.options, p, DVec3::new(xa, ya + 0.2, za));
             }
         }
@@ -163,8 +193,12 @@ impl Engine {
         let r = &mut local;
         let ty = o.ty;
         let mut particle = match ty {
-            T::Smoke | T::LargeSmoke | T::WhiteSmoke | T::Ash | T::WhiteAsh => self.smoke(r, ty, p, v),
-            T::Flame | T::SoulFireFlame | T::CopperFireFlame | T::SmallFlame => Engine::flame(r, ty, p, v),
+            T::Smoke | T::LargeSmoke | T::WhiteSmoke | T::Ash | T::WhiteAsh => {
+                self.smoke(r, ty, p, v)
+            }
+            T::Flame | T::SoulFireFlame | T::CopperFireFlame | T::SmallFlame => {
+                Engine::flame(r, ty, p, v)
+            }
             T::Lava => Engine::lava(r, p),
             T::DrippingWater
             | T::FallingWater
@@ -186,7 +220,9 @@ impl Engine {
             T::Rain | T::Splash => Engine::water_drop(r, ty, p, v),
             T::Bubble | T::BubbleColumnUp | T::SulfurBubbles => Engine::bubble(r, ty, p, v),
             T::CurrentDown => Engine::current_down(r, p),
-            T::Underwater | T::CrimsonSpore | T::WarpedSpore | T::SporeBlossomAir => self.suspended(r, ty, p),
+            T::Underwater | T::CrimsonSpore | T::WarpedSpore | T::SporeBlossomAir => {
+                self.suspended(r, ty, p)
+            }
             T::Portal | T::ReversePortal => Engine::portal(r, ty, p, v),
             T::Enchant => Engine::enchant(r, p, v),
             T::Crit | T::EnchantedHit => Engine::crit(r, ty, p, v),
@@ -215,7 +251,8 @@ impl Engine {
     /// `SpriteSet.get(random)`, drawn from the provider's generator.
     pub(crate) fn sprite_from_set(&mut self, ty: Type) -> Option<&'static str> {
         let sprites = ty.sprites();
-        (!sprites.is_empty()).then(|| sprites[self.provider.next_int(sprites.len() as i32) as usize])
+        (!sprites.is_empty())
+            .then(|| sprites[self.provider.next_int(sprites.len() as i32) as usize])
     }
 
     /// `ParticleEngine.tick`: emitters, live particles, then the ones made meanwhile.
@@ -283,7 +320,8 @@ impl Particle {
             return;
         }
         let last = sprites.len() as i64 - 1;
-        let index = (i64::from(self.age.max(0)) * last / i64::from(self.lifetime.max(1))).clamp(0, last);
+        let index =
+            (i64::from(self.age.max(0)) * last / i64::from(self.lifetime.max(1))).clamp(0, last);
         self.sprite = Some(sprites[index as usize]);
     }
 }

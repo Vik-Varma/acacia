@@ -24,7 +24,13 @@ impl App {
         match sign {
             Some((text, hanging)) => {
                 let mut lines = text.split('\n');
-                self.shown.sign = Some(SignEdit { lines: std::array::from_fn(|_| TextEdit::new(lines.next().unwrap_or(""), LINE_MAX)), line: 0, hanging });
+                self.shown.sign = Some(SignEdit {
+                    lines: std::array::from_fn(|_| {
+                        TextEdit::new(lines.next().unwrap_or(""), LINE_MAX)
+                    }),
+                    line: 0,
+                    hanging,
+                });
                 self.play.release_all();
                 self.grab(false);
             }
@@ -40,18 +46,31 @@ impl App {
     }
 
     fn write_sign(&mut self) {
-        let Some(sign) = self.shown.sign.take() else { return };
-        let text = sign.lines.iter().map(TextEdit::text).collect::<Vec<_>>().join("\n");
-        let _ = self.net.commands.send(Command::WriteSign(Some(text.trim_end_matches('\n').to_owned())));
+        let Some(sign) = self.shown.sign.take() else {
+            return;
+        };
+        let text = sign
+            .lines
+            .iter()
+            .map(TextEdit::text)
+            .collect::<Vec<_>>()
+            .join("\n");
+        let _ = self.net.commands.send(Command::WriteSign(Some(
+            text.trim_end_matches('\n').to_owned(),
+        )));
         self.leave_sign();
     }
 
     pub(super) fn sign_key(&mut self, code: KeyCode) {
-        let Some(sign) = &mut self.shown.sign else { return };
+        let Some(sign) = &mut self.shown.sign else {
+            return;
+        };
         let edit = match code {
             KeyCode::Escape => return self.write_sign(),
             KeyCode::ArrowUp => return sign.line = (sign.line + LINES - 1) % LINES,
-            KeyCode::ArrowDown | KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::Tab => return sign.line = (sign.line + 1) % LINES,
+            KeyCode::ArrowDown | KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::Tab => {
+                return sign.line = (sign.line + 1) % LINES;
+            }
             KeyCode::Backspace => Key::Backspace,
             KeyCode::Delete => Key::Delete,
             KeyCode::ArrowLeft => Key::Left,
@@ -66,7 +85,9 @@ impl App {
     /// Typed text goes into the line while it still fits the sign.
     pub(super) fn sign_text(&mut self, text: &str) {
         let look = self.settings.look;
-        let Some(sign) = &mut self.shown.sign else { return };
+        let Some(sign) = &mut self.shown.sign else {
+            return;
+        };
         let mut line = sign.lines[sign.line].clone();
         line.insert(text);
         if sign_editor::fits(self.ui.theme(look), &line.text(), sign.hanging) {

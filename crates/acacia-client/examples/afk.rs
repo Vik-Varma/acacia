@@ -13,16 +13,21 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use acacia_client::proto::packets::{CommandOutput, Respawn, Text, TextContent};
-use acacia_client::{Client, ClientBuilder, EveryPack, Event, Socks5Proxy, TransportKind};
+use acacia_client::{Client, ClientBuilder, Event, EveryPack, Socks5Proxy, TransportKind};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
     let mut args = std::env::args().skip(1);
     let server = args.next().unwrap_or_else(|| "127.0.0.1:19140".into());
     let name = args.next().unwrap_or_else(|| "Bot".into());
     let secs: u64 = args.next().map_or(10, |s| s.parse().expect("seconds"));
-    let proxy = std::env::var("BEDROCK_PROXY").ok().map(|p| Socks5Proxy::parse(&p)).transpose()?;
+    let proxy = std::env::var("BEDROCK_PROXY")
+        .ok()
+        .map(|p| Socks5Proxy::parse(&p))
+        .transpose()?;
 
     let start = Instant::now();
     let transport = match std::env::var("BEDROCK_TRANSPORT").as_deref() {
@@ -31,10 +36,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ => TransportKind::Auto,
     };
     let strict = std::env::var("BEDROCK_STRICT").is_ok();
-    let mut builder =
-        Client::builder(&server).auto_respawn(std::env::var("BEDROCK_AUTO_RESPAWN").is_ok()).transport(transport).strict(strict).blob_cache_dir(".blobs").pack_cache_dir(".packs");
+    let mut builder = Client::builder(&server)
+        .auto_respawn(std::env::var("BEDROCK_AUTO_RESPAWN").is_ok())
+        .transport(transport)
+        .strict(strict)
+        .blob_cache_dir(".blobs")
+        .pack_cache_dir(".packs");
     if std::env::var_os("BEDROCK_SKIP_PACKS").is_some() {
-        builder = builder.pack_store(Arc::new(EveryPack)).login_timeout(Duration::from_secs(180));
+        builder = builder
+            .pack_store(Arc::new(EveryPack))
+            .login_timeout(Duration::from_secs(180));
     }
     if let Some(p) = &proxy {
         println!("via proxy {}:{}", p.host, p.port);
@@ -42,9 +53,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let builder = login(builder, &name, proxy.as_ref(), start).await?;
     let mut client = builder.connect().await?;
-    println!("spawned as {} (runtime id {}) in {:?}", client.display_name(), client.runtime_entity_id(), start.elapsed());
+    println!(
+        "spawned as {} (runtime id {}) in {:?}",
+        client.display_name(),
+        client.runtime_entity_id(),
+        start.elapsed()
+    );
 
-    let script: Vec<String> = std::env::var("BEDROCK_CMD").unwrap_or_default().split(';').filter(|l| !l.is_empty()).map(str::to_owned).collect();
+    let script: Vec<String> = std::env::var("BEDROCK_CMD")
+        .unwrap_or_default()
+        .split(';')
+        .filter(|l| !l.is_empty())
+        .map(str::to_owned)
+        .collect();
     let mut script = script.into_iter();
     let mut step = tokio::time::interval(Duration::from_secs(1));
 
@@ -52,7 +73,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut violations = 0;
     let deadline = tokio::time::sleep(Duration::from_secs(secs));
     tokio::pin!(deadline);
-    let mut status = tokio::time::interval_at(tokio::time::Instant::now() + Duration::from_secs(60), Duration::from_secs(60));
+    let mut status = tokio::time::interval_at(
+        tokio::time::Instant::now() + Duration::from_secs(60),
+        Duration::from_secs(60),
+    );
     loop {
         tokio::select! {
             event = client.recv() => match event {
@@ -103,13 +127,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn login(builder: ClientBuilder, name: &str, proxy: Option<&Socks5Proxy>, start: Instant) -> Result<ClientBuilder, Box<dyn std::error::Error>> {
-    let Some(account) = name.strip_prefix('@') else { return Ok(builder.offline(name)) };
+async fn login(
+    builder: ClientBuilder,
+    name: &str,
+    proxy: Option<&Socks5Proxy>,
+    start: Instant,
+) -> Result<ClientBuilder, Box<dyn std::error::Error>> {
+    let Some(account) = name.strip_prefix('@') else {
+        return Ok(builder.offline(name));
+    };
     use acacia_client::auth::{Account, AuthClient, AuthConfig, FileTokenCache};
-    let config = AuthConfig { proxy: proxy.map(Socks5Proxy::to_url), ..AuthConfig::default() };
-    let account = Account::new(Arc::new(AuthClient::new(config)?), Arc::new(FileTokenCache::new(".tokens")?), account);
+    let config = AuthConfig {
+        proxy: proxy.map(Socks5Proxy::to_url),
+        ..AuthConfig::default()
+    };
+    let account = Account::new(
+        Arc::new(AuthClient::new(config)?),
+        Arc::new(FileTokenCache::new(".tokens")?),
+        account,
+    );
     let (key, credentials) = account.login_credentials().await?;
-    println!("signed in as {} in {:?}", credentials.display_name, start.elapsed());
+    println!(
+        "signed in as {} in {:?}",
+        credentials.display_name,
+        start.elapsed()
+    );
     Ok(builder.online(credentials, key))
 }
 

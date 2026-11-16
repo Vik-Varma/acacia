@@ -25,21 +25,46 @@ pub fn lines(f: &Facts) -> (Vec<String>, Vec<String>) {
     let left = vec![
         format!("Acacia ({:?} look, {:?})", f.look, f.mode),
         format!("{:.0} fps", f.fps),
-        format!("{} sections, {} drawn, {}k quads, {} meshing", f.stats.sections, f.stats.drawn, f.stats.quads / 1000, f.stats.pending),
+        format!(
+            "{} sections, {} drawn, {}k quads, {} meshing",
+            f.stats.sections,
+            f.stats.drawn,
+            f.stats.quads / 1000,
+            f.stats.pending
+        ),
         String::new(),
         format!("XYZ: {:.3} / {:.5} / {:.3}", p.x, p.y, p.z),
         format!("Block: {} {} {}", b.x, b.y, b.z),
-        format!("Chunk: {} {} {} in {} {} {}", b.x & 15, b.y & 15, b.z & 15, b.x >> 4, b.y >> 4, b.z >> 4),
+        format!(
+            "Chunk: {} {} {} in {} {} {}",
+            b.x & 15,
+            b.y & 15,
+            b.z & 15,
+            b.x >> 4,
+            b.y >> 4,
+            b.z >> 4
+        ),
         format!("Facing: {} ({:.1} / {:.1})", facing(yaw), wrap(yaw), pitch),
     ];
     let mut right = Vec::new();
     if let (Some(t), Some(world)) = (f.target, f.world) {
-        let id = world.get(t.block.x >> 4, t.block.z >> 4).map(|c| c.read().block(t.block.x, t.block.y, t.block.z));
+        let id = world
+            .get(t.block.x >> 4, t.block.z >> 4)
+            .map(|c| c.read().block(t.block.x, t.block.y, t.block.z));
         let state = id.and_then(|id| world.registry().get(id));
-        right.push(format!("Targeted Block: {}, {}, {}", t.block.x, t.block.y, t.block.z));
+        right.push(format!(
+            "Targeted Block: {}, {}, {}",
+            t.block.x, t.block.y, t.block.z
+        ));
         if let Some(s) = state {
             right.push(s.name.to_owned());
-            right.extend(s.properties.trim_matches(|c| c == '[' || c == ']').split(',').filter(|p| !p.is_empty()).map(str::to_owned));
+            right.extend(
+                s.properties
+                    .trim_matches(|c| c == '[' || c == ']')
+                    .split(',')
+                    .filter(|p| !p.is_empty())
+                    .map(str::to_owned),
+            );
         }
     }
     (left, right)

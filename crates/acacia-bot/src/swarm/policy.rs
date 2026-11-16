@@ -12,11 +12,16 @@ use super::spec::BotId;
 pub enum Decision {
     Reconnect,
     /// Join this `host:port` next (a server transfer); later reconnects go back to the spec's target.
-    Follow { address: String },
-    Stop { error: String },
+    Follow {
+        address: String,
+    },
+    Stop {
+        error: String,
+    },
 }
 
-pub type DisconnectHook = Arc<dyn Fn(&BotId, &DisconnectReason, Decision) -> Decision + Send + Sync>;
+pub type DisconnectHook =
+    Arc<dyn Fn(&BotId, &DisconnectReason, Decision) -> Decision + Send + Sync>;
 
 #[derive(Clone)]
 pub struct Policy {
@@ -45,7 +50,10 @@ impl Default for Policy {
 }
 
 pub(crate) enum Ended<'a> {
-    Session { reason: &'a DisconnectReason, uptime: Duration },
+    Session {
+        reason: &'a DisconnectReason,
+        uptime: Duration,
+    },
     Connect(&'a ConnectError),
     Auth(&'a AuthError),
     /// The spec cannot work as given (bad proxy, realm with an offline login).
@@ -82,7 +90,9 @@ impl Policy {
                 let default = self.session_decision(retry, reason, Duration::ZERO);
                 self.hooked(id, reason, default)
             }
-            Ended::Connect(e @ (ConnectError::NetherNetNeedsOnline | ConnectError::NetherNetUnsupported)) => stop(e),
+            Ended::Connect(
+                e @ (ConnectError::NetherNetNeedsOnline | ConnectError::NetherNetUnsupported),
+            ) => stop(e),
             Ended::Connect(_) => Decision::Reconnect,
             Ended::Auth(e) if permanent(e) => stop(e),
             Ended::Auth(_) => Decision::Reconnect,
@@ -110,19 +120,33 @@ impl Policy {
         }
     }
 
-    fn session_decision(&self, retry: &mut Retry, reason: &DisconnectReason, uptime: Duration) -> Decision {
+    fn session_decision(
+        &self,
+        retry: &mut Retry,
+        reason: &DisconnectReason,
+        uptime: Duration,
+    ) -> Decision {
         match reason {
             DisconnectReason::Kicked { message, .. } if uptime < self.kick_window => {
                 retry.quick_kicks += 1;
                 if retry.quick_kicks >= self.kick_limit {
-                    let error = format!("kicked {} times within {:?} of joining: {message}", retry.quick_kicks, self.kick_window);
+                    let error = format!(
+                        "kicked {} times within {:?} of joining: {message}",
+                        retry.quick_kicks, self.kick_window
+                    );
                     return Decision::Stop { error };
                 }
                 Decision::Reconnect
             }
-            DisconnectReason::Transfer { address, port } => Decision::Follow { address: host_port(address, *port) },
-            DisconnectReason::LoginFailed(status) if *status != PlayStatusStatus::FailedServerFull => {
-                Decision::Stop { error: format!("login refused: {status:?}") }
+            DisconnectReason::Transfer { address, port } => Decision::Follow {
+                address: host_port(address, *port),
+            },
+            DisconnectReason::LoginFailed(status)
+                if *status != PlayStatusStatus::FailedServerFull =>
+            {
+                Decision::Stop {
+                    error: format!("login refused: {status:?}"),
+                }
             }
             _ => {
                 retry.quick_kicks = 0;
@@ -132,22 +156,35 @@ impl Policy {
     }
 
     fn delay(&self, failures: u32, noise: u64) -> Duration {
-        let base = self.initial.saturating_mul(1 << failures.min(16)).min(self.max);
+        let base = self
+            .initial
+            .saturating_mul(1 << failures.min(16))
+            .min(self.max);
         base * (75 + (noise % 51) as u32) / 100
     }
 }
 
 /// Sign-in problems only the account holder can fix.
 fn permanent(e: &AuthError) -> bool {
-    e.requires_user_action() || matches!(e, AuthError::OAuth { .. } | AuthError::DeviceCodeExpired | AuthError::DeviceCodeDeclined)
+    e.requires_user_action()
+        || matches!(
+            e,
+            AuthError::OAuth { .. } | AuthError::DeviceCodeExpired | AuthError::DeviceCodeDeclined
+        )
 }
 
 fn stop(e: impl std::fmt::Display) -> Decision {
-    Decision::Stop { error: e.to_string() }
+    Decision::Stop {
+        error: e.to_string(),
+    }
 }
 
 fn host_port(host: &str, port: u16) -> String {
-    if host.contains(':') { format!("[{host}]:{port}") } else { format!("{host}:{port}") }
+    if host.contains(':') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    }
 }
 
 #[cfg(test)]

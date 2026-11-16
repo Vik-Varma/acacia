@@ -9,15 +9,15 @@ use acacia_world::BlockAccess;
 
 use super::build_sim::{builder, items, view};
 use super::grid::Grid;
+use crate::ActionError;
 use crate::build::{Block, Structure};
 use crate::cadence::splitmix;
 use crate::interact::confirm::{Confirm, Expect};
 use crate::interact::pipeline::{Pipeline, Undo};
-use crate::interact::{block_distance, BLOCK_REACH};
+use crate::interact::{BLOCK_REACH, block_distance};
 use crate::movement::{Movement, Rollout};
 use crate::pathfind::process::{Act, Arbiter, BlockView, Decision, Look, Target};
-use crate::pathfind::{answered, NavStatus, SearchJob};
-use crate::ActionError;
+use crate::pathfind::{NavStatus, SearchJob, answered};
 
 const ORIGIN: BlockPos = [3, 1, 3];
 /// Ticks an action takes to reach the server, and an echo to come back.
@@ -67,7 +67,8 @@ impl Toy {
         }
         while self.to_client.front().is_some_and(|(t, ..)| *t <= now) {
             let (_, pos, name, props) = self.to_client.pop_front().expect("due");
-            self.client.set_state(pos, name.trim_start_matches("minecraft:"), &props);
+            self.client
+                .set_state(pos, name.trim_start_matches("minecraft:"), &props);
             pipe.echo(pos);
         }
     }
@@ -87,7 +88,10 @@ impl Look for ClientLook<'_> {
         None
     }
     fn block(&self, p: BlockPos) -> Option<BlockView> {
-        self.g.registry.get(self.g.view.block(p[0], p[1], p[2])).map(BlockView::of)
+        self.g
+            .registry
+            .get(self.g.view.block(p[0], p[1], p[2]))
+            .map(BlockView::of)
     }
     fn count(&self, item: &str) -> u32 {
         self.inv.get(item).copied().unwrap_or(0)
@@ -109,7 +113,10 @@ fn floor_and_wall() -> Structure {
     for x in 0..6 {
         for z in 0..3 {
             s.set([x, 0, z], Some(Block::new("oak_planks", "")));
-            s.set([x, 1, z], Some(Block::new(if z == 0 { "cobblestone" } else { "air" }, "")));
+            s.set(
+                [x, 1, z],
+                Some(Block::new(if z == 0 { "cobblestone" } else { "air" }, "")),
+            );
         }
     }
     s
@@ -118,7 +125,17 @@ fn floor_and_wall() -> Structure {
 #[test]
 fn pipelined_placements_build_block_exact_through_refusals_and_losses() {
     let s = floor_and_wall();
-    let mut toy = Toy { server: Grid::floor(-20, 30), client: Grid::floor(-20, 30), to_server: VecDeque::new(), to_client: VecDeque::new(), rng: 11, actions: 0, refused: 0, lost: 0, late: 0 };
+    let mut toy = Toy {
+        server: Grid::floor(-20, 30),
+        client: Grid::floor(-20, 30),
+        to_server: VecDeque::new(),
+        to_client: VecDeque::new(),
+        rng: 11,
+        actions: 0,
+        refused: 0,
+        lost: 0,
+        late: 0,
+    };
     let mut inv = items(&[("oak_planks", 64), ("cobblestone", 64), ("dirt", 32)]);
     let mut pipe: Pipeline<(String, String)> = Pipeline::default();
     let mut arb = Arbiter::new();
@@ -129,42 +146,101 @@ fn pipelined_placements_build_block_exact_through_refusals_and_losses() {
     let (mut most_in_flight, mut finished_in_flight) = (0, None);
     for tick in 0..6000u64 {
         toy.tick(tick, &mut pipe);
-        for d in pipe.settle(tick, |p| toy.client.registry.get(toy.client.view.block(p[0], p[1], p[2])).map(|s| (toy.client.view.block(p[0], p[1], p[2]), s))) {
+        for d in pipe.settle(tick, |p| {
+            toy.client
+                .registry
+                .get(toy.client.view.block(p[0], p[1], p[2]))
+                .map(|s| (toy.client.view.block(p[0], p[1], p[2]), s))
+        }) {
             if let Some(undo) = &d.undo {
                 let (name, props) = &undo.extra;
-                toy.client.set_state(d.target, name.trim_start_matches("minecraft:"), props);
+                toy.client
+                    .set_state(d.target, name.trim_start_matches("minecraft:"), props);
             }
-            let act = Act::Place { item: String::new(), against: [d.target[0], d.target[1] - 1, d.target[2]], face: crate::interact::Face::Up, click: [0.5, 1.0, 0.5] };
+            let act = Act::Place {
+                item: String::new(),
+                against: [d.target[0], d.target[1] - 1, d.target[2]],
+                face: crate::interact::Face::Up,
+                click: [0.5, 1.0, 0.5],
+            };
             arb.acted(id, &act, &d.result.map_err(ActionError::Rejected));
         }
         let pos = m.position().expect("started");
-        let decision = arb.decide(pos, m.on_ground(), &ClientLook { g: &toy.client, inv: &inv, pipe: &pipe });
+        let decision = arb.decide(
+            pos,
+            m.on_ground(),
+            &ClientLook {
+                g: &toy.client,
+                inv: &inv,
+                pipe: &pipe,
+            },
+        );
         match decision {
             // As live, where `place_sent` waits in `admit_action` until the governor lets one more out.
             Decision::Act(..) if pipe.targets().count() >= CAP => m.controls.stop(),
-            Decision::Act(pid, Act::Place { item, against, face, click }) => {
+            Decision::Act(
+                pid,
+                Act::Place {
+                    item,
+                    against,
+                    face,
+                    click,
+                },
+            ) => {
                 let target = face.adjacent(against);
                 let eye = [pos[0], pos[1] + 1.62, pos[2]];
                 let before = toy.client.view.block(target[0], target[1], target[2]);
-                if block_distance(eye, against) > BLOCK_REACH || inv.get(&item).copied().unwrap_or(0) == 0 {
-                    let act = Act::Place { item, against, face, click };
-                    arb.acted(pid, &act, &Err(ActionError::NotPossible("out of reach".into())));
+                if block_distance(eye, against) > BLOCK_REACH
+                    || inv.get(&item).copied().unwrap_or(0) == 0
+                {
+                    let act = Act::Place {
+                        item,
+                        against,
+                        face,
+                        click,
+                    };
+                    arb.acted(
+                        pid,
+                        &act,
+                        &Err(ActionError::NotPossible("out of reach".into())),
+                    );
                 } else {
                     *inv.get_mut(&item).expect("held") -= 1;
                     let name = item.trim_start_matches("minecraft:").to_string();
                     toy.to_server.push_back((tick + UP, target, name.clone()));
                     let old = view(&toy.client, target);
                     toy.client.set_state(target, &name, "");
-                    let confirm = Confirm::new(Expect::Solid, Some(before), tick, TIMEOUT, 1).predicted();
-                    pipe.push(target, confirm, Undo { replaced: Some(before), extra: old });
+                    let confirm =
+                        Confirm::new(Expect::Solid, Some(before), tick, TIMEOUT, 1).predicted();
+                    pipe.push(
+                        target,
+                        confirm,
+                        Undo {
+                            replaced: Some(before),
+                            extra: old,
+                        },
+                    );
                 }
             }
-            Decision::Act(pid, act) => arb.acted(pid, &act, &Err(ActionError::NotPossible(format!("not modelled: {act:?}")))),
+            Decision::Act(pid, act) => arb.acted(
+                pid,
+                &act,
+                &Err(ActionError::NotPossible(format!("not modelled: {act:?}"))),
+            ),
             Decision::Go => {
                 let pilot = arb.pilot_mut().expect("routed");
                 let opts = pilot.search_opts(Some(super::alter::blocks(64)), 20.0);
-                let result = pilot.drive(&toy.client.terrain(), &mut m, opts, &mut |job: SearchJob<Rollout>| answered(job.run(&toy.client.terrain())));
-                assert_ne!(result, Ok(NavStatus::Working), "the scene needs no path work");
+                let result = pilot.drive(
+                    &toy.client.terrain(),
+                    &mut m,
+                    opts,
+                    &mut |job: SearchJob<Rollout>| answered(job.run(&toy.client.terrain())),
+                );
+                assert_ne!(
+                    result,
+                    Ok(NavStatus::Working),
+                    "the scene needs no path work"
+                );
                 if !matches!(result, Ok(NavStatus::Searching | NavStatus::Moving)) {
                     m.controls.stop();
                 }
@@ -180,18 +256,42 @@ fn pipelined_placements_build_block_exact_through_refusals_and_losses() {
         m.tick(&toy.client.physics());
     }
     let st = status.lock().unwrap().clone();
-    eprintln!("actions {} refused {} lost {} late echoes {} most in flight {most_in_flight} status {st:?}", toy.actions, toy.refused, toy.lost, toy.late);
+    eprintln!(
+        "actions {} refused {} lost {} late echoes {} most in flight {most_in_flight} status {st:?}",
+        toy.actions, toy.refused, toy.lost, toy.late
+    );
     assert_eq!(arb.outcome(id), Some(&Ok(())), "status {st:?}");
-    assert_eq!(finished_in_flight, Some(0), "finished with placements in flight");
-    assert!(toy.refused > 0 && toy.lost > 0 && toy.late > 0, "the server refused, lost and delayed some");
+    assert_eq!(
+        finished_in_flight,
+        Some(0),
+        "finished with placements in flight"
+    );
+    assert!(
+        toy.refused > 0 && toy.lost > 0 && toy.late > 0,
+        "the server refused, lost and delayed some"
+    );
     let to_place = s.cells().filter(|(_, b)| !b.is_air()).count() as u32;
-    assert_eq!(st.placed, to_place, "every cell placed once it went through");
-    assert_eq!(toy.actions, to_place + toy.refused + toy.lost, "each refused or lost placement sent again");
-    assert!((2..=CAP).contains(&most_in_flight), "placements overlapped, within the cap: {most_in_flight}");
+    assert_eq!(
+        st.placed, to_place,
+        "every cell placed once it went through"
+    );
+    assert_eq!(
+        toy.actions,
+        to_place + toy.refused + toy.lost,
+        "each refused or lost placement sent again"
+    );
+    assert!(
+        (2..=CAP).contains(&most_in_flight),
+        "placements overlapped, within the cap: {most_in_flight}"
+    );
     for (p, b) in s.cells() {
         let pos = [ORIGIN[0] + p[0], ORIGIN[1] + p[1], ORIGIN[2] + p[2]];
         let (server, client) = (view(&toy.server, pos), view(&toy.client, pos));
-        assert_eq!(server.0, format!("minecraft:{}", b.name.trim_start_matches("minecraft:")), "server at {pos:?}");
+        assert_eq!(
+            server.0,
+            format!("minecraft:{}", b.name.trim_start_matches("minecraft:")),
+            "server at {pos:?}"
+        );
         assert_eq!(client, server, "ghost at {pos:?}");
     }
 }

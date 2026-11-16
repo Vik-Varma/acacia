@@ -26,7 +26,14 @@ impl PlayerState {
             return s.bb;
         }
         let [w, h] = dims;
-        Aabb::new(pos[0] - w, pos[1], pos[2] - w, pos[0] + w, pos[1] + h, pos[2] + w)
+        Aabb::new(
+            pos[0] - w,
+            pos[1],
+            pos[2] - w,
+            pos[0] + w,
+            pos[1] + h,
+            pos[2] + w,
+        )
     }
 
     /// The player's collision box at the current position.
@@ -41,7 +48,11 @@ impl PlayerState {
     }
 
     pub(crate) fn remember_box(&mut self, bb: Aabb) {
-        self.shape = Some(CollisionShape { bb, pos: self.pos, dims: self.collision_dims() });
+        self.shape = Some(CollisionShape {
+            bb,
+            pos: self.pos,
+            dims: self.collision_dims(),
+        });
     }
 
     pub(crate) fn set_swimming_pose_flags(&mut self) {
@@ -84,11 +95,14 @@ fn recover_rounded_contacts(bb: Aabb, pos: Vec3, boxes: &[Aabb]) -> Aabb {
     // A face the rebuilt box is inside by float noise only: the server's box touches it (see README).
     for other in boxes {
         for axis in [0, 2] {
-            let across = (0..3).filter(|&i| i != axis).all(|i| other.max[i] - omin[i] > CONTACT_NOISE && omax[i] - other.min[i] > CONTACT_NOISE);
+            let across = (0..3).filter(|&i| i != axis).all(|i| {
+                other.max[i] - omin[i] > CONTACT_NOISE && omax[i] - other.min[i] > CONTACT_NOISE
+            });
             if !across {
                 continue;
             }
-            let (inside_low, inside_high) = (other.max[axis] - low[axis], high[axis] - other.min[axis]);
+            let (inside_low, inside_high) =
+                (other.max[axis] - low[axis], high[axis] - other.min[axis]);
             if inside_low > 0.0 && inside_low < CONTACT_NOISE {
                 low[axis] = other.max[axis];
             }
@@ -120,7 +134,10 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
             return;
         }
         // Wider than the box, or `Aabb::intersects` drops the faces it is inside by noise.
-        let boxes = self.nearby_bboxes(st, &bb.grow_vec([2.0 * CONTACT_NOISE, 0.0, 2.0 * CONTACT_NOISE]));
+        let boxes = self.nearby_bboxes(
+            st,
+            &bb.grow_vec([2.0 * CONTACT_NOISE, 0.0, 2.0 * CONTACT_NOISE]),
+        );
         let bb = recover_rounded_contacts(bb, st.pos, &boxes);
         st.remember_box(bb);
     }
@@ -143,7 +160,8 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
     /// Scaffolding collides only under a player standing above it who isn't descending (Java
     /// `ScaffoldingBlock::getCollisionShape`; its unsupported-bottom lip is not modelled).
     pub(crate) fn collides_for(&self, st: &PlayerState, cell: BlockPos) -> bool {
-        self.w.block(cell).traversal != Traversal::Scaffolding || st.pos[1] > cell[1] as f32 + 1.0 - 1e-5 && !st.pressing_descend
+        self.w.block(cell).traversal != Traversal::Scaffolding
+            || st.pos[1] > cell[1] as f32 + 1.0 - 1e-5 && !st.pressing_descend
     }
 
     pub(crate) fn pose_collisions_available(&self, st: &PlayerState) -> bool {
@@ -153,7 +171,10 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
     /// Whether a standing box of `height` is free, and whether that could be determined.
     pub(crate) fn can_fit_height_known(&self, st: &PlayerState, height: f32) -> (bool, bool) {
         let scale = st.size[2];
-        let bb = st.box_with_dims(st.pos, [(st.size[0] * 0.5) * scale - HEADROOM_MARGIN, height * scale]);
+        let bb = st.box_with_dims(
+            st.pos,
+            [(st.size[0] * 0.5) * scale - HEADROOM_MARGIN, height * scale],
+        );
         if !self.loaded(&bb) {
             return (false, false);
         }
@@ -161,7 +182,11 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
     }
 
     /// Chooses standing, sneaking or crawling without entering a ceiling.
-    pub(crate) fn restore_upright_pose(&self, st: &mut PlayerState, collisions_available: bool) -> bool {
+    pub(crate) fn restore_upright_pose(
+        &self,
+        st: &mut PlayerState,
+        collisions_available: bool,
+    ) -> bool {
         if !collisions_available {
             return false;
         }

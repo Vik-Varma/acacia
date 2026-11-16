@@ -66,14 +66,35 @@ pub enum Hit {
 /// The buttons `page` shows, with their labels.
 fn buttons(page: Page, size: [f32; 2]) -> Vec<(Hit, [f32; 4], &'static str)> {
     let left = ((size[0] - AREA) / 2.0).floor();
-    let turn = |at: [f32; 2]| [left + at[0], TOP + at[1], left + at[0] + TURN[0], TOP + at[1] + TURN[1]];
-    let (x, y) = (((size[0] - DONE[0]) / 2.0).floor(), (TOP + DONE_Y).min(size[1] - DONE[1] - 2.0));
+    let turn = |at: [f32; 2]| {
+        [
+            left + at[0],
+            TOP + at[1],
+            left + at[0] + TURN[0],
+            TOP + at[1] + TURN[1],
+        ]
+    };
+    let (x, y) = (
+        ((size[0] - DONE[0]) / 2.0).floor(),
+        (TOP + DONE_Y).min(size[1] - DONE[1] - 2.0),
+    );
     let half = (DONE[0] - GAP) / 2.0;
-    let (whole, first, second) = ([x, y, x + DONE[0], y + DONE[1]], [x, y, x + half, y + DONE[1]], [x + half + GAP, y, x + DONE[0], y + DONE[1]]);
+    let (whole, first, second) = (
+        [x, y, x + DONE[0], y + DONE[1]],
+        [x, y, x + half, y + DONE[1]],
+        [x + half + GAP, y, x + DONE[0], y + DONE[1]],
+    );
     if page.signing.is_some() {
-        return vec![(Hit::Finalize, first, "Sign and Close"), (Hit::Cancel, second, "Cancel")];
+        return vec![
+            (Hit::Finalize, first, "Sign and Close"),
+            (Hit::Cancel, second, "Cancel"),
+        ];
     }
-    let mut shown = if page.writing { vec![(Hit::Sign, first, "Sign"), (Hit::Done, second, "Done")] } else { vec![(Hit::Done, whole, "Done")] };
+    let mut shown = if page.writing {
+        vec![(Hit::Sign, first, "Sign"), (Hit::Done, second, "Done")]
+    } else {
+        vec![(Hit::Done, whole, "Done")]
+    };
     if page.page > 0 {
         shown.push((Hit::Back, turn(BACK_AT), "<"));
     }
@@ -85,12 +106,20 @@ fn buttons(page: Page, size: [f32; 2]) -> Vec<(Hit, [f32; 4], &'static str)> {
 
 /// The button under `at`; a turn button only where there is a page to turn to.
 pub fn hit(page: Page, size: [f32; 2], at: [f32; 2]) -> Option<Hit> {
-    buttons(page, size).into_iter().find(|(_, rect, _)| contains(*rect, at)).map(|(hit, ..)| hit)
+    buttons(page, size)
+        .into_iter()
+        .find(|(_, rect, _)| contains(*rect, at))
+        .map(|(hit, ..)| hit)
 }
 
 /// Whether `text` fits on a page.
 pub fn fits(theme: &Theme, text: &str) -> bool {
-    theme.font.as_ref().is_none_or(|font| text.split('\n').map(|line| font.wrap(line, TEXT_WIDTH).len().max(1)).sum::<usize>() <= LINES)
+    theme.font.as_ref().is_none_or(|font| {
+        text.split('\n')
+            .map(|line| font.wrap(line, TEXT_WIDTH).len().max(1))
+            .sum::<usize>()
+            <= LINES
+    })
 }
 
 pub fn draw(list: &mut DrawList, theme: &Theme, page: Page, mouse: [f32; 2], size: [f32; 2]) {
@@ -102,22 +131,57 @@ pub fn draw(list: &mut DrawList, theme: &Theme, page: Page, mouse: [f32; 2], siz
         Some(art) => list.sprite(art, left, TOP, [0xFF; 4]),
         None => {
             list.fill(white, paper, PAPER_EDGE);
-            list.fill(white, [paper[0] + 1.0, paper[1] + 1.0, paper[2] - 1.0, paper[3] - 1.0], PAPER);
+            list.fill(
+                white,
+                [
+                    paper[0] + 1.0,
+                    paper[1] + 1.0,
+                    paper[2] - 1.0,
+                    paper[3] - 1.0,
+                ],
+                PAPER,
+            );
         }
     }
     let over = hit(page, size, mouse);
     for (button, rect, text) in buttons(page, size) {
-        let state = State { hover: over == Some(button), ..State::default() };
-        theme.widgets.skin().draw(list, theme.font.as_ref(), &Widget::Button { text: text.into(), image: None }, rect, state);
+        let state = State {
+            hover: over == Some(button),
+            ..State::default()
+        };
+        theme.widgets.skin().draw(
+            list,
+            theme.font.as_ref(),
+            &Widget::Button {
+                text: text.into(),
+                image: None,
+            },
+            rect,
+            state,
+        );
     }
     let Some(font) = &theme.font else { return };
     if let Some(title) = page.signing {
         return draw_signing(list, font, title, left);
     }
     let number = format!("Page {} of {}", page.page + 1, page.pages.max(1));
-    font.draw(list, &number, left + NUMBER_AT[0] - font.width(&number), TOP + NUMBER_AT[1], 0x000000, 1.0, false);
+    font.draw(
+        list,
+        &number,
+        left + NUMBER_AT[0] - font.width(&number),
+        TOP + NUMBER_AT[1],
+        0x000000,
+        1.0,
+        false,
+    );
     let wrapped = |text: &str| -> Vec<String> {
-        let lines = text.split('\n').flat_map(|line| if line.is_empty() { vec![String::new()] } else { font.wrap(line, TEXT_WIDTH) });
+        let lines = text.split('\n').flat_map(|line| {
+            if line.is_empty() {
+                vec![String::new()]
+            } else {
+                font.wrap(line, TEXT_WIDTH)
+            }
+        });
         lines.take(LINES).collect()
     };
     let at = |row: usize| TOP + TEXT_AT[1] + row as f32 * LINE_HEIGHT;
@@ -128,7 +192,10 @@ pub fn draw(list: &mut DrawList, theme: &Theme, page: Page, mouse: [f32; 2], siz
         // The caret stands where the text before it ends; in a word that the rest of the page
         // wraps onto the next line, that is still the end of its old line.
         let before = wrapped(page.text.get(..page.caret).unwrap_or(page.text));
-        let (x, y) = (left + TEXT_AT[0] + before.last().map_or(0.0, |line| font.width(line)), at(before.len().saturating_sub(1)));
+        let (x, y) = (
+            left + TEXT_AT[0] + before.last().map_or(0.0, |line| font.width(line)),
+            at(before.len().saturating_sub(1)),
+        );
         match page.caret >= page.text.len() {
             true => _ = font.draw(list, "_", x, y, 0x000000, 1.0, false),
             false => list.fill(white, [x, y - 1.0, x + 1.0, y + 8.0], [0, 0, 0, 0xFF]),
@@ -138,11 +205,29 @@ pub fn draw(list: &mut DrawList, theme: &Theme, page: Page, mouse: [f32; 2], siz
 
 fn draw_signing(list: &mut DrawList, font: &Font, title: &str, left: f32) {
     let middle = left + TEXT_AT[0] + TEXT_WIDTH / 2.0;
-    let centred = |list: &mut DrawList, text: &str, y: f32, colour: u32| font.draw(list, text, middle - (font.width(text) / 2.0).floor(), TOP + y, colour, 1.0, false);
+    let centred = |list: &mut DrawList, text: &str, y: f32, colour: u32| {
+        font.draw(
+            list,
+            text,
+            middle - (font.width(text) / 2.0).floor(),
+            TOP + y,
+            colour,
+            1.0,
+            false,
+        )
+    };
     centred(list, HEADING, SIGNING_Y[0], 0x000000);
     centred(list, &format!("{title}_"), SIGNING_Y[1], 0x000000);
     for (i, line) in font.wrap(WARNING, TEXT_WIDTH).iter().enumerate() {
-        font.draw(list, line, left + TEXT_AT[0], TOP + SIGNING_Y[2] + i as f32 * LINE_HEIGHT, GREY, 1.0, false);
+        font.draw(
+            list,
+            line,
+            left + TEXT_AT[0],
+            TOP + SIGNING_Y[2] + i as f32 * LINE_HEIGHT,
+            GREY,
+            1.0,
+            false,
+        );
     }
 }
 
@@ -154,21 +239,69 @@ mod tests {
     fn turn_buttons_show_only_where_a_page_follows() {
         let size = [426.0, 240.0];
         let (back, forward, done) = ([165.0, 165.0], [240.0, 165.0], [213.0, 200.0]);
-        let first = Page { text: "", page: 0, pages: 3, writing: false, caret: 0, signing: None };
-        assert_eq!((hit(first, size, back), hit(first, size, forward), hit(first, size, done)), (None, Some(Hit::Forward), Some(Hit::Done)));
+        let first = Page {
+            text: "",
+            page: 0,
+            pages: 3,
+            writing: false,
+            caret: 0,
+            signing: None,
+        };
+        assert_eq!(
+            (
+                hit(first, size, back),
+                hit(first, size, forward),
+                hit(first, size, done)
+            ),
+            (None, Some(Hit::Forward), Some(Hit::Done))
+        );
         let last = Page { page: 2, ..first };
-        assert_eq!((hit(last, size, back), hit(last, size, forward)), (Some(Hit::Back), None));
-        assert_eq!(hit(Page { writing: true, ..last }, size, forward), Some(Hit::Forward), "a new page");
+        assert_eq!(
+            (hit(last, size, back), hit(last, size, forward)),
+            (Some(Hit::Back), None)
+        );
+        assert_eq!(
+            hit(
+                Page {
+                    writing: true,
+                    ..last
+                },
+                size,
+                forward
+            ),
+            Some(Hit::Forward),
+            "a new page"
+        );
     }
 
     #[test]
     fn a_book_and_quill_signs_from_the_left_button() {
         let size = [426.0, 240.0];
         let (left, right) = ([150.0, 200.0], [280.0, 200.0]);
-        let quill = Page { text: "", page: 0, pages: 1, writing: true, caret: 0, signing: None };
-        assert_eq!((hit(quill, size, left), hit(quill, size, right)), (Some(Hit::Sign), Some(Hit::Done)));
-        let signing = Page { signing: Some("Title"), ..quill };
-        assert_eq!((hit(signing, size, left), hit(signing, size, right)), (Some(Hit::Finalize), Some(Hit::Cancel)));
-        assert_eq!(hit(signing, size, [240.0, 165.0]), None, "no page turns while signing");
+        let quill = Page {
+            text: "",
+            page: 0,
+            pages: 1,
+            writing: true,
+            caret: 0,
+            signing: None,
+        };
+        assert_eq!(
+            (hit(quill, size, left), hit(quill, size, right)),
+            (Some(Hit::Sign), Some(Hit::Done))
+        );
+        let signing = Page {
+            signing: Some("Title"),
+            ..quill
+        };
+        assert_eq!(
+            (hit(signing, size, left), hit(signing, size, right)),
+            (Some(Hit::Finalize), Some(Hit::Cancel))
+        );
+        assert_eq!(
+            hit(signing, size, [240.0, 165.0]),
+            None,
+            "no page turns while signing"
+        );
     }
 }

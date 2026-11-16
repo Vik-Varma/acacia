@@ -15,10 +15,10 @@ use rand_core::{OsRng, RngCore};
 
 use self::socket::LanSocket;
 
+use crate::ConnectError;
 use crate::net_wire::NetherNetWire;
 use crate::transport::Transport;
 use crate::trickle::{self, SignalPath};
-use crate::ConnectError;
 
 /// Vanilla's cadence (qos-lan-capture-2026-10-03.md).
 const REQUEST_INTERVAL: Duration = Duration::from_secs(2);
@@ -80,7 +80,11 @@ pub async fn discover_lan(duration: Duration) -> io::Result<Vec<LanServer>> {
 
 /// The first request goes to the fallback (vanilla's interface scan is still running); later ones to
 /// the broadcast domain, which loses any address a send fails on.
-async fn broadcast_request(socket: &LanSocket, request: &[u8], domain: &mut Option<Vec<SocketAddr>>) -> io::Result<()> {
+async fn broadcast_request(
+    socket: &LanSocket,
+    request: &[u8],
+    domain: &mut Option<Vec<SocketAddr>>,
+) -> io::Result<()> {
     let Some(addrs) = domain else {
         socket.send_to(request, socket::FALLBACK).await?;
         let addrs = socket.broadcast_domain()?;
@@ -100,9 +104,17 @@ async fn broadcast_request(socket: &LanSocket, request: &[u8], domain: &mut Opti
 }
 
 /// Connects to a discovered world: signals over discovery packets, ICE on its own socket.
-pub(crate) async fn dial(server: &LanServer, identity: &Identity) -> Result<(Transport, NetherNetWire), ConnectError> {
+pub(crate) async fn dial(
+    server: &LanServer,
+    identity: &Identity,
+) -> Result<(Transport, NetherNetWire), ConnectError> {
     let deadline = Instant::now() + DIAL_TIMEOUT;
-    let mut path = LanPath { socket: LanSocket::bind()?, own_id: server.local_id, server, outbox: Vec::new() };
+    let mut path = LanPath {
+        socket: LanSocket::bind()?,
+        own_id: server.local_id,
+        server,
+        outbox: Vec::new(),
+    };
     let transport = Transport::bind(server.addr, None).await?;
     let wire = trickle::connect(&mut path, &transport, identity, deadline).await?;
     Ok((transport, wire))
@@ -122,8 +134,13 @@ impl SignalPath for LanPath<'_> {
 
     async fn flush(&mut self) -> Result<(), ConnectError> {
         for signal in std::mem::take(&mut self.outbox) {
-            let packet = LanPacket::Message { recipient: self.server.network_id, data: signal.to_string() };
-            self.socket.send_to(&packet.encode(self.own_id), self.server.addr).await?;
+            let packet = LanPacket::Message {
+                recipient: self.server.network_id,
+                data: signal.to_string(),
+            };
+            self.socket
+                .send_to(&packet.encode(self.own_id), self.server.addr)
+                .await?;
         }
         Ok(())
     }
@@ -137,9 +154,15 @@ impl SignalPath for LanPath<'_> {
         };
         Ok(match LanPacket::decode(&buf[..n]) {
             Ok((LanPacket::Message { recipient, data }, sender))
-                if recipient == self.own_id && sender == self.server.network_id && !data.is_empty() && data != "Ping" =>
+                if recipient == self.own_id
+                    && sender == self.server.network_id
+                    && !data.is_empty()
+                    && data != "Ping" =>
             {
-                Signal::parse(&data).map_err(|e| tracing::debug!("bad LAN signal: {e}")).into_iter().collect()
+                Signal::parse(&data)
+                    .map_err(|e| tracing::debug!("bad LAN signal: {e}"))
+                    .into_iter()
+                    .collect()
             }
             _ => vec![],
         })
@@ -194,10 +217,16 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn dials_a_lan_host_over_discovery_messages() {
         let discovery = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-        let server = LanServer { addr: discovery.local_addr().unwrap(), network_id: HOST_ID, data: ServerData::default(), local_id: 7 };
+        let server = LanServer {
+            addr: discovery.local_addr().unwrap(),
+            network_id: HOST_ID,
+            data: ServerData::default(),
+            local_id: 7,
+        };
         // Like the vanilla game hosting a world: no a=identity in the answer.
         tokio::spawn(run_host(discovery, RtcHost::bind(false).await));
-        let identity = Identity::multiplayer(SigningKey::from_slice(&[5; 48]).unwrap(), "token".into());
+        let identity =
+            Identity::multiplayer(SigningKey::from_slice(&[5; 48]).unwrap(), "token".into());
         let dialed = tokio::time::timeout(Duration::from_secs(20), dial(&server, &identity)).await;
         let (_, wire) = dialed.expect("dial timed out").expect("dial failed");
         assert!(wire.conn.is_open());

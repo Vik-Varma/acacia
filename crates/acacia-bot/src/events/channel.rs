@@ -10,9 +10,16 @@ use super::{BotEvent, EventSink};
 /// ([`BotEvent::is_lossy`]) are dropped and counted in a [`BotEvent::Lagged`] where they would have been; the
 /// rest are always kept. The receiver ends once every clone of the sink is gone (the bot and its config).
 pub fn channel(capacity: usize) -> (EventSink, EventReceiver) {
-    let shared = Arc::new(Shared { queue: Mutex::new(Queue::default()), notify: Notify::new(), capacity });
+    let shared = Arc::new(Shared {
+        queue: Mutex::new(Queue::default()),
+        notify: Notify::new(),
+        capacity,
+    });
     let end = SinkEnd(shared.clone());
-    (Arc::new(move |event| end.push(event)), EventReceiver(shared))
+    (
+        Arc::new(move |event| end.push(event)),
+        EventReceiver(shared),
+    )
 }
 
 /// The consuming end of [`channel`].

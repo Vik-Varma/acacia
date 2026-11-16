@@ -92,8 +92,16 @@ impl Chat {
     /// Up (`older`) and down through what was sent before.
     pub fn recall(&mut self, older: bool) {
         let Some(input) = &mut self.input else { return };
-        self.recall = if older { (self.recall + 1).min(self.sent.len()) } else { self.recall.saturating_sub(1) };
-        *input = if self.recall == 0 { String::new() } else { self.sent[self.recall - 1].clone() };
+        self.recall = if older {
+            (self.recall + 1).min(self.sent.len())
+        } else {
+            self.recall.saturating_sub(1)
+        };
+        *input = if self.recall == 0 {
+            String::new()
+        } else {
+            self.sent[self.recall - 1].clone()
+        };
     }
 
     /// The lines to draw, newest first, with their opacity (0 to 1).
@@ -106,7 +114,10 @@ impl Chat {
             .take(SHOWN_CLOSED)
             .map_while(|l| {
                 let left = SHOWN_FOR.checked_sub(now.saturating_duration_since(l.at))?;
-                Some((l.text.as_str(), (left.as_secs_f32() / FADE.as_secs_f32()).min(1.0)))
+                Some((
+                    l.text.as_str(),
+                    (left.as_secs_f32() / FADE.as_secs_f32()).min(1.0),
+                ))
             })
             .collect()
     }
@@ -123,14 +134,31 @@ pub fn draw(list: &mut DrawList, theme: &Theme, chat: &Chat, now: Instant, size:
     let [w, h] = size;
     let white = theme.atlas.white();
     // Newest message lowest; a wrapped message's lines read downwards.
-    let rows = chat.visible(now).into_iter().flat_map(|(text, opacity)| font.wrap(text, WIDTH).into_iter().rev().map(move |l| (l, opacity)));
+    let rows = chat.visible(now).into_iter().flat_map(|(text, opacity)| {
+        font.wrap(text, WIDTH)
+            .into_iter()
+            .rev()
+            .map(move |l| (l, opacity))
+    });
     for (i, (line, opacity)) in rows.enumerate() {
         let bottom = h - BOTTOM - i as f32 * LINE_HEIGHT;
         if bottom < LINE_HEIGHT {
             break;
         }
-        list.fill(white, [0.0, bottom - LINE_HEIGHT, WIDTH + 8.0, bottom], [0, 0, 0, (opacity * 127.0) as u8]);
-        font.draw(list, &line, 4.0, bottom - LINE_HEIGHT + 1.0, 0xFFFFFF, opacity, true);
+        list.fill(
+            white,
+            [0.0, bottom - LINE_HEIGHT, WIDTH + 8.0, bottom],
+            [0, 0, 0, (opacity * 127.0) as u8],
+        );
+        font.draw(
+            list,
+            &line,
+            4.0,
+            bottom - LINE_HEIGHT + 1.0,
+            0xFFFFFF,
+            opacity,
+            true,
+        );
     }
     if let Some(input) = &chat.input {
         list.fill(white, [2.0, h - 14.0, w - 2.0, h - 2.0], [0, 0, 0, 127]);
@@ -155,7 +183,11 @@ mod tests {
         assert!((shown[1].1 - 0.5).abs() < 1e-3, "{shown:?}");
         assert_eq!(chat.visible(start + Duration::from_secs(11)).len(), 1);
         chat.open("");
-        assert_eq!(chat.visible(start + Duration::from_secs(60)).len(), 2, "open shows everything");
+        assert_eq!(
+            chat.visible(start + Duration::from_secs(60)).len(),
+            2,
+            "open shows everything"
+        );
     }
 
     #[test]
@@ -167,7 +199,11 @@ mod tests {
             assert_eq!(chat.submit().as_deref(), Some(text));
         }
         chat.record("/time set day");
-        assert_eq!(chat.history(), ["hi", "/time set day"], "oldest first, a repeat not kept");
+        assert_eq!(
+            chat.history(),
+            ["hi", "/time set day"],
+            "oldest first, a repeat not kept"
+        );
         chat.open("");
         chat.recall(true);
         assert_eq!(chat.input.as_deref(), Some("/time set day"));

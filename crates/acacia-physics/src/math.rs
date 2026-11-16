@@ -12,7 +12,11 @@ static SIN_TABLE: OnceLock<Box<[f32]>> = OnceLock::new();
 /// BDS fills its table with `sinf(i / 10430.378f)` (dumped from a live Linux BDS 1.26.52.3: all 65536 entries;
 /// two thirds differ by an ulp from a correctly rounded sine, which moved every off-axis sprint jump).
 fn sin_table() -> &'static [f32] {
-    SIN_TABLE.get_or_init(|| (0..65536).map(|i| crate::sinf::sinf(i as f32 / 10430.378)).collect())
+    SIN_TABLE.get_or_init(|| {
+        (0..65536)
+            .map(|i| crate::sinf::sinf(i as f32 / 10430.378))
+            .collect()
+    })
 }
 
 /// Minecraft's table sine.
@@ -90,7 +94,24 @@ mod tests {
 
     #[test]
     fn floor_and_ceil_i32_match_std() {
-        let edges = [0.0, -0.0, 0.5, -0.5, 1.0, -1.0, -1e-7, 63.999_996, -64.000_01, 3e9, -3e9, 2_147_483_648.0, -2_147_483_904.0, f32::INFINITY, f32::NEG_INFINITY, f32::NAN];
+        let edges = [
+            0.0,
+            -0.0,
+            0.5,
+            -0.5,
+            1.0,
+            -1.0,
+            -1e-7,
+            63.999_996,
+            -64.000_01,
+            3e9,
+            -3e9,
+            2_147_483_648.0,
+            -2_147_483_904.0,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            f32::NAN,
+        ];
         let sweep = (-20_000..20_000).map(|i| i as f32 * 0.003_7 - 0.25);
         for v in edges.into_iter().chain(sweep) {
             assert_eq!(floor_i32(v), v.floor() as i32, "floor {v}");

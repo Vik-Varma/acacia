@@ -9,9 +9,15 @@ pub(super) struct Gpu {
     pub config: wgpu::SurfaceConfiguration,
 }
 
-pub(super) fn open(target: impl Into<wgpu::SurfaceTarget<'static>>, (width, height): (u32, u32)) -> Result<Gpu, Error> {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let surface = instance.create_surface(target).map_err(|e| Error::Surface(e.to_string()))?;
+pub(super) fn open(
+    target: impl Into<wgpu::SurfaceTarget<'static>>,
+    (width, height): (u32, u32),
+) -> Result<Gpu, Error> {
+    let instance =
+        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+    let surface = instance
+        .create_surface(target)
+        .map_err(|e| Error::Surface(e.to_string()))?;
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,
         compatible_surface: Some(&surface),
@@ -38,17 +44,30 @@ pub(super) fn open(target: impl Into<wgpu::SurfaceTarget<'static>>, (width, heig
     config.format = config.format.add_srgb_suffix();
     // The UI pass draws through a plain view of the same texture: both games blend UI in gamma space.
     config.view_formats = vec![config.format.remove_srgb_suffix()];
-    if surface.get_capabilities(&adapter).usages.contains(wgpu::TextureUsages::COPY_SRC) {
+    if surface
+        .get_capabilities(&adapter)
+        .usages
+        .contains(wgpu::TextureUsages::COPY_SRC)
+    {
         config.usage |= wgpu::TextureUsages::COPY_SRC;
     }
     config.present_mode = wgpu::PresentMode::AutoVsync;
     surface.configure(&device, &config);
-    Ok(Gpu { surface, device, queue, config })
+    Ok(Gpu {
+        surface,
+        device,
+        queue,
+        config,
+    })
 }
 
 /// The texture to draw the frame into, reconfiguring a suboptimal, outdated or lost surface;
 /// `None` when there is none this time.
-pub(super) fn acquire_or_reconfigure(surface: &wgpu::Surface, device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Option<wgpu::SurfaceTexture> {
+pub(super) fn acquire_or_reconfigure(
+    surface: &wgpu::Surface,
+    device: &wgpu::Device,
+    config: &wgpu::SurfaceConfiguration,
+) -> Option<wgpu::SurfaceTexture> {
     match surface.get_current_texture() {
         wgpu::CurrentSurfaceTexture::Success(f) => Some(f),
         // wgpu 30 refuses to configure while a texture is held: drop it and skip the frame.

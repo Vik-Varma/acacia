@@ -27,7 +27,10 @@ impl Mask {
 
 pub(super) fn cubes(ctx: &Ctx, out: &mut SectionMesh) {
     let lighter = ctx.lighter();
-    let mut mask = Mask { keys: [0; 256], light: [[0; 4]; 256] };
+    let mut mask = Mask {
+        keys: [0; 256],
+        light: [[0; 4]; 256],
+    };
     for face in 0..6u8 {
         let (axis, ua, va) = AXES[face as usize];
         for s in 0..16 {
@@ -64,21 +67,41 @@ fn face_key(ctx: &Ctx, p: [i32; 3], face: u8, vertex_lit: bool) -> u64 {
     if b.shape != Shape::Cube {
         return 0;
     }
-    let ao = if b.layer == Layer::Solid && !vertex_lit { corner_ao(ctx, n, face) } else { [3; 4] };
-    let translucent = if b.layer == Layer::Translucent { TRANSLUCENT } else { 0 };
+    let ao = if b.layer == Layer::Solid && !vertex_lit {
+        corner_ao(ctx, n, face)
+    } else {
+        [3; 4]
+    };
+    let translucent = if b.layer == Layer::Translucent {
+        TRANSLUCENT
+    } else {
+        0
+    };
     PRESENT | translucent | pack(ctx.surface(p, b, face as usize), ao)
 }
 
 fn pack(s: Surface, ao: [u8; 4]) -> u64 {
-    let ao_bits = ao.iter().enumerate().fold(0u64, |a, (i, &x)| a | (u64::from(x) << (i * 2)));
+    let ao_bits = ao
+        .iter()
+        .enumerate()
+        .fold(0u64, |a, (i, &x)| a | (u64::from(x) << (i * 2)));
     let [r, g, b] = s.color.map(u64::from);
-    let look = u64::from(s.texture) | u64::from(s.tint_kind) << 12 | (s.material as u64) << 14 | ao_bits << 16 | (r | g << 7 | b << 14) << 24;
+    let look = u64::from(s.texture)
+        | u64::from(s.tint_kind) << 12
+        | (s.material as u64) << 14
+        | ao_bits << 16
+        | (r | g << 7 | b << 14) << 24;
     look | u64::from(s.turn) << 47
 }
 
 fn unpack(key: u64) -> (Surface, [u8; 4]) {
     let bits = |at: u32, len: u32| (key >> at) & ((1 << len) - 1);
-    let material = [Material::Opaque, Material::Cutout, Material::Blend, Material::Overlay][bits(14, 2) as usize];
+    let material = [
+        Material::Opaque,
+        Material::Cutout,
+        Material::Blend,
+        Material::Overlay,
+    ][bits(14, 2) as usize];
     let surface = Surface {
         texture: bits(0, 12) as u16,
         tint_kind: bits(12, 2) as u32,
@@ -101,7 +124,11 @@ pub(super) fn corner_ao(ctx: &Ctx, n: [i32; 3], face: u8) -> [u8; 4] {
     };
     [(-1, -1), (1, -1), (1, 1), (-1, 1)].map(|(du, dv)| {
         let (s1, s2, c) = (occ(du, 0), occ(0, dv), occ(du, dv));
-        if s1 == 1 && s2 == 1 { 0 } else { 3 - s1 - s2 - c }
+        if s1 == 1 && s2 == 1 {
+            0
+        } else {
+            3 - s1 - s2 - c
+        }
     })
 }
 
@@ -117,9 +144,13 @@ fn emit(mask: &mut Mask, face: u8, s: i32, out: &mut SectionMesh) {
                 u += 1;
                 continue;
             }
-            let joins = |mask: &Mask, x: usize, y: usize| (x == u && y == vv) || mask.joins(start, y * 16 + x);
+            let joins = |mask: &Mask, x: usize, y: usize| {
+                (x == u && y == vv) || mask.joins(start, y * 16 + x)
+            };
             let w = (u..16).take_while(|&x| joins(mask, x, vv)).count();
-            let h = (vv..16).take_while(|&y| (u..u + w).all(|x| joins(mask, x, y))).count();
+            let h = (vv..16)
+                .take_while(|&y| (u..u + w).all(|x| joins(mask, x, y)))
+                .count();
             let light = mask.light[start];
             for y in vv..vv + h {
                 mask.keys[y * 16 + u..y * 16 + u + w].fill(0);
@@ -128,7 +159,11 @@ fn emit(mask: &mut Mask, face: u8, s: i32, out: &mut SectionMesh) {
             (pos[axis], pos[ua], pos[va]) = (plane as u32 * 16, u as u32 * 16, vv as u32 * 16);
             let (surface, ao) = unpack(key);
             let quad = Quad::new(pos, face, [w as u32 * 16, h as u32 * 16], surface, ao).lit(light);
-            if key & TRANSLUCENT != 0 { out.translucent.push(quad) } else { out.solid.push(quad) }
+            if key & TRANSLUCENT != 0 {
+                out.translucent.push(quad)
+            } else {
+                out.solid.push(quad)
+            }
             u += w;
         }
     }
@@ -146,21 +181,47 @@ mod tests {
 
     #[test]
     fn a_block_with_alternatives_draws_the_one_its_position_picks() {
-        let air = RenderBlock { shape: Shape::None, occludes: false, shades: false, ..BlockTable::cube(0) };
-        let turned = RenderBlock { turns: [0, 0, 3, 0, 0, 0], ..BlockTable::cube(2) };
+        let air = RenderBlock {
+            shape: Shape::None,
+            occludes: false,
+            shades: false,
+            ..BlockTable::cube(0)
+        };
+        let turned = RenderBlock {
+            turns: [0, 0, 3, 0, 0, 0],
+            ..BlockTable::cube(2)
+        };
         let either = Random::Whole(Weighted(Box::new([(1, BlockTable::cube(1)), (1, turned)])));
-        let stone = RenderBlock { random: Some(Arc::new(either)), ..BlockTable::cube(1) };
+        let stone = RenderBlock {
+            random: Some(Arc::new(either)),
+            ..BlockTable::cube(1)
+        };
         let table = BlockTable::from_blocks(vec![air, stone]);
-        let mut v = Volume { origin: [160, 64, -48], ..Volume::filled(0) };
+        let mut v = Volume {
+            origin: [160, 64, -48],
+            ..Volume::filled(0)
+        };
         (0..16).for_each(|x| (0..16).for_each(|z| v.blocks[cell(x, 0, z)] = 1));
         let mut out = SectionMesh::default();
-        cubes(&Ctx { v: &v, table: &table, biomes: &BiomeColors::default(), cells: None }, &mut out);
+        cubes(
+            &Ctx {
+                v: &v,
+                table: &table,
+                biomes: &BiomeColors::default(),
+                cells: None,
+            },
+            &mut out,
+        );
 
         // Blocks of floor per texture, from the faces looking up.
         let mut area = [0; 3];
         for [_, w1, _] in out.solid.iter().filter(|q| q.face() == 2).map(|q| q.0) {
             let texture = (w1 >> 18 & 4095) as usize;
-            assert_eq!(w1 >> 16 & 3, if texture == 2 { 3 } else { 0 }, "only the second alternative is turned");
+            assert_eq!(
+                w1 >> 16 & 3,
+                if texture == 2 { 3 } else { 0 },
+                "only the second alternative is turned"
+            );
             area[texture] += ((w1 & 255) + 1) * ((w1 >> 8 & 255) + 1) / 256;
         }
         assert_eq!(area[1] + area[2], 256);

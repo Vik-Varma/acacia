@@ -10,7 +10,7 @@ mod support;
 use std::time::Instant;
 
 use acacia_bot::build::{BuildJob, BuildStatus, Builder, Phase};
-use support::{house, Error};
+use support::{Error, house};
 
 /// Ticks to stay after the build: a cell BDS is still mining out (an unfinished break) only shows up later.
 fn linger(scene: &str) -> u32 {
@@ -18,22 +18,33 @@ fn linger(scene: &str) -> u32 {
 }
 
 fn env<T: std::str::FromStr>(name: &str, default: T) -> T {
-    std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
 }
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Error> {
-    let _ = tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
     let mut args = std::env::args().skip(1);
     let server = args.next().unwrap_or_else(|| "127.0.0.1:19170".into());
     let name = args.next().unwrap_or_else(|| "Builder".into());
     let observer = args.next().unwrap_or_else(|| "BuildObs".into());
     // SCHEMATIC=<file>: build that file on the bare pad (support/schematic.rs) instead of a scene.
     let file = std::env::var("SCHEMATIC").ok();
-    let stem = file.as_deref().and_then(|f| std::path::Path::new(f).file_stem()).map(|s| s.to_string_lossy().into_owned());
+    let stem = file
+        .as_deref()
+        .and_then(|f| std::path::Path::new(f).file_stem())
+        .map(|s| s.to_string_lossy().into_owned());
     let scene: String = stem.unwrap_or_else(|| env("SCENE", "house16".to_string()));
     let acceptance = scene == "house16" && file.is_none();
-    support::watchdog(file.as_deref().map_or(if acceptance { 900 } else { 240 }, support::schematic::budget));
+    support::watchdog(file.as_deref().map_or(
+        if acceptance { 900 } else { 240 },
+        support::schematic::budget,
+    ));
     let kill_at: u32 = env("KILL_AT", if acceptance { 150 } else { 0 });
     let (mut a, pad) = support::connect(&server, &name).await?;
     let job = match &file {
@@ -45,22 +56,49 @@ async fn main() -> Result<(), Error> {
     let saved = job.to_json();
     house::fresh_journals();
     let started = Instant::now();
-    let (ticks, first, mut fixes) = house::drive(&mut a, house::journaled(Builder::new(job)?, &name)?, kill_at, &name).await?;
+    let (ticks, first, mut fixes) = house::drive(
+        &mut a,
+        house::journaled(Builder::new(job)?, &name)?,
+        kill_at,
+        &name,
+    )
+    .await?;
     let mut total = (ticks, first.clone());
     if kill_at > 0 && first.phase != Phase::Done {
         println!("killed after {ticks} ticks: {first:?}");
         a.disconnect().await;
         let (mut b, _) = support::connect(&server, &name).await?;
-        let inv = b.state().inventory.main.iter().filter(|s| !s.is_empty()).count();
+        let inv = b
+            .state()
+            .inventory
+            .main
+            .iter()
+            .filter(|s| !s.is_empty())
+            .count();
         println!("restarted with {inv} stacks in the inventory");
-        for c in ["/give @s diamond_pickaxe", "/give @s diamond_shovel", "/give @s dirt 64"] {
+        for c in [
+            "/give @s diamond_pickaxe",
+            "/give @s diamond_shovel",
+            "/give @s dirt 64",
+        ] {
             pad.run(&b, c);
             b.wait_ticks(4).await?;
         }
-        let resumed = house::journaled(Builder::new(BuildJob::from_json(&saved)?)?, &format!("{name}-resumed"))?;
+        let resumed = house::journaled(
+            Builder::new(BuildJob::from_json(&saved)?)?,
+            &format!("{name}-resumed"),
+        )?;
         let (more, second, f) = house::drive(&mut b, resumed, 0, &name).await?;
         fixes += f;
-        total = (ticks + more, BuildStatus { placed: first.placed + second.placed, broken: first.broken + second.broken, restocks: first.restocks + second.restocks, ..second });
+        total = (
+            ticks + more,
+            BuildStatus {
+                placed: first.placed + second.placed,
+                broken: first.broken + second.broken,
+                restocks: first.restocks + second.restocks,
+                ..second
+            },
+        );
         pad.go_home(&mut b).await?;
         b.disconnect().await;
     } else {
@@ -72,10 +110,27 @@ async fn main() -> Result<(), Error> {
     let (ticks, s) = total;
     println!(
         "{scene} {} after {ticks} ticks ({:.0} s): {} placed, {} broken, {} restocks, {} adjusted, {} walks, {fixes} corrections, {} mismatches, unsupported {:?}, failed {:?}, scaffold {}, missing {:?}",
-        if wrong.is_empty() && s.phase == Phase::Done { "PASS" } else { "FAIL" },
-        started.elapsed().as_secs_f32(), s.placed, s.broken, s.restocks, s.adjusted, s.walks, wrong.len(), s.unsupported, s.failed, s.scaffold, s.missing
+        if wrong.is_empty() && s.phase == Phase::Done {
+            "PASS"
+        } else {
+            "FAIL"
+        },
+        started.elapsed().as_secs_f32(),
+        s.placed,
+        s.broken,
+        s.restocks,
+        s.adjusted,
+        s.walks,
+        wrong.len(),
+        s.unsupported,
+        s.failed,
+        s.scaffold,
+        s.missing
     );
-    wrong.iter().take(env("SHOW_WRONG", 20)).for_each(|m| println!("  {:?}: want {} found {}", m.pos, m.want, m.found));
+    wrong
+        .iter()
+        .take(env("SHOW_WRONG", 20))
+        .for_each(|m| println!("  {:?}: want {} found {}", m.pos, m.want, m.found));
     house::report(&wrong);
     Ok(())
 }

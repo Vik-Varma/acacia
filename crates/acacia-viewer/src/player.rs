@@ -26,8 +26,15 @@ const JUMP_LATCH: Duration = Duration::from_millis(70);
 /// Java's `rightClickDelay`: a held use button repeats every 4 ticks.
 const USE_REPEAT: Duration = Duration::from_millis(200);
 const HOTBAR_KEYS: [KeyCode; 9] = [
-    KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3, KeyCode::Digit4, KeyCode::Digit5,
-    KeyCode::Digit6, KeyCode::Digit7, KeyCode::Digit8, KeyCode::Digit9,
+    KeyCode::Digit1,
+    KeyCode::Digit2,
+    KeyCode::Digit3,
+    KeyCode::Digit4,
+    KeyCode::Digit5,
+    KeyCode::Digit6,
+    KeyCode::Digit7,
+    KeyCode::Digit8,
+    KeyCode::Digit9,
 ];
 
 pub struct Play {
@@ -94,7 +101,26 @@ impl EyeTrack {
 
 impl Play {
     pub fn new(commands: UnboundedSender<Command>) -> Self {
-        Play { commands, held: Vec::new(), sent: None, eye: None, me: None, target: None, entity: None, attacking: false, using: None, using_item: None, perspective: 0, swung: None, jumped: None, carried: Carried { degrees: 0.0, turned: 0.0, at: Instant::now() } }
+        Play {
+            commands,
+            held: Vec::new(),
+            sent: None,
+            eye: None,
+            me: None,
+            target: None,
+            entity: None,
+            attacking: false,
+            using: None,
+            using_item: None,
+            perspective: 0,
+            swung: None,
+            jumped: None,
+            carried: Carried {
+                degrees: 0.0,
+                turned: 0.0,
+                at: Instant::now(),
+            },
+        }
     }
 
     fn send(&self, command: Command) {
@@ -105,10 +131,18 @@ impl Play {
     pub fn tick(&mut self, me: Me) {
         let now = Instant::now();
         let from = self.eye.as_ref().map_or(me.eye, |e| e.at(now));
-        self.eye = Some(EyeTrack { from, to: me.eye, at: now });
+        self.eye = Some(EyeTrack {
+            from,
+            to: me.eye,
+            at: now,
+        });
         let before = self.me.as_ref().and_then(|m| m.carrying_yaw);
         if let (Some(before), Some(yaw)) = (before, me.carrying_yaw) {
-            self.carried = Carried { degrees: self.carried.left() + crate::entities::wrap_degrees(yaw - before), turned: 0.0, at: now };
+            self.carried = Carried {
+                degrees: self.carried.left() + crate::entities::wrap_degrees(yaw - before),
+                turned: 0.0,
+                at: now,
+            };
         }
         self.me = Some(me);
     }
@@ -150,7 +184,13 @@ impl Play {
     /// Wheel down moves right along the hotbar, as in both games.
     pub fn scroll(&self, lines: f32) {
         let Some(me) = &self.me else { return };
-        let step = if lines < 0.0 { 1 } else if lines > 0.0 { 8 } else { return };
+        let step = if lines < 0.0 {
+            1
+        } else if lines > 0.0 {
+            8
+        } else {
+            return;
+        };
         self.send(Command::Hotbar((me.hotbar + step) % 9));
     }
 
@@ -159,7 +199,10 @@ impl Play {
             (MouseButton::Left, true) => {
                 self.attacking = true;
                 match (self.entity, &self.target) {
-                    (Some(runtime_id), _) => self.send(Command::Entity { runtime_id, attack: true }),
+                    (Some(runtime_id), _) => self.send(Command::Entity {
+                        runtime_id,
+                        attack: true,
+                    }),
                     (None, Some(t)) => self.send(Command::Mine(Some((t.block, t.face)))),
                     (None, None) => self.send(Command::Swing),
                 }
@@ -184,7 +227,10 @@ impl Play {
 
     fn use_once(&mut self) {
         match (self.entity, &self.target) {
-            (Some(runtime_id), _) => self.send(Command::Entity { runtime_id, attack: false }),
+            (Some(runtime_id), _) => self.send(Command::Entity {
+                runtime_id,
+                attack: false,
+            }),
             (None, Some(t)) => self.send(Command::UseOn(t.block, t.face)),
             (None, None) if self.using_item.is_none() => {
                 self.using_item = Some(Instant::now());
@@ -201,13 +247,22 @@ impl Play {
         if (self.attacking || using) && self.swung.is_none_or(|s| now - s >= SWING) {
             self.swung = Some(now);
         }
-        self.swung.map_or(0.0, |s| ((now - s).as_secs_f32() / SWING.as_secs_f32()).min(1.0) % 1.0)
+        self.swung.map_or(0.0, |s| {
+            ((now - s).as_secs_f32() / SWING.as_secs_f32()).min(1.0) % 1.0
+        })
     }
 
     /// The stacks in the main and the off hand in first person; none from behind or in front.
     pub fn held_first_person(&self) -> [Option<&crate::control::Stack>; 2] {
-        let Some(me) = self.me.as_ref().filter(|_| self.perspective == 0) else { return [None; 2] };
-        [me.items.get(usize::from(me.hotbar)).and_then(Option::as_ref), me.offhand.as_ref()]
+        let Some(me) = self.me.as_ref().filter(|_| self.perspective == 0) else {
+            return [None; 2];
+        };
+        [
+            me.items
+                .get(usize::from(me.hotbar))
+                .and_then(Option::as_ref),
+            me.offhand.as_ref(),
+        ]
     }
 
     /// Not when seated: Shift leaves the vehicle (`Play::key`), and BDS refuses mounts while sneaking.
@@ -217,7 +272,8 @@ impl Play {
 
     /// Seconds the held item has been in use in the air, if it is.
     pub fn item_use_secs(&self, now: Instant) -> Option<f32> {
-        self.using_item.map(|since| now.saturating_duration_since(since).as_secs_f32())
+        self.using_item
+            .map(|since| now.saturating_duration_since(since).as_secs_f32())
     }
 
     /// Whether a block or an entity is under the crosshair.
@@ -235,11 +291,20 @@ impl Play {
     }
 
     /// Moves the camera to the eye (or behind it), finds the target and sends what changed.
-    pub fn frame(&mut self, camera: &mut Camera, world: Option<&World>, table: Option<&BlockTable>, entities: &[EntityBox], now: Instant) {
+    pub fn frame(
+        &mut self,
+        camera: &mut Camera,
+        world: Option<&World>,
+        table: Option<&BlockTable>,
+        entities: &[EntityBox],
+        now: Instant,
+    ) {
         let Some(eye) = self.eye(now) else { return };
         camera.yaw += self.carried.turn(now).to_radians();
         let aim = camera.forward();
-        let mut target = world.zip(table).and_then(|(w, t)| pick::pick(w, t, eye, aim, BLOCK_REACH));
+        let mut target = world
+            .zip(table)
+            .and_then(|(w, t)| pick::pick(w, t, eye, aim, BLOCK_REACH));
         let entity = pick::pick_entity(entities, eye, aim, ENTITY_REACH)
             .filter(|&(_, at)| target.as_ref().is_none_or(|t| at < t.distance));
         self.entity = entity.map(|(id, _)| id);
@@ -267,7 +332,12 @@ impl Play {
         if self.perspective != 0 {
             // The camera backs off along the look ray, stopping short of blocks (Java's `Camera.getMaxZoom`).
             let back = if self.perspective == 1 { -aim } else { aim };
-            let room = world.zip(table).and_then(|(w, t)| pick::pick(w, t, eye, back, THIRD_PERSON_DISTANCE)).map_or(f64::from(THIRD_PERSON_DISTANCE), |hit| (hit.distance - 0.1).max(0.0));
+            let room = world
+                .zip(table)
+                .and_then(|(w, t)| pick::pick(w, t, eye, back, THIRD_PERSON_DISTANCE))
+                .map_or(f64::from(THIRD_PERSON_DISTANCE), |hit| {
+                    (hit.distance - 0.1).max(0.0)
+                });
             camera.position = eye + back.as_dvec3() * room.max(0.0);
         }
     }

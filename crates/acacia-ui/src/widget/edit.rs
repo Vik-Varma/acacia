@@ -13,7 +13,11 @@ pub struct TextEdit {
 impl TextEdit {
     pub fn new(text: &str, max: usize) -> TextEdit {
         let chars: Vec<char> = text.chars().take(max).collect();
-        TextEdit { caret: chars.len(), chars, max }
+        TextEdit {
+            caret: chars.len(),
+            chars,
+            max,
+        }
     }
 
     pub fn text(&self) -> String {
@@ -70,7 +74,10 @@ mod tests {
         let mut e = TextEdit::new("ac", 4);
         e.key(Key::Left);
         e.insert("b\u{7}");
-        assert_eq!((e.text(), e.before_caret()), ("abc".to_owned(), "ab".to_owned()));
+        assert_eq!(
+            (e.text(), e.before_caret()),
+            ("abc".to_owned(), "ab".to_owned())
+        );
         e.key(Key::End);
         e.insert("def");
         assert_eq!(e.text(), "abcd");

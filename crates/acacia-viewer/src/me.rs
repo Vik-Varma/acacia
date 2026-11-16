@@ -61,15 +61,32 @@ pub fn me(bot: &Bot) -> Me {
     let items = std::array::from_fn(|slot| stack_of(bot, state.inventory.main.get(slot)?));
     Me {
         eye: DVec3::new(x.into(), y.into(), z.into()),
-        on_ground: bot.bedrock().and_then(|b| b.movement()).is_some_and(|m| m.on_ground()),
-        sprinting: bot.bedrock().and_then(|b| b.movement()).is_some_and(|m| m.sprinting()),
-        flying: bot.bedrock().and_then(|b| b.movement()).is_some_and(|m| m.flying()),
+        on_ground: bot
+            .bedrock()
+            .and_then(|b| b.movement())
+            .is_some_and(|m| m.on_ground()),
+        sprinting: bot
+            .bedrock()
+            .and_then(|b| b.movement())
+            .is_some_and(|m| m.sprinting()),
+        flying: bot
+            .bedrock()
+            .and_then(|b| b.movement())
+            .is_some_and(|m| m.flying()),
         riding: bot.vehicle().is_some(),
         carrying_yaw: crate::ride::carrying_yaw(bot),
         hurts: state.hurts.count(p.runtime_entity_id),
-        armor: state.inventory.armor.iter().filter_map(|s| state.item_name(s)).map(crate::armor::points).sum(),
+        armor: state
+            .inventory
+            .armor
+            .iter()
+            .filter_map(|s| state.item_name(s))
+            .map(crate::armor::points)
+            .sum(),
         air: Some((p.air.0.max(0) as u32, p.air.1.max(1) as u32)).filter(|(air, max)| air < max),
-        mining: bot.mining_progress().map(|(p, f)| (IVec3::from_array(p), f)),
+        mining: bot
+            .mining_progress()
+            .map(|(p, f)| (IVec3::from_array(p), f)),
         hotbar: state.inventory.selected_hotbar_slot,
         game_mode: p.game_mode,
         alive: p.alive,
@@ -79,20 +96,43 @@ pub fn me(bot: &Bot) -> Me {
             .entities
             .iter()
             .filter(|e| e.kind == "minecraft:lightning_bolt")
-            .map(|e| (e.runtime_id, DVec3::new(e.position.x.into(), e.position.y.into(), e.position.z.into())))
+            .map(|e| {
+                (
+                    e.runtime_id,
+                    DVec3::new(
+                        e.position.x.into(),
+                        e.position.y.into(),
+                        e.position.z.into(),
+                    ),
+                )
+            })
             .collect(),
         health: p.health,
         max_health: p.max_health,
         food: p.hunger,
         saturation: p.saturation,
-        head: state.inventory.armor.first().and_then(|s| state.item_name(s)).map(str::to_owned),
+        head: state
+            .inventory
+            .armor
+            .first()
+            .and_then(|s| state.item_name(s))
+            .map(str::to_owned),
         xp_level: p.xp_level,
         xp_progress: p.xp_progress,
         items,
         book: bot.held_book_pages(),
         offhand: stack_of(bot, &state.inventory.offhand),
-        effects: p.effects.iter().map(|e| (e.id, e.duration, e.tick, e.ambient)).collect(),
-        bosses: state.environment.boss_bars.values().map(|b| (b.title.clone(), b.progress, boss_colour(b.color))).collect(),
+        effects: p
+            .effects
+            .iter()
+            .map(|e| (e.id, e.duration, e.tick, e.ambient))
+            .collect(),
+        bosses: state
+            .environment
+            .boss_bars
+            .values()
+            .map(|b| (b.title.clone(), b.progress, boss_colour(b.color)))
+            .collect(),
     }
 }
 

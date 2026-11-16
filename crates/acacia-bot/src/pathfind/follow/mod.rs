@@ -9,12 +9,12 @@ use std::sync::Arc;
 
 use acacia_physics::Vec3;
 
+use super::PathNode;
 use super::follow_macro::{MacroReport, MacroRunner, MacroStep};
 use super::hazard::Hazards;
 use super::moves::MoveKind;
 use super::profile::{Aim, MovementProfile};
 use super::rollout::Spend;
-use super::PathNode;
 use crate::cadence::splitmix;
 use crate::movement::{Controls, SimWorld, StepIn};
 
@@ -93,8 +93,29 @@ fn dir(a: Vec3, b: Vec3) -> (i32, i32) {
 impl Follower {
     /// `tolerance`: how close (horizontally, blocks) to the final node's centre counts as arrived.
     pub fn new(path: Vec<PathNode>, start: Vec3, tolerance: f32) -> Self {
-        let (macros, aim, spend) = (MacroRunner::default(), Aim::new(MovementProfile::Optimal, 0), Spend::default());
-        Self { path, index: 0, worked: false, origin: start, last_pos: None, best_dist: f32::INFINITY, since_progress: 0, tolerance, macros, aim, rng: 0, shortcuts: false, tried: None, ends_at_goal: true, spend, hazards: None }
+        let (macros, aim, spend) = (
+            MacroRunner::default(),
+            Aim::new(MovementProfile::Optimal, 0),
+            Spend::default(),
+        );
+        Self {
+            path,
+            index: 0,
+            worked: false,
+            origin: start,
+            last_pos: None,
+            best_dist: f32::INFINITY,
+            since_progress: 0,
+            tolerance,
+            macros,
+            aim,
+            rng: 0,
+            shortcuts: false,
+            tried: None,
+            ends_at_goal: true,
+            spend,
+            hazards: None,
+        }
     }
 
     /// Moves like `profile` (default `Optimal`), every aim jittered from `seed` for `Human`.
@@ -147,15 +168,30 @@ impl Follower {
 
     /// `live`: a fork of the live simulation, which macro moves need (without it they are steered
     /// classically); `w` the world it runs in.
-    pub fn tick<S: StepIn<W>, W: SimWorld + ?Sized>(&mut self, s: &Sense, live: Option<&S>, w: &W, c: &mut Controls) -> FollowStatus {
+    pub fn tick<S: StepIn<W>, W: SimWorld + ?Sized>(
+        &mut self,
+        s: &Sense,
+        live: Option<&S>,
+        w: &W,
+        c: &mut Controls,
+    ) -> FollowStatus {
         let mut spend = Spend::new(ROLLOUT_BUDGET);
         let status = self.tick_within(s, live, w, c, &mut spend);
         self.spend = spend;
         status
     }
 
-    fn tick_within<S: StepIn<W>, W: SimWorld + ?Sized>(&mut self, s: &Sense, live: Option<&S>, w: &W, c: &mut Controls, spend: &mut Spend) -> FollowStatus {
-        let vel = self.last_pos.map_or([0.0; 3], |l| [s.pos[0] - l[0], s.pos[1] - l[1], s.pos[2] - l[2]]);
+    fn tick_within<S: StepIn<W>, W: SimWorld + ?Sized>(
+        &mut self,
+        s: &Sense,
+        live: Option<&S>,
+        w: &W,
+        c: &mut Controls,
+        spend: &mut Spend,
+    ) -> FollowStatus {
+        let vel = self.last_pos.map_or([0.0; 3], |l| {
+            [s.pos[0] - l[0], s.pos[1] - l[1], s.pos[2] - l[2]]
+        });
         self.last_pos = Some(s.pos);
         if self.path.is_empty() {
             c.stop();
@@ -198,7 +234,11 @@ impl Follower {
         if self.has_pending(self.index) {
             return self.approach_work(s, c, speed);
         }
-        if last && dist < self.tolerance && speed < SETTLED && self.reached(&node, s, self.tolerance) {
+        if last
+            && dist < self.tolerance
+            && speed < SETTLED
+            && self.reached(&node, s, self.tolerance)
+        {
             c.stop();
             return FollowStatus::Arrived;
         }
@@ -212,7 +252,9 @@ impl Follower {
                 return FollowStatus::Stuck;
             }
         }
-        let coast = live.filter(|_| last).and_then(|l| Self::coast_end(l, c, w, spend));
+        let coast = live
+            .filter(|_| last)
+            .and_then(|l| Self::coast_end(l, c, w, spend));
         let stops = self.stops::<S>(coast, target, dist, speed);
         self.steer(s, c, &node, target, dist, last, stops);
         FollowStatus::Moving
@@ -232,7 +274,8 @@ impl Follower {
         while self.index + 1 < self.path.len() && !self.has_pending(self.index) {
             let node = self.path[self.index];
             let next = self.path[self.index + 1];
-            let straight = next.kind == MoveKind::Walk && dir(self.origin, center(&node)) == dir(center(&node), center(&next));
+            let straight = next.kind == MoveKind::Walk
+                && dir(self.origin, center(&node)) == dir(center(&node), center(&next));
             if !self.reached(&node, s, if straight { 0.45 } else { 0.25 }) {
                 break;
             }
@@ -244,7 +287,10 @@ impl Follower {
         for j in window {
             let n = self.path[j];
             let feet_cell = [s.pos[0].floor() as i32, s.pos[2].floor() as i32];
-            if feet_cell == [n.pos[0], n.pos[2]] && (s.pos[1] - n.feet).abs() < 0.3 && (s.on_ground || s.in_water) {
+            if feet_cell == [n.pos[0], n.pos[2]]
+                && (s.pos[1] - n.feet).abs() < 0.3
+                && (s.on_ground || s.in_water)
+            {
                 self.origin = center(&self.path[j - 1]);
                 self.index = j;
                 self.worked = false;
@@ -263,9 +309,13 @@ impl Follower {
             MoveKind::ClimbUp => dy > -0.05 && h < 0.5,
             MoveKind::ClimbDown => dy < 0.1 && h < 0.5,
             MoveKind::Ascend => h < radius && dy > -0.25 && dy < 0.6,
-            MoveKind::Parkour | MoveKind::Descend | MoveKind::Down => h < radius.max(0.35) && dy.abs() < 0.5 && (s.on_ground || s.in_water),
+            MoveKind::Parkour | MoveKind::Descend | MoveKind::Down => {
+                h < radius.max(0.35) && dy.abs() < 0.5 && (s.on_ground || s.in_water)
+            }
             MoveKind::Pillar => h < 0.5 && dy > -0.1 && dy < 0.6 && s.on_ground,
-            MoveKind::Walk | MoveKind::Swim | MoveKind::Run | MoveKind::Hop | MoveKind::Boat => h < radius && dy.abs() < 0.6,
+            MoveKind::Walk | MoveKind::Swim | MoveKind::Run | MoveKind::Hop | MoveKind::Boat => {
+                h < radius && dy.abs() < 0.6
+            }
         }
     }
 
@@ -282,6 +332,10 @@ impl Follower {
 fn seg_dist(pos: Vec3, a: Vec3, b: Vec3) -> f32 {
     let (sx, sz) = (b[0] - a[0], b[2] - a[2]);
     let len2 = sx * sx + sz * sz;
-    let t = if len2 > 0.0 { (((pos[0] - a[0]) * sx + (pos[2] - a[2]) * sz) / len2).clamp(0.0, 1.0) } else { 0.0 };
+    let t = if len2 > 0.0 {
+        (((pos[0] - a[0]) * sx + (pos[2] - a[2]) * sz) / len2).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
     (pos[0] - a[0] - sx * t).hypot(pos[2] - a[2] - sz * t)
 }

@@ -50,7 +50,10 @@ impl CallResult {
     pub fn ok(value: &impl Serialize) -> Self {
         match serde_json::to_value(value) {
             Ok(value) => Self::Ok(value),
-            Err(e) => Self::Err(ApiError::new(ErrorCode::Internal, format!("result did not serialize: {e}"))),
+            Err(e) => Self::Err(ApiError::new(
+                ErrorCode::Internal,
+                format!("result did not serialize: {e}"),
+            )),
         }
     }
 }
@@ -82,8 +85,12 @@ impl Command {
     pub fn from_json(json: &str) -> Result<Self, (Option<CallId>, ApiError)> {
         let bad = |e: serde_json::Error| ApiError::new(ErrorCode::BadParams, e.to_string());
         let envelope: Envelope = serde_json::from_str(json).map_err(|e| (None, bad(e)))?;
-        let method = Method::parse(&envelope.method, envelope.params).map_err(|e| (Some(envelope.call), e))?;
-        Ok(Self { call: envelope.call, method })
+        let method = Method::parse(&envelope.method, envelope.params)
+            .map_err(|e| (Some(envelope.call), e))?;
+        Ok(Self {
+            call: envelope.call,
+            method,
+        })
     }
 
     pub fn to_json(&self) -> String {

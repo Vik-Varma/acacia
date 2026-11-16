@@ -56,19 +56,33 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { look: LookChoice::default(), vsync: true, cave_culling: true, gui_scale: 0, volume: 100, fov: 70, view_bobbing: true, clouds: true, fancy_clouds: true, menu_blur: acacia_ui::blur::DEFAULT_RADIUS }
+        Settings {
+            look: LookChoice::default(),
+            vsync: true,
+            cave_culling: true,
+            gui_scale: 0,
+            volume: 100,
+            fov: 70,
+            view_bobbing: true,
+            clouds: true,
+            fancy_clouds: true,
+            menu_blur: acacia_ui::blur::DEFAULT_RADIUS,
+        }
     }
 }
 
 impl Settings {
     fn path() -> PathBuf {
-        std::env::var_os("ACACIA_SETTINGS").map_or_else(|| PathBuf::from(".viewer.json"), PathBuf::from)
+        std::env::var_os("ACACIA_SETTINGS")
+            .map_or_else(|| PathBuf::from(".viewer.json"), PathBuf::from)
     }
 
     /// Defaults when the file is missing or unreadable.
     pub fn load() -> Settings {
         let path = Settings::path();
-        let Ok(text) = std::fs::read_to_string(&path) else { return Settings::default() };
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            return Settings::default();
+        };
         serde_json::from_str(&text).unwrap_or_else(|e| {
             tracing::warn!(%e, path = %path.display(), "settings");
             Settings::default()
@@ -92,7 +106,13 @@ mod tests {
     #[test]
     fn missing_fields_take_defaults() {
         let s: Settings = serde_json::from_str(r#"{"look":"java"}"#).unwrap();
-        assert_eq!(s, Settings { look: LookChoice::Java, ..Settings::default() });
+        assert_eq!(
+            s,
+            Settings {
+                look: LookChoice::Java,
+                ..Settings::default()
+            }
+        );
     }
 
     #[test]

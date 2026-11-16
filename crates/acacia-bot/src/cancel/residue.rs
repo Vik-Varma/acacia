@@ -39,13 +39,20 @@ pub(crate) struct Residue {
 
 impl Residue {
     fn take(&mut self, claim: &Claim) -> Option<Held> {
-        let i = self.held.iter().position(|(owner, _)| std::ptr::eq(owner.as_ptr(), Arc::as_ptr(&claim.0)))?;
+        let i = self
+            .held
+            .iter()
+            .position(|(owner, _)| std::ptr::eq(owner.as_ptr(), Arc::as_ptr(&claim.0)))?;
         Some(self.held.remove(i).1)
     }
 
     /// Entries whose claim was dropped, newest first.
     fn orphans(&mut self) -> Vec<Held> {
-        let mut orphans: Vec<Held> = self.held.extract_if(.., |(owner, _)| owner.strong_count() == 0).map(|(_, held)| held).collect();
+        let mut orphans: Vec<Held> = self
+            .held
+            .extract_if(.., |(owner, _)| owner.strong_count() == 0)
+            .map(|(_, held)| held)
+            .collect();
         orphans.reverse();
         orphans
     }
@@ -59,7 +66,10 @@ impl Residue {
 impl Bot {
     pub(crate) fn claim(&mut self, held: Held) -> Claim {
         let claim = Claim(Arc::new(()));
-        self.cancel.residue.held.push((Arc::downgrade(&claim.0), held));
+        self.cancel
+            .residue
+            .held
+            .push((Arc::downgrade(&claim.0), held));
         claim
     }
 

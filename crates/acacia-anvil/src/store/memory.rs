@@ -53,7 +53,13 @@ impl AnvilStore {
         let decoded: Vec<_> = std::thread::scope(|s| {
             let jobs: Vec<_> = payloads
                 .chunks(per)
-                .map(|part| s.spawn(move || part.iter().map(|(p, b)| (*p, decode(*p, b))).collect::<Vec<_>>()))
+                .map(|part| {
+                    s.spawn(move || {
+                        part.iter()
+                            .map(|(p, b)| (*p, decode(*p, b)))
+                            .collect::<Vec<_>>()
+                    })
+                })
                 .collect();
             jobs.into_iter()
                 .flat_map(|j| j.join().expect("read-back worker panicked"))

@@ -62,7 +62,10 @@ impl Kind {
             "magic_critical_hit_emitter" => Kind::EnchantedHitBurst,
             "large_explosion" => Kind::Explosion,
             "huge_explosion_emitter" | "huge_explosion_lab_misc_emitter" => Kind::ExplosionEmitter,
-            "explosion_particle" | "explosion_manual" | "egg_destroy_emitter" | "death_explosion_emitter" => Kind::Poof,
+            "explosion_particle"
+            | "explosion_manual"
+            | "egg_destroy_emitter"
+            | "death_explosion_emitter" => Kind::Poof,
             "heart_particle" => Kind::Heart,
             "villager_angry" => Kind::AngryVillager,
             "villager_happy" | "crop_growth_emitter" => Kind::HappyVillager,
@@ -70,9 +73,16 @@ impl Kind {
             "rain_splash_particle" => Kind::Rain,
             "basic_bubble_particle" | "basic_bubble_particle_manual" => Kind::Bubble,
             "lava_particle" => Kind::Lava,
-            "redstone_wire_dust_particle" | "redstone_torch_dust_particle" | "redstone_ore_dust_particle" | "redstone_repeater_dust_particle" => Kind::REDSTONE,
+            "redstone_wire_dust_particle"
+            | "redstone_torch_dust_particle"
+            | "redstone_ore_dust_particle"
+            | "redstone_repeater_dust_particle" => Kind::REDSTONE,
             "note_particle" => Kind::Note(0.0),
-            "basic_portal_particle" | "portal_reverse_particle" | "portal_directional" | "portal_east_west" | "portal_north_south" => Kind::Portal,
+            "basic_portal_particle"
+            | "portal_reverse_particle"
+            | "portal_directional"
+            | "portal_east_west"
+            | "portal_north_south" => Kind::Portal,
             "water_drip_particle" | "stalactite_water_drip_particle" => Kind::DrippingWater,
             "lava_drip_particle" | "stalactite_lava_drip_particle" => Kind::DrippingLava,
             _ => return None,
@@ -86,8 +96,14 @@ mod tests {
 
     #[test]
     fn identifiers_name_kinds_with_or_without_the_namespace() {
-        assert_eq!(Kind::from_identifier("minecraft:basic_flame_particle"), Some(Kind::Flame));
-        assert_eq!(Kind::from_identifier("critical_hit_emitter"), Some(Kind::CritBurst));
+        assert_eq!(
+            Kind::from_identifier("minecraft:basic_flame_particle"),
+            Some(Kind::Flame)
+        );
+        assert_eq!(
+            Kind::from_identifier("critical_hit_emitter"),
+            Some(Kind::CritBurst)
+        );
         assert_eq!(Kind::from_identifier("minecraft:no_such_particle"), None);
     }
 }

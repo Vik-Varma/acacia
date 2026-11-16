@@ -52,13 +52,21 @@ struct State {
 
 impl State {
     fn bot(&mut self, who: &str, until: u64) -> &mut Bot {
-        let bot = self.bots.entry(who.to_string()).or_insert(Bot { cells: HashSet::new(), feet: [f32::NAN; 3], until });
+        let bot = self.bots.entry(who.to_string()).or_insert(Bot {
+            cells: HashSet::new(),
+            feet: [f32::NAN; 3],
+            until,
+        });
         bot.until = until;
         bot
     }
 
     fn taken(&self, who: &str) -> HashSet<BlockPos> {
-        self.bots.iter().filter(|(k, _)| *k != who).flat_map(|(_, b)| b.cells.iter().copied()).collect()
+        self.bots
+            .iter()
+            .filter(|(k, _)| *k != who)
+            .flat_map(|(_, b)| b.cells.iter().copied())
+            .collect()
     }
 }
 
@@ -72,12 +80,20 @@ pub struct LocalBoard {
 impl LocalBoard {
     /// Leases last `lease_ms` milliseconds after the last heartbeat.
     pub fn new(lease_ms: u64) -> Self {
-        Self { clock: Clock::Wall(Instant::now()), lease: lease_ms, state: Mutex::default() }
+        Self {
+            clock: Clock::Wall(Instant::now()),
+            lease: lease_ms,
+            state: Mutex::default(),
+        }
     }
 
     /// Leases last `lease` units of a clock moved by [`LocalBoard::set_now`].
     pub fn manual(lease: u64) -> Self {
-        Self { clock: Clock::Manual(AtomicU64::new(0)), lease, state: Mutex::default() }
+        Self {
+            clock: Clock::Manual(AtomicU64::new(0)),
+            lease,
+            state: Mutex::default(),
+        }
     }
 
     pub fn set_now(&self, now: u64) {
@@ -107,7 +123,11 @@ impl TaskBoard for LocalBoard {
     fn claim(&self, who: &str, wanted: &[BlockPos]) -> Vec<BlockPos> {
         let (mut s, until) = self.live();
         let taken = s.taken(who);
-        let got: Vec<BlockPos> = wanted.iter().copied().filter(|c| !taken.contains(c)).collect();
+        let got: Vec<BlockPos> = wanted
+            .iter()
+            .copied()
+            .filter(|c| !taken.contains(c))
+            .collect();
         s.bot(who, until).cells = got.iter().copied().collect();
         got
     }
@@ -115,7 +135,10 @@ impl TaskBoard for LocalBoard {
     fn heartbeat(&self, who: &str, feet: Vec3) {
         let (mut s, until) = self.live();
         s.bot(who, until).feet = feet;
-        s.stations.values_mut().filter(|(k, _)| k == who).for_each(|(_, u)| *u = until);
+        s.stations
+            .values_mut()
+            .filter(|(k, _)| k == who)
+            .for_each(|(_, u)| *u = until);
     }
 
     fn release(&self, who: &str) {
@@ -129,12 +152,21 @@ impl TaskBoard for LocalBoard {
     }
 
     fn others(&self, who: &str) -> Vec<Vec3> {
-        self.live().0.bots.iter().filter(|(k, _)| *k != who).map(|(_, b)| b.feet).collect()
+        self.live()
+            .0
+            .bots
+            .iter()
+            .filter(|(k, _)| *k != who)
+            .map(|(_, b)| b.feet)
+            .collect()
     }
 
     fn rank(&self, who: &str) -> (usize, usize) {
         let s = self.live().0;
-        (s.bots.keys().filter(|k| k.as_str() < who).count(), s.bots.len().max(1))
+        (
+            s.bots.keys().filter(|k| k.as_str() < who).count(),
+            s.bots.len().max(1),
+        )
     }
 
     fn open_station(&self, who: &str, station: BlockPos) -> bool {

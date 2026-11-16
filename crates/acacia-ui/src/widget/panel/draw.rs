@@ -9,8 +9,13 @@ use crate::widget::{Skin, State, Widget};
 
 impl Panel {
     pub fn draw(&self, list: &mut DrawList, skin: &dyn Skin, font: Option<&Font>, now: Instant) {
-        let blink = (now.saturating_duration_since(self.focused_at).as_millis() / BLINK_MS).is_multiple_of(2);
-        let hover = if self.open.is_some() || self.drag.is_some() { None } else { self.item_at(skin, font, self.mouse) };
+        let blink = (now.saturating_duration_since(self.focused_at).as_millis() / BLINK_MS)
+            .is_multiple_of(2);
+        let hover = if self.open.is_some() || self.drag.is_some() {
+            None
+        } else {
+            self.item_at(skin, font, self.mouse)
+        };
         for (i, p) in self.items.iter().enumerate() {
             let rect = self.rect(i);
             if p.scrolls && (rect[3] <= self.viewport[1] || rect[1] >= self.viewport[3]) {

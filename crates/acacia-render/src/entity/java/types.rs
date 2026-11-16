@@ -159,10 +159,18 @@ fn posed(kind: &str, baby: bool, pose: &str) -> Option<f32> {
         "crouching" if avatar => 1.5,
         "swimming" | "fall_flying" | "spin_attack" if avatar => 0.6,
         "sitting" if matches!(kind, "minecraft:camel" | "minecraft:camel_husk") => {
-            if baby { 0.425 } else { 0.945 }
+            if baby {
+                0.425
+            } else {
+                0.945
+            }
         }
         "long_jumping" if kind == "minecraft:goat" => {
-            if baby { 0.455 } else { 0.91 }
+            if baby {
+                0.455
+            } else {
+                0.91
+            }
         }
         "emerging" | "digging" if kind == "minecraft:warden" => 1.0,
         _ => return None,
@@ -179,7 +187,14 @@ pub fn name_tag(kind: &str, baby: bool, pose: &str) -> Option<NameTag> {
     } else {
         let &(_, adult, young, living) = HEIGHTS.iter().find(|(k, ..)| *k == kind)?;
         let standing = if baby { young } else { adult };
-        if living { posed(kind, baby, pose).unwrap_or(standing) } else { standing }
+        if living {
+            posed(kind, baby, pose).unwrap_or(standing)
+        } else {
+            standing
+        }
     };
-    Some(NameTag { height, distance: 64.0 })
+    Some(NameTag {
+        height,
+        distance: 64.0,
+    })
 }

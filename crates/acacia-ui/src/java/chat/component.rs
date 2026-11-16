@@ -46,7 +46,14 @@ impl ChatOptions {
 
     /// `ChatComponent.getHeight`.
     pub fn height_px(&self, focused: bool) -> i32 {
-        floor_d(if focused { self.height_focused } else { self.height_unfocused } * 160.0 + 20.0)
+        floor_d(
+            if focused {
+                self.height_focused
+            } else {
+                self.height_unfocused
+            } * 160.0
+                + 20.0,
+        )
     }
 
     /// `getLineHeight`.
@@ -63,7 +70,11 @@ pub struct TagIcon {
     pub height: i32,
 }
 
-pub const CHAT_MODIFIED: TagIcon = TagIcon { sprite: "icon/chat_modified", width: 9, height: 9 };
+pub const CHAT_MODIFIED: TagIcon = TagIcon {
+    sprite: "icon/chat_modified",
+    width: 9,
+    height: 9,
+};
 
 /// A tag's tooltip text.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -82,23 +93,43 @@ pub struct Tag {
 }
 
 impl Tag {
-    pub const SYSTEM: Tag = Tag { indicator: 0xD0D0D0, icon: None, text: Some(TagText::Key("chat.tag.system")) };
+    pub const SYSTEM: Tag = Tag {
+        indicator: 0xD0D0D0,
+        icon: None,
+        text: Some(TagText::Key("chat.tag.system")),
+    };
     /// `addServerSystemMessage`'s.
-    pub const SYSTEM_SINGLE_PLAYER: Tag = Tag { indicator: 0xD0D0D0, icon: None, text: Some(TagText::Key("chat.tag.system_single_player")) };
-    pub const CHAT_NOT_SECURE: Tag = Tag { indicator: 0xD0D0D0, icon: None, text: Some(TagText::Key("chat.tag.not_secure")) };
-    pub const CHAT_ERROR: Tag = Tag { indicator: 0xFF5555, icon: None, text: Some(TagText::Key("chat.tag.error")) };
+    pub const SYSTEM_SINGLE_PLAYER: Tag = Tag {
+        indicator: 0xD0D0D0,
+        icon: None,
+        text: Some(TagText::Key("chat.tag.system_single_player")),
+    };
+    pub const CHAT_NOT_SECURE: Tag = Tag {
+        indicator: 0xD0D0D0,
+        icon: None,
+        text: Some(TagText::Key("chat.tag.not_secure")),
+    };
+    pub const CHAT_ERROR: Tag = Tag {
+        indicator: 0xFF5555,
+        icon: None,
+        text: Some(TagText::Key("chat.tag.error")),
+    };
 
     pub fn modified(original: &str) -> Tag {
-        Tag { indicator: 0x606060, icon: Some(CHAT_MODIFIED), text: Some(TagText::Modified(original.to_owned())) }
+        Tag {
+            indicator: 0x606060,
+            icon: Some(CHAT_MODIFIED),
+            text: Some(TagText::Modified(original.to_owned())),
+        }
     }
 
     /// `text()`.
     pub fn text(&self, lang: Lang) -> Option<Text> {
         Some(match self.text.as_ref()? {
             TagText::Key(key) => Text::translate(key, &[], lang),
-            TagText::Modified(original) => {
-                Text::translate("chat.tag.modified", &[], lang).append("\n").append(Text::literal(original.clone()).with_color(0xAAAAAA))
-            }
+            TagText::Modified(original) => Text::translate("chat.tag.modified", &[], lang)
+                .append("\n")
+                .append(Text::literal(original.clone()).with_color(0xAAAAAA)),
         })
     }
 }
@@ -141,7 +172,10 @@ const MAX_LINES: usize = 100;
 
 impl Chat {
     pub fn new(options: ChatOptions) -> Chat {
-        Chat { options, ..Chat::default() }
+        Chat {
+            options,
+            ..Chat::default()
+        }
     }
 
     pub fn lines_per_page(&self, focused: bool) -> i32 {
@@ -149,8 +183,19 @@ impl Chat {
     }
 
     /// `ChatComponent.addMessage` at `Hud.tickCount` `ticks`; `focused` is `isChatFocused`.
-    pub fn add(&mut self, m: &dyn Metrics, content: Text, tag: Option<Tag>, ticks: i32, focused: bool) {
-        let message = Message { added: ticks, content, tag };
+    pub fn add(
+        &mut self,
+        m: &dyn Metrics,
+        content: Text,
+        tag: Option<Tag>,
+        ticks: i32,
+        focused: bool,
+    ) {
+        let message = Message {
+            added: ticks,
+            content,
+            tag,
+        };
         self.add_lines(m, &message, focused);
         self.messages.insert(0, message);
         self.messages.truncate(MAX_LINES);
@@ -169,7 +214,15 @@ impl Chat {
                 self.new_since_scroll = true;
                 self.scroll_chat(1, focused);
             }
-            self.lines.insert(0, Line { added: message.added, content: line, tag: message.tag.clone(), end: i + 1 == count });
+            self.lines.insert(
+                0,
+                Line {
+                    added: message.added,
+                    content: line,
+                    tag: message.tag.clone(),
+                    end: i + 1 == count,
+                },
+            );
         }
         self.lines.truncate(MAX_LINES);
     }

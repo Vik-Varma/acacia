@@ -22,24 +22,56 @@ pub struct PartPose {
 
 impl Default for PartPose {
     fn default() -> Self {
-        PartPose { x: 0.0, y: 0.0, z: 0.0, x_rot: 0.0, y_rot: 0.0, z_rot: 0.0, x_scale: 1.0, y_scale: 1.0, z_scale: 1.0 }
+        PartPose {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            x_rot: 0.0,
+            y_rot: 0.0,
+            z_rot: 0.0,
+            x_scale: 1.0,
+            y_scale: 1.0,
+            z_scale: 1.0,
+        }
     }
 }
 
 impl PartPose {
     pub fn from_array([x, y, z, x_rot, y_rot, z_rot, x_scale, y_scale, z_scale]: [f32; 9]) -> Self {
-        PartPose { x, y, z, x_rot, y_rot, z_rot, x_scale, y_scale, z_scale }
+        PartPose {
+            x,
+            y,
+            z,
+            x_rot,
+            y_rot,
+            z_rot,
+            x_scale,
+            y_scale,
+            z_scale,
+        }
     }
 
     pub fn to_array(self) -> [f32; 9] {
-        [self.x, self.y, self.z, self.x_rot, self.y_rot, self.z_rot, self.x_scale, self.y_scale, self.z_scale]
+        [
+            self.x,
+            self.y,
+            self.z,
+            self.x_rot,
+            self.y_rot,
+            self.z_rot,
+            self.x_scale,
+            self.y_scale,
+            self.z_scale,
+        ]
     }
 
     /// `ModelPart.translateAndRotate`'s matrix, in blocks.
     pub fn matrix(&self) -> glam::Mat4 {
         use glam::{Mat4, Vec3};
         Mat4::from_translation(Vec3::new(self.x, self.y, self.z) / 16.0)
-            * Mat4::from_quat(super::joml::rotation_zyx_quat(self.z_rot, self.y_rot, self.x_rot))
+            * Mat4::from_quat(super::joml::rotation_zyx_quat(
+                self.z_rot, self.y_rot, self.x_rot,
+            ))
             * Mat4::from_scale(Vec3::new(self.x_scale, self.y_scale, self.z_scale))
     }
 }
@@ -61,12 +93,23 @@ pub struct Part {
 
 impl Part {
     pub fn parse(name: &str, value: &Value) -> Part {
-        let floats = |v: &Value| -> Vec<f32> { v.as_array().into_iter().flatten().map(|x| x.as_f64().unwrap_or(0.0) as f32).collect() };
+        let floats = |v: &Value| -> Vec<f32> {
+            v.as_array()
+                .into_iter()
+                .flatten()
+                .map(|x| x.as_f64().unwrap_or(0.0) as f32)
+                .collect()
+        };
         let mut pose = PartPose::default().to_array();
         for (slot, f) in pose.iter_mut().zip(floats(&value["pose"])) {
             *slot = f;
         }
-        let normals: Vec<Vec<f32>> = value["normals"].as_array().into_iter().flatten().map(floats).collect();
+        let normals: Vec<Vec<f32>> = value["normals"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(floats)
+            .collect();
         let polygons = value["polygons"]
             .as_array()
             .into_iter()
@@ -74,20 +117,41 @@ impl Part {
             .enumerate()
             .filter_map(|(index, polygon)| {
                 let corners: Vec<Vec<f32>> = polygon.as_array()?.iter().map(floats).collect();
-                let corner = |i: usize| -> Option<[f32; 5]> { corners.get(i)?.get(..5)?.try_into().ok() };
-                let normal = normals.get(index).and_then(|n| n.get(..3)?.try_into().ok()).unwrap_or_default();
-                Some(Polygon { vertices: [corner(0)?, corner(1)?, corner(2)?, corner(3)?], normal })
+                let corner =
+                    |i: usize| -> Option<[f32; 5]> { corners.get(i)?.get(..5)?.try_into().ok() };
+                let normal = normals
+                    .get(index)
+                    .and_then(|n| n.get(..3)?.try_into().ok())
+                    .unwrap_or_default();
+                Some(Polygon {
+                    vertices: [corner(0)?, corner(1)?, corner(2)?, corner(3)?],
+                    normal,
+                })
             })
             .collect();
-        let children = value["children"].as_object().into_iter().flatten().map(|(name, child)| Part::parse(name, child)).collect();
-        Part { name: name.to_owned(), pose: PartPose::from_array(pose), polygons, children }
+        let children = value["children"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(name, child)| Part::parse(name, child))
+            .collect();
+        Part {
+            name: name.to_owned(),
+            pose: PartPose::from_array(pose),
+            polygons,
+            children,
+        }
     }
 
     /// Depth first, the root first; each part with its path (`body/head`, the root's is empty).
     pub fn walk(&self) -> Vec<(String, &Part)> {
         fn visit<'a>(part: &'a Part, path: String, out: &mut Vec<(String, &'a Part)>) {
             for child in &part.children {
-                let child_path = if path.is_empty() { child.name.clone() } else { format!("{path}/{}", child.name) };
+                let child_path = if path.is_empty() {
+                    child.name.clone()
+                } else {
+                    format!("{path}/{}", child.name)
+                };
                 out.push((child_path.clone(), child));
                 visit(child, child_path, out);
             }
@@ -101,7 +165,10 @@ impl Part {
 /// Every layer of the export by its name (`minecraft:cow#main`).
 pub fn parse_layers(text: &str) -> serde_json::Result<BTreeMap<String, Part>> {
     let layers: BTreeMap<String, Value> = serde_json::from_str(text)?;
-    Ok(layers.into_iter().map(|(name, value)| (name, Part::parse("root", &value))).collect())
+    Ok(layers
+        .into_iter()
+        .map(|(name, value)| (name, Part::parse("root", &value)))
+        .collect())
 }
 
 #[cfg(test)]
@@ -122,7 +189,14 @@ pub(super) mod tests {
         let paths: Vec<_> = root.walk().into_iter().map(|(path, _)| path).collect();
         assert_eq!(paths, ["", "body", "body/head"]);
         let body = &root.children[0];
-        assert_eq!((body.pose.y, body.polygons[0].normal, body.polygons[0].vertices[2]), (12.0, [0.0, 0.0, -1.0], [4.0, 12.0, -2.0, 0.5, 1.0]));
+        assert_eq!(
+            (
+                body.pose.y,
+                body.polygons[0].normal,
+                body.polygons[0].vertices[2]
+            ),
+            (12.0, [0.0, 0.0, -1.0], [4.0, 12.0, -2.0, 0.5, 1.0])
+        );
         assert_eq!(body.children[0].pose.x_rot, 0.5);
     }
 }

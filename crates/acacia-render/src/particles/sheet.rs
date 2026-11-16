@@ -44,8 +44,23 @@ pub enum Set {
 }
 
 const SETS: [Set; 17] = [
-    Set::Generic, Set::Flame, Set::SoulFlame, Set::Lava, Set::Crit, Set::EnchantedHit, Set::Heart, Set::Angry, Set::Happy,
-    Set::Splash, Set::Bubble, Set::Note, Set::DripHang, Set::DripFall, Set::DripLand, Set::BigSmoke, Set::Explosion,
+    Set::Generic,
+    Set::Flame,
+    Set::SoulFlame,
+    Set::Lava,
+    Set::Crit,
+    Set::EnchantedHit,
+    Set::Heart,
+    Set::Angry,
+    Set::Happy,
+    Set::Splash,
+    Set::Bubble,
+    Set::Note,
+    Set::DripHang,
+    Set::DripFall,
+    Set::DripLand,
+    Set::BigSmoke,
+    Set::Explosion,
 ];
 /// Java sprites are packed into cells this many texels square, this many to a row.
 const CELL: u32 = 32;
@@ -78,12 +93,32 @@ impl Sheet {
         self.named.get(name).copied()
     }
 
-    fn new(style: Style, image: RgbaImage, texels: Vec<Vec<[u32; 4]>>, named: Vec<(&'static str, [u32; 4])>) -> Sheet {
+    fn new(
+        style: Style,
+        image: RgbaImage,
+        texels: Vec<Vec<[u32; 4]>>,
+        named: Vec<(&'static str, [u32; 4])>,
+    ) -> Sheet {
         let (w, h) = (image.width() as f32, image.height() as f32);
-        let uv = |[x, y, sw, sh]: [u32; 4]| [x as f32 / w, y as f32 / h, (x + sw) as f32 / w, (y + sh) as f32 / h];
-        let frames = texels.into_iter().map(|set| set.into_iter().map(uv).collect()).collect();
+        let uv = |[x, y, sw, sh]: [u32; 4]| {
+            [
+                x as f32 / w,
+                y as f32 / h,
+                (x + sw) as f32 / w,
+                (y + sh) as f32 / h,
+            ]
+        };
+        let frames = texels
+            .into_iter()
+            .map(|set| set.into_iter().map(uv).collect())
+            .collect();
         let named = named.into_iter().map(|(name, t)| (name, uv(t))).collect();
-        Sheet { style, image, frames, named }
+        Sheet {
+            style,
+            image,
+            frames,
+            named,
+        }
     }
 }
 
@@ -120,10 +155,15 @@ fn java(files: &Path) -> Option<Sheet> {
             names.push(name);
         }
     }
-    let mut image = RgbaImage::new(CELL * COLUMNS, CELL * (names.len() as u32).div_ceil(COLUMNS));
+    let mut image = RgbaImage::new(
+        CELL * COLUMNS,
+        CELL * (names.len() as u32).div_ceil(COLUMNS),
+    );
     let mut packed: FxHashMap<String, [u32; 4]> = FxHashMap::default();
     for name in names {
-        let Some(sprite) = image_file(&dir, &name).and_then(|p| image::open(p).ok()) else { continue };
+        let Some(sprite) = image_file(&dir, &name).and_then(|p| image::open(p).ok()) else {
+            continue;
+        };
         // An animated sprite is a vertical strip: its first frame.
         let side = sprite.width().min(sprite.height()).min(CELL);
         let sprite = sprite.crop_imm(0, 0, side, side).into_rgba8();
@@ -132,8 +172,19 @@ fn java(files: &Path) -> Option<Sheet> {
         image::imageops::replace(&mut image, &sprite, i64::from(x), i64::from(y));
         packed.insert(name, [x, y, side, side]);
     }
-    let texels = SETS.iter().map(|&s| java_names(s).iter().filter_map(|n| packed.get(n).copied()).collect()).collect();
-    let named = all_sprites().into_iter().filter_map(|n| Some((n, *packed.get(n)?))).collect();
+    let texels = SETS
+        .iter()
+        .map(|&s| {
+            java_names(s)
+                .iter()
+                .filter_map(|n| packed.get(n).copied())
+                .collect()
+        })
+        .collect();
+    let named = all_sprites()
+        .into_iter()
+        .filter_map(|n| Some((n, *packed.get(n)?)))
+        .collect();
     Some(Sheet::new(Style::Java, image, texels, named))
 }
 
@@ -161,16 +212,33 @@ fn bedrock_texels(set: Set) -> Vec<[u32; 4]> {
 }
 
 fn bedrock(files: &Path) -> Option<Sheet> {
-    let open = |name: &str| Some(image::open(image_file(files, &format!("textures/particle/{name}"))?).ok()?.into_rgba8());
+    let open = |name: &str| {
+        Some(
+            image::open(image_file(files, &format!("textures/particle/{name}"))?)
+                .ok()?
+                .into_rgba8(),
+        )
+    };
     let sheet = open("particles")?;
     let strip = open("campfire_smoke");
-    let height = sheet.height().max(strip.as_ref().map_or(0, RgbaImage::height));
+    let height = sheet
+        .height()
+        .max(strip.as_ref().map_or(0, RgbaImage::height));
     let mut image = RgbaImage::new(STRIP_X + 16, height);
     image::imageops::replace(&mut image, &sheet, 0, 0);
     if let Some(strip) = &strip {
         image::imageops::replace(&mut image, strip, i64::from(STRIP_X), 0);
     }
-    let texels = SETS.iter().map(|&s| if s == Set::BigSmoke && strip.is_none() { Vec::new() } else { bedrock_texels(s) }).collect();
+    let texels = SETS
+        .iter()
+        .map(|&s| {
+            if s == Set::BigSmoke && strip.is_none() {
+                Vec::new()
+            } else {
+                bedrock_texels(s)
+            }
+        })
+        .collect();
     Some(Sheet::new(Style::Bedrock, image, texels, Vec::new()))
 }
 
@@ -186,8 +254,19 @@ mod tests {
     #[test]
     fn bedrock_frames_land_on_the_sheet() {
         let image = RgbaImage::new(STRIP_X + 16, 192);
-        let sheet = Sheet::new(Style::Bedrock, image, SETS.iter().map(|&s| bedrock_texels(s)).collect(), Vec::new());
+        let sheet = Sheet::new(
+            Style::Bedrock,
+            image,
+            SETS.iter().map(|&s| bedrock_texels(s)).collect(),
+            Vec::new(),
+        );
         assert_eq!(sheet.frames(Set::Explosion).len(), 16);
-        assert!(sheet.frames.iter().flatten().all(|r| r.iter().all(|v| (0.0..=1.0).contains(v)) && r[0] < r[2] && r[1] < r[3]));
+        assert!(
+            sheet
+                .frames
+                .iter()
+                .flatten()
+                .all(|r| r.iter().all(|v| (0.0..=1.0).contains(v)) && r[0] < r[2] && r[1] < r[3])
+        );
     }
 }

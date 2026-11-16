@@ -52,7 +52,11 @@ pub fn visible_sections(
                 continue;
             }
             let n = s + IVec3::from_array(*d);
-            if !sections.contains(&n.y) || seen.contains(&key(n)) || visibility(key(n)).is_none() || !in_view(n) {
+            if !sections.contains(&n.y)
+                || seen.contains(&key(n))
+                || visibility(key(n)).is_none()
+                || !in_view(n)
+            {
                 continue;
             }
             seen.insert(key(n));
@@ -85,7 +89,10 @@ mod tests {
     #[test]
     fn a_closed_wall_hides_what_is_behind_it_but_not_itself() {
         let open = reach(|_| ALL);
-        assert!(open.contains(&(0, 0, 3)) && !open.contains(&(0, 0, -3)), "frustum still applies");
+        assert!(
+            open.contains(&(0, 0, 3)) && !open.contains(&(0, 0, -3)),
+            "frustum still applies"
+        );
         let walled = reach(|k| if k.2 == 2 { 0 } else { ALL });
         assert!(walled.contains(&(0, 0, 2)) && !walled.contains(&(0, 0, 3)));
     }
@@ -95,7 +102,13 @@ mod tests {
         // Faces 4 (+Z) and 5 (-Z) connect; nothing else does.
         let tunnel = 1 << 14;
         assert!(connected(tunnel, 4, 5) && !connected(tunnel, 5, 0));
-        let r = reach(|k| if k.2 == 2 { if k == (0, 0, 2) { tunnel } else { 0 } } else { ALL });
+        let r = reach(|k| {
+            if k.2 == 2 {
+                if k == (0, 0, 2) { tunnel } else { 0 }
+            } else {
+                ALL
+            }
+        });
         assert!(r.contains(&(0, 0, 3)), "straight through");
     }
 }

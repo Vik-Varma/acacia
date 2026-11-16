@@ -63,11 +63,25 @@ fn title_alpha(since: Instant, now: Instant) -> Option<f32> {
 fn centred(list: &mut DrawList, font: &Font, text: &str, x: f32, y: f32, scale: f32, alpha: f32) {
     let base = list.scale;
     list.scale = base * scale;
-    font.draw(list, text, x / scale - font.width(text) / 2.0, y / scale, 0xFFFFFF, alpha, true);
+    font.draw(
+        list,
+        text,
+        x / scale - font.width(text) / 2.0,
+        y / scale,
+        0xFFFFFF,
+        alpha,
+        true,
+    );
     list.scale = base;
 }
 
-pub fn draw_titles(list: &mut DrawList, theme: &Theme, titles: &Titles, now: Instant, [w, h]: [f32; 2]) {
+pub fn draw_titles(
+    list: &mut DrawList,
+    theme: &Theme,
+    titles: &Titles,
+    now: Instant,
+    [w, h]: [f32; 2],
+) {
     let Some(font) = &theme.font else { return };
     if let Some((text, since)) = &titles.title
         && let Some(alpha) = title_alpha(*since, now)
@@ -79,16 +93,34 @@ pub fn draw_titles(list: &mut DrawList, theme: &Theme, titles: &Titles, now: Ins
         }
     }
     if let Some((text, since)) = &titles.action_bar {
-        let left = ACTION_BAR.saturating_sub(now.saturating_duration_since(*since)).as_secs_f32();
+        let left = ACTION_BAR
+            .saturating_sub(now.saturating_duration_since(*since))
+            .as_secs_f32();
         if left > 0.0 {
-            centred(list, font, text, w / 2.0, h - 68.0, 1.0, (left / (ACTION_BAR.as_secs_f32() / 2.0)).min(1.0));
+            centred(
+                list,
+                font,
+                text,
+                w / 2.0,
+                h - 68.0,
+                1.0,
+                (left / (ACTION_BAR.as_secs_f32() / 2.0)).min(1.0),
+            );
         }
     }
     if let Some((text, since, bars)) = &titles.item_name {
         // Java: 40 ticks, fading over the last 10; 59 above the bottom, 14 lower without the bars.
         let left = ITEM_NAME_TICKS - now.saturating_duration_since(*since).as_secs_f32() / TICK;
         if left > 0.0 {
-            centred(list, font, text, w / 2.0, h - if *bars { 59.0 } else { 45.0 }, 1.0, (left / 10.0).min(1.0));
+            centred(
+                list,
+                font,
+                text,
+                w / 2.0,
+                h - if *bars { 59.0 } else { 45.0 },
+                1.0,
+                (left / 10.0).min(1.0),
+            );
         }
     }
 }
@@ -110,11 +142,21 @@ pub fn draw_bosses(list: &mut DrawList, theme: &Theme, bosses: &[Boss], [w, _]: 
             list.sprite(bg, left, y, WHITE);
         }
         if let Some(fill) = theme.atlas.get(&format!("boss_bar/{colour}_progress")) {
-            let filled = (boss.progress.clamp(0.0, 1.0) * 183.0).floor().min(fill.width as f32);
+            let filled = (boss.progress.clamp(0.0, 1.0) * 183.0)
+                .floor()
+                .min(fill.width as f32);
             list.sprite_part(fill, left, y, [0.0, 0.0, filled, fill.height as f32], WHITE);
         }
         if let Some(font) = &theme.font {
-            font.draw(list, boss.title, (w / 2.0 - font.width(boss.title) / 2.0).floor(), y - 9.0, 0xFFFFFF, 1.0, true);
+            font.draw(
+                list,
+                boss.title,
+                (w / 2.0 - font.width(boss.title) / 2.0).floor(),
+                y - 9.0,
+                0xFFFFFF,
+                1.0,
+                true,
+            );
         }
     }
 }
@@ -126,7 +168,8 @@ mod tests {
     #[test]
     fn titles_fade_in_stay_and_out() {
         let start = Instant::now();
-        let at = |ticks: u32| title_alpha(start, start + Duration::from_millis(u64::from(ticks) * 50));
+        let at =
+            |ticks: u32| title_alpha(start, start + Duration::from_millis(u64::from(ticks) * 50));
         assert_eq!(at(5), Some(0.5));
         assert_eq!(at(40), Some(1.0));
         assert_eq!(at(90), Some(0.5));

@@ -2,15 +2,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use acacia_api::{ApiError, BlockAtCursorParams, BlockPos, BotId, ErrorCode, FindBlocksParams};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use acacia_host::{Host, HostConfig, ENTITY_NUMBERS};
+use acacia_host::{ENTITY_NUMBERS, Host, HostConfig};
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::UnknownReturnValue;
 use napi_derive::napi;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 
-use crate::error::{refusal, Code};
-use crate::forward::{self, Sink, MAX_QUEUE};
+use crate::error::{Code, refusal};
+use crate::forward::{self, MAX_QUEUE, Sink};
 use crate::hot::{self, HOT_NUMBERS};
 
 #[napi(object, object_to_js = false)]
@@ -71,16 +71,27 @@ impl NativeHost {
         let ms = |v: u32| Duration::from_millis(v.into());
         config.join_spacing = options.join_spacing_ms.map_or(config.join_spacing, ms);
         config.join_jitter = options.join_jitter_ms.map_or(config.join_jitter, ms);
-        config.max_batch_bytes = options.max_batch_bytes.map_or(config.max_batch_bytes, |b| b as usize);
+        config.max_batch_bytes = options
+            .max_batch_bytes
+            .map_or(config.max_batch_bytes, |b| b as usize);
         #[cfg(feature = "test-server")]
         if let Ok(fake) = std::env::var("ACACIA_FAKE_SIGN_IN") {
             let ms = fake.parse().ok().filter(|&ms: &u64| ms > 1).unwrap_or(300);
-            config.sign_in = Some(Arc::new(acacia_host::FakeSignIn::new(Duration::from_millis(ms))));
+            config.sign_in = Some(Arc::new(acacia_host::FakeSignIn::new(
+                Duration::from_millis(ms),
+            )));
         }
-        let (host, outbound) = Host::start(config).map_err(|e| Error::from_reason(format!("host threads: {e}")))?;
+        let (host, outbound) =
+            Host::start(config).map_err(|e| Error::from_reason(format!("host threads: {e}")))?;
         let host = Arc::new(host);
-        forward::spawn(outbound, sink.clone()).map_err(|e| Error::from_reason(format!("forwarder thread: {e}")))?;
-        Ok(Self { host, sink, keep_alive: false, closing: false })
+        forward::spawn(outbound, sink.clone())
+            .map_err(|e| Error::from_reason(format!("forwarder thread: {e}")))?;
+        Ok(Self {
+            host,
+            sink,
+            keep_alive: false,
+            closing: false,
+        })
     }
 
     /// Enqueues one command (JSON); throws with the refusal's `code` if the host will not take it.
@@ -117,7 +128,9 @@ impl NativeHost {
             }
         };
         if status != napi::sys::Status::napi_ok {
-            return Err(Error::from_reason(format!("keep-alive {on}: napi status {status}")));
+            return Err(Error::from_reason(format!(
+                "keep-alive {on}: napi status {status}"
+            )));
         }
         self.keep_alive = on;
         Ok(())
@@ -127,10 +140,14 @@ impl NativeHost {
     /// for an unknown bot or before its first tick.
     #[napi(catch_unwind)]
     pub fn hot_numbers(&self, bot: String, mut into: Float64ArraySlice) -> Result<bool> {
-        let Some(hot) = self.host.hot(&BotId(bot)).filter(|h| h.tick != 0) else { return Ok(false) };
+        let Some(hot) = self.host.hot(&BotId(bot)).filter(|h| h.tick != 0) else {
+            return Ok(false);
+        };
         // SAFETY: JS is blocked in this call, so nothing else touches the array.
         let into = unsafe { into.as_mut() };
-        let target = into.get_mut(..HOT_NUMBERS).ok_or_else(|| Error::from_reason(format!("hotNumbers needs {HOT_NUMBERS} slots")))?;
+        let target = into
+            .get_mut(..HOT_NUMBERS)
+            .ok_or_else(|| Error::from_reason(format!("hotNumbers needs {HOT_NUMBERS} slots")))?;
         target.copy_from_slice(&hot::numbers(&hot));
         Ok(true)
     }
@@ -163,13 +180,21 @@ impl NativeHost {
     /// The numbers of added and moved entities are written into `numbers` by slot; a new array comes back when
     /// that one is too small (holding the old one's numbers too) or the delta is full (holding only the new ones).
     #[napi(catch_unwind)]
-    pub fn entity_delta(&self, bot: String, since: Option<i64>, mut numbers: Float64ArraySlice) -> Option<EntityDelta> {
-        let delta = self.host.entity_delta(&BotId(bot), since.map(|v| v as u64))?;
+    pub fn entity_delta(
+        &self,
+        bot: String,
+        since: Option<i64>,
+        mut numbers: Float64ArraySlice,
+    ) -> Option<EntityDelta> {
+        let delta = self
+            .host
+            .entity_delta(&BotId(bot), since.map(|v| v as u64))?;
         // SAFETY: JS is blocked in this call, so nothing else touches the array.
         let into = unsafe { numbers.as_mut() };
         let slots = delta.slots() as usize;
         let mut grown = (delta.full() || into.len() < slots * ENTITY_NUMBERS).then(|| {
-            let mut grown = vec![f64::NAN; slots.max(MIN_SLOTS).next_power_of_two() * ENTITY_NUMBERS];
+            let mut grown =
+                vec![f64::NAN; slots.max(MIN_SLOTS).next_power_of_two() * ENTITY_NUMBERS];
             if !delta.full() {
                 grown[..into.len()].copy_from_slice(into);
             }
@@ -181,7 +206,12 @@ impl NativeHost {
             target[at..at + ENTITY_NUMBERS].copy_from_slice(&row);
         }
         let (version, full, members) = (delta.version() as i64, delta.full(), delta.members_json());
-        Some(EntityDelta { version, full, members, numbers: grown.map(Float64Array::new) })
+        Some(EntityDelta {
+            version,
+            full,
+            members,
+            numbers: grown.map(Float64Array::new),
+        })
     }
 
     /// The server's `ItemTable` (JSON), or null for an unknown bot; empty until the table arrives at login.
@@ -193,13 +223,17 @@ impl NativeHost {
     /// `bot.findBlocks` now: `FindBlocksParams` JSON in, `FindBlocksResult` JSON out; throws with the error's `code`.
     #[napi]
     pub fn find_blocks(&self, bot: String, params: String) -> Result<String, Code> {
-        json_read(&params, |p: FindBlocksParams| self.host.find_blocks(&BotId(bot), &p))
+        json_read(&params, |p: FindBlocksParams| {
+            self.host.find_blocks(&BotId(bot), &p)
+        })
     }
 
     /// `bot.blockAtCursor` now: `BlockAtCursorParams` JSON in, `BlockAtCursorResult` JSON out; throws as `find_blocks`.
     #[napi]
     pub fn block_at_cursor(&self, bot: String, params: String) -> Result<String, Code> {
-        json_read(&params, |p: BlockAtCursorParams| self.host.block_at_cursor(&BotId(bot), &p))
+        json_read(&params, |p: BlockAtCursorParams| {
+            self.host.block_at_cursor(&BotId(bot), &p)
+        })
     }
 
     /// The `Block` at a cell of the bot's dimension (JSON), or null when unknown (see acacia-host's `block_at`).
@@ -211,8 +245,13 @@ impl NativeHost {
 }
 
 /// A sync read with JSON params and result; a parse failure is `BAD_PARAMS`.
-fn json_read<P: DeserializeOwned, R: Serialize>(params: &str, read: impl FnOnce(P) -> std::result::Result<R, ApiError>) -> Result<String, Code> {
-    let params = serde_json::from_str(params).map_err(|e| refusal(ApiError::new(ErrorCode::BadParams, e.to_string())))?;
+fn json_read<P: DeserializeOwned, R: Serialize>(
+    params: &str,
+    read: impl FnOnce(P) -> std::result::Result<R, ApiError>,
+) -> Result<String, Code> {
+    let params = serde_json::from_str(params)
+        .map_err(|e| refusal(ApiError::new(ErrorCode::BadParams, e.to_string())))?;
     let found = read(params).map_err(refusal)?;
-    serde_json::to_string(&found).map_err(|e| refusal(ApiError::new(ErrorCode::Internal, e.to_string())))
+    serde_json::to_string(&found)
+        .map_err(|e| refusal(ApiError::new(ErrorCode::Internal, e.to_string())))
 }

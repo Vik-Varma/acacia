@@ -14,19 +14,36 @@ pub(super) struct Piece {
 }
 
 pub(super) fn pieces(root: &Path) -> Vec<Piece> {
-    let Ok(dir) = std::fs::read_dir(root.join("attachables")) else { return Vec::new() };
+    let Ok(dir) = std::fs::read_dir(root.join("attachables")) else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
     for entry in dir.flatten() {
         let path = entry.path();
-        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
         if name.ends_with(".player.json") || !name.ends_with(".json") {
             continue;
         }
-        let Ok(file) = json::read(&path) else { continue };
+        let Ok(file) = json::read(&path) else {
+            continue;
+        };
         let d = &file["minecraft:attachable"]["description"];
-        let (Some(item), Some(geometry), Some(texture)) = (d["identifier"].as_str(), d["geometry"]["default"].as_str(), d["textures"]["default"].as_str()) else { continue };
+        let (Some(item), Some(geometry), Some(texture)) = (
+            d["identifier"].as_str(),
+            d["geometry"]["default"].as_str(),
+            d["textures"]["default"].as_str(),
+        ) else {
+            continue;
+        };
         if geometry.contains(".armor.") {
-            out.push(Piece { item: item.to_owned(), geometry: geometry.to_owned(), texture: texture.to_owned() });
+            out.push(Piece {
+                item: item.to_owned(),
+                geometry: geometry.to_owned(),
+                texture: texture.to_owned(),
+            });
         }
     }
     out

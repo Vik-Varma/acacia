@@ -52,9 +52,22 @@ pub fn mesh_section(volume: &Volume, table: &BlockTable, biomes: &BiomeColors) -
 }
 
 /// With the section's light, which [`crate::look::Lighting::Java`] puts in the vertices.
-pub fn mesh_section_lit(volume: &Volume, table: &BlockTable, biomes: &BiomeColors, cells: Option<&LightCells>) -> SectionMesh {
-    let ctx = Ctx { v: volume, table, biomes, cells };
-    let mut out = SectionMesh { visibility: visibility::section_visibility(volume, table), ..Default::default() };
+pub fn mesh_section_lit(
+    volume: &Volume,
+    table: &BlockTable,
+    biomes: &BiomeColors,
+    cells: Option<&LightCells>,
+) -> SectionMesh {
+    let ctx = Ctx {
+        v: volume,
+        table,
+        biomes,
+        cells,
+    };
+    let mut out = SectionMesh {
+        visibility: visibility::section_visibility(volume, table),
+        ..Default::default()
+    };
     greedy::cubes(&ctx, &mut out);
     shapes::others(&ctx, &mut out);
     model::sort_for_blending(&mut out.translucent);
@@ -106,19 +119,30 @@ impl Ctx<'_> {
     fn tint(&self, [x, y, z]: [i32; 3], tint: Tint) -> [u8; 3] {
         let here = self.v.biome(x, y, z);
         let biome = self.biomes.get(here);
-        let Some(color) = tint.color(biome) else { return [255; 3] };
+        let Some(color) = tint.color(biome) else {
+            return [255; 3];
+        };
         let reach = i32::from(self.table.biome_blend).min(volume::BLEND);
-        let around = move || (-reach..=reach).flat_map(move |dx| (-reach..=reach).map(move |dz| (dx, dz)));
+        let around =
+            move || (-reach..=reach).flat_map(move |dx| (-reach..=reach).map(move |dz| (dx, dz)));
         let patched = tint == Tint::Grass && biome.grass_patch.is_some();
         let same = || !patched && around().all(|(dx, dz)| self.v.biome(x + dx, y, z + dz) == here);
-        if !matches!(tint, Tint::Grass | Tint::Foliage | Tint::DryFoliage | Tint::Water) || same() {
+        if !matches!(
+            tint,
+            Tint::Grass | Tint::Foliage | Tint::DryFoliage | Tint::Water
+        ) || same()
+        {
             return color;
         }
         let [wx, _, wz] = self.world([x, y, z]);
         let mut sum = [0u32; 3];
         for (dx, dz) in around() {
             let biome = self.biomes.get(self.v.biome(x + dx, y, z + dz));
-            let c = if tint == Tint::Grass { biome.grass_at(wx + dx, wz + dz) } else { tint.color(biome).unwrap_or(color) };
+            let c = if tint == Tint::Grass {
+                biome.grass_at(wx + dx, wz + dz)
+            } else {
+                tint.color(biome).unwrap_or(color)
+            };
             (0..3).for_each(|i| sum[i] += u32::from(c[i]));
         }
         let count = (2 * reach as u32 + 1).pow(2);
@@ -133,19 +157,35 @@ mod tests {
 
     #[test]
     fn a_tint_blends_the_biomes_within_the_looks_reach() {
-        let grey = |v: u8| BiomeTint { grass: [v; 3], grass_patch: None, foliage: [v; 3], dry_foliage: [v; 3], water: [v; 3] };
+        let grey = |v: u8| BiomeTint {
+            grass: [v; 3],
+            grass_patch: None,
+            foliage: [v; 3],
+            dry_foliage: [v; 3],
+            water: [v; 3],
+        };
         let biomes = BiomeColors::of(&[(0, grey(0)), (1, grey(250))]);
         let mut v = Volume::filled(0);
         (8..18).for_each(|x| (-2..18).for_each(|z| v.biomes[volume::biome_cell(x, 0, z)] = 1));
         let tint = |reach: u8, x: i32, tint: Tint| {
             let mut table = BlockTable::from_blocks(Vec::new());
             table.biome_blend = reach;
-            Ctx { v: &v, table: &table, biomes: &biomes, cells: None }.tint([x, 0, 5], tint)
+            Ctx {
+                v: &v,
+                table: &table,
+                biomes: &biomes,
+                cells: None,
+            }
+            .tint([x, 0, 5], tint)
         };
         assert_eq!(tint(1, 7, Tint::Grass), [83; 3], "one column of three");
         assert_eq!(tint(2, 7, Tint::Grass), [100; 3], "two columns of five");
         assert_eq!(tint(2, 5, Tint::Water), [0; 3]);
-        assert_eq!(tint(2, 15, Tint::Foliage), [250; 3], "the section's border has the next one's biomes");
+        assert_eq!(
+            tint(2, 15, Tint::Foliage),
+            [250; 3],
+            "the section's border has the next one's biomes"
+        );
         assert_eq!(tint(2, 7, Tint::Fixed([1, 2, 3])), [1, 2, 3]);
         assert_eq!(tint(2, 7, Tint::None), [255; 3]);
     }

@@ -71,8 +71,14 @@ impl Lanes {
                 // Events the bot raised before it built the snapshot go first.
                 self.drain_events();
                 match built {
-                    Some(s) => self.out.done(call, Ok(Reply::Snapshot(convert::snapshot(&s)))),
-                    None => self.out.fail(call, ErrorCode::Disconnected, "the bot ended before the snapshot"),
+                    Some(s) => self
+                        .out
+                        .done(call, Ok(Reply::Snapshot(convert::snapshot(&s)))),
+                    None => self.out.fail(
+                        call,
+                        ErrorCode::Disconnected,
+                        "the bot ended before the snapshot",
+                    ),
                 }
                 false
             }
@@ -100,11 +106,15 @@ impl Lanes {
                 self.sent(call, sent, Reply::Command(()));
             }
             Method::SetEvents(p) => {
-                let sent = self.inbox.send(Immediate::SetEvents(convert::events(&p.events)));
+                let sent = self
+                    .inbox
+                    .send(Immediate::SetEvents(convert::events(&p.events)));
                 self.sent(call, sent, Reply::SetEvents(()));
             }
             Method::SetControlState(p) => {
-                let sent = self.inbox.send(Immediate::Key(convert::key(p.control), p.state));
+                let sent = self
+                    .inbox
+                    .send(Immediate::Key(convert::key(p.control), p.state));
                 self.sent(call, sent, Reply::SetControlState(()));
             }
             Method::ClearControlStates(_) => {
@@ -112,11 +122,17 @@ impl Lanes {
                 self.sent(call, sent, Reply::ClearControlStates(()));
             }
             Method::FindBlocks(p) => match &self.reader {
-                Some(reader) => self.out.done(call, convert::find_blocks(reader, &p).map(Reply::FindBlocks)),
+                Some(reader) => self.out.done(
+                    call,
+                    convert::find_blocks(reader, &p).map(Reply::FindBlocks),
+                ),
                 None => self.out.fail(call, ErrorCode::NotPossible, NO_SNAPSHOTS),
             },
             Method::BlockAtCursor(p) => match &self.reader {
-                Some(reader) => self.out.done(call, convert::block_at_cursor(reader, &p).map(Reply::BlockAtCursor)),
+                Some(reader) => self.out.done(
+                    call,
+                    convert::block_at_cursor(reader, &p).map(Reply::BlockAtCursor),
+                ),
                 None => self.out.fail(call, ErrorCode::NotPossible, NO_SNAPSHOTS),
             },
             Method::Snapshot(_) => {
@@ -124,7 +140,8 @@ impl Lanes {
                 if self.inbox.send(Immediate::Snapshot(tx)) {
                     self.snapshots.push_back((call, rx));
                 } else {
-                    self.out.fail(call, ErrorCode::Disconnected, "the bot has ended");
+                    self.out
+                        .fail(call, ErrorCode::Disconnected, "the bot has ended");
                 }
             }
             Method::Cancel(p) => {
@@ -134,7 +151,8 @@ impl Lanes {
                 }
                 if let Some(i) = self.queue.iter().position(|(c, _)| *c == p.call) {
                     self.queue.remove(i);
-                    self.out.fail(p.call, ErrorCode::Cancelled, "cancelled before it ran");
+                    self.out
+                        .fail(p.call, ErrorCode::Cancelled, "cancelled before it ran");
                 }
             }
             Method::Close(_) => {
@@ -142,7 +160,11 @@ impl Lanes {
                 self.closers.push(call);
                 return true;
             }
-            other => self.out.fail(call, ErrorCode::Internal, &format!("{} is not a bot method", other.name())),
+            other => self.out.fail(
+                call,
+                ErrorCode::Internal,
+                &format!("{} is not a bot method", other.name()),
+            ),
         }
         false
     }
@@ -150,7 +172,9 @@ impl Lanes {
     fn sent(&self, call: CallId, sent: bool, reply: Reply) {
         match sent {
             true => self.out.done(call, Ok(reply)),
-            false => self.out.fail(call, ErrorCode::Disconnected, "the connection has ended"),
+            false => self
+                .out
+                .fail(call, ErrorCode::Disconnected, "the connection has ended"),
         }
     }
 
@@ -170,10 +194,18 @@ impl Lanes {
     /// The bot has ended: fails every call still owed but `bot.close` ones.
     pub(super) fn fail_open(&mut self) {
         for (call, _) in self.queue.drain(..) {
-            self.out.fail(call, ErrorCode::Disconnected, "the bot disconnected before the call ran");
+            self.out.fail(
+                call,
+                ErrorCode::Disconnected,
+                "the bot disconnected before the call ran",
+            );
         }
         for (call, _) in self.snapshots.drain(..) {
-            self.out.fail(call, ErrorCode::Disconnected, "the bot ended before the snapshot");
+            self.out.fail(
+                call,
+                ErrorCode::Disconnected,
+                "the bot ended before the snapshot",
+            );
         }
     }
 }

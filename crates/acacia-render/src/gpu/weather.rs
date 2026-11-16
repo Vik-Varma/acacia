@@ -5,8 +5,8 @@
 use glam::DVec3;
 
 use super::pipeline::DEPTH_FORMAT;
-use crate::weather::columns::{self, WeatherLevel};
 use crate::weather::Streaks;
+use crate::weather::columns::{self, WeatherLevel};
 
 /// The Weather Radius option at its default.
 const RADIUS: i32 = 10;
@@ -37,13 +37,27 @@ impl WeatherPass {
     pub fn new(device: &wgpu::Device, color: wgpu::TextureFormat, globals: &wgpu::Buffer) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("weather"),
-            source: wgpu::ShaderSource::Wgsl(concat!(include_str!("globals.wgsl"), include_str!("weather.wgsl")).into()),
+            source: wgpu::ShaderSource::Wgsl(
+                concat!(include_str!("globals.wgsl"), include_str!("weather.wgsl")).into(),
+            ),
         });
-        let entry = |binding, ty| wgpu::BindGroupLayoutEntry { binding, visibility: wgpu::ShaderStages::VERTEX_FRAGMENT, ty, count: None };
+        let entry = |binding, ty| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty,
+            count: None,
+        };
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("weather"),
             entries: &[
-                entry(0, wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }),
+                entry(
+                    0,
+                    wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                ),
                 entry(
                     1,
                     wgpu::BindingType::Texture {
@@ -52,10 +66,17 @@ impl WeatherPass {
                         multisampled: false,
                     },
                 ),
-                entry(2, wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering)),
+                entry(
+                    2,
+                    wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                ),
             ],
         });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("weather"), bind_group_layouts: &[Some(&layout)], immediate_size: 0 });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("weather"),
+            bind_group_layouts: &[Some(&layout)],
+            immediate_size: 0,
+        });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("weather"),
             layout: Some(&pipeline_layout),
@@ -100,19 +121,37 @@ impl WeatherPass {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        WeatherPass { pipeline, layout, globals: globals.clone(), sampler, bind_groups: None, vertices, counts: [0; 2] }
+        WeatherPass {
+            pipeline,
+            layout,
+            globals: globals.clone(),
+            sampler,
+            bind_groups: None,
+            vertices,
+            counts: [0; 2],
+        }
     }
 
     pub fn set_texture(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, streaks: &Streaks) {
         let group = |image: &image::RgbaImage| {
-            let view = super::entity_textures::upload(device, queue, image.width(), image.height(), image);
+            let view =
+                super::entity_textures::upload(device, queue, image.width(), image.height(), image);
             device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("weather"),
                 layout: &self.layout,
                 entries: &[
-                    wgpu::BindGroupEntry { binding: 0, resource: self.globals.as_entire_binding() },
-                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&view) },
-                    wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.globals.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
                 ],
             })
         };
@@ -120,22 +159,41 @@ impl WeatherPass {
     }
 
     /// `rain` 0 to 1; `ticks` the level's game time, its fraction the partial tick.
-    pub fn prepare(&mut self, queue: &wgpu::Queue, level: Option<&impl WeatherLevel>, camera: DVec3, rain: f32, ticks: f64) {
+    pub fn prepare(
+        &mut self,
+        queue: &wgpu::Queue,
+        level: Option<&impl WeatherLevel>,
+        camera: DVec3,
+        rain: f32,
+        ticks: f64,
+    ) {
         self.counts = [0; 2];
-        let (Some(level), true) = (level, rain > 0.0 && self.bind_groups.is_some()) else { return };
+        let (Some(level), true) = (level, rain > 0.0 && self.bind_groups.is_some()) else {
+            return;
+        };
         let (game_time, partial) = (ticks.floor() as i64, ticks.fract() as f32);
         let columns = columns::extract(level, rain, game_time, partial, camera, RADIUS);
         let triangles = |q: [columns::WeatherVertex; 4]| {
-            let v = q.map(|v| Vertex { position: v.pos, uv: v.uv, alpha: f32::from(v.alpha) / 255.0, light: v.light.map(f32::from) });
+            let v = q.map(|v| Vertex {
+                position: v.pos,
+                uv: v.uv,
+                alpha: f32::from(v.alpha) / 255.0,
+                light: v.light.map(f32::from),
+            });
             [v[0], v[1], v[2], v[2], v[3], v[0]]
         };
-        let out: Vec<Vertex> = columns::quads(&columns, camera).into_iter().flat_map(triangles).collect();
+        let out: Vec<Vertex> = columns::quads(&columns, camera)
+            .into_iter()
+            .flat_map(triangles)
+            .collect();
         queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&out));
         self.counts = [columns.rain.len() as u32 * 6, columns.snow.len() as u32 * 6];
     }
 
     pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
-        let Some(groups) = &self.bind_groups else { return };
+        let Some(groups) = &self.bind_groups else {
+            return;
+        };
         pass.set_pipeline(&self.pipeline);
         pass.set_vertex_buffer(0, self.vertices.slice(..));
         let mut first = 0;

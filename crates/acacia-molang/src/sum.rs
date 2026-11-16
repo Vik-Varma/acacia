@@ -25,15 +25,30 @@ impl Parser<'_> {
         for child in [left, right] {
             let (of, post) = self.split(child);
             let Node::Sum(list) = self.node(of) else {
-                terms.push(Summand { base: of, post, node: Some(child) });
+                terms.push(Summand {
+                    base: of,
+                    post,
+                    node: Some(child),
+                });
                 continue;
             };
             for &term in self.items(list) {
                 let (base, own) = self.split(term);
                 terms.push(if post.scale == 1.0 {
-                    Summand { base, post: own, node: Some(term) }
+                    Summand {
+                        base,
+                        post: own,
+                        node: Some(term),
+                    }
                 } else {
-                    Summand { base, post: Post { scale: own.scale * post.scale, offset: own.offset * post.scale }, node: None }
+                    Summand {
+                        base,
+                        post: Post {
+                            scale: own.scale * post.scale,
+                            offset: own.offset * post.scale,
+                        },
+                        node: None,
+                    }
                 });
             }
             offset += post.offset;
@@ -48,7 +63,13 @@ impl Parser<'_> {
         });
         if let Some(c) = constant {
             if let [term] = terms[..] {
-                return self.wrap((term.base, Post { scale: term.post.scale, offset: (term.post.offset + c) + offset }));
+                return self.wrap((
+                    term.base,
+                    Post {
+                        scale: term.post.scale,
+                        offset: (term.post.offset + c) + offset,
+                    },
+                ));
             }
             offset += c;
         } else if self.terms_alike(&terms) {
@@ -57,9 +78,21 @@ impl Parser<'_> {
         self.merge_variables(&mut terms);
         match terms[..] {
             [] => self.number_with(offset),
-            [term] => self.wrap((term.base, Post { scale: term.post.scale, offset: term.post.offset + offset })),
+            [term] => self.wrap((
+                term.base,
+                Post {
+                    scale: term.post.scale,
+                    offset: term.post.offset + offset,
+                },
+            )),
             _ => {
-                let terms: Vec<u32> = terms.into_iter().map(|term| term.node.unwrap_or_else(|| self.wrap((term.base, term.post)))).collect();
+                let terms: Vec<u32> = terms
+                    .into_iter()
+                    .map(|term| {
+                        term.node
+                            .unwrap_or_else(|| self.wrap((term.base, term.post)))
+                    })
+                    .collect();
                 let list = self.list(&terms);
                 let sum = self.push(Node::Sum(list));
                 self.wrap((sum, Post { scale: 1.0, offset }))
@@ -70,7 +103,10 @@ impl Parser<'_> {
     /// Terms that print alike become one, their post-ops summed in two interleaved chains (even and
     /// odd positions), then the odd one out.
     fn merge_alike(&mut self, terms: &[Summand], offset: f32) -> u32 {
-        let zero = Post { scale: 0.0, offset: 0.0 };
+        let zero = Post {
+            scale: 0.0,
+            offset: 0.0,
+        };
         let (mut even, mut odd) = (zero, zero);
         let (pairs, remainder) = terms.as_chunks::<2>();
         for [a, b] in pairs {
@@ -84,7 +120,13 @@ impl Parser<'_> {
         if total.scale == 0.0 {
             return self.number_with(offset);
         }
-        self.wrap((terms[0].base, Post { scale: total.scale, offset: total.offset + offset }))
+        self.wrap((
+            terms[0].base,
+            Post {
+                scale: total.scale,
+                offset: total.offset + offset,
+            },
+        ))
     }
 
     /// Terms reading the same plain `variable.` merge into the first, their post-ops summed; when the
@@ -93,7 +135,9 @@ impl Parser<'_> {
         let mut live: Vec<(u32, usize)> = Vec::new();
         let mut leaving = vec![false; terms.len()];
         for index in 0..terms.len() {
-            let Node::Var { slot, path } = self.node(terms[index].base) else { continue };
+            let Node::Var { slot, path } = self.node(terms[index].base) else {
+                continue;
+            };
             if path.len > 0 {
                 continue;
             }

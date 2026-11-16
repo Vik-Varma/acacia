@@ -51,7 +51,14 @@ pub enum Face {
 }
 
 impl Face {
-    pub const ALL: [Face; 6] = [Face::Down, Face::Up, Face::North, Face::South, Face::West, Face::East];
+    pub const ALL: [Face; 6] = [
+        Face::Down,
+        Face::Up,
+        Face::North,
+        Face::South,
+        Face::West,
+        Face::East,
+    ];
 
     /// The face numbered `n` on the wire (as `acacia_world::ray::RayHit::face`); out of range is `Up`.
     pub fn from_wire(n: u8) -> Face {
@@ -78,7 +85,11 @@ impl Face {
     /// Centre of the face, relative to the block's minimum corner (the `click_pos` vanilla sends).
     pub fn click_offset(self) -> Vec3 {
         let o = self.offset();
-        [0.5 + 0.5 * o[0] as f32, 0.5 + 0.5 * o[1] as f32, 0.5 + 0.5 * o[2] as f32]
+        [
+            0.5 + 0.5 * o[0] as f32,
+            0.5 + 0.5 * o[1] as f32,
+            0.5 + 0.5 * o[2] as f32,
+        ]
     }
 }
 
@@ -87,7 +98,11 @@ pub(crate) fn block_min(pos: BlockPos) -> Vec3 {
 }
 
 pub(crate) fn block_center(pos: BlockPos) -> Vec3 {
-    [pos[0] as f32 + 0.5, pos[1] as f32 + 0.5, pos[2] as f32 + 0.5]
+    [
+        pos[0] as f32 + 0.5,
+        pos[1] as f32 + 0.5,
+        pos[2] as f32 + 0.5,
+    ]
 }
 
 /// World position of the centre of `face` of the block at `pos`.
@@ -104,7 +119,10 @@ pub(crate) fn relative(pos: BlockPos, point: Vec3) -> Vec3 {
 
 /// Distance from `p` to the nearest point of the box.
 pub(crate) fn distance_to_box(p: Vec3, min: Vec3, max: Vec3) -> f32 {
-    (0..3).map(|i| (min[i] - p[i]).max(p[i] - max[i]).max(0.0).powi(2)).sum::<f32>().sqrt()
+    (0..3)
+        .map(|i| (min[i] - p[i]).max(p[i] - max[i]).max(0.0).powi(2))
+        .sum::<f32>()
+        .sqrt()
 }
 
 /// Distance from `eye` to the block's centre, what [`BLOCK_REACH`] limits.
@@ -157,7 +175,9 @@ pub(crate) fn entity_box(entity: &Entity) -> (Vec3, Vec3) {
     let (width, height, lift) = HITBOXES
         .iter()
         .find(|(kind, ..)| *kind == entity.kind)
-        .map_or((ENTITY_WIDTH, ENTITY_HEIGHT, 0.0), |&(_, w, h, lift)| (w, h, lift));
+        .map_or((ENTITY_WIDTH, ENTITY_HEIGHT, 0.0), |&(_, w, h, lift)| {
+            (w, h, lift)
+        });
     let (h, y) = (width / 2.0, f.y - lift);
     ([f.x - h, y, f.z - h], [f.x + h, y + height, f.z + h])
 }
@@ -171,11 +191,32 @@ pub(crate) fn entity_distance(eye: Vec3, entity: &Entity) -> f32 {
 /// Aim points in the hitbox, centre first, each with where the ray from `eye` towards it enters the box.
 pub(crate) fn entity_aims(eye: Vec3, entity: &Entity) -> impl Iterator<Item = (Vec3, Vec3)> {
     let (min, max) = entity_box(entity);
-    let at = move |fx: f32, fy: f32, fz: f32| -> Vec3 { [min[0] + (max[0] - min[0]) * fx, min[1] + (max[1] - min[1]) * fy, min[2] + (max[2] - min[2]) * fz] };
-    let points = [at(0.5, 0.5, 0.5), at(0.5, 0.8, 0.5), at(0.5, 0.2, 0.5), at(0.25, 0.5, 0.25), at(0.75, 0.5, 0.75), at(0.25, 0.5, 0.75), at(0.75, 0.5, 0.25)];
+    let at = move |fx: f32, fy: f32, fz: f32| -> Vec3 {
+        [
+            min[0] + (max[0] - min[0]) * fx,
+            min[1] + (max[1] - min[1]) * fy,
+            min[2] + (max[2] - min[2]) * fz,
+        ]
+    };
+    let points = [
+        at(0.5, 0.5, 0.5),
+        at(0.5, 0.8, 0.5),
+        at(0.5, 0.2, 0.5),
+        at(0.25, 0.5, 0.25),
+        at(0.75, 0.5, 0.75),
+        at(0.25, 0.5, 0.75),
+        at(0.75, 0.5, 0.25),
+    ];
     points.into_iter().map(move |aim| {
         let dir = [aim[0] - eye[0], aim[1] - eye[1], aim[2] - eye[2]];
         let t = ray_box(eye, dir, min, max).map_or(1.0, |(t, _)| t);
-        (aim, [eye[0] + dir[0] * t, eye[1] + dir[1] * t, eye[2] + dir[2] * t])
+        (
+            aim,
+            [
+                eye[0] + dir[0] * t,
+                eye[1] + dir[1] * t,
+                eye[2] + dir[2] * t,
+            ],
+        )
     })
 }

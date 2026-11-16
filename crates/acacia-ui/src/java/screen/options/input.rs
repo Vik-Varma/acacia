@@ -60,7 +60,10 @@ pub fn cycle_values(id: &str, max_gui_scale: i32) -> Vec<V> {
 pub fn cycled(values: Values, id: &str, back: bool, max_gui_scale: i32) -> V {
     let list = cycle_values(id, max_gui_scale);
     let current = value(values, id);
-    let index = list.iter().position(|v| *v == current).map_or(-1, |i| i as i64);
+    let index = list
+        .iter()
+        .position(|v| *v == current)
+        .map_or(-1, |i| i as i64);
     let n = list.len() as i64;
     list[(index + if back { -1 } else { 1 }).rem_euclid(n) as usize].clone()
 }

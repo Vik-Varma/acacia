@@ -22,7 +22,10 @@ pub struct PageButton {
 impl PageButton {
     pub fn new(ctx: &Ctx, x: i32, y: i32, forward: bool) -> PageButton {
         let key = if forward { NEXT } else { PREVIOUS };
-        PageButton { base: Base::new(x, y, 23, 13, ctx.tr(key)).with_id(key), forward }
+        PageButton {
+            base: Base::new(x, y, 23, 13, ctx.tr(key)).with_id(key),
+            forward,
+        }
     }
 }
 
@@ -65,11 +68,16 @@ pub fn background(env: &Env, ctx: &mut Ctx) {
 /// `book.pageIndicator` in black without a shadow (`PAGE_TEXT_STYLE`).
 pub fn page_indicator(ctx: &Ctx, page: usize, count: usize) -> Text {
     let n = |v: usize| Text::literal(v.to_string());
-    ctx.tr_args("book.pageIndicator", &[n(page + 1), n(count)]).with_style(&page_style())
+    ctx.tr_args("book.pageIndicator", &[n(page + 1), n(count)])
+        .with_style(&page_style())
 }
 
 pub fn page_style() -> Style {
-    Style { color: Some(0), shadow_color: Some(0), ..Style::default() }
+    Style {
+        color: Some(0),
+        shadow_color: Some(0),
+        ..Style::default()
+    }
 }
 
 /// The indicator right-aligned on `left + 148`.
@@ -120,10 +128,20 @@ impl BookViewScreen {
         forward.base.visible = book.page + 1 < book.pages.len();
         let mut back = PageButton::new(ctx, l + 43, 2 + 157, false);
         back.base.visible = book.page > 0;
-        let page = book.pages.get(book.page).cloned().unwrap_or_default().with_style(&page_style());
+        let page = book
+            .pages
+            .get(book.page)
+            .cloned()
+            .unwrap_or_default()
+            .with_style(&page_style());
         let lines = split(ctx.font, &page, 114);
         let indicator = page_indicator(ctx, book.page, book.pages.len().max(1));
-        BookViewScreen { env, lines, indicator, widgets: vec![Box::new(done), Box::new(forward), Box::new(back)] }
+        BookViewScreen {
+            env,
+            lines,
+            indicator,
+            widgets: vec![Box::new(done), Box::new(forward), Box::new(back)],
+        }
     }
 }
 
@@ -148,7 +166,12 @@ impl Screen for BookViewScreen {
     /// Page Up and Page Down turn the page (after the focused button had its say).
     fn key_pressed(&mut self, s: &mut Interaction, key: Key, shift: bool) -> Option<Fired> {
         let fired = crate::java::widget::input::key_pressed(&mut self.children(), s, key, shift);
-        let page = |id: &'static str| Some(Fired { id: id.into(), action: Action::Press });
+        let page = |id: &'static str| {
+            Some(Fired {
+                id: id.into(),
+                action: Action::Press,
+            })
+        };
         fired.or_else(|| match key {
             Key::PageUp => page(PREVIOUS),
             Key::PageDown => page(NEXT),

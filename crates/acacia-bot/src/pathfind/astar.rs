@@ -7,11 +7,11 @@ use acacia_physics::{BlockPos, Vec3};
 
 use super::boat::BoatLegs;
 use super::cache::RolloutCache;
+use super::costs::CLASSIC_STARTUP;
 use super::exit::{Exits, has_exit};
 use super::frontier::{Frontier, Popped, Rec};
 use super::goal::Goal;
 use super::macros::{self, MACRO_TIME_SHARE, MacroStats, Macros};
-use super::costs::CLASSIC_STARTUP;
 use super::moves::{self, Ctx, Edge, MoveKind};
 use super::node::{Entry, Momentum, NodeKey, run_entry};
 pub use super::opts::{Path, SearchOpts};
@@ -32,10 +32,16 @@ pub fn start_node<B: Blocks>(t: &Terrain<B>, feet: Vec3) -> Option<(BlockPos, Sp
         return Some(([x, y, z], s));
     }
     let mut best: Option<(f32, BlockPos, Spot)> = None;
-    for (dx, dy, dz) in (-1..=1).flat_map(|dx| (-2..=1).flat_map(move |dy| (-1..=1).map(move |dz| (dx, dy, dz)))) {
+    for (dx, dy, dz) in
+        (-1..=1).flat_map(|dx| (-2..=1).flat_map(move |dy| (-1..=1).map(move |dz| (dx, dy, dz))))
+    {
         let p = [x + dx, y + dy, z + dz];
         let Some(s) = t.spot(p) else { continue };
-        let d = [p[0] as f32 + 0.5 - feet[0], s.feet - feet[1], p[2] as f32 + 0.5 - feet[2]];
+        let d = [
+            p[0] as f32 + 0.5 - feet[0],
+            s.feet - feet[1],
+            p[2] as f32 + 0.5 - feet[2],
+        ];
         let d = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
         if best.is_none_or(|(b, ..)| d < b) {
             best = Some((d, p, s));
@@ -45,23 +51,48 @@ pub fn start_node<B: Blocks>(t: &Terrain<B>, feet: Vec3) -> Option<(BlockPos, Sp
 }
 
 /// Searches from a player standing at `feet`.
-pub fn search<S: PlanSim<B>, B: Blocks>(t: &Terrain<B>, feet: Vec3, goal: &Goal, opts: &SearchOpts) -> Path {
+pub fn search<S: PlanSim<B>, B: Blocks>(
+    t: &Terrain<B>,
+    feet: Vec3,
+    goal: &Goal,
+    opts: &SearchOpts,
+) -> Path {
     search_from(t, &S::standing(feet), goal, opts)
 }
 
 /// Searches from the player's live state: its momentum is the start node's, and its attributes and
 /// effects shape every macro move.
-pub fn search_from<S: PlanSim<B>, B: Blocks>(t: &Terrain<B>, live: &S, goal: &Goal, opts: &SearchOpts) -> Path {
+pub fn search_from<S: PlanSim<B>, B: Blocks>(
+    t: &Terrain<B>,
+    live: &S,
+    goal: &Goal,
+    opts: &SearchOpts,
+) -> Path {
     search_cached(t, live, goal, opts, &RolloutCache::default())
 }
 
 /// [`search_from`] reusing (and adding to) the macro-move results in `cache`; they are dropped first if
 /// they were found for another profile or player.
-pub fn search_cached<S: PlanSim<B>, B: Blocks>(t: &Terrain<B>, live: &S, goal: &Goal, opts: &SearchOpts, cache: &RolloutCache) -> Path {
+pub fn search_cached<S: PlanSim<B>, B: Blocks>(
+    t: &Terrain<B>,
+    live: &S,
+    goal: &Goal,
+    opts: &SearchOpts,
+    cache: &RolloutCache,
+) -> Path {
     let started = Instant::now();
-    let empty = |complete| Path { nodes: Vec::new(), complete, unreachable: false, cost: 0.0, visited: 0, macro_stats: MacroStats::default() };
+    let empty = |complete| Path {
+        nodes: Vec::new(),
+        complete,
+        unreachable: false,
+        cost: 0.0,
+        visited: 0,
+        macro_stats: MacroStats::default(),
+    };
     let body = live.body();
-    let Some((start, spot)) = start_node(t, body.pos) else { return empty(false) };
+    let Some((start, spot)) = start_node(t, body.pos) else {
+        return empty(false);
+    };
     if goal.success(start) {
         return empty(true);
     }
@@ -71,9 +102,18 @@ pub fn search_cached<S: PlanSim<B>, B: Blocks>(t: &Terrain<B>, live: &S, goal: &
         true if resting => Entry::Rest,
         true => run_entry(body.vel),
     };
-    let start = NodeKey { entry, ..NodeKey::rest(start) };
+    let start = NodeKey {
+        entry,
+        ..NodeKey::rest(start)
+    };
     let speed = opts.speed(S::envelope());
-    let mut front = Frontier::new(Rec::start(start, spot, Momentum::snap(&live.motion(), start.pos)), goal, speed, opts.favour.as_deref(), opts.hazards.as_deref());
+    let mut front = Frontier::new(
+        Rec::start(start, spot, Momentum::snap(&live.motion(), start.pos)),
+        goal,
+        speed,
+        opts.favour.as_deref(),
+        opts.hazards.as_deref(),
+    );
     let mut edges: Vec<Edge> = Vec::with_capacity(32);
     let (mut visited, mut leaps) = (0, 0usize);
     let macros = opts.macros.then(|| Macros {
@@ -86,9 +126,27 @@ pub fn search_cached<S: PlanSim<B>, B: Blocks>(t: &Terrain<B>, live: &S, goal: &
         deadline: started + opts.budget / MACRO_TIME_SHARE,
         stats: Cell::default(),
     });
-    let boats = opts.boats.then(|| BoatLegs::new(goal, S::envelope(), opts.profile, &opts.boat_source)).flatten();
-    let mut ctx: Ctx<S> = Ctx { parkour: opts.parkour, dig: opts.allow_dig, bridge: opts.allow_bridge, doors: opts.open_doors, kit: &opts.kit, blocks_left: 0, macros, keep: opts.keep.as_deref(), no_body: opts.no_body.as_deref(), boats: boats.as_ref() };
-    let stats = |ctx: &Ctx<S>| ctx.macros.as_ref().map_or_else(MacroStats::default, |m| m.stats.get());
+    let boats = opts
+        .boats
+        .then(|| BoatLegs::new(goal, S::envelope(), opts.profile, &opts.boat_source))
+        .flatten();
+    let mut ctx: Ctx<S> = Ctx {
+        parkour: opts.parkour,
+        dig: opts.allow_dig,
+        bridge: opts.allow_bridge,
+        doors: opts.open_doors,
+        kit: &opts.kit,
+        blocks_left: 0,
+        macros,
+        keep: opts.keep.as_deref(),
+        no_body: opts.no_body.as_deref(),
+        boats: boats.as_ref(),
+    };
+    let stats = |ctx: &Ctx<S>| {
+        ctx.macros
+            .as_ref()
+            .map_or_else(MacroStats::default, |m| m.stats.get())
+    };
     let (mut cut, mut reaches, mut exits) = (false, Reaches::default(), Exits::default());
 
     while let Some(popped) = front.pop() {
@@ -100,11 +158,20 @@ pub fn search_cached<S: PlanSim<B>, B: Blocks>(t: &Terrain<B>, live: &S, goal: &
                     cut = true;
                     break;
                 }
-                let (Some(m), r) = (&ctx.macros, front.recs[l.parent as usize]) else { continue };
+                let (Some(m), r) = (&ctx.macros, front.recs[l.parent as usize]) else {
+                    continue;
+                };
                 // From the search's start, the bot's real facing (it may face away); other nodes face their leap.
                 match macros::leap(t, r.key.pos, &r.mom, l.cand, l.parent == 0, m) {
                     Ok(e) => {
-                        debug_assert!(e.cost >= l.floor - 1e-3, "leap {:?} -> {:?} cost {} under its floor {}", r.key.pos, e.pos, e.cost, l.floor);
+                        debug_assert!(
+                            e.cost >= l.floor - 1e-3,
+                            "leap {:?} -> {:?} cost {} under its floor {}",
+                            r.key.pos,
+                            e.pos,
+                            e.cost,
+                            l.floor
+                        );
                         front.relax(l.parent, &e)
                     }
                     Err(Miss::Short) => front.fell_short(&l),
@@ -115,7 +182,14 @@ pub fn search_cached<S: PlanSim<B>, B: Blocks>(t: &Terrain<B>, live: &S, goal: &
         };
         let rec = front.recs[i as usize];
         if goal.success(rec.key.pos) {
-            return Path { nodes: front.reconstruct(i), complete: true, unreachable: false, cost: rec.raw, visited, macro_stats: stats(&ctx) };
+            return Path {
+                nodes: front.reconstruct(i),
+                complete: true,
+                unreachable: false,
+                cost: rec.raw,
+                visited,
+                macro_stats: stats(&ctx),
+            };
         }
         visited += 1;
         // Checked often: a node with macro moves costs many rollouts.
@@ -125,21 +199,47 @@ pub fn search_cached<S: PlanSim<B>, B: Blocks>(t: &Terrain<B>, live: &S, goal: &
         }
         edges.clear();
         ctx.blocks_left = opts.kit.blocks.saturating_sub(rec.placed);
-        moves::successors(t, rec.key.pos, rec.spot, (rec.key.entry, &rec.mom), &ctx, &mut edges);
+        moves::successors(
+            t,
+            rec.key.pos,
+            rec.spot,
+            (rec.key.entry, &rec.mom),
+            &ctx,
+            &mut edges,
+        );
         if i == 0 && resting {
             // Classic moves from standing pay their run-up, as the simulated macro moves beside them do.
-            let walks = |e: &&mut Edge| e.mac.is_none() && e.work.is_empty() && !e.spot.wet && matches!(e.kind, MoveKind::Walk | MoveKind::Ascend | MoveKind::Descend | MoveKind::Parkour);
-            edges.iter_mut().filter(walks).for_each(|e| e.cost += CLASSIC_STARTUP);
+            let walks = |e: &&mut Edge| {
+                e.mac.is_none()
+                    && e.work.is_empty()
+                    && !e.spot.wet
+                    && matches!(
+                        e.kind,
+                        MoveKind::Walk | MoveKind::Ascend | MoveKind::Descend | MoveKind::Parkour
+                    )
+            };
+            edges
+                .iter_mut()
+                .filter(walks)
+                .for_each(|e| e.cost += CLASSIC_STARTUP);
         }
         edges.iter().for_each(|e| front.relax(i, e));
         if let Some(m) = &ctx.macros {
-            for c in macros::leap_candidates(t, rec.key.pos, rec.spot, (rec.key.entry, &rec.mom), m) {
+            for c in macros::leap_candidates(t, rec.key.pos, rec.spot, (rec.key.entry, &rec.mom), m)
+            {
                 // Down into a basin with no way on (a pit floor): never on a path to the goal.
-                if c.q[1] < rec.key.pos[1] && !c.to.wet &&!exits.open::<S, B>(t, c.q, c.to, opts, goal) {
+                if c.q[1] < rec.key.pos[1]
+                    && !c.to.wet
+                    && !exits.open::<S, B>(t, c.q, c.to, opts, goal)
+                {
                     continue;
                 }
                 let reach = reaches.get(&rec.mom, live);
-                front.queue_leap(i, c, reach::leap_floor(t, rec.key.pos, &rec.mom, &c, reach, live, opts.profile));
+                front.queue_leap(
+                    i,
+                    c,
+                    reach::leap_floor(t, rec.key.pos, &rec.mom, &c, reach, live, opts.profile),
+                );
             }
         }
     }
@@ -155,5 +255,12 @@ pub fn search_cached<S: PlanSim<B>, B: Blocks>(t: &Terrain<B>, live: &S, goal: &
         pick = r.parent;
     }
     let cost = front.recs[pick as usize].raw;
-    Path { nodes: front.reconstruct(pick), complete: false, unreachable, cost, visited, macro_stats }
+    Path {
+        nodes: front.reconstruct(pick),
+        complete: false,
+        unreachable,
+        cost,
+        visited,
+        macro_stats,
+    }
 }

@@ -7,8 +7,8 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
-use acacia_mitm::proto::packets::ResourcePacksInfo;
 use acacia_mitm::proto::RawPacket;
+use acacia_mitm::proto::packets::ResourcePacksInfo;
 use acacia_mitm::{Interceptor, Verdict};
 
 /// Replaces every pack's `cdn_url` the game is told. The capture keeps the server's own packet.
@@ -16,17 +16,24 @@ pub struct PointPacks(pub String);
 
 impl Interceptor for PointPacks {
     fn on_server_packet(&mut self, packet: &RawPacket) -> Verdict {
-        let Some(mut info) = packet.is::<ResourcePacksInfo>().then(|| packet.decode::<ResourcePacksInfo>().ok()).flatten() else {
+        let Some(mut info) = packet
+            .is::<ResourcePacksInfo>()
+            .then(|| packet.decode::<ResourcePacksInfo>().ok())
+            .flatten()
+        else {
             return Verdict::Forward;
         };
-        info.texture_packs.iter_mut().for_each(|p| p.cdn_url = self.0.clone());
+        info.texture_packs
+            .iter_mut()
+            .for_each(|p| p.cdn_url = self.0.clone());
         Verdict::replace(&info)
     }
 }
 
 /// Serves `zip` on `port`, logging to `log`.
 pub fn start(zip: &Path, port: u16, log: &Path) -> io::Result<()> {
-    let pack = std::fs::read(zip).map_err(|e| io::Error::new(e.kind(), format!("--pack-cdn {}: {e}", zip.display())))?;
+    let pack = std::fs::read(zip)
+        .map_err(|e| io::Error::new(e.kind(), format!("--pack-cdn {}: {e}", zip.display())))?;
     serve(SocketAddr::from(([0, 0, 0, 0], port)), pack, log)
 }
 
@@ -39,7 +46,12 @@ pub fn url(proxy: SocketAddr, port: u16) -> String {
 
 fn serve(listen: SocketAddr, pack: Vec<u8>, log: &Path) -> io::Result<()> {
     let listener = TcpListener::bind(listen)?;
-    let log = Arc::new(Mutex::new(std::fs::OpenOptions::new().create(true).append(true).open(log)?));
+    let log = Arc::new(Mutex::new(
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log)?,
+    ));
     let pack: Arc<[u8]> = pack.into();
     std::thread::spawn(move || {
         for stream in listener.incoming().flatten() {
@@ -65,14 +77,26 @@ fn answer(stream: TcpStream, pack: &[u8], log: &Mutex<std::fs::File>) -> io::Res
         }
         head.push(line.trim_end().to_owned());
     }
-    let millis = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default().as_millis();
+    let millis = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
     let entry = format!("{millis} {peer}\n{}\n\n", head.join("\n"));
     print!("pack cdn request:\n{entry}");
-    log.lock().unwrap_or_else(|p| p.into_inner()).write_all(entry.as_bytes())?;
+    log.lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .write_all(entry.as_bytes())?;
 
-    let method = head.first().and_then(|l| l.split(' ').next()).unwrap_or_default();
+    let method = head
+        .first()
+        .and_then(|l| l.split(' ').next())
+        .unwrap_or_default();
     let mut stream = stream;
-    write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/zip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", pack.len())?;
+    write!(
+        stream,
+        "HTTP/1.1 200 OK\r\nContent-Type: application/zip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        pack.len()
+    )?;
     if method != "HEAD" {
         stream.write_all(pack)?;
     }

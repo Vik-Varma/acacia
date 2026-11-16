@@ -25,14 +25,36 @@ const PACE: u32 = 30;
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Error> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let server = args.first().cloned().unwrap_or_else(|| "127.0.0.1:19174".into());
-    let coordinate = |index: usize, default: i32| args.get(index).and_then(|a| a.parse().ok()).unwrap_or(default);
+    let server = args
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "127.0.0.1:19174".into());
+    let coordinate = |index: usize, default: i32| {
+        args.get(index)
+            .and_then(|a| a.parse().ok())
+            .unwrap_or(default)
+    };
     let [x, y, z] = [coordinate(1, 240), coordinate(2, -60), coordinate(3, 104)];
     let pacing = args.get(4).is_some_and(|a| a == "pace");
-    let trackers = Trackers { entities: true, ..Trackers::default() };
-    let config = BotConfig { physics: true, trackers, ..BotConfig::default() };
-    let mut bot = Bot::connect(Client::builder(&server).offline("Prop").skin(caped()), config).await?;
-    while bot.bedrock().and_then(|b| b.movement()).is_none_or(|m| !m.is_started()) {
+    let trackers = Trackers {
+        entities: true,
+        ..Trackers::default()
+    };
+    let config = BotConfig {
+        physics: true,
+        trackers,
+        ..BotConfig::default()
+    };
+    let mut bot = Bot::connect(
+        Client::builder(&server).offline("Prop").skin(caped()),
+        config,
+    )
+    .await?;
+    while bot
+        .bedrock()
+        .and_then(|b| b.movement())
+        .is_none_or(|m| !m.is_started())
+    {
         bot.wait_ticks(1).await?;
     }
     // A bot that died here last time respawns at the world spawn first.
@@ -52,23 +74,43 @@ async fn main() -> Result<(), Error> {
     }
     bot.select_hotbar(0)?;
     bot.wait_ticks(20).await?;
-    let off = |e: &acacia_bot::state::Entity| (e.position.x - (x as f32 + 2.5)).abs() + (e.position.z - (z as f32 + 0.5)).abs();
+    let off = |e: &acacia_bot::state::Entity| {
+        (e.position.x - (x as f32 + 2.5)).abs() + (e.position.z - (z as f32 + 0.5)).abs()
+    };
     let cows = bot.state().entities.iter().filter(|e| e.kind == COW);
-    let cow = cows.min_by(|a, b| off(a).total_cmp(&off(b))).map(|e| e.runtime_id).ok_or("no cow was tracked")?;
+    let cow = cows
+        .min_by(|a, b| off(a).total_cmp(&off(b)))
+        .map(|e| e.runtime_id)
+        .ok_or("no cow was tracked")?;
     bot.interact_entity(cow).await?;
     bot.wait_ticks(10).await?;
     println!("leashed cow {cow}");
-    banner(&mut bot, [x - 2, y, z], args.get(4).is_some_and(|a| a == "shield")).await?;
+    banner(
+        &mut bot,
+        [x - 2, y, z],
+        args.get(4).is_some_and(|a| a == "shield"),
+    )
+    .await?;
     println!("holding {:?}", bot.state().inventory_summary());
     // Turned back to face north after aiming at the cow and the loom.
-    bot.command(&format!("/tp @s {} {y} {} 180 0", x as f32 + 0.5, z as f32 + 0.5));
+    bot.command(&format!(
+        "/tp @s {} {y} {} 180 0",
+        x as f32 + 0.5,
+        z as f32 + 0.5
+    ));
     bot.wait_ticks(10).await?;
     println!("posed");
     for leg in 0..HOLD / PACE {
         if let Some(controls) = bot.controls() {
             (controls.sneak, controls.forward) = (!pacing, if pacing { 1.0 } else { 0.0 });
             // East, then back west.
-            controls.yaw = if !pacing { 180.0 } else if leg % 2 == 0 { -90.0 } else { 90.0 };
+            controls.yaw = if !pacing {
+                180.0
+            } else if leg % 2 == 0 {
+                -90.0
+            } else {
+                90.0
+            };
         }
         bot.wait_ticks(PACE).await?;
     }
@@ -77,14 +119,24 @@ async fn main() -> Result<(), Error> {
 
 /// The flat skin with a red cape, gold across its top third.
 fn caped() -> Skin {
-    let texel = |index: u32| if index / 64 < 7 { [0xE0, 0xB0, 0x20, 0xFF] } else { [0xB0, 0x20, 0x20, 0xFF] };
+    let texel = |index: u32| {
+        if index / 64 < 7 {
+            [0xE0, 0xB0, 0x20, 0xFF]
+        } else {
+            [0xB0, 0x20, 0x20, 0xFF]
+        }
+    };
     Skin::classic_with_cape(64, 32, &(0..64 * 32).flat_map(texel).collect::<Vec<u8>>())
 }
 
 /// Looms a patterned banner at a loom set at `loom` and holds it in the main hand with a shield
 /// in the other, or crafts it `onto_shield` and holds that: no command makes either.
 async fn banner(bot: &mut Bot, loom: [i32; 3], onto_shield: bool) -> Result<(), Error> {
-    let setup = [format!("/setblock {} {} {} loom", loom[0], loom[1], loom[2]), "/clear @s".to_owned(), "/give @s banner 1 15".to_owned()];
+    let setup = [
+        format!("/setblock {} {} {} loom", loom[0], loom[1], loom[2]),
+        "/clear @s".to_owned(),
+        "/give @s banner 1 15".to_owned(),
+    ];
     for command in &setup {
         bot.command(command);
         bot.wait_ticks(6).await?;
@@ -111,7 +163,10 @@ async fn banner(bot: &mut Bot, loom: [i32; 3], onto_shield: bool) -> Result<(), 
     }
     bot.select_hotbar(0)?;
     bot.wait_ticks(10).await?;
-    println!("held: {:?}", bot.state().held_item().nbt.as_ref().map(|nbt| &nbt.value));
+    println!(
+        "held: {:?}",
+        bot.state().held_item().nbt.as_ref().map(|nbt| &nbt.value)
+    );
     Ok(())
 }
 
@@ -123,5 +178,9 @@ async fn find(bot: &mut Bot, name: &str) -> Result<SlotRef, Error> {
         }
         bot.wait_ticks(1).await?;
     }
-    Err(format!("no {name} in the inventory: {:?}", bot.state().inventory_summary()).into())
+    Err(format!(
+        "no {name} in the inventory: {:?}",
+        bot.state().inventory_summary()
+    )
+    .into())
 }

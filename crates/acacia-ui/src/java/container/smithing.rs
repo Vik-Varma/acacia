@@ -10,15 +10,36 @@ use crate::java::text::Text;
 use crate::java::tooltip::{Line, Positioner, Tooltip};
 use crate::java::widget::measure::split;
 
-const TEMPLATE_ICONS: [&str; 2] = ["container/slot/smithing_template_armor_trim", "container/slot/smithing_template_netherite_upgrade"];
-const TRIM_BASE: [&str; 4] = ["container/slot/helmet", "container/slot/chestplate", "container/slot/leggings", "container/slot/boots"];
+const TEMPLATE_ICONS: [&str; 2] = [
+    "container/slot/smithing_template_armor_trim",
+    "container/slot/smithing_template_netherite_upgrade",
+];
+const TRIM_BASE: [&str; 4] = [
+    "container/slot/helmet",
+    "container/slot/chestplate",
+    "container/slot/leggings",
+    "container/slot/boots",
+];
 const TRIM_ADDITIONS: [&str; 7] = [
-    "container/slot/ingot", "container/slot/redstone_dust", "container/slot/lapis_lazuli", "container/slot/quartz",
-    "container/slot/diamond", "container/slot/emerald", "container/slot/amethyst_shard",
+    "container/slot/ingot",
+    "container/slot/redstone_dust",
+    "container/slot/lapis_lazuli",
+    "container/slot/quartz",
+    "container/slot/diamond",
+    "container/slot/emerald",
+    "container/slot/amethyst_shard",
 ];
 const UPGRADE_BASE: [&str; 11] = [
-    "container/slot/helmet", "container/slot/sword", "container/slot/chestplate", "container/slot/pickaxe", "container/slot/leggings",
-    "container/slot/axe", "container/slot/boots", "container/slot/hoe", "container/slot/shovel", "container/slot/nautilus_armor",
+    "container/slot/helmet",
+    "container/slot/sword",
+    "container/slot/chestplate",
+    "container/slot/pickaxe",
+    "container/slot/leggings",
+    "container/slot/axe",
+    "container/slot/boots",
+    "container/slot/hoe",
+    "container/slot/shovel",
+    "container/slot/nautilus_armor",
     "container/slot/spear",
 ];
 const UPGRADE_ADDITIONS: [&str; 1] = ["container/slot/ingot"];
@@ -47,8 +68,16 @@ impl Template {
     }
 
     fn description(self, slot: usize) -> String {
-        let kind = if self == Template::Trim { "armor_trim" } else { "netherite_upgrade" };
-        let part = if slot == 1 { "base_slot_description" } else { "additions_slot_description" };
+        let kind = if self == Template::Trim {
+            "armor_trim"
+        } else {
+            "netherite_upgrade"
+        };
+        let part = if slot == 1 {
+            "base_slot_description"
+        } else {
+            "additions_slot_description"
+        };
         format!("item.minecraft.smithing_template.{kind}.{part}")
     }
 }
@@ -62,11 +91,22 @@ pub struct Smithing {
 }
 
 impl Smithing {
-    pub fn new(width: i32, height: i32, title: Text, inventory: Text, station: Station, ticks: i32) -> Smithing {
+    pub fn new(
+        width: i32,
+        height: i32,
+        title: Text,
+        inventory: Text,
+        station: Station,
+        ticks: i32,
+    ) -> Smithing {
         let slots = item_combiner::slots(&[(8, 48), (26, 48), (44, 48), (98, 48)], (8, 84));
         let mut base = Base::new(width, height, [176, 166], title, inventory, slots);
         base.title_label = [44, 15];
-        Smithing { base, station, ticks }
+        Smithing {
+            base,
+            station,
+            ticks,
+        }
     }
 
     /// `SmithingMenu`'s `hasRecipeError` for slots as they are: every input in, no result.
@@ -75,7 +115,11 @@ impl Smithing {
     }
 
     fn template(&self) -> Option<Template> {
-        self.base.slots[0].item.as_ref().filter(|s| !s.is_empty()).and_then(|s| Template::of(&s.id))
+        self.base.slots[0]
+            .item
+            .as_ref()
+            .filter(|s| !s.is_empty())
+            .and_then(|s| Template::of(&s.id))
     }
 
     fn error(&self) -> bool {
@@ -91,10 +135,21 @@ impl Smithing {
         }
         let (tick, len) = (self.ticks, icons.len() as i32);
         let index = (tick / 30 % len) as usize;
-        let alpha = if len > 1 && tick >= 30 { ((tick % 30) as f32 + partial).min(4.0) / 4.0 } else { 1.0 };
+        let alpha = if len > 1 && tick >= 30 {
+            ((tick % 30) as f32 + partial).min(4.0) / 4.0
+        } else {
+            1.0
+        };
         let (x, y) = (self.base.left + s.x, self.base.top + s.y);
         if alpha < 1.0 {
-            gui.sprite_tinted(icons[(index as i32 - 1).rem_euclid(len) as usize], x, y, 16, 16, white(1.0 - alpha));
+            gui.sprite_tinted(
+                icons[(index as i32 - 1).rem_euclid(len) as usize],
+                x,
+                y,
+                16,
+                16,
+                white(1.0 - alpha),
+            );
         }
         gui.sprite_tinted(icons[index], x, y, 16, 16, white(alpha));
     }
@@ -111,13 +166,25 @@ impl Smithing {
                         tooltip = Some("container.upgrade.missing_template_tooltip".to_owned());
                     }
                 }
-                Some(t) if !hovered.has_item() && (hovered.index == 1 || hovered.index == 2) => tooltip = Some(t.description(hovered.index)),
+                Some(t) if !hovered.has_item() && (hovered.index == 1 || hovered.index == 2) => {
+                    tooltip = Some(t.description(hovered.index))
+                }
                 _ => {}
             }
         }
         if let Some(key) = tooltip {
-            let lines = split(env.font, &Text::translate(&key, &[], env.lang), 115).into_iter().map(Line::Text).collect();
-            let t = Tooltip { lines, x: mouse[0], y: mouse[1], positioner: Positioner::Default, style: None, extra_space: false };
+            let lines = split(env.font, &Text::translate(&key, &[], env.lang), 115)
+                .into_iter()
+                .map(Line::Text)
+                .collect();
+            let t = Tooltip {
+                lines,
+                x: mouse[0],
+                y: mouse[1],
+                positioner: Positioner::Default,
+                style: None,
+                extra_space: false,
+            };
             self.base.tooltip.set(t, false);
         }
     }

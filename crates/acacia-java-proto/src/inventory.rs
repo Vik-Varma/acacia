@@ -23,7 +23,15 @@ mod tests {
         // Container 0, state 5, slot 36, one item 1 with an empty patch.
         let body = [0, 5, 0, 36, 1, 1, 0, 0];
         let packet = ContainerSetSlot::read(&mut &body[..]).unwrap();
-        assert_eq!(packet, ContainerSetSlot { container: VarInt(0), state_id: VarInt(5), slot: 36, item: Some(ItemStack::new(1, 1)) });
+        assert_eq!(
+            packet,
+            ContainerSetSlot {
+                container: VarInt(0),
+                state_id: VarInt(5),
+                slot: 36,
+                item: Some(ItemStack::new(1, 1))
+            }
+        );
         let mut out = Vec::new();
         packet.write(&mut out);
         assert_eq!(out, body);

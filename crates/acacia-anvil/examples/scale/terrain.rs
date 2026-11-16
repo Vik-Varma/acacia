@@ -21,7 +21,18 @@ fn key(cx: i32, cz: i32, n: u32) -> u64 {
 impl Terrain {
     pub fn new(reg: &BlockRegistry) -> Self {
         let id = |n: &str| reg.states_of(n).next().unwrap_or_else(|| panic!("{n}")).0;
-        let [stone, dirt, grass, ore, torch, glow, wire, snow, water, sand] = [
+        let [
+            stone,
+            dirt,
+            grass,
+            ore,
+            torch,
+            glow,
+            wire,
+            snow,
+            water,
+            sand,
+        ] = [
             "minecraft:stone",
             "minecraft:dirt",
             "minecraft:grass_block",
@@ -57,7 +68,17 @@ impl Terrain {
                             1 => c.set(x, top + 1, z, 0, snow),
                             2 if x < 6 && (4..10).contains(&z) => {
                                 for y in 10..16 {
-                                    c.set(x, y, z, 0, if (x, y) == (0, 10) { glow } else { reg.air_id() });
+                                    c.set(
+                                        x,
+                                        y,
+                                        z,
+                                        0,
+                                        if (x, y) == (0, 10) {
+                                            glow
+                                        } else {
+                                            reg.air_id()
+                                        },
+                                    );
                                 }
                             }
                             3 if (5..11).contains(&x) && (5..11).contains(&z) => {
@@ -83,7 +104,11 @@ impl Terrain {
         (c.x, c.z) = (cx, cz);
         for n in 1..=rev {
             let h = key(cx, cz, n);
-            let (lx, lz, y) = ((h & 15) as i32, ((h >> 4) & 15) as i32, 90 + ((h >> 8) % 20) as i32);
+            let (lx, lz, y) = (
+                (h & 15) as i32,
+                ((h >> 4) & 15) as i32,
+                90 + ((h >> 8) % 20) as i32,
+            );
             c.set(cx * 16 + lx, y, cz * 16 + lz, 0, self.glowstone);
         }
         c

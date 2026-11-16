@@ -35,7 +35,12 @@ pub(crate) struct Speed {
 impl Speed {
     /// Classic moves: sprinting, then climbing or falling (azalea's heuristics, which Baritone also uses).
     pub fn classic(env: &'static Envelope) -> Speed {
-        Speed { per_block: env.cost_heuristic, startup: 0.0, overlap: false, env }
+        Speed {
+            per_block: env.cost_heuristic,
+            startup: 0.0,
+            overlap: false,
+            env,
+        }
     }
 
     fn combine(&self, xz: f32, y: f32) -> f32 {
@@ -45,7 +50,12 @@ impl Speed {
     /// Ticks for `blocks` horizontally; `rest`: starting from standing. Classic moves cost a sprint a block
     /// from rest, so the startup never exceeds what they save over `per_block`.
     pub(crate) fn run(&self, blocks: f32, rest: bool) -> f32 {
-        let startup = if rest { self.startup.min((costs::sprint(self.env) - self.per_block).max(0.0) * blocks) } else { 0.0 };
+        let startup = if rest {
+            self.startup
+                .min((costs::sprint(self.env) - self.per_block).max(0.0) * blocks)
+        } else {
+            0.0
+        };
         blocks * self.per_block + startup
     }
 }
@@ -70,7 +80,10 @@ impl Goal {
     /// Estimated ticks to the goal at speed `s`; `rest`: from standing.
     pub(crate) fn estimate(&self, p: BlockPos, s: Speed, rest: bool) -> f32 {
         match self {
-            Goal::Block(g) => s.combine(s.run(xz((g[0] - p[0]) as f32, (g[2] - p[2]) as f32), rest), y(s.env, (g[1] - p[1]) as f32)),
+            Goal::Block(g) => s.combine(
+                s.run(xz((g[0] - p[0]) as f32, (g[2] - p[2]) as f32), rest),
+                y(s.env, (g[1] - p[1]) as f32),
+            ),
             Goal::Near(g, r) => {
                 let d = dist_sq(p, *g).sqrt();
                 let exact = Goal::Block(*g).estimate(p, s, rest);
@@ -78,7 +91,10 @@ impl Goal {
             }
             Goal::XZ(x, z) => s.run(xz((x - p[0]) as f32, (z - p[2]) as f32), rest),
             Goal::Y(gy) => y(s.env, (gy - p[1]) as f32),
-            Goal::Or(goals) => goals.iter().map(|g| g.estimate(p, s, rest)).fold(f32::INFINITY, f32::min),
+            Goal::Or(goals) => goals
+                .iter()
+                .map(|g| g.estimate(p, s, rest))
+                .fold(f32::INFINITY, f32::min),
             Goal::Away(from, r) => s.run((r - dist_sq(p, *from).sqrt()).max(0.0), rest),
         }
     }

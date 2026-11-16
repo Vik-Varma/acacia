@@ -96,7 +96,10 @@ impl Controls {
 }
 
 /// Adds queued block actions (server-authoritative breaking) to a tick's input.
-pub(crate) fn attach_actions(input: &mut PlayerAuthInput, actions: Vec<PlayerAuthInputBlockActionItem>) {
+pub(crate) fn attach_actions(
+    input: &mut PlayerAuthInput,
+    actions: Vec<PlayerAuthInputBlockActionItem>,
+) {
     if !actions.is_empty() {
         input.input_data.push(InputData::BlockAction);
         input.block_action = Some(actions);

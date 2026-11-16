@@ -4,8 +4,8 @@
 
 use acacia_proto::types::{HeightMap, HeightMapDataType};
 
-use super::storage::VOLUME;
 use super::Chunk;
+use super::storage::VOLUME;
 
 /// Per column, the y just above the highest counted layer-0 block; `min_y` where there is none.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,7 +81,9 @@ impl Heightmap {
 
     /// The packet field: 16 rows of 16, one row per z.
     pub fn rows(&self) -> Option<HeightMap> {
-        let Heightmap::Data(data) = self else { return None };
+        let Heightmap::Data(data) = self else {
+            return None;
+        };
         Some(std::array::from_fn(|z| data[z * 16..][..16].to_vec()))
     }
 }

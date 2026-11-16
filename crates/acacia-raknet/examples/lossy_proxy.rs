@@ -48,7 +48,14 @@ impl Dice {
             return None;
         }
         let jitter = link.jitter.as_micros() as u64;
-        Some(link.delay + Duration::from_micros(if jitter == 0 { 0 } else { self.next() % (jitter + 1) }))
+        Some(
+            link.delay
+                + Duration::from_micros(if jitter == 0 {
+                    0
+                } else {
+                    self.next() % (jitter + 1)
+                }),
+        )
     }
 }
 
@@ -67,13 +74,26 @@ fn send_later(socket: Arc<UdpSocket>, datagram: Vec<u8>, to: Option<SocketAddr>,
 }
 
 fn flag(args: &[String], name: &str) -> Option<f64> {
-    args.iter().position(|arg| arg == name).and_then(|at| args.get(at + 1)).map(|value| value.parse().unwrap_or_else(|_| panic!("{name} takes a number")))
+    args.iter()
+        .position(|arg| arg == name)
+        .and_then(|at| args.get(at + 1))
+        .map(|value| {
+            value
+                .parse()
+                .unwrap_or_else(|_| panic!("{name} takes a number"))
+        })
 }
 
 fn link(args: &[String], loss_flag: &str) -> Link {
     let ms = |name: &str| Duration::from_micros((flag(args, name).unwrap_or(0.0) * 1000.0) as u64);
-    let loss = flag(args, loss_flag).or_else(|| flag(args, "--loss")).unwrap_or(0.0);
-    Link { delay: ms("--delay"), jitter: ms("--jitter"), loss: (loss * 10_000.0) as u64 }
+    let loss = flag(args, loss_flag)
+        .or_else(|| flag(args, "--loss"))
+        .unwrap_or(0.0);
+    Link {
+        delay: ms("--delay"),
+        jitter: ms("--jitter"),
+        loss: (loss * 10_000.0) as u64,
+    }
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -81,7 +101,9 @@ async fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let [listen, server] = [0, 1].map(|at| args.get(at).and_then(|addr| addr.parse::<SocketAddr>().ok()).expect("usage: lossy_proxy <listen addr> <server addr> [--delay ms] [--jitter ms] [--loss %] [--up-loss %] [--down-loss %] [--seed n]"));
     let (up, down) = (link(&args, "--up-loss"), link(&args, "--down-loss"));
-    let dice = Arc::new(Mutex::new(Dice(flag(&args, "--seed").unwrap_or(1.0) as u64 | 1)));
+    let dice = Arc::new(Mutex::new(Dice(
+        flag(&args, "--seed").unwrap_or(1.0) as u64 | 1,
+    )));
     let counts = Arc::new(Counts::default());
     let front = Arc::new(UdpSocket::bind(listen).await?);
     println!("relaying {listen} -> {server}; up {up:?}, down {down:?}");
@@ -91,7 +113,13 @@ async fn main() -> std::io::Result<()> {
         loop {
             tokio::time::sleep(Duration::from_secs(10)).await;
             let get = |count: &AtomicU64| count.load(Ordering::Relaxed);
-            println!("up {} (dropped {}), down {} (dropped {})", get(&report.up), get(&report.up_dropped), get(&report.down), get(&report.down_dropped));
+            println!(
+                "up {} (dropped {}), down {} (dropped {})",
+                get(&report.up),
+                get(&report.up_dropped),
+                get(&report.down),
+                get(&report.down_dropped)
+            );
         }
     });
 
@@ -103,10 +131,18 @@ async fn main() -> std::io::Result<()> {
         let back = match clients.get(&from) {
             Some(back) => back.clone(),
             None => {
-                let back = Arc::new(UdpSocket::bind(if server.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" }).await?);
+                let back = Arc::new(
+                    UdpSocket::bind(if server.is_ipv4() {
+                        "0.0.0.0:0"
+                    } else {
+                        "[::]:0"
+                    })
+                    .await?,
+                );
                 back.connect(server).await?;
                 println!("client {from} on {}", back.local_addr()?);
-                let (reply, front, dice, counts) = (back.clone(), front.clone(), dice.clone(), counts.clone());
+                let (reply, front, dice, counts) =
+                    (back.clone(), front.clone(), dice.clone(), counts.clone());
                 tokio::spawn(async move {
                     let mut buf = vec![0u8; 65536];
                     while let Ok(len) = reply.recv(&mut buf).await {

@@ -68,7 +68,9 @@ impl LightData {
     /// The lowest sky light source of the block column at `x`, `z` (Java's rules).
     #[inline]
     pub fn sky_lowest(&self, x: i32, z: i32) -> Option<i32> {
-        self.sky_sources.get(&(x >> 4, z >> 4)).map(|c| c[((x & 15) * 16 + (z & 15)) as usize])
+        self.sky_sources
+            .get(&(x >> 4, z >> 4))
+            .map(|c| c[((x & 15) * 16 + (z & 15)) as usize])
     }
 
     #[inline]
@@ -106,16 +108,24 @@ impl LightData {
             for z in -1..=16 {
                 for y in -1..=16 {
                     let (wx, wy, wz) = (ox + x, oy + y, oz + z);
-                    let opaque = self.props.get(wx, wy, wz).is_some_and(|p| p & 15 == OPAQUE_FILTER);
+                    let opaque = self
+                        .props
+                        .get(wx, wy, wz)
+                        .is_some_and(|p| p & 15 == OPAQUE_FILTER);
                     cells[cell(x, y, z)] = if opaque {
                         OPAQUE_CELL
                     } else {
-                        self.light.get(wx, wy, wz).map_or(0, |l| l.min(OPAQUE_CELL - 1))
+                        self.light
+                            .get(wx, wy, wz)
+                            .map_or(0, |l| l.min(OPAQUE_CELL - 1))
                     };
                 }
             }
         }
-        LightVolume { generation: self.generation, cells }
+        LightVolume {
+            generation: self.generation,
+            cells,
+        }
     }
 
     /// The light of a section and its border, for meshing light into vertices.

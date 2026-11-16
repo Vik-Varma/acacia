@@ -24,13 +24,22 @@ pub(super) fn dump_key(java: &JavaState) -> String {
 }
 
 /// Every vanilla Bedrock state the mapping gives a Java state.
-pub(super) fn print(mapping: &Mapping, dump: &Path, outcome: &mut super::Outcome) -> Result<(), Error> {
+pub(super) fn print(
+    mapping: &Mapping,
+    dump: &Path,
+    outcome: &mut super::Outcome,
+) -> Result<(), Error> {
     let dump: Dump = serde_json::from_slice(&std::fs::read(dump)?)?;
     let registry = BlockRegistry::vanilla();
     let (mut same, mut differing): (usize, BTreeMap<&str, (usize, bool)>) = (0, BTreeMap::new());
     for state in (0..registry.len() as u32).filter_map(|id| registry.get(id)) {
-        let Some(java) = mapping.get(&state_key(state)) else { continue };
-        let (ours, theirs) = (shade::darkens(java, state.is_full_cube()), dump.dark.contains(&dump_key(java)));
+        let Some(java) = mapping.get(&state_key(state)) else {
+            continue;
+        };
+        let (ours, theirs) = (
+            shade::darkens(java, state.is_full_cube()),
+            dump.dark.contains(&dump_key(java)),
+        );
         if ours == theirs {
             same += 1;
         } else {
@@ -40,11 +49,26 @@ pub(super) fn print(mapping: &Mapping, dump: &Path, outcome: &mut super::Outcome
     }
     outcome.cases += same + differing.values().map(|(count, _)| count).sum::<usize>();
     let wrong: usize = differing.values().map(|(count, _)| count).sum();
-    println!("{same} of {} mapped states darken ambient occlusion as the game has them", same + wrong);
+    println!(
+        "{same} of {} mapped states darken ambient occlusion as the game has them",
+        same + wrong
+    );
     for dark in [true, false] {
-        let names: Vec<String> = differing.iter().filter(|(_, (_, theirs))| *theirs == dark).map(|(name, (count, _))| format!("{name} ({count})")).collect();
+        let names: Vec<String> = differing
+            .iter()
+            .filter(|(_, (_, theirs))| *theirs == dark)
+            .map(|(name, (count, _))| format!("{name} ({count})"))
+            .collect();
         if !names.is_empty() {
-            println!("  the game's {}: {}", if dark { "darken, ours do not" } else { "stay bright, ours darken" }, names.join(" "));
+            println!(
+                "  the game's {}: {}",
+                if dark {
+                    "darken, ours do not"
+                } else {
+                    "stay bright, ours darken"
+                },
+                names.join(" ")
+            );
         }
     }
     Ok(())

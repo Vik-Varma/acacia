@@ -17,7 +17,13 @@ const POSES: [(&str, &str, [f32; 3]); 6] = [
 ];
 
 fn degrees(s: &RenderState, field: &str, default: [f32; 3]) -> [f32; 3] {
-    let axis = |i: usize, c: &str| if s.has(&format!("{field}{c}")) { s.num(&format!("{field}{c}")) } else { default[i] };
+    let axis = |i: usize, c: &str| {
+        if s.has(&format!("{field}{c}")) {
+            s.num(&format!("{field}{c}"))
+        } else {
+            default[i]
+        }
+    };
     [axis(0, "X"), axis(1, "Y"), axis(2, "Z")]
 }
 
@@ -37,7 +43,10 @@ pub(super) fn armor_stand(p: &mut Poses, s: &RenderState) {
     let arms = s.flag("showArms");
     p.set_visible("left_arm", arms);
     p.set_visible("right_arm", arms);
-    p.set_visible("base_plate", !s.has("showBasePlate") || s.flag("showBasePlate"));
+    p.set_visible(
+        "base_plate",
+        !s.has("showBasePlate") || s.flag("showBasePlate"),
+    );
     let [x, y, z] = degrees(s, "bodyPose", [0.0; 3]);
     for stick in ["right_body_stick", "left_body_stick", "shoulder_stick"] {
         let pose = p.get(stick);

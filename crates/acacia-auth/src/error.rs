@@ -19,7 +19,11 @@ pub enum Error {
     #[error("http: {0}")]
     Http(#[from] reqwest::Error),
     #[error("{endpoint} returned HTTP {status}: {body}")]
-    Status { endpoint: String, status: u16, body: String },
+    Status {
+        endpoint: String,
+        status: u16,
+        body: String,
+    },
     /// Xbox Live refused the account (`X-Err` header). See [`XboxError`].
     #[error("xbox live: {0}")]
     Xbox(XboxError),

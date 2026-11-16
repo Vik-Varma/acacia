@@ -6,12 +6,19 @@ use acacia_bot::{ActionError, Bot};
 use crate::convert;
 
 pub(super) async fn equip(bot: &mut Bot, p: EquipParams) -> Result<(), ActionError> {
-    hold(bot, &p.item, convert::destination(p.destination.unwrap_or(EquipDestination::Hand))).await
+    hold(
+        bot,
+        &p.item,
+        convert::destination(p.destination.unwrap_or(EquipDestination::Hand)),
+    )
+    .await
 }
 
 async fn hold(bot: &mut Bot, item: &str, to: Destination) -> Result<(), ActionError> {
     let name = convert::item_name(item);
-    let slot = bot.find_item_named(&name).ok_or_else(|| ActionError::NotPossible(format!("no {name} in the inventory")))?;
+    let slot = bot
+        .find_item_named(&name)
+        .ok_or_else(|| ActionError::NotPossible(format!("no {name} in the inventory")))?;
     bot.equip(slot, to).await
 }
 
@@ -31,7 +38,9 @@ pub(super) async fn toss(bot: &mut Bot, p: TossParams) -> Result<TossResult, Act
         .map(|(slot, s)| (slot as u8, s.count))
         .collect();
     if stacks.is_empty() {
-        return Err(ActionError::NotPossible(format!("no {name} in the inventory")));
+        return Err(ActionError::NotPossible(format!(
+            "no {name} in the inventory"
+        )));
     }
     if let Some(v) = p.toward {
         bot.look_at([v.x, v.y, v.z]).await?;

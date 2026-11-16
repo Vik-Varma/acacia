@@ -62,9 +62,13 @@ pub(crate) async fn discover(http: &Http, game_version: &str) -> Result<Discover
         .header("Content-Type", "application/json")
         .header("User-Agent", ep::SERVICES_USER_AGENT);
     let v: Value = http.json(req, &url).await?;
-    let env = v.pointer("/result/serviceEnvironments/auth/prod").cloned().ok_or_else(|| {
-        Error::Protocol { endpoint: url.clone(), reason: "no auth.prod environment".into() }
-    })?;
+    let env = v
+        .pointer("/result/serviceEnvironments/auth/prod")
+        .cloned()
+        .ok_or_else(|| Error::Protocol {
+            endpoint: url.clone(),
+            reason: "no auth.prod environment".into(),
+        })?;
     let signaling = v
         .pointer("/result/serviceEnvironments/signaling/prod")
         .cloned()
@@ -74,11 +78,20 @@ pub(crate) async fn discover(http: &Http, game_version: &str) -> Result<Discover
         .and_then(Value::as_object)
         .map(|m| {
             m.iter()
-                .filter_map(|(region, host)| Some(QosBeacon { region: region.clone(), host: host.as_str()?.to_owned() }))
+                .filter_map(|(region, host)| {
+                    Some(QosBeacon {
+                        region: region.clone(),
+                        host: host.as_str()?.to_owned(),
+                    })
+                })
                 .collect()
         })
         .unwrap_or_default();
-    Ok(Discovery { auth: serde_json::from_value(env)?, signaling, qos_beacons })
+    Ok(Discovery {
+        auth: serde_json::from_value(env)?,
+        signaling,
+        qos_beacons,
+    })
 }
 
 /// `POST multiplayer.minecraft.net/authentication` → the 2-JWT Mojang chain bound to
@@ -146,7 +159,14 @@ pub(crate) async fn playfab_login(
         "CreateAccount": true,
         "XboxToken": auth,
     });
-    let req = http.xbox_post(&url, user_agent, None, Some(&auth), serde_json::to_vec(&body)?, xbox_key);
+    let req = http.xbox_post(
+        &url,
+        user_agent,
+        None,
+        Some(&auth),
+        serde_json::to_vec(&body)?,
+        xbox_key,
+    );
     let r: Envelope = http.json(req, &url).await?;
     Ok(PlayFabSession {
         session_ticket: r.data.session_ticket,
@@ -184,7 +204,10 @@ pub(crate) async fn session_start(
         #[serde(rename = "validUntil")]
         valid_until: String,
     }
-    let url = format!("{}/api/v1.0/session/start", env.service_uri.trim_end_matches('/'));
+    let url = format!(
+        "{}/api/v1.0/session/start",
+        env.service_uri.trim_end_matches('/')
+    );
     let body = json!({
         "device": {
             "applicationType": "MinecraftPE",
@@ -227,7 +250,10 @@ pub(crate) async fn multiplayer_token(
         #[serde(rename = "validUntil")]
         valid_until: String,
     }
-    let url = format!("{}/api/v1.0/multiplayer/session/start", env.service_uri.trim_end_matches('/'));
+    let url = format!(
+        "{}/api/v1.0/multiplayer/session/start",
+        env.service_uri.trim_end_matches('/')
+    );
     let req = services_post(http, &url, &json!({ "publicKey": public_key }))
         .header("Authorization", &service.authorization_header);
     let t: Token = result_of(http.json(req, &url).await?, &url)?;
@@ -254,5 +280,8 @@ fn result_of<T: serde::de::DeserializeOwned>(v: Value, url: &str) -> Result<T> {
 fn parse_time(s: &str, url: &str) -> Result<i64> {
     time::OffsetDateTime::parse(s, &time::format_description::well_known::Rfc3339)
         .map(|t| t.unix_timestamp())
-        .map_err(|e| Error::Protocol { endpoint: url.into(), reason: format!("time {s:?}: {e}") })
+        .map_err(|e| Error::Protocol {
+            endpoint: url.into(),
+            reason: format!("time {s:?}: {e}"),
+        })
 }

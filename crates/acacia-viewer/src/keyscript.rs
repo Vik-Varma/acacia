@@ -97,11 +97,29 @@ mod tests {
 
     #[test]
     fn keys_and_clicks_parse() {
-        assert_eq!(parse("3.5 +Space"), Some((Duration::from_secs_f32(3.5), Step::Key(KeyCode::Space, true))));
-        assert_eq!(parse("9 click 640 300"), Some((Duration::from_secs(9), Step::Click([640.0, 300.0]))));
+        assert_eq!(
+            parse("3.5 +Space"),
+            Some((
+                Duration::from_secs_f32(3.5),
+                Step::Key(KeyCode::Space, true)
+            ))
+        );
+        assert_eq!(
+            parse("9 click 640 300"),
+            Some((Duration::from_secs(9), Step::Click([640.0, 300.0])))
+        );
         assert_eq!(parse("1 +Nope"), None);
-        assert_eq!(parse("4 type Hello sign"), Some((Duration::from_secs(4), Step::Type("Hello sign".into()))));
-        assert_eq!(parse("2 -Use"), Some((Duration::from_secs(2), Step::Use(false))));
-        assert_eq!(parse("1 +T"), Some((Duration::from_secs(1), Step::Key(KeyCode::KeyT, true))));
+        assert_eq!(
+            parse("4 type Hello sign"),
+            Some((Duration::from_secs(4), Step::Type("Hello sign".into())))
+        );
+        assert_eq!(
+            parse("2 -Use"),
+            Some((Duration::from_secs(2), Step::Use(false)))
+        );
+        assert_eq!(
+            parse("1 +T"),
+            Some((Duration::from_secs(1), Step::Key(KeyCode::KeyT, true)))
+        );
     }
 }

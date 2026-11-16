@@ -4,7 +4,9 @@
 use std::time::Duration;
 
 use acacia_client::{Client, Event, TransportKind};
-use acacia_mitm::proto::packets::{SetTime, Text, TextCategory, TextContent, TextContentRaw, TextType};
+use acacia_mitm::proto::packets::{
+    SetTime, Text, TextCategory, TextContent, TextContentRaw, TextType,
+};
 use acacia_mitm::proto::{Packet, RawPacket};
 use acacia_mitm::{Injector, Interceptor, Player, Proxy, Recorder, Verdict};
 use acacia_testserver::{FakeServer, Script};
@@ -15,7 +17,9 @@ fn text(message: &str) -> Text {
         needs_translation: false,
         category: TextCategory::MessageOnly,
         r#type: TextType::Raw,
-        content: TextContent::Raw(TextContentRaw { message: message.into() }),
+        content: TextContent::Raw(TextContentRaw {
+            message: message.into(),
+        }),
         xuid: String::new(),
         platform_chat_id: String::new(),
         has_filtered_message: false,
@@ -71,13 +75,17 @@ async fn next_text(client: &mut Client) -> String {
         loop {
             match client.recv().await.expect("client still connected") {
                 Event::Packet(p) if p.is::<SetTime>() => panic!("SetTime got through: {p:?}"),
-                Event::Packet(p) if p.is::<Text>() => return message(&p.decode::<Text>().unwrap()).to_owned(),
+                Event::Packet(p) if p.is::<Text>() => {
+                    return message(&p.decode::<Text>().unwrap()).to_owned();
+                }
                 Event::Packet(_) | Event::Violation(_) => {}
                 Event::Disconnected(reason) => panic!("disconnected: {reason:?}"),
             }
         }
     };
-    tokio::time::timeout(Duration::from_secs(10), wait).await.expect("a Text within 10 s")
+    tokio::time::timeout(Duration::from_secs(10), wait)
+        .await
+        .expect("a Text within 10 s")
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -102,8 +110,14 @@ async fn proxy_rewrites_drops_and_injects_both_ways() {
     let addr = proxy.local_addr().unwrap();
     let proxy = tokio::spawn(proxy.run());
 
-    let builder = Client::builder(addr.to_string()).offline("MitmTester").transport(TransportKind::RakNet).subscribe([Text::ID, SetTime::ID]);
-    let mut client = builder.connect().await.expect("client joins through the proxy");
+    let builder = Client::builder(addr.to_string())
+        .offline("MitmTester")
+        .transport(TransportKind::RakNet)
+        .subscribe([Text::ID, SetTime::ID]);
+    let mut client = builder
+        .connect()
+        .await
+        .expect("client joins through the proxy");
     server.spawned().await.expect("script reaches PlayerSpawn");
     let injector = injectors.recv().await.expect("one session");
 
@@ -112,26 +126,50 @@ async fn proxy_rewrites_drops_and_injects_both_ways() {
     assert_eq!(next_text(&mut client).await, "the [redacted] plan");
 
     assert!(client.send(&text("hello")));
-    assert_eq!(message(&server.recv::<Text>().await.unwrap()), "hello (via proxy)");
+    assert_eq!(
+        message(&server.recv::<Text>().await.unwrap()),
+        "hello (via proxy)"
+    );
 
     assert!(injector.to_game(&text("from the proxy")));
     assert_eq!(next_text(&mut client).await, "from the proxy");
     assert!(injector.to_server(&text("also from the proxy")));
-    assert_eq!(message(&server.recv::<Text>().await.unwrap()), "also from the proxy");
+    assert_eq!(
+        message(&server.recv::<Text>().await.unwrap()),
+        "also from the proxy"
+    );
 
     client.close();
-    let hooks = tokio::time::timeout(Duration::from_secs(10), async { [watched.recv().await, watched.recv().await] });
-    assert_eq!(hooks.await.expect("both hooks within 10 s"), [Some("login MitmTester".into()), Some("close".into())]);
+    let hooks = tokio::time::timeout(Duration::from_secs(10), async {
+        [watched.recv().await, watched.recv().await]
+    });
+    assert_eq!(
+        hooks.await.expect("both hooks within 10 s"),
+        [Some("login MitmTester".into()), Some("close".into())]
+    );
     proxy.abort();
 
     // What the interceptors and the injector changed on the wire is in the capture (record.rs).
     let text = std::fs::read_to_string(&capture).unwrap();
-    let events = |event: &str, rest: &str| text.lines().filter(|l| l.contains(&format!(r#"{{"event":"{event}""#)) && l.contains(rest)).count();
+    let events = |event: &str, rest: &str| {
+        text.lines()
+            .filter(|l| l.contains(&format!(r#"{{"event":"{event}""#)) && l.contains(rest))
+            .count()
+    };
     // The spawn script may hold SetTime and Text of its own.
     assert!(events("dropped", r#""name":"SetTime""#) >= 1);
-    assert!(events("dropped", r#""name":"Text""#) >= 2, "each replaced Text did not go on itself");
+    assert!(
+        events("dropped", r#""name":"Text""#) >= 2,
+        "each replaced Text did not go on itself"
+    );
     assert!(events("sent", r#""to":"game","why":"replace""#) >= 1);
     assert_eq!(events("sent", r#""to":"server","why":"replace""#), 1);
-    assert_eq!((events("sent", r#""to":"game","why":"inject""#), events("sent", r#""to":"server","why":"inject""#)), (1, 1));
+    assert_eq!(
+        (
+            events("sent", r#""to":"game","why":"inject""#),
+            events("sent", r#""to":"server","why":"inject""#)
+        ),
+        (1, 1)
+    );
     std::fs::remove_dir_all(&dir).unwrap();
 }

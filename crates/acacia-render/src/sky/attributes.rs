@@ -25,7 +25,12 @@ macro_rules! attributes {
 }
 
 const fn rgb(c: u32) -> Value4 {
-    [(c >> 16 & 255) as f32 / 255.0, (c >> 8 & 255) as f32 / 255.0, (c & 255) as f32 / 255.0, 1.0]
+    [
+        (c >> 16 & 255) as f32 / 255.0,
+        (c >> 8 & 255) as f32 / 255.0,
+        (c & 255) as f32 / 255.0,
+        1.0,
+    ]
 }
 
 const fn num(v: f32) -> Value4 {
@@ -62,7 +67,9 @@ impl Attr {
     /// `AttributeRange.sanitize`: the bounds the attribute is clamped to after every layer.
     pub fn range(self) -> Option<(f32, f32)> {
         match self {
-            Attr::FogEnd | Attr::SkyFogEnd | Attr::CloudFogEnd | Attr::WaterFogEnd => Some((0.0, f32::INFINITY)),
+            Attr::FogEnd | Attr::SkyFogEnd | Attr::CloudFogEnd | Attr::WaterFogEnd => {
+                Some((0.0, f32::INFINITY))
+            }
             Attr::StarBrightness | Attr::SkyLightFactor => Some((0.0, 1.0)),
             Attr::SkyLightLevel => Some((0.0, 15.0)),
             _ => None,
@@ -72,7 +79,13 @@ impl Attr {
     /// How many of its [`Value4`] lanes it uses: 3 for an RGB colour, 4 for an ARGB one, else 1.
     pub fn arity(self) -> usize {
         match self {
-            Attr::SkyColor | Attr::FogColor | Attr::SkyLightColor | Attr::BlockLightTint | Attr::AmbientLightColor | Attr::WaterFogColor | Attr::NightVisionColor => 3,
+            Attr::SkyColor
+            | Attr::FogColor
+            | Attr::SkyLightColor
+            | Attr::BlockLightTint
+            | Attr::AmbientLightColor
+            | Attr::WaterFogColor
+            | Attr::NightVisionColor => 3,
             Attr::CloudColor | Attr::SunriseSunsetColor => 4,
             _ => 1,
         }
@@ -131,34 +144,82 @@ impl Attributes {
     pub fn apply_weather(&mut self, rain: f32, thunder: f32) {
         let grey = |c: [f32; 3]| c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11;
         let lerp = |t: f32, a: f32, b: f32| a + (b - a) * t;
-        let lerp3 = |t: f32, a: [f32; 3], b: [f32; 3]| -> [f32; 3] { std::array::from_fn(|i| lerp(t, a[i], b[i])) };
+        let lerp3 = |t: f32, a: [f32; 3], b: [f32; 3]| -> [f32; 3] {
+            std::array::from_fn(|i| lerp(t, a[i], b[i]))
+        };
         // The layers' colours are 8-bit (`ARGB.colorFromFloat` floors).
         let q = |v: f32| (v * 255.0).floor() / 255.0;
         let night = [q(0.48), q(0.48), 1.0];
         // (level, sky grey brightness and share, fog multiplier, cloud grey brightness and share, light share)
         let layers = [
-            (rain - thunder, (0.6, 0.75), [q(0.5), q(0.5), q(0.6)], (0.24, 0.5), 0.3125),
-            (thunder, (0.24, 0.94), [q(0.25), q(0.25), q(0.3)], (0.095, 0.94), 0.527_343_75),
+            (
+                rain - thunder,
+                (0.6, 0.75),
+                [q(0.5), q(0.5), q(0.6)],
+                (0.24, 0.5),
+                0.3125,
+            ),
+            (
+                thunder,
+                (0.24, 0.94),
+                [q(0.25), q(0.25), q(0.3)],
+                (0.095, 0.94),
+                0.527_343_75,
+            ),
         ];
         for (level, (sky_b, sky_f), fog, (cloud_b, cloud_f), share) in layers {
             if level <= 0.0 {
                 continue;
             }
             let sky = self.rgb(Attr::SkyColor);
-            self.set_rgb(Attr::SkyColor, lerp3(level, sky, lerp3(sky_f, sky, [grey(sky) * sky_b; 3])));
+            self.set_rgb(
+                Attr::SkyColor,
+                lerp3(level, sky, lerp3(sky_f, sky, [grey(sky) * sky_b; 3])),
+            );
             let fogged = self.rgb(Attr::FogColor);
-            self.set_rgb(Attr::FogColor, lerp3(level, fogged, std::array::from_fn(|i| fogged[i] * fog[i])));
+            self.set_rgb(
+                Attr::FogColor,
+                lerp3(level, fogged, std::array::from_fn(|i| fogged[i] * fog[i])),
+            );
             let cloud = self.rgb(Attr::CloudColor);
-            self.set_rgb(Attr::CloudColor, lerp3(level, cloud, lerp3(cloud_f, cloud, [grey(cloud) * cloud_b; 3])));
+            self.set_rgb(
+                Attr::CloudColor,
+                lerp3(
+                    level,
+                    cloud,
+                    lerp3(cloud_f, cloud, [grey(cloud) * cloud_b; 3]),
+                ),
+            );
             let level_now = self.number(Attr::SkyLightLevel);
-            self.set_number(Attr::SkyLightLevel, lerp(level, level_now, lerp(share, level_now, 4.0)));
+            self.set_number(
+                Attr::SkyLightLevel,
+                lerp(level, level_now, lerp(share, level_now, 4.0)),
+            );
             let light = self.rgb(Attr::SkyLightColor);
-            self.set_rgb(Attr::SkyLightColor, lerp3(level, light, lerp3(q(share), light, night)));
+            self.set_rgb(
+                Attr::SkyLightColor,
+                lerp3(level, light, lerp3(q(share), light, night)),
+            );
             let factor = self.number(Attr::SkyLightFactor);
-            self.set_number(Attr::SkyLightFactor, lerp(level, factor, lerp(share, factor, 0.24)));
-            self.set_number(Attr::StarBrightness, lerp(level, self.number(Attr::StarBrightness), 0.0));
+            self.set_number(
+                Attr::SkyLightFactor,
+                lerp(level, factor, lerp(share, factor, 0.24)),
+            );
+            self.set_number(
+                Attr::StarBrightness,
+                lerp(level, self.number(Attr::StarBrightness), 0.0),
+            );
             let s = self.get(Attr::SunriseSunsetColor);
-            self.set(Attr::SunriseSunsetColor, std::array::from_fn(|i| if i < 3 { lerp(level, s[i], s[i] * fog[i]) } else { s[3] }));
+            self.set(
+                Attr::SunriseSunsetColor,
+                std::array::from_fn(|i| {
+                    if i < 3 {
+                        lerp(level, s[i], s[i] * fog[i])
+                    } else {
+                        s[3]
+                    }
+                }),
+            );
         }
     }
 
@@ -176,7 +237,10 @@ impl Attributes {
     pub fn apply_flash(&mut self) {
         let sky = self.rgb(Attr::SkyColor);
         let flash = [0.8, 0.8, 1.0];
-        self.set_rgb(Attr::SkyColor, std::array::from_fn(|i| sky[i] + (flash[i] - sky[i]) * 0.22));
+        self.set_rgb(
+            Attr::SkyColor,
+            std::array::from_fn(|i| sky[i] + (flash[i] - sky[i]) * 0.22),
+        );
         self.set_number(Attr::SkyLightFactor, 1.0);
     }
 
@@ -201,8 +265,18 @@ mod tests {
             assert_eq!(Attr::by_name(a.name()), Some(a));
         }
         let d = Attributes::default();
-        assert_eq!((d.number(Attr::FogEnd), d.number(Attr::SkyLightLevel), d.darken()), (1024.0, 15.0, 0.0));
-        assert_eq!(d.rgb(Attr::WaterFogColor), [5.0 / 255.0, 5.0 / 255.0, 0x33 as f32 / 255.0]);
+        assert_eq!(
+            (
+                d.number(Attr::FogEnd),
+                d.number(Attr::SkyLightLevel),
+                d.darken()
+            ),
+            (1024.0, 15.0, 0.0)
+        );
+        assert_eq!(
+            d.rgb(Attr::WaterFogColor),
+            [5.0 / 255.0, 5.0 / 255.0, 0x33 as f32 / 255.0]
+        );
     }
 
     #[test]
@@ -214,9 +288,15 @@ mod tests {
         a.apply_weather(1.0, 1.0);
         assert_eq!(a.number(Attr::StarBrightness), 0.0);
         let [r, g, b] = a.rgb(Attr::SkyColor);
-        assert!((r - g).abs() < 0.05 && (g - b).abs() < 0.05 && b < clear.rgb(Attr::SkyColor)[2] * 0.5, "{:?}", [r, g, b]);
+        assert!(
+            (r - g).abs() < 0.05 && (g - b).abs() < 0.05 && b < clear.rgb(Attr::SkyColor)[2] * 0.5,
+            "{:?}",
+            [r, g, b]
+        );
         // Thunder takes the sky light most of the way to level 4.
-        assert!((a.number(Attr::SkyLightLevel) - (15.0 + (4.0 - 15.0) * 0.527_343_75)).abs() < 1e-4);
+        assert!(
+            (a.number(Attr::SkyLightLevel) - (15.0 + (4.0 - 15.0) * 0.527_343_75)).abs() < 1e-4
+        );
         let mut rain = clear;
         rain.apply_weather(0.0, 0.0);
         assert_eq!(rain, clear);

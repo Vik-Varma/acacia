@@ -52,7 +52,8 @@ pub fn compare_ignore_case(a: &str, b: &str) -> Ordering {
         if p == q {
             continue;
         }
-        let (Some(c1), Some(c2)) = (char::from_u32(u32::from(p)), char::from_u32(u32::from(q))) else {
+        let (Some(c1), Some(c2)) = (char::from_u32(u32::from(p)), char::from_u32(u32::from(q)))
+        else {
             return p.cmp(&q);
         };
         let (u1, u2) = (single(c1.to_uppercase(), c1), single(c2.to_uppercase(), c2));

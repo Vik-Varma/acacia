@@ -8,15 +8,26 @@ impl Chunk {
     /// Makes section `section_y` (world y >> 4) one block throughout, without liquid. Out-of-range
     /// sections are ignored, as in [`Chunk::set`].
     pub fn fill_section(&mut self, section_y: i32, id: u32) {
-        let section = Section { blocks: Storage::Single(id), liquid: Storage::Single(self.dim.air) };
+        let section = Section {
+            blocks: Storage::Single(id),
+            liquid: Storage::Single(self.dim.air),
+        };
         self.put_section(section_y - (self.dim.min_y >> 4), section);
     }
 
     /// Replaces section `section_y` with runtime ids in XZY order, `(x << 8) | (z << 4) | y`;
     /// no `liquid` means none.
-    pub fn set_section(&mut self, section_y: i32, blocks: &[u32; VOLUME], liquid: Option<&[u32; VOLUME]>) {
+    pub fn set_section(
+        &mut self,
+        section_y: i32,
+        blocks: &[u32; VOLUME],
+        liquid: Option<&[u32; VOLUME]>,
+    ) {
         let liquid = liquid.map_or(Storage::Single(self.dim.air), Storage::from_values);
-        let section = Section { blocks: Storage::from_values(blocks), liquid };
+        let section = Section {
+            blocks: Storage::from_values(blocks),
+            liquid,
+        };
         self.put_section(section_y - (self.dim.min_y >> 4), section);
     }
 
@@ -30,7 +41,8 @@ impl Chunk {
     pub fn set_biome(&mut self, x: i32, y: i32, z: i32, id: u32) {
         let Some(slot) = self.slot(y) else { return };
         while self.biomes.len() <= slot {
-            self.biomes.push(self.biomes.last().cloned().unwrap_or(Storage::Single(0)));
+            self.biomes
+                .push(self.biomes.last().cloned().unwrap_or(Storage::Single(0)));
         }
         self.biomes[slot].set(index(x, y, z), id);
     }

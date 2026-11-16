@@ -3,9 +3,9 @@ use std::sync::Arc;
 use acacia_world::World;
 
 use super::slots::ListBuilder;
-use super::{build, SnapshotReader};
-use crate::state::Entities;
+use super::{SnapshotReader, build};
 use crate::Bot;
+use crate::state::Entities;
 
 /// The bot's side of [`SnapshotReader`]: what it last published.
 #[derive(Default)]
@@ -32,12 +32,18 @@ impl Bot {
 
     /// After the ticks that came due (see [`crate::snapshot`]).
     pub(crate) fn publish_snapshot(&mut self, ticks: u32) {
-        let Some(mut p) = self.snapshots.take() else { return };
+        let Some(mut p) = self.snapshots.take() else {
+            return;
+        };
         p.tick += u64::from(ticks);
         *p.reader.0.hot.lock() = self.hot_snapshot(p.tick);
         p.publish_entities(&mut self.state.entities);
         let s = &self.state;
-        let sources = Some((s.inventory.version(), s.player.effects.version(), s.player_list.version()));
+        let sources = Some((
+            s.inventory.version(),
+            s.player.effects.version(),
+            s.player_list.version(),
+        ));
         if sources != p.sources {
             p.sources = sources;
             p.cold_version += 1;
@@ -48,7 +54,11 @@ impl Bot {
             *items = s.items.clone();
         }
         drop(items);
-        let world = self.backend.world().and_then(|w| w.view()).map(|v| v.world());
+        let world = self
+            .backend
+            .world()
+            .and_then(|w| w.view())
+            .map(|v| v.world());
         if world.map(Arc::as_ptr) != p.world.as_ref().map(Arc::as_ptr) {
             p.world = world.cloned();
             *p.reader.0.world.lock() = p.world.clone();

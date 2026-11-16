@@ -33,10 +33,17 @@ fn replayed_traces_keep_their_mismatch_counts() {
         let events = trace::read(&dir.join(name)).unwrap_or_else(|e| panic!("{name}: {e}"));
         let report = trace::replay(&events, 1e-4, false);
         let (mismatches, _) = report.correction_mismatches(tolerance);
-        println!("{name:28} {} of {} corrections mismatch (known {known})", mismatches.len(), report.corrections.len());
+        println!(
+            "{name:28} {} of {} corrections mismatch (known {known})",
+            mismatches.len(),
+            report.corrections.len()
+        );
         if mismatches.len() > known {
             let ticks: Vec<_> = mismatches.iter().map(|c| c.tick).collect();
-            failures.push(format!("{name}: {} mismatches, known {known}; ticks {ticks:?}", mismatches.len()));
+            failures.push(format!(
+                "{name}: {} mismatches, known {known}; ticks {ticks:?}",
+                mismatches.len()
+            ));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));

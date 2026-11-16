@@ -29,7 +29,10 @@ pub struct Tags {
 impl Tags {
     /// `dir` is the jar's `data/minecraft/tags/block`.
     pub fn load(dir: &Path) -> Result<Tags, Error> {
-        Ok(Tags { flow: resolve(dir, "blocks_fluid_flow")?, leaves: resolve(dir, "leaves")? })
+        Ok(Tags {
+            flow: resolve(dir, "blocks_fluid_flow")?,
+            leaves: resolve(dir, "leaves")?,
+        })
     }
 }
 
@@ -42,8 +45,14 @@ fn resolve(dir: &Path, tag: &str) -> Result<HashSet<String>, Error> {
             continue;
         }
         let file: Value = serde_json::from_slice(&std::fs::read(dir.join(format!("{tag}.json")))?)?;
-        for entry in file["values"].as_array().ok_or_else(|| format!("tag {tag} has no values"))? {
-            let id = entry.as_str().or_else(|| entry["id"].as_str()).ok_or_else(|| format!("tag {tag}: bad entry {entry}"))?;
+        for entry in file["values"]
+            .as_array()
+            .ok_or_else(|| format!("tag {tag} has no values"))?
+        {
+            let id = entry
+                .as_str()
+                .or_else(|| entry["id"].as_str())
+                .ok_or_else(|| format!("tag {tag}: bad entry {entry}"))?;
             match id.strip_prefix('#') {
                 Some(nested) => pending.push(unspaced(nested)),
                 None => {
@@ -60,10 +69,20 @@ fn unspaced(id: &str) -> String {
 }
 
 /// `faces` are the Java model's as the blockstate places it, when Java draws the block.
-pub fn rules(base: FluidRules, java: &JavaState, faces: Option<&[BakedFace]>, tags: &Tags) -> FluidRules {
+pub fn rules(
+    base: FluidRules,
+    java: &JavaState,
+    faces: Option<&[BakedFace]>,
+    tags: &Tags,
+) -> FluidRules {
     let blocks_motion = tags.flow.contains(&java.name);
     let solid = blocks_motion || SOLID_UNTAGGED.contains(&java.name.as_str());
-    let mut rules = FluidRules { blocks_motion, solid, occludes: !base.ice && !no_occlusion(&java.name), ..base };
+    let mut rules = FluidRules {
+        blocks_motion,
+        solid,
+        occludes: !base.ice && !no_occlusion(&java.name),
+        ..base
+    };
     match faces {
         // No geometry: drawn by a block entity (its support shape is the base's) or a bare wall.
         Some([]) => rules.cover = [0.0; 6],
@@ -75,7 +94,9 @@ pub fn rules(base: FluidRules, java: &JavaState, faces: Option<&[BakedFace]>, ta
     }
     let bare_wall = java.name.ends_with("_wall")
         && java.property("up") == Some("false")
-        && ["east", "west", "north", "south"].iter().all(|side| java.property(side) == Some("none"));
+        && ["east", "west", "north", "south"]
+            .iter()
+            .all(|side| java.property(side) == Some("none"));
     if bare_wall {
         rules.sturdy = [false; 6];
     }
@@ -84,7 +105,9 @@ pub fn rules(base: FluidRules, java: &JavaState, faces: Option<&[BakedFace]>, ta
     }
     // A ladder's support shape is the plate against its wall.
     if let (true, Some(facing)) = (java.name == "ladder", java.property("facing")) {
-        let back = ["west", "east", "", "", "north", "south"].iter().position(|f| *f == facing);
+        let back = ["west", "east", "", "", "north", "south"]
+            .iter()
+            .position(|f| *f == facing);
         rules.sturdy = std::array::from_fn(|face| Some(face) == back);
     }
     rules
@@ -92,7 +115,14 @@ pub fn rules(base: FluidRules, java: &JavaState, faces: Option<&[BakedFace]>, ta
 
 /// [`plane_coverage`] of the faces lying in the block's side `face` (east, west, up, down, south, north).
 fn cover(faces: &[BakedFace], face: usize) -> f32 {
-    let (axis, u, v) = [(0, 2, 1), (0, 2, 1), (1, 0, 2), (1, 0, 2), (2, 0, 1), (2, 0, 1)][face];
+    let (axis, u, v) = [
+        (0, 2, 1),
+        (0, 2, 1),
+        (1, 0, 2),
+        (1, 0, 2),
+        (2, 0, 1),
+        (2, 0, 1),
+    ][face];
     let plane = if face.is_multiple_of(2) { 16.0 } else { 0.0 };
     let rects: Vec<[f64; 4]> = faces
         .iter()
@@ -100,7 +130,10 @@ fn cover(faces: &[BakedFace], face: usize) -> f32 {
         .map(|f| {
             let span = |i: usize| {
                 let values = f.positions.map(|p| f64::from(p[i].clamp(0.0, 16.0)) / 16.0);
-                (values.iter().copied().fold(f64::INFINITY, f64::min), values.iter().copied().fold(f64::NEG_INFINITY, f64::max))
+                (
+                    values.iter().copied().fold(f64::INFINITY, f64::min),
+                    values.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+                )
             };
             let ((u0, u1), (v0, v1)) = (span(u), span(v));
             [u0, u1, v0, v1]
@@ -114,15 +147,46 @@ mod tests {
     use super::*;
 
     fn face(positions: [[f32; 3]; 4]) -> BakedFace {
-        BakedFace { positions, uvs: [[0.0; 2]; 4], texture: String::new(), cull: None, tint_index: None, shade: None, ambient_occlusion: true }
+        BakedFace {
+            positions,
+            uvs: [[0.0; 2]; 4],
+            texture: String::new(),
+            cull: None,
+            tint_index: None,
+            shade: None,
+            ambient_occlusion: true,
+        }
     }
 
     #[test]
     fn a_bottom_slab_covers_its_sides_halfway_and_its_bottom() {
-        let east = face([[16.0, 8.0, 16.0], [16.0, 0.0, 16.0], [16.0, 0.0, 0.0], [16.0, 8.0, 0.0]]);
-        let down = face([[0.0, 0.0, 16.0], [0.0, 0.0, 0.0], [16.0, 0.0, 0.0], [16.0, 0.0, 16.0]]);
-        let top = face([[0.0, 8.0, 0.0], [0.0, 8.0, 16.0], [16.0, 8.0, 16.0], [16.0, 8.0, 0.0]]);
+        let east = face([
+            [16.0, 8.0, 16.0],
+            [16.0, 0.0, 16.0],
+            [16.0, 0.0, 0.0],
+            [16.0, 8.0, 0.0],
+        ]);
+        let down = face([
+            [0.0, 0.0, 16.0],
+            [0.0, 0.0, 0.0],
+            [16.0, 0.0, 0.0],
+            [16.0, 0.0, 16.0],
+        ]);
+        let top = face([
+            [0.0, 8.0, 0.0],
+            [0.0, 8.0, 16.0],
+            [16.0, 8.0, 16.0],
+            [16.0, 8.0, 0.0],
+        ]);
         let faces = [east, down, top];
-        assert_eq!((cover(&faces, 0), cover(&faces, 1), cover(&faces, 2), cover(&faces, 3)), (0.5, 0.0, 0.0, 1.0));
+        assert_eq!(
+            (
+                cover(&faces, 0),
+                cover(&faces, 1),
+                cover(&faces, 2),
+                cover(&faces, 3)
+            ),
+            (0.5, 0.0, 0.0, 1.0)
+        );
     }
 }

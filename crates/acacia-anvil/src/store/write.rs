@@ -69,14 +69,24 @@ impl Worker {
     fn encode(&mut self, sh: &Shared, pos: Pos) -> Result<Rendered, Error> {
         let start = Instant::now();
         let entry = &sh.columns[&pos];
-        encode_chunk(&entry.col, &self.light, &[], sh.props, &mut self.enc, &mut self.nbt);
+        encode_chunk(
+            &entry.col,
+            &self.light,
+            &[],
+            sh.props,
+            &mut self.enc,
+            &mut self.nbt,
+        );
         let hash = hash_bytes(&self.nbt);
         let (lx, lz) = (local(pos.0), local(pos.1));
         // Not written by this store yet (evicted before, or a previous run): compare with the file.
         let unchanged = sh.region.has_chunk(lx, lz)
             && match entry.written {
                 Some(h) => h == hash,
-                None => sh.region.chunk_nbt(lx, lz).is_some_and(|old| old == self.nbt),
+                None => sh
+                    .region
+                    .chunk_nbt(lx, lz)
+                    .is_some_and(|old| old == self.nbt),
             };
         let start = lap(&mut self.times.encode, start);
         let payload = if unchanged {

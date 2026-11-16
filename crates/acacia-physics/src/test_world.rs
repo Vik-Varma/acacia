@@ -4,7 +4,9 @@ use std::collections::HashMap;
 
 use crate::aabb::Aabb;
 use crate::math::BlockPos;
-use crate::world::{BlockPhysics, Bounce, InsideMovement, Liquid, LiquidKind, Traversal, WorldView};
+use crate::world::{
+    BlockPhysics, Bounce, InsideMovement, Liquid, LiquidKind, Traversal, WorldView,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TestBlock {
@@ -41,7 +43,13 @@ impl TestBlock {
             Some(b) => (b, true),
             None => (base, false),
         };
-        let liquid = |kind| Some(Self::Liquid(Liquid { kind, depth, falling }));
+        let liquid = |kind| {
+            Some(Self::Liquid(Liquid {
+                kind,
+                depth,
+                falling,
+            }))
+        };
         Some(match base {
             "water" => return liquid(LiquidKind::Water),
             "lava" => return liquid(LiquidKind::Lava),
@@ -67,11 +75,17 @@ impl TestBlock {
 
     pub fn boxes(&self) -> &'static [Aabb] {
         const fn b(x0: f32, y0: f32, z0: f32, x1: f32, y1: f32, z1: f32) -> Aabb {
-            Aabb { min: [x0, y0, z0], max: [x1, y1, z1] }
+            Aabb {
+                min: [x0, y0, z0],
+                max: [x1, y1, z1],
+            }
         }
         const FULL: &[Aabb] = &[b(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)];
         const SLAB: &[Aabb] = &[b(0.0, 0.0, 0.0, 1.0, 0.5, 1.0)];
-        const STAIR: &[Aabb] = &[b(0.0, 0.0, 0.0, 1.0, 0.5, 1.0), b(0.0, 0.5, 0.5, 1.0, 1.0, 1.0)];
+        const STAIR: &[Aabb] = &[
+            b(0.0, 0.0, 0.0, 1.0, 0.5, 1.0),
+            b(0.0, 0.5, 0.5, 1.0, 1.0, 1.0),
+        ];
         const LADDER: &[Aabb] = &[b(0.0, 0.0, 0.8125, 1.0, 1.0, 1.0)];
         const SOUL_SAND: &[Aabb] = &[b(0.0, 0.0, 0.0, 1.0, 0.875, 1.0)];
         const HONEY: &[Aabb] = &[b(0.0625, 0.0, 0.0625, 0.9375, 0.9375, 0.9375)];
@@ -84,7 +98,12 @@ impl TestBlock {
             Self::SoulSand => SOUL_SAND,
             Self::Honey => HONEY,
             Self::Bed => BED,
-            Self::Web | Self::PowderSnow | Self::BerryBush | Self::Vine | Self::Scaffolding | Self::Liquid(_) => &[],
+            Self::Web
+            | Self::PowderSnow
+            | Self::BerryBush
+            | Self::Vine
+            | Self::Scaffolding
+            | Self::Liquid(_) => &[],
         }
     }
 
@@ -94,18 +113,42 @@ impl TestBlock {
             Self::Stone => BlockPhysics::solid(0.6),
             Self::Ice | Self::PackedIce => BlockPhysics::solid(0.98),
             Self::BlueIce => BlockPhysics::solid(0.989),
-            Self::Slime => BlockPhysics { bounce: Bounce::Slime, ..BlockPhysics::solid(0.8) },
+            Self::Slime => BlockPhysics {
+                bounce: Bounce::Slime,
+                ..BlockPhysics::solid(0.8)
+            },
             Self::Slab | Self::Stair => block,
-            Self::Ladder | Self::Vine => BlockPhysics { climbable: true, ..block },
+            Self::Ladder | Self::Vine => BlockPhysics {
+                climbable: true,
+                ..block
+            },
             Self::SoulSand => BlockPhysics::soul_sand(),
-            Self::Honey => BlockPhysics { honey: true, friction: 0.8, ..block },
-            Self::Web => BlockPhysics { cobweb: true, ..block },
-            Self::PowderSnow => {
-                BlockPhysics { inside: InsideMovement::PowderSnow, traversal: Traversal::PowderSnow, ..block }
-            }
-            Self::BerryBush => BlockPhysics { inside: InsideMovement::SweetBerryBush, ..block },
-            Self::Scaffolding => BlockPhysics { traversal: Traversal::Scaffolding, ..block },
-            Self::Bed => BlockPhysics { bounce: Bounce::Bed, ..block },
+            Self::Honey => BlockPhysics {
+                honey: true,
+                friction: 0.8,
+                ..block
+            },
+            Self::Web => BlockPhysics {
+                cobweb: true,
+                ..block
+            },
+            Self::PowderSnow => BlockPhysics {
+                inside: InsideMovement::PowderSnow,
+                traversal: Traversal::PowderSnow,
+                ..block
+            },
+            Self::BerryBush => BlockPhysics {
+                inside: InsideMovement::SweetBerryBush,
+                ..block
+            },
+            Self::Scaffolding => BlockPhysics {
+                traversal: Traversal::Scaffolding,
+                ..block
+            },
+            Self::Bed => BlockPhysics {
+                bounce: Bounce::Bed,
+                ..block
+            },
             Self::Liquid(l) => BlockPhysics::liquid(l),
         }
     }
@@ -150,6 +193,8 @@ impl WorldView for TestWorld {
     }
 
     fn block(&self, pos: BlockPos) -> BlockPhysics {
-        self.cells.get(&pos).map_or(BlockPhysics::AIR, TestBlock::physics)
+        self.cells
+            .get(&pos)
+            .map_or(BlockPhysics::AIR, TestBlock::physics)
     }
 }

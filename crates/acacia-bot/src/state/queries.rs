@@ -27,16 +27,30 @@ impl GameState {
     /// First stack of `item` as `(window, slot, stack)`: the player's own windows first, then the open
     /// container.
     pub fn find_item(&self, item: Item) -> Option<(i32, usize, &ItemStack)> {
-        self.inventory.find(|s| self.item(s) == Some(item)).or_else(|| {
-            let open = self.containers.open.as_ref()?;
-            open.iter().find(|(_, s)| self.item(s) == Some(item)).map(|(slot, s)| (open.window_id, slot, s))
-        })
+        self.inventory
+            .find(|s| self.item(s) == Some(item))
+            .or_else(|| {
+                let open = self.containers.open.as_ref()?;
+                open.iter()
+                    .find(|(_, s)| self.item(s) == Some(item))
+                    .map(|(slot, s)| (open.window_id, slot, s))
+            })
     }
 
     /// Recipes that make `item`. The first lookup decodes `CraftingData`.
     pub fn recipes_for(&self, item: Item) -> Vec<&Recipe> {
-        let Some((id, _)) = self.items.network_id(item) else { return Vec::new() };
-        self.recipes.book().producing(id).filter(|r| r.outputs.first().is_some_and(|o| self.item(o) == Some(item))).collect()
+        let Some((id, _)) = self.items.network_id(item) else {
+            return Vec::new();
+        };
+        self.recipes
+            .book()
+            .producing(id)
+            .filter(|r| {
+                r.outputs
+                    .first()
+                    .is_some_and(|o| self.item(o) == Some(item))
+            })
+            .collect()
     }
 
     /// Total count per identifier across the player's own windows, sorted by identifier. Items
@@ -44,7 +58,9 @@ impl GameState {
     pub fn inventory_summary(&self) -> Vec<(String, u32)> {
         let mut totals: BTreeMap<String, u32> = BTreeMap::new();
         for (_, _, stack) in self.inventory.iter() {
-            let name = self.item_name(stack).map_or_else(|| format!("#{}", stack.network_id), str::to_owned);
+            let name = self
+                .item_name(stack)
+                .map_or_else(|| format!("#{}", stack.network_id), str::to_owned);
             *totals.entry(name).or_default() += u32::from(stack.count);
         }
         totals.into_iter().collect()

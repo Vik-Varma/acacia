@@ -3,7 +3,9 @@
 
 use crc::{CRC_32_ISCSI, Crc};
 
-use crate::item::{CUSTOM_NAME, DAMAGE, ENCHANTMENTS, ItemStack, MAP_ID, MAX_DAMAGE, MAX_STACK_SIZE, UNBREAKABLE};
+use crate::item::{
+    CUSTOM_NAME, DAMAGE, ENCHANTMENTS, ItemStack, MAP_ID, MAX_DAMAGE, MAX_STACK_SIZE, UNBREAKABLE,
+};
 use crate::nbt;
 use crate::wire::read_len;
 use crate::{Error, VarInt, Wire, write_varint};
@@ -79,8 +81,16 @@ impl HashedStack {
     /// server resends it.
     pub fn of(stack: &ItemStack, enchantments: &[String]) -> HashedStack {
         let c = &stack.components;
-        let ints = [(MAX_STACK_SIZE, c.max_stack_size), (MAX_DAMAGE, c.max_damage), (DAMAGE, c.damage), (MAP_ID, c.map_id)];
-        let mut added: Vec<_> = ints.iter().filter_map(|&(id, v)| Some((id, hash_int(v?)))).collect();
+        let ints = [
+            (MAX_STACK_SIZE, c.max_stack_size),
+            (MAX_DAMAGE, c.max_damage),
+            (DAMAGE, c.damage),
+            (MAP_ID, c.map_id),
+        ];
+        let mut added: Vec<_> = ints
+            .iter()
+            .filter_map(|&(id, v)| Some((id, hash_int(v?))))
+            .collect();
         if c.unbreakable {
             added.push((UNBREAKABLE, hash_unit()));
         }
@@ -88,11 +98,27 @@ impl HashedStack {
         if let Some(name) = c.custom_name_text() {
             added.push((CUSTOM_NAME, hash_string(&name)));
         }
-        let named = |&(id, level): &(i32, i32)| Some((hash_string(enchantments.get(usize::try_from(id).ok()?)?), hash_int(level)));
-        if let Some(entries) = c.enchantments.iter().map(named).collect::<Option<Vec<_>>>().filter(|e| !e.is_empty()) {
+        let named = |&(id, level): &(i32, i32)| {
+            Some((
+                hash_string(enchantments.get(usize::try_from(id).ok()?)?),
+                hash_int(level),
+            ))
+        };
+        if let Some(entries) = c
+            .enchantments
+            .iter()
+            .map(named)
+            .collect::<Option<Vec<_>>>()
+            .filter(|e| !e.is_empty())
+        {
             added.push((ENCHANTMENTS, hash_map(entries)));
         }
-        HashedStack { item: stack.item, count: stack.count, added, removed: c.removed.clone() }
+        HashedStack {
+            item: stack.item,
+            count: stack.count,
+            added,
+            removed: c.removed.clone(),
+        }
     }
 }
 
@@ -110,11 +136,18 @@ impl Wire for Option<HashedStack> {
         for _ in 0..read_len(input)? {
             removed.push(VarInt::read(input)?.0);
         }
-        Ok(Some(HashedStack { item, count, added, removed }))
+        Ok(Some(HashedStack {
+            item,
+            count,
+            added,
+            removed,
+        }))
     }
 
     fn write(&self, out: &mut Vec<u8>) {
-        let Some(s) = self else { return false.write(out) };
+        let Some(s) = self else {
+            return false.write(out);
+        };
         true.write(out);
         write_varint(s.item, out);
         write_varint(s.count, out);
@@ -145,13 +178,32 @@ impl Wire for ContainerClick {
     fn read(input: &mut &[u8]) -> Result<Self, Error> {
         let (container, state_id) = (VarInt::read(input)?.0, VarInt::read(input)?.0);
         let (slot, button) = (i16::read(input)?, i8::read(input)?);
-        let inputs = [ContainerInput::Pickup, ContainerInput::QuickMove, ContainerInput::Swap, ContainerInput::Clone, ContainerInput::Throw, ContainerInput::QuickCraft, ContainerInput::PickupAll];
-        let kind = usize::try_from(VarInt::read(input)?.0).ok().and_then(|i| inputs.get(i).copied()).ok_or(Error::Invalid("container input"))?;
+        let inputs = [
+            ContainerInput::Pickup,
+            ContainerInput::QuickMove,
+            ContainerInput::Swap,
+            ContainerInput::Clone,
+            ContainerInput::Throw,
+            ContainerInput::QuickCraft,
+            ContainerInput::PickupAll,
+        ];
+        let kind = usize::try_from(VarInt::read(input)?.0)
+            .ok()
+            .and_then(|i| inputs.get(i).copied())
+            .ok_or(Error::Invalid("container input"))?;
         let mut changed = Vec::new();
         for _ in 0..read_len(input)? {
             changed.push((i16::read(input)?, Option::<HashedStack>::read(input)?));
         }
-        Ok(Self { container, state_id, slot, button, input: kind, changed, carried: Option::<HashedStack>::read(input)? })
+        Ok(Self {
+            container,
+            state_id,
+            slot,
+            button,
+            input: kind,
+            changed,
+            carried: Option::<HashedStack>::read(input)?,
+        })
     }
 
     fn write(&self, out: &mut Vec<u8>) {
@@ -171,7 +223,11 @@ impl Wire for ContainerClick {
 
 crate::packets::packet!(ContainerClose { container: VarInt });
 // A window property: a furnace's fuel and cooking timers, a brewing stand's brew time, ...
-crate::packets::packet!(ContainerSetData { container: VarInt, id: i16, value: i16 });
+crate::packets::packet!(ContainerSetData {
+    container: VarInt,
+    id: i16,
+    value: i16
+});
 
 /// `ClientboundOpenScreenPacket`: `menu` is a `minecraft:menu` registry id, `title` a text component's network NBT.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -186,7 +242,11 @@ impl Wire for OpenScreen {
         let (container, menu) = (VarInt::read(input)?.0, VarInt::read(input)?.0);
         let start = *input;
         nbt::skip_tag(input)?;
-        Ok(Self { container, menu, title: start[..start.len() - input.len()].to_vec() })
+        Ok(Self {
+            container,
+            menu,
+            title: start[..start.len() - input.len()].to_vec(),
+        })
     }
 
     fn write(&self, out: &mut Vec<u8>) {
@@ -212,21 +272,35 @@ mod tests {
         // Guava: Hashing.crc32c().newHasher().putByte(8).putInt(5).hash().asInt()
         assert_eq!(hash_int(5), CRC32C.checksum(&[8, 5, 0, 0, 0]) as i32);
         assert_eq!(CRC32C.checksum(b"123456789"), 0xE306_9283);
-        assert_eq!(hash_string("ab"), CRC32C.checksum(&[12, 2, 0, 0, 0, b'a', 0, b'b', 0]) as i32);
+        assert_eq!(
+            hash_string("ab"),
+            CRC32C.checksum(&[12, 2, 0, 0, 0, b'a', 0, b'b', 0]) as i32
+        );
     }
 
     #[test]
     fn enchantments_hash_as_a_map_sorted_by_unsigned_key_hash() {
-        let names = ["minecraft:efficiency".to_owned(), "minecraft:unbreaking".to_owned()];
+        let names = [
+            "minecraft:efficiency".to_owned(),
+            "minecraft:unbreaking".to_owned(),
+        ];
         let mut pickaxe = ItemStack::new(1052, 1);
         pickaxe.components.enchantments = vec![(1, 3), (0, 5)];
-        let entries = [(hash_string(&names[0]), hash_int(5)), (hash_string(&names[1]), hash_int(3))];
+        let entries = [
+            (hash_string(&names[0]), hash_int(5)),
+            (hash_string(&names[1]), hash_int(3)),
+        ];
         let mut sorted = entries.to_vec();
         sorted.sort_by_key(|&(k, _)| k as u32);
         let mut bytes = vec![TAG_MAP_START];
-        sorted.iter().for_each(|(k, v)| bytes.extend(k.to_le_bytes().into_iter().chain(v.to_le_bytes())));
+        sorted
+            .iter()
+            .for_each(|(k, v)| bytes.extend(k.to_le_bytes().into_iter().chain(v.to_le_bytes())));
         bytes.push(TAG_MAP_END);
-        assert_eq!(HashedStack::of(&pickaxe, &names).added, vec![(ENCHANTMENTS, CRC32C.checksum(&bytes) as i32)]);
+        assert_eq!(
+            HashedStack::of(&pickaxe, &names).added,
+            vec![(ENCHANTMENTS, CRC32C.checksum(&bytes) as i32)]
+        );
         // An id the registry does not name leaves the component out: the server resends the slot.
         assert!(HashedStack::of(&pickaxe, &names[..1]).added.is_empty());
     }
@@ -234,13 +308,20 @@ mod tests {
     #[test]
     fn open_screen_keeps_its_title_nbt() {
         let title = vec![nbt::TAG_STRING, 0, 5, b'C', b'h', b'e', b's', b't'];
-        let screen = OpenScreen { container: 3, menu: 2, title };
+        let screen = OpenScreen {
+            container: 3,
+            menu: 2,
+            title,
+        };
         let mut buf = Vec::new();
         screen.write(&mut buf);
         buf.push(0xff);
         let mut input = &buf[..];
         assert_eq!(OpenScreen::read(&mut input), Ok(screen.clone()));
-        assert_eq!((input, screen.title_text().as_deref()), (&[0xff][..], Some("Chest")));
+        assert_eq!(
+            (input, screen.title_text().as_deref()),
+            (&[0xff][..], Some("Chest"))
+        );
     }
 
     #[test]

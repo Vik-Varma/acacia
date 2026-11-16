@@ -31,11 +31,28 @@ struct Wire<'a, T> {
 fn row<T: From<f32>>(slot: u32, e: &EntityInfo) -> Row<T> {
     let ([x, y, z], [vx, vy, vz]) = (e.position, e.velocity);
     let t = T::from;
-    (slot, t(x), t(y), t(z), t(vx), t(vy), t(vz), t(e.yaw), t(e.pitch), e.health.map(t))
+    (
+        slot,
+        t(x),
+        t(y),
+        t(z),
+        t(vx),
+        t(vy),
+        t(vz),
+        t(e.yaw),
+        t(e.pitch),
+        e.health.map(t),
+    )
 }
 
 fn member(slot: u32, e: &EntityInfo) -> Member<'_> {
-    (slot, EntityId(e.runtime_id), UniqueId(e.unique_id), &e.kind, e.username.as_deref())
+    (
+        slot,
+        EntityId(e.runtime_id),
+        UniqueId(e.unique_id),
+        &e.kind,
+        e.username.as_deref(),
+    )
 }
 
 /// From a reader's cursor to [`EntityDelta::version`]: apply `removed`, then `added`, then the numbers.
@@ -66,7 +83,20 @@ impl EntityDelta {
         let list = &self.0.list;
         self.0.added.iter().chain(&self.0.moved).map(|&i| {
             let r: Row<f64> = row(list.slots[i], &list.entities[i]);
-            (r.0, [r.1, r.2, r.3, r.4, r.5, r.6, r.7, r.8, r.9.unwrap_or(f64::NAN)])
+            (
+                r.0,
+                [
+                    r.1,
+                    r.2,
+                    r.3,
+                    r.4,
+                    r.5,
+                    r.6,
+                    r.7,
+                    r.8,
+                    r.9.unwrap_or(f64::NAN),
+                ],
+            )
         })
     }
 
@@ -90,9 +120,15 @@ impl EntityDelta {
             version: with_numbers.then_some(list.version),
             full: with_numbers && d.full,
             removed: d.removed.iter().map(|(slot, e)| row(*slot, e)).collect(),
-            added: d.added.iter().map(|&i| member(list.slots[i], &list.entities[i])).collect(),
+            added: d
+                .added
+                .iter()
+                .map(|&i| member(list.slots[i], &list.entities[i]))
+                .collect(),
             numbers: match with_numbers {
-                true => changed.map(|&i| row(list.slots[i], &list.entities[i])).collect(),
+                true => changed
+                    .map(|&i| row(list.slots[i], &list.entities[i]))
+                    .collect(),
                 false => Vec::new(),
             },
         }

@@ -38,9 +38,16 @@ impl SignTextPass {
     pub fn new(device: &wgpu::Device, color: wgpu::TextureFormat, globals: &wgpu::Buffer) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("sign text"),
-            source: wgpu::ShaderSource::Wgsl(concat!(include_str!("globals.wgsl"), include_str!("sign_text.wgsl")).into()),
+            source: wgpu::ShaderSource::Wgsl(
+                concat!(include_str!("globals.wgsl"), include_str!("sign_text.wgsl")).into(),
+            ),
         });
-        let entry = |binding, ty| wgpu::BindGroupLayoutEntry { binding, visibility: wgpu::ShaderStages::VERTEX_FRAGMENT, ty, count: None };
+        let entry = |binding, ty| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty,
+            count: None,
+        };
         let texture = wgpu::BindingType::Texture {
             sample_type: wgpu::TextureSampleType::Float { filterable: true },
             view_dimension: wgpu::TextureViewDimension::D2,
@@ -49,12 +56,26 @@ impl SignTextPass {
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("sign text"),
             entries: &[
-                entry(0, wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }),
+                entry(
+                    0,
+                    wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                ),
                 entry(1, texture),
-                entry(2, wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering)),
+                entry(
+                    2,
+                    wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                ),
             ],
         });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("sign text"), bind_group_layouts: &[Some(&layout)], immediate_size: 0 });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("sign text"),
+            bind_group_layouts: &[Some(&layout)],
+            immediate_size: 0,
+        });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("sign text"),
             layout: Some(&pipeline_layout),
@@ -86,23 +107,55 @@ impl SignTextPass {
             multiview_mask: None,
             cache: None,
         });
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor { label: Some("sign text"), ..Default::default() });
-        SignTextPass { pipeline, layout, sampler, globals: globals.clone(), bind_group: None, vertices: vertex_buffer(device, 4096), count: 0 }
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("sign text"),
+            ..Default::default()
+        });
+        SignTextPass {
+            pipeline,
+            layout,
+            sampler,
+            globals: globals.clone(),
+            bind_group: None,
+            vertices: vertex_buffer(device, 4096),
+            count: 0,
+        }
     }
 
     /// Uploads the quads of the signs within reach of `camera`. `atlas` is the UI pass's texture
     /// and its version; `light` gives (block, sky) at a world position.
-    pub fn prepare(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, atlas: Option<&(wgpu::TextureView, u64)>, signs: &[Placed], camera: DVec3, light: impl Fn(DVec3) -> [f32; 2]) {
+    pub fn prepare(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        atlas: Option<&(wgpu::TextureView, u64)>,
+        signs: &[Placed],
+        camera: DVec3,
+        light: impl Fn(DVec3) -> [f32; 2],
+    ) {
         self.count = 0;
         let Some((view, version)) = atlas else { return };
-        if self.bind_group.as_ref().is_none_or(|(_, built)| built != version) {
+        if self
+            .bind_group
+            .as_ref()
+            .is_none_or(|(_, built)| built != version)
+        {
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("sign text"),
                 layout: &self.layout,
                 entries: &[
-                    wgpu::BindGroupEntry { binding: 0, resource: self.globals.as_entire_binding() },
-                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(view) },
-                    wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.globals.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
                 ],
             });
             self.bind_group = Some((bind_group, *version));
@@ -131,7 +184,9 @@ impl SignTextPass {
     }
 
     pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
-        let Some((bind_group, _)) = self.bind_group.as_ref().filter(|_| self.count > 0) else { return };
+        let Some((bind_group, _)) = self.bind_group.as_ref().filter(|_| self.count > 0) else {
+            return;
+        };
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, bind_group, &[]);
         pass.set_vertex_buffer(0, self.vertices.slice(..));
@@ -142,8 +197,20 @@ impl SignTextPass {
 /// Two triangles for `quad`, whose `matrix` takes font pixels to blocks from the sign's `corner`.
 fn push_quad(out: &mut Vec<Vertex>, quad: &Quad, matrix: &Mat4, corner: Vec3, light: [f32; 2]) {
     let ([l, t, r, b], [ul, vt, ur, vb]) = (quad.rect, quad.uv);
-    let vertex = |x: f32, y: f32, u: f32, v: f32| Vertex { position: (corner + matrix.transform_point3(Vec3::new(x, y, 0.0))).to_array(), uv: [u, v], color: quad.color, light };
-    out.extend([vertex(l, t, ul, vt), vertex(l, b, ul, vb), vertex(r, b, ur, vb), vertex(l, t, ul, vt), vertex(r, b, ur, vb), vertex(r, t, ur, vt)]);
+    let vertex = |x: f32, y: f32, u: f32, v: f32| Vertex {
+        position: (corner + matrix.transform_point3(Vec3::new(x, y, 0.0))).to_array(),
+        uv: [u, v],
+        color: quad.color,
+        light,
+    };
+    out.extend([
+        vertex(l, t, ul, vt),
+        vertex(l, b, ul, vb),
+        vertex(r, b, ur, vb),
+        vertex(l, t, ul, vt),
+        vertex(r, b, ur, vb),
+        vertex(r, t, ur, vt),
+    ]);
 }
 
 fn vertex_buffer(device: &wgpu::Device, count: usize) -> wgpu::Buffer {
@@ -161,14 +228,32 @@ mod tests {
 
     #[test]
     fn a_quad_becomes_two_triangles_on_the_board() {
-        let quad = Quad::plain([-2.0, -1.0, 2.0, 1.0], [10.0, 20.0, 14.0, 22.0], [1, 2, 3, 255]);
-        let matrix = Mat4::from_translation(Vec3::new(0.5, 0.5, 0.5)) * Mat4::from_scale(Vec3::new(0.25, -0.25, 0.25));
+        let quad = Quad::plain(
+            [-2.0, -1.0, 2.0, 1.0],
+            [10.0, 20.0, 14.0, 22.0],
+            [1, 2, 3, 255],
+        );
+        let matrix = Mat4::from_translation(Vec3::new(0.5, 0.5, 0.5))
+            * Mat4::from_scale(Vec3::new(0.25, -0.25, 0.25));
         let mut out = Vec::new();
-        push_quad(&mut out, &quad, &matrix, Vec3::new(10.0, 0.0, 0.0), [7.0, 15.0]);
+        push_quad(
+            &mut out,
+            &quad,
+            &matrix,
+            Vec3::new(10.0, 0.0, 0.0),
+            [7.0, 15.0],
+        );
         let corners: Vec<([f32; 3], [f32; 2])> = out.iter().map(|v| (v.position, v.uv)).collect();
-        assert_eq!(corners[0], ([10.0, 0.75, 0.5], [10.0, 20.0]), "the top left is up: font pixels run down");
+        assert_eq!(
+            corners[0],
+            ([10.0, 0.75, 0.5], [10.0, 20.0]),
+            "the top left is up: font pixels run down"
+        );
         assert_eq!(corners[2], ([11.0, 0.25, 0.5], [14.0, 22.0]));
         assert_eq!((corners[3], corners[4]), (corners[0], corners[2]));
-        assert!(out.iter().all(|v| v.color == [1, 2, 3, 255] && v.light == [7.0, 15.0]));
+        assert!(
+            out.iter()
+                .all(|v| v.color == [1, 2, 3, 255] && v.light == [7.0, 15.0])
+        );
     }
 }

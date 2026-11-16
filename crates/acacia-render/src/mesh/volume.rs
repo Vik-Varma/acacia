@@ -47,7 +47,13 @@ pub(super) fn biome_cell(x: i32, y: i32, z: i32) -> usize {
 impl Volume {
     /// Every cell `block`, liquid 0, biome 0.
     pub fn filled(block: u32) -> Volume {
-        Volume { origin: [0; 3], blocks: Box::new([block; CELLS]), liquid: Box::new([0; CELLS]), biomes: Box::new([0; BIOME_CELLS]), nether: false }
+        Volume {
+            origin: [0; 3],
+            blocks: Box::new([block; CELLS]),
+            liquid: Box::new([0; CELLS]),
+            biomes: Box::new([0; BIOME_CELLS]),
+            nether: false,
+        }
     }
 
     #[inline]
@@ -73,7 +79,13 @@ impl Volume {
 
     /// [`Volume::gather`] for a look lit by `lighting`: Java's level is `VOID_AIR` below the world,
     /// so faces towards it draw and its occlusion sees air.
-    pub fn gather_lit(world: &World, cx: i32, section_y: i32, cz: i32, lighting: Lighting) -> Option<Volume> {
+    pub fn gather_lit(
+        world: &World,
+        cx: i32,
+        section_y: i32,
+        cz: i32,
+        lighting: Lighting,
+    ) -> Option<Volume> {
         world.get(cx, cz)?;
         let dim = world.dimension();
         let mut v = Volume {
@@ -83,21 +95,30 @@ impl Volume {
             biomes: Box::new([NO_BIOME; BIOME_CELLS]),
             nether: crate::sky::Realm::of(&dim) == crate::sky::Realm::Nether,
         };
-        let (mut blocks, mut liquid, mut biomes) =
-            (Box::new([0; SECTION_VOLUME]), Box::new([0; SECTION_VOLUME]), Box::new([0; SECTION_VOLUME]));
+        let (mut blocks, mut liquid, mut biomes) = (
+            Box::new([0; SECTION_VOLUME]),
+            Box::new([0; SECTION_VOLUME]),
+            Box::new([0; SECTION_VOLUME]),
+        );
         for dx in -1..=1 {
             for dz in -1..=1 {
-                let Some(shared) = world.get(cx + dx, cz + dz) else { continue };
+                let Some(shared) = world.get(cx + dx, cz + dz) else {
+                    continue;
+                };
                 let chunk = shared.read();
                 for dy in -1..=1 {
                     let index = section_y + dy - (dim.min_y >> 4);
                     let below = index < 0;
-                    let present = !below && chunk.copy_section(index as usize, &mut blocks, &mut liquid);
+                    let present =
+                        !below && chunk.copy_section(index as usize, &mut blocks, &mut liquid);
                     if !present {
                         // Sections the server hasn't sent yet hide faces like unloaded columns do;
                         // their arrival remeshes the neighbours.
                         let void = below && lighting == Lighting::Volume;
-                        let unknown = void || (!below && index < chunk.section_count() as i32 && !chunk.section_known(index as usize));
+                        let unknown = void
+                            || (!below
+                                && index < chunk.section_count() as i32
+                                && !chunk.section_known(index as usize));
                         blocks.fill(if unknown { OCCLUDER } else { dim.air });
                         liquid.fill(dim.air);
                     }
@@ -112,7 +133,11 @@ impl Volume {
     }
 
     /// Copies the part of a neighbouring section (offset -1..=1 per axis) that falls in the border.
-    fn copy_part(&mut self, [blocks, liquid, biomes]: [&[u32; SECTION_VOLUME]; 3], offset: [i32; 3]) {
+    fn copy_part(
+        &mut self,
+        [blocks, liquid, biomes]: [&[u32; SECTION_VOLUME]; 3],
+        offset: [i32; 3],
+    ) {
         let range = |o: i32, border: i32| match o {
             -1 => 16 - border..16,
             0 => 0..16,

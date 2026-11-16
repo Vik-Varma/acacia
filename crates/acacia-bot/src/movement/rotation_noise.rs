@@ -18,7 +18,11 @@ pub(crate) struct RotationNoise {
 
 impl RotationNoise {
     pub(crate) fn new(seed: u64) -> Self {
-        Self { rng: seed, requested: None, sent: (0.0, 0.0) }
+        Self {
+            rng: seed,
+            requested: None,
+            sent: (0.0, 0.0),
+        }
     }
 
     /// `(yaw, pitch)` to send this tick for the requested `(yaw, pitch)`. A request equal to the last one keeps
@@ -61,9 +65,23 @@ mod tests {
         let mut n = RotationNoise::new(7);
         n.apply(0.0, 0.0);
         let mut last = n.sent;
-        for (i, &(yaw, pitch)) in [(90.0, 0.0), (180.0, 0.0), (-90.0, 90.0), (0.0, 0.0), (45.0, 30.0)].iter().cycle().take(500).enumerate() {
+        for (i, &(yaw, pitch)) in [
+            (90.0, 0.0),
+            (180.0, 0.0),
+            (-90.0, 90.0),
+            (0.0, 0.0),
+            (45.0, 30.0),
+        ]
+        .iter()
+        .cycle()
+        .take(500)
+        .enumerate()
+        {
             let sent = n.apply(yaw, pitch);
-            assert!(!on_tenth(sent.0 - last.0) && !on_tenth(sent.1 - last.1), "turn {i}: {last:?} -> {sent:?}");
+            assert!(
+                !on_tenth(sent.0 - last.0) && !on_tenth(sent.1 - last.1),
+                "turn {i}: {last:?} -> {sent:?}"
+            );
             assert!((sent.0 - yaw).abs() <= MAX_DEG && (sent.1 - pitch).abs() <= MAX_DEG + 1e-6);
             last = sent;
         }

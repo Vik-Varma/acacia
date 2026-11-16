@@ -17,17 +17,30 @@ pub(crate) struct Support {
 
 impl Support {
     /// `Entity.checkSupportingBlock`.
-    pub(crate) fn update<W: Blocks>(&mut self, colliders: &Colliders<W>, bbox: Aabb, pos: [f64; 3], on_ground: bool, movement: [f64; 3]) {
+    pub(crate) fn update<W: Blocks>(
+        &mut self,
+        colliders: &Colliders<W>,
+        bbox: Aabb,
+        pos: [f64; 3],
+        on_ground: bool,
+        movement: [f64; 3],
+    ) {
         if !on_ground {
             *self = Support::default();
             return;
         }
-        let area = Aabb { min: [bbox.min[0], bbox.min[1] - 1.0E-6, bbox.min[2]], max: [bbox.max[0], bbox.min[1], bbox.max[2]] };
+        let area = Aabb {
+            min: [bbox.min[0], bbox.min[1] - 1.0E-6, bbox.min[2]],
+            max: [bbox.max[0], bbox.min[1], bbox.max[2]],
+        };
         let mut found = colliders.supporting_block(&area, pos);
         if found.is_none() && !self.no_blocks {
             found = colliders.supporting_block(&area.moved([-movement[0], 0.0, -movement[2]]), pos);
         }
-        *self = Support { block: found, no_blocks: found.is_none() };
+        *self = Support {
+            block: found,
+            no_blocks: found.is_none(),
+        };
     }
 
     /// `Entity.getOnPos` for offsets above 1.0E-5.
@@ -37,8 +50,14 @@ impl Support {
             return [floor(pos[0]), below, floor(pos[2])];
         };
         let block = world.block_state(support).block();
-        let keeps_support = (offset as f64 <= 0.5 && block.is(BlockTag::Fences)) || block.is(BlockTag::Walls) || block.is(BlockTag::FenceGates);
-        if keeps_support { support } else { [support[0], below, support[2]] }
+        let keeps_support = (offset as f64 <= 0.5 && block.is(BlockTag::Fences))
+            || block.is(BlockTag::Walls)
+            || block.is(BlockTag::FenceGates);
+        if keeps_support {
+            support
+        } else {
+            [support[0], below, support[2]]
+        }
     }
 
     /// `Entity.getBlockSpeedFactor`.
@@ -48,6 +67,10 @@ impl Support {
         if block == Block::Water || block == Block::BubbleColumn || here as f64 != 1.0 {
             return here;
         }
-        speed_factor(world.block_state(self.on_pos(world, pos, BELOW_MOVEMENT_OFFSET)).block())
+        speed_factor(
+            world
+                .block_state(self.on_pos(world, pos, BELOW_MOVEMENT_OFFSET))
+                .block(),
+        )
     }
 }

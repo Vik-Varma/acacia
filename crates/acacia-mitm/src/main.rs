@@ -54,11 +54,13 @@ fn args() -> Result<Args, String> {
     while let Some(flag) = it.next() {
         let value = it.next().ok_or(format!("{flag} needs a value"))?;
         match flag.as_str() {
-            "--transport" => args.nethernet = match value.as_str() {
-                "raknet" => false,
-                "nethernet" => true,
-                _ => return Err(format!("--transport: {value} is not raknet or nethernet")),
-            },
+            "--transport" => {
+                args.nethernet = match value.as_str() {
+                    "raknet" => false,
+                    "nethernet" => true,
+                    _ => return Err(format!("--transport: {value} is not raknet or nethernet")),
+                }
+            }
             "--listen" => args.listen = value.parse().map_err(|e| format!("--listen: {e}"))?,
             "--server" => args.server = value,
             "--out" => args.out = value,
@@ -69,13 +71,21 @@ fn args() -> Result<Args, String> {
         }
     }
     if args.server.is_empty() {
-        args.server = if args.nethernet { "127.0.0.1:19160" } else { "127.0.0.1:19140" }.into();
+        args.server = if args.nethernet {
+            "127.0.0.1:19160"
+        } else {
+            "127.0.0.1:19140"
+        }
+        .into();
     }
     if args.nethernet && args.online.is_none() {
         return Err("--transport nethernet needs --online <account>: BDS refuses NetherNet offers without a MultiplayerToken".into());
     }
     if args.realm.is_some() && (args.online.is_none() || args.nethernet) {
-        return Err("--realm needs --online <account>, a member of the realm, and the RakNet transport".into());
+        return Err(
+            "--realm needs --online <account>, a member of the realm, and the RakNet transport"
+                .into(),
+        );
     }
     Ok(args)
 }
@@ -84,7 +94,14 @@ async fn sign_in(id: &str) -> Result<(Arc<AuthClient>, Account), Box<dyn std::er
     let auth = Arc::new(AuthClient::new(AuthConfig::default())?);
     let account = Account::new(auth.clone(), Arc::new(FileTokenCache::new(".tokens")?), id);
     if !account.is_signed_in().await? {
-        account.sign_in(|p| println!("sign in at {} with code {}", p.verification_uri, p.user_code)).await?;
+        account
+            .sign_in(|p| {
+                println!(
+                    "sign in at {} with code {}",
+                    p.verification_uri, p.user_code
+                )
+            })
+            .await?;
     }
     Ok((auth, account))
 }
@@ -94,16 +111,25 @@ const STACK: usize = 64 << 20;
 
 fn main() -> Result<(), String> {
     let runtime = std::thread::Builder::new().stack_size(STACK).spawn(|| {
-        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().map_err(|e| e.to_string())?;
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| e.to_string())?;
         rt.block_on(run()).map_err(|e| e.to_string())
     });
-    runtime.map_err(|e| e.to_string())?.join().map_err(|_| "proxy thread panicked".to_owned())?
+    runtime
+        .map_err(|e| e.to_string())?
+        .join()
+        .map_err(|_| "proxy thread panicked".to_owned())?
 }
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args = args()?;
-    let stamp = time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());
-    let name = stamp.format(time::macros::format_description!("[year][month][day]-[hour][minute][second]"))?;
+    let stamp =
+        time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+    let name = stamp.format(time::macros::format_description!(
+        "[year][month][day]-[hour][minute][second]"
+    ))?;
     let signed_in = match &args.online {
         Some(id) => Some(sign_in(id).await?),
         None => None,
@@ -111,14 +137,23 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let proxy = match (args.realm, signed_in) {
         (Some(realm), Some((auth, account))) => Proxy::realm(auth, account, realm),
         (_, signed_in) => {
-            let target = tokio::net::lookup_host(&args.server).await?.next().ok_or(format!("{}: no address", args.server))?;
+            let target = tokio::net::lookup_host(&args.server)
+                .await?
+                .next()
+                .ok_or(format!("{}: no address", args.server))?;
             let proxy = Proxy::new(target);
-            signed_in.into_iter().fold(proxy, |proxy, (_, account)| proxy.online(account))
+            signed_in
+                .into_iter()
+                .fold(proxy, |proxy, (_, account)| proxy.online(account))
         }
     };
     let mut proxy = proxy.listen(args.listen);
     let rec = Recorder::create(args.out.as_ref(), &name)?;
-    println!("join {} from the game; recording to {}", args.listen, rec.path().display());
+    println!(
+        "join {} from the game; recording to {}",
+        args.listen,
+        rec.path().display()
+    );
     if args.nethernet {
         proxy = proxy.nethernet(acacia_mitm::host_key(args.out.as_ref())?);
     }
@@ -129,6 +164,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     // MITM_TRACE=1 logs every datagram on the game's side (first byte and size), to debug joins and
     // compare send pacing.
-    let proxy = proxy.record(rec).trace_datagrams(std::env::var_os("MITM_TRACE").is_some());
+    let proxy = proxy
+        .record(rec)
+        .trace_datagrams(std::env::var_os("MITM_TRACE").is_some());
     Ok(proxy.bind().await?.run().await?)
 }

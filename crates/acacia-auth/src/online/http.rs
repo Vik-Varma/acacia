@@ -23,11 +23,16 @@ impl Http {
         if let Some(proxy) = &cfg.proxy {
             builder = builder.proxy(reqwest::Proxy::all(proxy)?);
         }
-        Ok(Self { client: builder.build()?, skew_ms: AtomicI64::new(0) })
+        Ok(Self {
+            client: builder.build()?,
+            skew_ms: AtomicI64::new(0),
+        })
     }
 
     fn local_ms() -> i64 {
-        SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis() as i64)
     }
 
     /// Unix nanoseconds adjusted to the last observed server `Date`.
@@ -36,15 +41,26 @@ impl Http {
     }
 
     fn observe_date(&self, headers: &HeaderMap) {
-        let Some(date) = headers.get("date").and_then(|v| v.to_str().ok()) else { return };
-        let Ok(t) = httpdate::parse_http_date(date) else { return };
-        let server = t.duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
-        self.skew_ms.store(server - Self::local_ms(), Ordering::Relaxed);
+        let Some(date) = headers.get("date").and_then(|v| v.to_str().ok()) else {
+            return;
+        };
+        let Ok(t) = httpdate::parse_http_date(date) else {
+            return;
+        };
+        let server = t
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis() as i64);
+        self.skew_ms
+            .store(server - Self::local_ms(), Ordering::Relaxed);
     }
 
     /// Sends and decodes a JSON response. Non-2xx responses become [`Error::Xbox`] when they carry
     /// an Xbox `X-Err` code (header or `XErr` body field), else [`Error::Status`].
-    pub async fn json<T: DeserializeOwned>(&self, req: RequestBuilder, endpoint: &str) -> Result<T> {
+    pub async fn json<T: DeserializeOwned>(
+        &self,
+        req: RequestBuilder,
+        endpoint: &str,
+    ) -> Result<T> {
         let resp = self.send(req, endpoint).await?;
         let bytes = resp.bytes().await?;
         serde_json::from_slice(&bytes).map_err(|e| Error::Protocol {
@@ -68,17 +84,30 @@ impl Http {
         let body = resp.bytes().await.unwrap_or_default();
         let json = serde_json::from_slice::<serde_json::Value>(&body).ok();
         // Keys only: failed Xbox responses can still carry live tokens.
-        let keys: Vec<&str> = json.as_ref().and_then(|v| v.as_object()).map(|o| o.keys().map(String::as_str).collect()).unwrap_or_default();
+        let keys: Vec<&str> = json
+            .as_ref()
+            .and_then(|v| v.as_object())
+            .map(|o| o.keys().map(String::as_str).collect())
+            .unwrap_or_default();
         tracing::debug!(endpoint, status, x_err = ?header_xerr, ?keys, len = body.len(), "auth request failed");
         let field = |name: &str| json.as_ref().and_then(|v| v.get(name));
-        let body_xerr = field("XErr").and_then(serde_json::Value::as_u64).and_then(|c| u32::try_from(c).ok());
+        let body_xerr = field("XErr")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|c| u32::try_from(c).ok());
         if let Some(code) = header_xerr.or(body_xerr) {
             return Err(Error::Xbox(XboxError::from_code(code)));
         }
         if let Some(url) = field("WebPage").and_then(serde_json::Value::as_str) {
-            return Err(Error::ActionRequired { endpoint: endpoint.into(), url: url.into() });
+            return Err(Error::ActionRequired {
+                endpoint: endpoint.into(),
+                url: url.into(),
+            });
         }
-        Err(Error::Status { endpoint: endpoint.into(), status, body: truncate(&body) })
+        Err(Error::Status {
+            endpoint: endpoint.into(),
+            status,
+            body: truncate(&body),
+        })
     }
 
     /// POST `body` with the headers every Xbox auth request carries plus its `Signature`.
@@ -108,13 +137,27 @@ impl Http {
     }
 
     /// The `Signature` header for a request to `url`, stamped with the server-corrected clock.
-    pub fn signature(&self, key: &SigningKey, method: &str, url: &str, authorization: &str, body: &[u8]) -> String {
+    pub fn signature(
+        &self,
+        key: &SigningKey,
+        method: &str,
+        url: &str,
+        authorization: &str,
+        body: &[u8],
+    ) -> String {
         let parsed = url::Url::parse(url).expect("endpoint URL");
         let path = match parsed.query() {
             Some(q) => format!("{}?{q}", parsed.path()),
             None => parsed.path().to_owned(),
         };
-        sign::signature_header(key, sign::filetime(self.server_now_nanos()), method, &path, authorization, body)
+        sign::signature_header(
+            key,
+            sign::filetime(self.server_now_nanos()),
+            method,
+            &path,
+            authorization,
+            body,
+        )
     }
 }
 

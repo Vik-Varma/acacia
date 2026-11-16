@@ -27,11 +27,20 @@ pub enum FoodChoice {
 }
 
 const fn plain(hunger: u8, saturation: f32) -> Food {
-    Food { hunger, saturation, always_edible: false, harmful: false, precious: false }
+    Food {
+        hunger,
+        saturation,
+        always_edible: false,
+        harmful: false,
+        precious: false,
+    }
 }
 
 const fn harmful(hunger: u8, saturation: f32) -> Food {
-    Food { harmful: true, ..plain(hunger, saturation) }
+    Food {
+        harmful: true,
+        ..plain(hunger, saturation)
+    }
 }
 
 /// What eating `item` restores; `None` if it is not food.
@@ -49,18 +58,31 @@ pub fn food(item: Item) -> Option<Food> {
         CookedMutton | CookedSalmon => plain(6, 9.6),
         DriedKelp | TropicalFish => plain(1, 0.2),
         GoldenCarrot => plain(6, 14.4),
-        HoneyBottle => Food { always_edible: true, ..plain(6, 1.2) },
+        HoneyBottle => Food {
+            always_edible: true,
+            ..plain(6, 1.2)
+        },
         MelonSlice | Mutton => plain(2, 1.2),
         Potato => plain(1, 0.6),
         PumpkinPie => plain(8, 4.8),
         RabbitStew => plain(10, 12.0),
-        GoldenApple | EnchantedGoldenApple => Food { always_edible: true, precious: true, ..plain(4, 9.6) },
+        GoldenApple | EnchantedGoldenApple => Food {
+            always_edible: true,
+            precious: true,
+            ..plain(4, 9.6)
+        },
         Chicken | PoisonousPotato => harmful(2, 1.2),
         Pufferfish => harmful(1, 0.2),
         RottenFlesh => harmful(4, 0.8),
         SpiderEye => harmful(2, 3.2),
-        SuspiciousStew => Food { always_edible: true, ..harmful(6, 7.2) },
-        ChorusFruit => Food { always_edible: true, ..harmful(4, 2.4) },
+        SuspiciousStew => Food {
+            always_edible: true,
+            ..harmful(6, 7.2)
+        },
+        ChorusFruit => Food {
+            always_edible: true,
+            ..harmful(4, 2.4)
+        },
         _ => return None,
     })
 }
@@ -77,12 +99,17 @@ pub fn use_ticks(item: Item) -> Option<u32> {
 
 /// Consumable with a full hunger bar (drinks and `always_edible` food).
 pub(crate) fn always_consumable(item: Item) -> bool {
-    matches!(item, Item::Potion | Item::MilkBucket | Item::OminousBottle) || food(item).is_some_and(|f| f.always_edible)
+    matches!(item, Item::Potion | Item::MilkBucket | Item::OminousBottle)
+        || food(item).is_some_and(|f| f.always_edible)
 }
 
 /// The slot of the food to eat among `candidates` (`(slot, item)`), skipping harmful and precious food;
 /// `missing` is how many hunger points the bar lacks. Ties go to the earlier slot.
-pub(crate) fn choose_food(candidates: impl Iterator<Item = (u8, Item)>, missing: f32, choice: FoodChoice) -> Option<u8> {
+pub(crate) fn choose_food(
+    candidates: impl Iterator<Item = (u8, Item)>,
+    missing: f32,
+    choice: FoodChoice,
+) -> Option<u8> {
     let edible: Vec<(u8, Food)> = candidates
         .filter_map(|(slot, item)| food(item).map(|f| (slot, f)))
         .filter(|(_, f)| !f.harmful && !f.precious)

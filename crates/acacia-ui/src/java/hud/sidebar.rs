@@ -45,7 +45,9 @@ impl ScoreEntry {
     }
 
     pub fn owner_name(&self) -> Text {
-        self.display.clone().unwrap_or_else(|| Text::literal(self.owner.clone()))
+        self.display
+            .clone()
+            .unwrap_or_else(|| Text::literal(self.owner.clone()))
     }
 }
 
@@ -89,7 +91,11 @@ pub fn sidebar(gui: &mut Gui, font: &dyn Metrics, s: &Sidebar) {
     let default = sidebar_default();
     let format = s.format.unwrap_or(&default);
     let mut entries: Vec<&ScoreEntry> = s.scores.iter().filter(|e| !e.is_hidden()).collect();
-    java_sort(&mut entries, |a, b| b.value.cmp(&a.value).then_with(|| compare_ignore_case(&a.owner, &b.owner)));
+    java_sort(&mut entries, |a, b| {
+        b.value
+            .cmp(&a.value)
+            .then_with(|| compare_ignore_case(&a.owner, &b.owner))
+    });
     entries.truncate(15);
     let rows: Vec<(Text, Text, i32)> = entries
         .iter()
@@ -105,7 +111,9 @@ pub fn sidebar(gui: &mut Gui, font: &dyn Metrics, s: &Sidebar) {
         .collect();
     let title_width = font.width(s.title);
     let spacer = font.width(&Text::literal(": "));
-    let biggest = rows.iter().fold(title_width, |m, (name, _, sw)| m.max(font.width(name) + if *sw > 0 { spacer + sw } else { 0 }));
+    let biggest = rows.iter().fold(title_width, |m, (name, _, sw)| {
+        m.max(font.width(name) + if *sw > 0 { spacer + sw } else { 0 })
+    });
     let count = rows.len() as i32;
     let bottom = gui.height / 2 + count * 9 / 3;
     let left = gui.width - biggest - 3;
@@ -113,7 +121,13 @@ pub fn sidebar(gui: &mut Gui, font: &dyn Metrics, s: &Sidebar) {
     let header_y = bottom - count * 9;
     gui.fill(left - 2, header_y - 9 - 1, right, header_y - 1, s.header);
     gui.fill(left - 2, header_y - 1, right, bottom, s.background);
-    gui.text(s.title.clone(), left + biggest / 2 - title_width / 2, header_y - 9, WHITE, false);
+    gui.text(
+        s.title.clone(),
+        left + biggest / 2 - title_width / 2,
+        header_y - 9,
+        WHITE,
+        false,
+    );
     for (i, (name, score, score_width)) in rows.into_iter().enumerate() {
         let y = bottom - (count - i as i32) * 9;
         gui.text(name, left, y, WHITE, false);
@@ -127,26 +141,60 @@ mod tests {
     use crate::java::gui::{Fixed, GuiDraw};
 
     fn entry(owner: &str, value: i32) -> ScoreEntry {
-        ScoreEntry { owner: owner.into(), value, display: None, format: None }
+        ScoreEntry {
+            owner: owner.into(),
+            value,
+            display: None,
+            format: None,
+        }
     }
 
     #[test]
     fn highest_first_hidden_left_out() {
-        let scores = [entry("bob", 1), entry("#x", 9), entry("Alex", 1), entry("Zed", 5)];
+        let scores = [
+            entry("bob", 1),
+            entry("#x", 9),
+            entry("Alex", 1),
+            entry("Zed", 5),
+        ];
         let none = |_: &str| -> Option<&Team> { None };
         let title = Text::literal("Kills");
         let mut gui = Gui::new(320, 240);
-        sidebar(&mut gui, &Fixed(6.0), &Sidebar { title: &title, format: None, scores: &scores, team: &none, background: 0, header: 0 });
-        let names: Vec<String> = gui.draws.iter().filter_map(|d| match d {
-            GuiDraw::Text { text, shadow: false, .. } => Some(text.plain()),
-            _ => None,
-        }).collect();
+        sidebar(
+            &mut gui,
+            &Fixed(6.0),
+            &Sidebar {
+                title: &title,
+                format: None,
+                scores: &scores,
+                team: &none,
+                background: 0,
+                header: 0,
+            },
+        );
+        let names: Vec<String> = gui
+            .draws
+            .iter()
+            .filter_map(|d| match d {
+                GuiDraw::Text {
+                    text,
+                    shadow: false,
+                    ..
+                } => Some(text.plain()),
+                _ => None,
+            })
+            .collect();
         assert_eq!(names, ["Kills", "Zed", "5", "Alex", "1", "bob", "1"]);
     }
 
     #[test]
     fn team_colour_under_the_affixes() {
-        let team = Team { name: "a".into(), prefix: Text::literal("[A] ").with_color(0xFF5555), suffix: Text::default(), color: Some(0x5555FF) };
+        let team = Team {
+            name: "a".into(),
+            prefix: Text::literal("[A] ").with_color(0xFF5555),
+            suffix: Text::default(),
+            color: Some(0x5555FF),
+        };
         let name = team.formatted_name(Text::literal("Mia"));
         assert_eq!(name.spans[0].style.color, Some(0xFF5555));
         assert_eq!(name.spans[1].style.color, Some(0x5555FF));

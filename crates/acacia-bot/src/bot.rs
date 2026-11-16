@@ -1,8 +1,7 @@
 use std::fmt::Debug;
 use std::time::Duration;
 
-use acacia_client::proto::{Packet, RawPacket};
-use acacia_client::{ClientBuilder, ConnectError, DisconnectReason};
+use crate::BotConfig;
 use crate::cadence::Ticker;
 use crate::events::{BotEvent, EventOut, EventSource, Events};
 use crate::governor::Governor;
@@ -13,7 +12,8 @@ use crate::riding::Ride;
 use crate::sleep::Bed;
 use crate::state::GameState;
 use crate::survival::{AutoEat, Survival};
-use crate::BotConfig;
+use acacia_client::proto::{Packet, RawPacket};
+use acacia_client::{ClientBuilder, ConnectError, DisconnectReason};
 
 mod bedrock;
 mod bedrock_step;
@@ -68,7 +68,13 @@ impl Bot {
         Bedrock::connect(builder, config).await
     }
 
-    fn assemble(backend: Backend, state: GameState, events: EventSource, out: EventOut, config: Assembly) -> Bot {
+    fn assemble(
+        backend: Backend,
+        state: GameState,
+        events: EventSource,
+        out: EventOut,
+        config: Assembly,
+    ) -> Bot {
         Bot {
             backend,
             state,
@@ -153,7 +159,9 @@ impl Bot {
 
     /// Queues a Bedrock packet; false once the connection is closed, and always on Java (nothing is sent).
     pub(crate) fn send_bedrock<T: Packet + Debug>(&self, packet: &T) -> bool {
-        self.backend.bedrock().is_some_and(|b| b.client.send(packet))
+        self.backend
+            .bedrock()
+            .is_some_and(|b| b.client.send(packet))
     }
 
     /// Closes the connection and waits (up to 2 s) for the disconnect to be sent, so the server
@@ -182,9 +190,13 @@ impl Bot {
             self.survival.idle = true;
             match self.step().await? {
                 Step::Packet(packet) => self.keep_for_caller(packet),
-                Step::Tick if !self.out.is_sink() && self.events.wants(Events::TICKS) => return Some(BotEvent::Tick),
+                Step::Tick if !self.out.is_sink() && self.events.wants(Events::TICKS) => {
+                    return Some(BotEvent::Tick);
+                }
                 Step::Tick | Step::Idle => {}
-                Step::Disconnected(reason) => return self.out.hand_over(BotEvent::Disconnected(reason)),
+                Step::Disconnected(reason) => {
+                    return self.out.hand_over(BotEvent::Disconnected(reason));
+                }
             }
         }
     }

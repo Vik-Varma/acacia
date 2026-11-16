@@ -16,11 +16,17 @@ pub struct Range {
 
 impl Range {
     pub fn at(pos: usize) -> Range {
-        Range { start: pos, end: pos }
+        Range {
+            start: pos,
+            end: pos,
+        }
     }
 
     fn encompassing(a: Range, b: Range) -> Range {
-        Range { start: a.start.min(b.start), end: a.end.max(b.end) }
+        Range {
+            start: a.start.min(b.start),
+            end: a.end.max(b.end),
+        }
     }
 }
 
@@ -89,8 +95,17 @@ impl Parse {
         if let [(_, e)] = self.errors.as_slice() {
             return Some(e.clone());
         }
-        let r = Reader { string: &self.input, cursor: self.cursor };
-        Some(r.error(if self.context.range.start == self.context.range.end { Kind::UnknownCommand } else { Kind::UnknownArgument }))
+        let r = Reader {
+            string: &self.input,
+            cursor: self.cursor,
+        };
+        Some(
+            r.error(if self.context.range.start == self.context.range.end {
+                Kind::UnknownCommand
+            } else {
+                Kind::UnknownArgument
+            }),
+        )
     }
 }
 
@@ -99,8 +114,20 @@ const SPACE: u16 = b' ' as u16;
 impl Tree {
     /// `CommandDispatcher.parse(reader, source)` from `start` (after the slash).
     pub fn parse(&self, input: &[u16], start: usize) -> Parse {
-        let context = Context { arguments: Vec::new(), nodes: Vec::new(), range: Range::at(start), executable: false };
-        let mut parse = self.parse_nodes(0, Reader { string: input, cursor: start }, context);
+        let context = Context {
+            arguments: Vec::new(),
+            nodes: Vec::new(),
+            range: Range::at(start),
+            executable: false,
+        };
+        let mut parse = self.parse_nodes(
+            0,
+            Reader {
+                string: input,
+                cursor: start,
+            },
+            context,
+        );
         parse.input = input.to_vec();
         parse
     }
@@ -108,26 +135,42 @@ impl Tree {
     /// `getRelevantNodes`: the literal spelled up to the next space, else every argument.
     fn relevant(&self, node: usize, r: &Reader) -> Vec<usize> {
         let children = &self.nodes[node].children;
-        let mut literals = children.iter().filter(|&&c| self.nodes[c].is_literal()).peekable();
+        let mut literals = children
+            .iter()
+            .filter(|&&c| self.nodes[c].is_literal())
+            .peekable();
         if literals.peek().is_none() {
             return children.clone();
         }
-        let end = (r.cursor..r.string.len()).find(|&i| r.string[i] == SPACE).unwrap_or(r.string.len());
+        let end = (r.cursor..r.string.len())
+            .find(|&i| r.string[i] == SPACE)
+            .unwrap_or(r.string.len());
         let word = String::from_utf16_lossy(&r.string[r.cursor..end]);
         match literals.find(|&&c| self.nodes[c].name() == word) {
             Some(&c) => vec![c],
-            None => children.iter().copied().filter(|&c| !self.nodes[c].is_literal()).collect(),
+            None => children
+                .iter()
+                .copied()
+                .filter(|&c| !self.nodes[c].is_literal())
+                .collect(),
         }
     }
 
     /// `child.parse(reader, context)` and the separator check after it.
-    fn parse_child(&self, child: usize, r: &mut Reader, context: &mut Context) -> Result<(), Error> {
+    fn parse_child(
+        &self,
+        child: usize,
+        r: &mut Reader,
+        context: &mut Context,
+    ) -> Result<(), Error> {
         let start = r.cursor;
         match &self.nodes[child].kind {
             NodeKind::Literal(literal) => {
                 let units: Vec<u16> = literal.encode_utf16().collect();
                 let end = start + units.len();
-                let fits = r.can_read_n(units.len()) && r.string[start..end] == units[..] && (end == r.string.len() || r.string[end] == SPACE);
+                let fits = r.can_read_n(units.len())
+                    && r.string[start..end] == units[..]
+                    && (end == r.string.len() || r.string[end] == SPACE);
                 if !fits {
                     return Err(r.error(Kind::LiteralIncorrect(literal.clone())));
                 }
@@ -136,7 +179,10 @@ impl Tree {
             }
             NodeKind::Argument { name, ty, .. } => {
                 ty.parse(r)?;
-                let range = Range { start, end: r.cursor };
+                let range = Range {
+                    start,
+                    end: r.cursor,
+                };
                 context.with_argument(name, range);
                 context.with_node(child, range);
             }
@@ -163,11 +209,21 @@ impl Tree {
                 r.skip();
                 potentials.push(self.parse_nodes(child, r, context));
             } else {
-                potentials.push(Parse { input: Vec::new(), context, cursor: r.cursor, errors: Vec::new() });
+                potentials.push(Parse {
+                    input: Vec::new(),
+                    context,
+                    cursor: r.cursor,
+                    errors: Vec::new(),
+                });
             }
         }
         if potentials.is_empty() {
-            return Parse { input: Vec::new(), context: so_far, cursor: original.cursor, errors };
+            return Parse {
+                input: Vec::new(),
+                context: so_far,
+                cursor: original.cursor,
+                errors,
+            };
         }
         let end = original.string.len();
         potentials.sort_by(|a, b| {

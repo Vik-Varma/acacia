@@ -29,8 +29,14 @@ pub(super) fn piglin(p: &mut Poses, s: &RenderState) {
     match s.text("armPose") {
         Some("DANCING") => {
             let dance = s.age() / 60.0;
-            p.z_rot("right_ear", pi_div(6.0) + pi_div(180.0) * sin(dance * 30.0) * 10.0);
-            p.z_rot("left_ear", -pi_div(6.0) - pi_div(180.0) * cos(dance * 30.0) * 10.0);
+            p.z_rot(
+                "right_ear",
+                pi_div(6.0) + pi_div(180.0) * sin(dance * 30.0) * 10.0,
+            );
+            p.z_rot(
+                "left_ear",
+                -pi_div(6.0) - pi_div(180.0) * cos(dance * 30.0) * 10.0,
+            );
             p.get("head").x += sin(dance * 10.0);
             p.get("head").y += sin(dance * 40.0) + 0.4;
             let arm = pi_div(180.0) * (70.0 + cos(dance * 40.0) * 10.0);
@@ -40,13 +46,28 @@ pub(super) fn piglin(p: &mut Poses, s: &RenderState) {
             p.get("left_arm").y += sin(dance * 40.0) * 0.5 + 0.5;
             p.get("body").y += sin(dance * 40.0) * 0.35;
         }
-        Some("ATTACKING_WITH_MELEE_WEAPON") if s.swing() == 0.0 => p.x_rot(if h.main_right { "right_arm" } else { "left_arm" }, -1.8),
+        Some("ATTACKING_WITH_MELEE_WEAPON") if s.swing() == 0.0 => p.x_rot(
+            if h.main_right {
+                "right_arm"
+            } else {
+                "left_arm"
+            },
+            -1.8,
+        ),
         Some("CROSSBOW_HOLD") => crossbow_hold(p, h.main_right),
-        Some("CROSSBOW_CHARGE") => crossbow_charge(p, (s.num("maxCrossbowChageDuration"), s.num("ticksUsingItem")), h.main_right),
+        Some("CROSSBOW_CHARGE") => crossbow_charge(
+            p,
+            (s.num("maxCrossbowChageDuration"), s.num("ticksUsingItem")),
+            h.main_right,
+        ),
         Some("ADMIRING_ITEM") => {
             p.x_rot("head", 0.5);
             p.y_rot("head", 0.0);
-            let (arm, turn) = if h.main_right { ("left_arm", 0.5) } else { ("right_arm", -0.5) };
+            let (arm, turn) = if h.main_right {
+                ("left_arm", 0.5)
+            } else {
+                ("right_arm", -0.5)
+            };
             p.y_rot(arm, turn);
             p.x_rot(arm, -0.9);
         }

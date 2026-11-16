@@ -1,7 +1,10 @@
-use acacia_client::proto::packets::{InventoryContent, InventorySlot, InventoryTransaction, ItemStackResponse, MobEquipment, PlayerHotbar};
+use acacia_client::proto::packets::{
+    InventoryContent, InventorySlot, InventoryTransaction, ItemStackResponse, MobEquipment,
+    PlayerHotbar,
+};
 use acacia_client::proto::types::{
-    ContainerSlotType, ItemStackResponsesItemContainersItemSlotsItem as ResponseSlot, ItemStackResponsesItemStatus,
-    TransactionActionsItemSourceType, WindowID,
+    ContainerSlotType, ItemStackResponsesItemContainersItemSlotsItem as ResponseSlot,
+    ItemStackResponsesItemStatus, TransactionActionsItemSourceType, WindowID,
 };
 use acacia_client::proto::{DecodeError, Packet, RawPacket};
 
@@ -9,11 +12,13 @@ use super::Me;
 
 mod stack;
 
-pub use stack::ItemStack;
 use stack::EMPTY;
+pub use stack::ItemStack;
 
 /// Slot updates from the successful responses in an `ItemStackResponse`, with their container.
-pub(super) fn successful_slots(packet: ItemStackResponse) -> impl Iterator<Item = (ContainerSlotType, ResponseSlot)> {
+pub(super) fn successful_slots(
+    packet: ItemStackResponse,
+) -> impl Iterator<Item = (ContainerSlotType, ResponseSlot)> {
     packet
         .responses
         .into_iter()
@@ -55,8 +60,14 @@ impl Default for Inventory {
 }
 
 impl Inventory {
-    pub const PACKETS: &'static [u32] =
-        &[InventoryContent::ID, InventorySlot::ID, MobEquipment::ID, PlayerHotbar::ID, ItemStackResponse::ID, InventoryTransaction::ID];
+    pub const PACKETS: &'static [u32] = &[
+        InventoryContent::ID,
+        InventorySlot::ID,
+        MobEquipment::ID,
+        PlayerHotbar::ID,
+        ItemStackResponse::ID,
+        InventoryTransaction::ID,
+    ];
 
     pub const WINDOW_INVENTORY: i32 = 0;
     pub const WINDOW_OFFHAND: i32 = 119;
@@ -68,7 +79,10 @@ impl Inventory {
     pub const UI_SLOTS: usize = 54;
 
     pub fn is_player_window(window: i32) -> bool {
-        matches!(window, Self::WINDOW_INVENTORY | Self::WINDOW_OFFHAND | Self::WINDOW_ARMOR | Self::WINDOW_UI)
+        matches!(
+            window,
+            Self::WINDOW_INVENTORY | Self::WINDOW_OFFHAND | Self::WINDOW_ARMOR | Self::WINDOW_UI
+        )
     }
 
     /// Moves on every change, and on some inventory packets that change nothing (see [`crate::snapshot`]).
@@ -96,13 +110,17 @@ impl Inventory {
             InventorySlot::ID => {
                 let p: InventorySlot = packet.decode()?;
                 tracing::trace!(window = ?p.window_id, slot = p.slot, id = p.item.network_id, count = p.item.count, "inventory slot");
-                if let Some(dst) = self.window_mut(p.window_id.to_raw() as i32).and_then(|w| w.get_mut(p.slot as usize)) {
+                if let Some(dst) = self
+                    .window_mut(p.window_id.to_raw() as i32)
+                    .and_then(|w| w.get_mut(p.slot as usize))
+                {
                     *dst = p.item.into();
                 }
             }
             MobEquipment::ID => {
                 let p: MobEquipment = packet.decode()?;
-                if p.runtime_entity_id == me.runtime_entity_id && p.window_id == WindowID::Inventory {
+                if p.runtime_entity_id == me.runtime_entity_id && p.window_id == WindowID::Inventory
+                {
                     self.select(p.selected_slot);
                 }
             }
@@ -124,9 +142,17 @@ impl Inventory {
             InventoryTransaction::ID => {
                 let p: InventoryTransaction = packet.decode()?;
                 tracing::trace!(actions = ?p.transaction.actions.iter().map(|a| (a.source_type, a.window_id, a.slot, a.new_item.count)).collect::<Vec<_>>(), "inventory transaction");
-                let changes = p.transaction.actions.into_iter().filter(|a| a.source_type == TransactionActionsItemSourceType::Container);
+                let changes = p
+                    .transaction
+                    .actions
+                    .into_iter()
+                    .filter(|a| a.source_type == TransactionActionsItemSourceType::Container);
                 for a in changes {
-                    if let Some(dst) = a.window_id.and_then(|w| self.window_mut(i32::from(w))).and_then(|w| w.get_mut(a.slot as usize)) {
+                    if let Some(dst) = a
+                        .window_id
+                        .and_then(|w| self.window_mut(i32::from(w)))
+                        .and_then(|w| w.get_mut(a.slot as usize))
+                    {
                         *dst = a.new_item.into();
                     }
                 }
@@ -157,16 +183,29 @@ impl Inventory {
     }
 
     pub fn held(&self) -> &ItemStack {
-        self.main.get(usize::from(self.selected_hotbar_slot)).unwrap_or(&EMPTY)
+        self.main
+            .get(usize::from(self.selected_hotbar_slot))
+            .unwrap_or(&EMPTY)
     }
 
     /// Every non-empty stack as `(window, slot, stack)`: main, armor, offhand, then the UI window
     /// (cursor and workstation inputs).
     pub fn iter(&self) -> impl Iterator<Item = (i32, usize, &ItemStack)> {
-        [Self::WINDOW_INVENTORY, Self::WINDOW_ARMOR, Self::WINDOW_OFFHAND, Self::WINDOW_UI]
-            .into_iter()
-            .flat_map(|w| self.window(w).unwrap_or_default().iter().enumerate().map(move |(i, s)| (w, i, s)))
-            .filter(|(_, _, s)| !s.is_empty())
+        [
+            Self::WINDOW_INVENTORY,
+            Self::WINDOW_ARMOR,
+            Self::WINDOW_OFFHAND,
+            Self::WINDOW_UI,
+        ]
+        .into_iter()
+        .flat_map(|w| {
+            self.window(w)
+                .unwrap_or_default()
+                .iter()
+                .enumerate()
+                .map(move |(i, s)| (w, i, s))
+        })
+        .filter(|(_, _, s)| !s.is_empty())
     }
 
     pub fn find(&self, pred: impl Fn(&ItemStack) -> bool) -> Option<(i32, usize, &ItemStack)> {
@@ -174,7 +213,10 @@ impl Inventory {
     }
 
     pub fn count_of(&self, network_id: i32) -> u32 {
-        self.iter().filter(|(_, _, s)| s.network_id == network_id).map(|(_, _, s)| u32::from(s.count)).sum()
+        self.iter()
+            .filter(|(_, _, s)| s.network_id == network_id)
+            .map(|(_, _, s)| u32::from(s.count))
+            .sum()
     }
 
     /// Also used by `Bot::select_hotbar`: servers don't echo the client's own selection back.
@@ -196,12 +238,16 @@ impl Inventory {
     }
 
     /// The slot an `ItemStackResponse` entry of container `kind` refers to, if it is the player's.
-    pub(crate) fn response_target(&mut self, kind: ContainerSlotType, slot: u8) -> Option<&mut ItemStack> {
+    pub(crate) fn response_target(
+        &mut self,
+        kind: ContainerSlotType,
+        slot: u8,
+    ) -> Option<&mut ItemStack> {
         self.touch();
         match kind {
-            ContainerSlotType::Hotbar | ContainerSlotType::Inventory | ContainerSlotType::HotbarAndInventory => {
-                self.main.get_mut(usize::from(slot))
-            }
+            ContainerSlotType::Hotbar
+            | ContainerSlotType::Inventory
+            | ContainerSlotType::HotbarAndInventory => self.main.get_mut(usize::from(slot)),
             ContainerSlotType::Armor => self.armor.get_mut(usize::from(slot)),
             ContainerSlotType::Offhand => Some(&mut self.offhand),
             ContainerSlotType::Cursor => Some(&mut self.ui[0]),

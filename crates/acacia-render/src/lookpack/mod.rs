@@ -34,15 +34,26 @@ pub struct LookPack {
 
 /// A block state's name in a pack: `minecraft:oak_log[pillar_axis=y]`, or the bare name.
 pub fn state_key(state: &BlockState) -> String {
-    if state.properties.is_empty() { state.name.to_owned() } else { format!("{}[{}]", state.name, state.properties) }
+    if state.properties.is_empty() {
+        state.name.to_owned()
+    } else {
+        format!("{}[{}]", state.name, state.properties)
+    }
 }
 
 impl LookPack {
     /// `$ACACIA_LOOKS`, else `looks` beside the resource pack ([`Pack::default_dir`]: `assets/looks`
     /// by default), then the look's name.
     pub fn default_dir(name: &str) -> PathBuf {
-        let beside_pack = || Pack::default_dir().parent().map_or_else(|| PathBuf::from("assets"), PathBuf::from).join("looks");
-        std::env::var_os("ACACIA_LOOKS").map_or_else(beside_pack, PathBuf::from).join(name)
+        let beside_pack = || {
+            Pack::default_dir()
+                .parent()
+                .map_or_else(|| PathBuf::from("assets"), PathBuf::from)
+                .join("looks")
+        };
+        std::env::var_os("ACACIA_LOOKS")
+            .map_or_else(beside_pack, PathBuf::from)
+            .join(name)
     }
 
     /// Bakes the vanilla registry's blocks from a Bedrock resource pack.
@@ -67,12 +78,17 @@ impl LookPack {
 
     /// What a state draws as, by [`state_key`].
     pub fn block(&self, state: &str) -> Option<&RenderBlock> {
-        self.states.get(state).map(|&index| &self.blocks[index as usize])
+        self.states
+            .get(state)
+            .map(|&index| &self.blocks[index as usize])
     }
 
     /// Makes a state draw as `block`. The model is dropped: it follows from the state.
     pub fn set_block(&mut self, state: String, block: RenderBlock) {
-        let block = RenderBlock { model: None, ..block };
+        let block = RenderBlock {
+            model: None,
+            ..block
+        };
         let json = serde_json::to_string(&block).expect("a render block serializes");
         let index = *self.distinct.entry(json).or_insert_with(|| {
             self.blocks.push(block);
@@ -88,10 +104,14 @@ impl LookPack {
 
     /// The [`blocks::LightFacts::shape`] of `shapes`, adding them when new.
     pub fn light_shape(&mut self, shapes: FaceShapes) -> u16 {
-        let index = self.light_shapes.iter().position(|s| *s == shapes).unwrap_or_else(|| {
-            self.light_shapes.push(shapes);
-            self.light_shapes.len() - 1
-        });
+        let index = self
+            .light_shapes
+            .iter()
+            .position(|s| *s == shapes)
+            .unwrap_or_else(|| {
+                self.light_shapes.push(shapes);
+                self.light_shapes.len() - 1
+            });
         u16::try_from(index + 1).expect("light shapes fit a u16")
     }
 
@@ -115,7 +135,9 @@ impl LookPack {
     pub fn block_table(&self, registry: &BlockRegistry) -> BlockTable {
         let block = |id| {
             let state = registry.get(id).expect("id below len");
-            let Some(&index) = self.states.get(&state_key(state)) else { return BlockTable::cube(0) };
+            let Some(&index) = self.states.get(&state_key(state)) else {
+                return BlockTable::cube(0);
+            };
             RenderBlock {
                 model: blocks::model::classify(state).map(Arc::new),
                 ..self.blocks[index as usize].clone()

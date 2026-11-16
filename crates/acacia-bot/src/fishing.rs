@@ -3,11 +3,11 @@
 
 use std::time::Duration;
 
-use acacia_client::proto::types::InputData;
 use acacia_client::proto::RawPacket;
+use acacia_client::proto::types::InputData;
 
 use crate::human::{FISH_REACTION, HOTBAR_SWITCH};
-use crate::interact::{wire, SwingSource};
+use crate::interact::{SwingSource, wire};
 use crate::state::{Inventory, ItemStack};
 use crate::{ActionError, Bot};
 
@@ -52,7 +52,13 @@ impl Bot {
         self.state.fishing.catch = None;
         self.use_rod();
         // BDS shows the catch only as a pickup (state::Fishing::catch); other servers update the slot.
-        let caught = |bot: &Bot, _: &RawPacket| bot.state.fishing.catch.clone().or_else(|| gained(&before, &bot.state.inventory.main));
+        let caught = |bot: &Bot, _: &RawPacket| {
+            bot.state
+                .fishing
+                .catch
+                .clone()
+                .or_else(|| gained(&before, &bot.state.inventory.main))
+        };
         match self.wait_until(CATCH_TIMEOUT, caught).await {
             Ok(item) => Ok(Some(item)),
             Err(ActionError::Timeout) => Ok(None),
@@ -66,11 +72,18 @@ impl Bot {
         if rod.is_some_and(|id| self.state.inventory.held().network_id == id) {
             return Ok(false);
         }
-        let hotbar = self.state.inventory.main.iter().take(usize::from(Inventory::HOTBAR_SLOTS));
+        let hotbar = self
+            .state
+            .inventory
+            .main
+            .iter()
+            .take(usize::from(Inventory::HOTBAR_SLOTS));
         let slot = rod.and_then(|id| hotbar.clone().position(|s| s.network_id == id));
         match slot {
             Some(slot) => self.select_hotbar(slot as u8).map(|()| true),
-            None => Err(ActionError::NotPossible("no fishing rod in the hotbar".into())),
+            None => Err(ActionError::NotPossible(
+                "no fishing rod in the hotbar".into(),
+            )),
         }
     }
 
@@ -91,7 +104,9 @@ impl Bot {
         self.use_rod();
         let hooked = |bot: &Bot, _: &RawPacket| bot.state.fishing.hook.is_some().then_some(());
         match self.wait_until(HOOK_TIMEOUT, hooked).await {
-            Err(ActionError::Timeout) => Err(ActionError::Rejected("no fishing hook appeared".into())),
+            Err(ActionError::Timeout) => {
+                Err(ActionError::Rejected("no fishing hook appeared".into()))
+            }
             other => other,
         }
     }
@@ -103,37 +118,69 @@ pub(crate) fn gained(before: &[ItemStack], after: &[ItemStack]) -> Option<ItemSt
         if now.is_empty() {
             return None;
         }
-        let had = if was.network_id == now.network_id && !was.is_empty() { was.count } else { 0 };
-        (now.count > had).then(|| ItemStack { count: now.count - had, ..now.clone() })
+        let had = if was.network_id == now.network_id && !was.is_empty() {
+            was.count
+        } else {
+            0
+        };
+        (now.count > had).then(|| ItemStack {
+            count: now.count - had,
+            ..now.clone()
+        })
     })
 }
 
 #[cfg(test)]
 mod tests {
     use acacia_client::proto::types::{
-        TransactionTransactionData, TransactionUseItemClientPrediction, TransactionUseItemTriggerType as TriggerType,
+        TransactionTransactionData, TransactionUseItemClientPrediction,
+        TransactionUseItemTriggerType as TriggerType,
     };
 
     use super::*;
 
     fn stack(network_id: i32, count: u16) -> ItemStack {
-        ItemStack { network_id, count, ..ItemStack::default() }
+        ItemStack {
+            network_id,
+            count,
+            ..ItemStack::default()
+        }
     }
 
     #[test]
     fn gained_reports_new_and_grown_stacks() {
         let before = vec![stack(5, 3), ItemStack::default(), stack(7, 1)];
         assert_eq!(gained(&before, &before), None);
-        assert_eq!(gained(&before, &[stack(5, 4), ItemStack::default(), stack(7, 1)]), Some(stack(5, 1)));
-        assert_eq!(gained(&before, &[stack(5, 3), stack(9, 1), stack(7, 1)]), Some(stack(9, 1)));
-        assert_eq!(gained(&before, &[stack(5, 2), ItemStack::default(), stack(8, 1)]), Some(stack(8, 1)), "replaced slot");
+        assert_eq!(
+            gained(&before, &[stack(5, 4), ItemStack::default(), stack(7, 1)]),
+            Some(stack(5, 1))
+        );
+        assert_eq!(
+            gained(&before, &[stack(5, 3), stack(9, 1), stack(7, 1)]),
+            Some(stack(9, 1))
+        );
+        assert_eq!(
+            gained(&before, &[stack(5, 2), ItemStack::default(), stack(8, 1)]),
+            Some(stack(8, 1)),
+            "replaced slot"
+        );
     }
 
     #[test]
     fn rod_and_rocket_clicks_match_the_capture() {
         let hand = wire::Hand::main(1, wire::to_wire(&stack(395, 1)), [-0.42, 72.62, 3.44]);
-        let TransactionTransactionData::ItemUse(u) = wire::click_air(hand).transaction.transaction_data else { panic!() };
-        assert_eq!((u.trigger_type, u.client_prediction), (TriggerType::UnknownValue, TransactionUseItemClientPrediction::Failure));
+        let TransactionTransactionData::ItemUse(u) =
+            wire::click_air(hand).transaction.transaction_data
+        else {
+            panic!()
+        };
+        assert_eq!(
+            (u.trigger_type, u.client_prediction),
+            (
+                TriggerType::UnknownValue,
+                TransactionUseItemClientPrediction::Failure
+            )
+        );
         assert_eq!((u.face, u.hotbar_slot, u.click_pos.x), (255, 1, 0.0));
     }
 }

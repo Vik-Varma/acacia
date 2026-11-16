@@ -7,7 +7,9 @@ pub fn points(item: &str) -> u32 {
     if name == "turtle_helmet" {
         return 2;
     }
-    let Some((material, piece)) = name.rsplit_once('_') else { return 0 };
+    let Some((material, piece)) = name.rsplit_once('_') else {
+        return 0;
+    };
     // Helmet, chestplate, leggings, boots.
     let by_piece: [u32; 4] = match material {
         "leather" => [1, 3, 2, 1],
@@ -33,8 +35,30 @@ mod tests {
 
     #[test]
     fn full_sets_add_up_as_in_java() {
-        let set = |m: &str| ["helmet", "chestplate", "leggings", "boots"].iter().map(|p| points(&format!("minecraft:{m}_{p}"))).sum::<u32>();
-        assert_eq!((set("leather"), set("golden"), set("chainmail"), set("iron"), set("diamond"), set("netherite")), (7, 11, 12, 15, 20, 20));
-        assert_eq!((points("minecraft:turtle_helmet"), points("minecraft:diamond_sword"), points("minecraft:stick")), (2, 0, 0));
+        let set = |m: &str| {
+            ["helmet", "chestplate", "leggings", "boots"]
+                .iter()
+                .map(|p| points(&format!("minecraft:{m}_{p}")))
+                .sum::<u32>()
+        };
+        assert_eq!(
+            (
+                set("leather"),
+                set("golden"),
+                set("chainmail"),
+                set("iron"),
+                set("diamond"),
+                set("netherite")
+            ),
+            (7, 11, 12, 15, 20, 20)
+        );
+        assert_eq!(
+            (
+                points("minecraft:turtle_helmet"),
+                points("minecraft:diamond_sword"),
+                points("minecraft:stick")
+            ),
+            (2, 0, 0)
+        );
     }
 }

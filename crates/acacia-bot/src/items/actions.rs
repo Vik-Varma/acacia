@@ -1,14 +1,16 @@
 use std::time::Duration;
 
 use acacia_client::proto::packets::{ContainerClose, Interact, InteractActionId};
-use acacia_client::proto::types::{ItemStackRequestActionsItem as Action, ItemStackResponsesItem, WindowID, WindowType};
+use acacia_client::proto::types::{
+    ItemStackRequestActionsItem as Action, ItemStackResponsesItem, WindowID, WindowType,
+};
 use acacia_world::BlockAccess;
 
 use super::craft::Craft;
 use super::plan::Plan;
 use super::quick::quick_move_ops;
 use super::request::{check_status, response_for};
-use super::slot::{open_container, BlockKind, Screen};
+use super::slot::{BlockKind, Screen, open_container};
 use super::{Op, SlotRef};
 use crate::cancel::{Claim, Held};
 use crate::state::GameState;
@@ -31,8 +33,14 @@ const OPEN_TIMEOUT: Duration = Duration::from_secs(1);
 /// while no screen is open.
 impl Bot {
     /// Moves `count` items from one slot onto an empty slot or a stack of the same item.
-    pub async fn move_item(&mut self, from: SlotRef, to: SlotRef, count: u8) -> Result<(), ActionError> {
-        self.item_stack_request(&[Op::Transfer { from, to, count }]).await
+    pub async fn move_item(
+        &mut self,
+        from: SlotRef,
+        to: SlotRef,
+        count: u8,
+    ) -> Result<(), ActionError> {
+        self.item_stack_request(&[Op::Transfer { from, to, count }])
+            .await
     }
 
     /// Exchanges the contents of two slots (which must not hold the same item).
@@ -47,7 +55,8 @@ impl Bot {
 
     /// Deletes `count` items from a slot (creative mode only).
     pub async fn destroy_item(&mut self, from: SlotRef, count: u8) -> Result<(), ActionError> {
-        self.item_stack_request(&[Op::Destroy { from, count }]).await
+        self.item_stack_request(&[Op::Destroy { from, count }])
+            .await
     }
 
     /// Picks the whole stack up into the cursor: a left click, which is how server GUI menus
@@ -55,8 +64,15 @@ impl Bot {
     /// resetting the menu and cursor with `InventorySlot`/`InventoryContent`, often without an
     /// `ItemStackResponse`: then this returns [`ActionError::Timeout`] after 3 s although the click went out.
     pub async fn pick_up(&mut self, from: SlotRef) -> Result<(), ActionError> {
-        let count = from.stack(&self.state).map_or(0, |s| u8::try_from(s.count).unwrap_or(u8::MAX));
-        self.item_stack_request(&[Op::Transfer { from, to: SlotRef::Cursor, count }]).await
+        let count = from
+            .stack(&self.state)
+            .map_or(0, |s| u8::try_from(s.count).unwrap_or(u8::MAX));
+        self.item_stack_request(&[Op::Transfer {
+            from,
+            to: SlotRef::Cursor,
+            count,
+        }])
+        .await
     }
 
     /// Shift-click: moves the whole stack to the other side (container ↔ player inventory, or
@@ -64,19 +80,38 @@ impl Bot {
     pub async fn quick_move(&mut self, from: SlotRef) -> Result<Vec<SlotRef>, ActionError> {
         let ops = quick_move_ops(&self.state, from)?;
         self.item_stack_request(&ops).await?;
-        Ok(ops.iter().filter_map(|op| if let Op::Transfer { to, .. } = op { Some(*to) } else { None }).collect())
+        Ok(ops
+            .iter()
+            .filter_map(|op| {
+                if let Op::Transfer { to, .. } = op {
+                    Some(*to)
+                } else {
+                    None
+                }
+            })
+            .collect())
     }
 
     /// Moves a stack of the open container into the player's inventory.
-    pub async fn move_to_inventory(&mut self, container_slot: u8) -> Result<Vec<SlotRef>, ActionError> {
+    pub async fn move_to_inventory(
+        &mut self,
+        container_slot: u8,
+    ) -> Result<Vec<SlotRef>, ActionError> {
         self.quick_move(SlotRef::Container(container_slot)).await
     }
 
     /// Moves the whole stack in main inventory slot `inventory_slot` (0-35) into `container_slot`.
-    pub async fn put_in_container(&mut self, inventory_slot: u8, container_slot: u8) -> Result<(), ActionError> {
+    pub async fn put_in_container(
+        &mut self,
+        inventory_slot: u8,
+        container_slot: u8,
+    ) -> Result<(), ActionError> {
         let from = SlotRef::Main(inventory_slot);
-        let count = from.stack(&self.state).map_or(0, |s| u8::try_from(s.count).unwrap_or(u8::MAX));
-        self.move_item(from, SlotRef::Container(container_slot), count).await
+        let count = from
+            .stack(&self.state)
+            .map_or(0, |s| u8::try_from(s.count).unwrap_or(u8::MAX));
+        self.move_item(from, SlotRef::Container(container_slot), count)
+            .await
     }
 
     /// Moves every stack of the open container into the player's inventory, stopping when it is
@@ -85,7 +120,10 @@ impl Bot {
         let Some(open) = open_container(&self.state) else {
             return Err(ActionError::NotPossible("no container is open".into()));
         };
-        let slots: Vec<u8> = open.iter().filter_map(|(i, _)| u8::try_from(i).ok()).collect();
+        let slots: Vec<u8> = open
+            .iter()
+            .filter_map(|(i, _)| u8::try_from(i).ok())
+            .collect();
         let mut moved = 0;
         for slot in slots {
             match self.move_to_inventory(slot).await {
@@ -103,20 +141,34 @@ impl Bot {
         if matches!(self.backend, crate::bot::Backend::Java(_)) {
             return self.java_item_ops(ops).await;
         }
-        self.run_plan(|state, screen| Plan::build(state, screen, ops)).await
+        self.run_plan(|state, screen| Plan::build(state, screen, ops))
+            .await
     }
 
     /// Sends a crafting request: `craft`'s actions, then `ops`.
-    pub(crate) async fn craft_request(&mut self, craft: &Craft, ops: &[Op]) -> Result<(), ActionError> {
-        self.run_plan(|state, screen| Plan::craft(state, screen, craft, ops)).await
+    pub(crate) async fn craft_request(
+        &mut self,
+        craft: &Craft,
+        ops: &[Op],
+    ) -> Result<(), ActionError> {
+        self.run_plan(|state, screen| Plan::craft(state, screen, craft, ops))
+            .await
     }
 
     /// Sends `head` (see [`Plan::headed`]) followed by `ops`.
-    pub(crate) async fn headed_request(&mut self, head: Vec<Action>, ops: &[Op]) -> Result<(), ActionError> {
-        self.run_plan(|state, screen| Plan::headed(state, screen, head.clone(), ops)).await
+    pub(crate) async fn headed_request(
+        &mut self,
+        head: Vec<Action>,
+        ops: &[Op],
+    ) -> Result<(), ActionError> {
+        self.run_plan(|state, screen| Plan::headed(state, screen, head.clone(), ops))
+            .await
     }
 
-    async fn run_plan(&mut self, build: impl Fn(&GameState, Screen) -> Result<Plan, ActionError>) -> Result<(), ActionError> {
+    async fn run_plan(
+        &mut self,
+        build: impl Fn(&GameState, Screen) -> Result<Plan, ActionError>,
+    ) -> Result<(), ActionError> {
         build(&self.state, self.screen())?;
         let screen = self.open_own_inventory_screen().await?;
         let result = self.send_plan(&build).await;
@@ -126,11 +178,16 @@ impl Bot {
         result
     }
 
-    async fn send_plan(&mut self, build: impl Fn(&GameState, Screen) -> Result<Plan, ActionError>) -> Result<(), ActionError> {
+    async fn send_plan(
+        &mut self,
+        build: impl Fn(&GameState, Screen) -> Result<Plan, ActionError>,
+    ) -> Result<(), ActionError> {
         // Rebuilt after the screen opened: the server may have resent slots meanwhile.
         let plan = build(&self.state, self.screen())?;
         let id = self.send_request(&plan)?;
-        let response = self.wait_until(RESPONSE_TIMEOUT, |_, packet| response_for(packet, id)).await?;
+        let response = self
+            .wait_until(RESPONSE_TIMEOUT, |_, packet| response_for(packet, id))
+            .await?;
         self.finish_request(plan, &response)
     }
 
@@ -143,10 +200,22 @@ impl Bot {
     }
 
     /// Applies an accepted request's prediction and the server's slot updates.
-    pub(crate) fn finish_request(&mut self, plan: Plan, response: &ItemStackResponsesItem) -> Result<(), ActionError> {
+    pub(crate) fn finish_request(
+        &mut self,
+        plan: Plan,
+        response: &ItemStackResponsesItem,
+    ) -> Result<(), ActionError> {
         tracing::debug!(?response, "item stack response");
         if let Err(e) = check_status(response) {
-            let main: Vec<String> = self.state.inventory.main.iter().enumerate().filter(|(_, s)| !s.is_empty()).map(|(i, s)| format!("{i}:{}x{}#{:?}", s.network_id, s.count, s.stack_network_id)).collect();
+            let main: Vec<String> = self
+                .state
+                .inventory
+                .main
+                .iter()
+                .enumerate()
+                .filter(|(_, s)| !s.is_empty())
+                .map(|(i, s)| format!("{i}:{}x{}#{:?}", s.network_id, s.count, s.stack_network_id))
+                .collect();
             tracing::debug!(%e, ?main, "item stack request refused; believed main inventory");
             return Err(e);
         }
@@ -171,11 +240,18 @@ impl Bot {
     }
 
     fn container_block(&self) -> BlockKind {
-        let (Some(world), Some(pos)) = (self.backend.world(), open_container(&self.state).and_then(|c| c.position.as_ref())) else {
+        let (Some(world), Some(pos)) = (
+            self.backend.world(),
+            open_container(&self.state).and_then(|c| c.position.as_ref()),
+        ) else {
             return BlockKind::Other;
         };
-        let (Some(view), Some(registry)) = (world.view(), world.registry()) else { return BlockKind::Other };
-        registry.get(view.block(pos.x, pos.y, pos.z)).map_or(BlockKind::Other, |b| BlockKind::from_name(b.name))
+        let (Some(view), Some(registry)) = (world.view(), world.registry()) else {
+            return BlockKind::Other;
+        };
+        registry
+            .get(view.block(pos.x, pos.y, pos.z))
+            .map_or(BlockKind::Other, |b| BlockKind::from_name(b.name))
     }
 
     /// Opens the own inventory screen unless some container is open; the claim that closes it if it did.
@@ -186,7 +262,12 @@ impl Bot {
         self.container_settled().await?;
         let screen = self.claim(Held::InventoryScreen);
         self.send_open_inventory();
-        match self.wait_until(OPEN_TIMEOUT, |bot, _| bot.state.containers.open.is_some().then_some(())).await {
+        match self
+            .wait_until(OPEN_TIMEOUT, |bot, _| {
+                bot.state.containers.open.is_some().then_some(())
+            })
+            .await
+        {
             Ok(()) | Err(ActionError::Timeout) => Ok(Some(screen)),
             Err(e) => Err(e),
         }
@@ -203,8 +284,22 @@ impl Bot {
 
     pub(crate) fn close_own_inventory_screen(&mut self) {
         // Vanilla closes the window id the server opened the screen as, with window type None.
-        let window_id = self.state.containers.open.as_ref().map_or(WindowID::Inventory, |c| WindowID::from_raw(i64::from(c.window_id)));
-        self.send_close(window_id.to_raw() as i32, ContainerClose { window_id, window_type: WindowType::None, server: false });
+        let window_id = self
+            .state
+            .containers
+            .open
+            .as_ref()
+            .map_or(WindowID::Inventory, |c| {
+                WindowID::from_raw(i64::from(c.window_id))
+            });
+        self.send_close(
+            window_id.to_raw() as i32,
+            ContainerClose {
+                window_id,
+                window_type: WindowType::None,
+                server: false,
+            },
+        );
         // Cleared now rather than on the server's echo, so the next request reopens the screen.
         self.state.containers.open = None;
     }

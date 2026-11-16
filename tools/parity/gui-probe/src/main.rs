@@ -31,7 +31,8 @@ use serde_json::{Map, Value, json};
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// Replays one case; `state` takes what the case reads back besides the draws.
-pub type Replay = fn(&Value, &Assets, &mut Map<String, Value>) -> Vec<acacia_ui::java::gui::GuiDraw>;
+pub type Replay =
+    fn(&Value, &Assets, &mut Map<String, Value>) -> Vec<acacia_ui::java::gui::GuiDraw>;
 
 /// What the probes load once from the assets.
 pub struct Assets {
@@ -76,13 +77,24 @@ fn main() -> Result<()> {
     };
     let replay = replay(harness).ok_or_else(|| format!("unknown harness {harness}"))?;
     let root = Path::new(root).to_owned();
-    let fonts = Arc::new(Fonts::java(&root, root.parent().and_then(Path::parent), FontOptions::default()));
+    let fonts = Arc::new(Fonts::java(
+        &root,
+        root.parent().and_then(Path::parent),
+        FontOptions::default(),
+    ));
     for w in &fonts.warnings {
         eprintln!("font: {w}");
     }
-    let assets = Assets { root, font: Box::new(font::Shared(Arc::clone(&fonts))), fonts };
+    let assets = Assets {
+        root,
+        font: Box::new(font::Shared(Arc::clone(&fonts))),
+        fonts,
+    };
     let mut out = BufWriter::new(std::fs::File::create(output)?);
-    for line in std::fs::read_to_string(inputs)?.lines().filter(|l| !l.is_empty()) {
+    for line in std::fs::read_to_string(inputs)?
+        .lines()
+        .filter(|l| !l.is_empty())
+    {
         let case: Value = serde_json::from_str(line)?;
         let mut state = Map::new();
         let draws = replay(&case, &assets, &mut state);
@@ -91,7 +103,10 @@ fn main() -> Result<()> {
             continue;
         }
         if !state.contains_key("draws") {
-            state.insert("draws".into(), json!(acacia_ui::java::encode::encode(&draws)));
+            state.insert(
+                "draws".into(),
+                json!(acacia_ui::java::encode::encode(&draws)),
+            );
         }
         writeln!(out, "{}", Value::Object(state))?;
     }

@@ -14,7 +14,10 @@ pub struct FlyInput {
 
 impl FlyInput {
     pub fn new() -> Self {
-        FlyInput { held: Vec::new(), speed: 12.0 }
+        FlyInput {
+            held: Vec::new(),
+            speed: 12.0,
+        }
     }
 
     pub fn key(&mut self, key: KeyCode, pressed: bool) {
@@ -42,7 +45,9 @@ impl FlyInput {
             let f = camera.forward();
             Vec3::new(f.x, 0.0, f.z).normalize_or_zero()
         };
-        let axis = |pos: KeyCode, neg: KeyCode| f32::from(u8::from(down(pos))) - f32::from(u8::from(down(neg)));
+        let axis = |pos: KeyCode, neg: KeyCode| {
+            f32::from(u8::from(down(pos))) - f32::from(u8::from(down(neg)))
+        };
         let wish = forward * axis(KeyCode::KeyW, KeyCode::KeyS)
             + camera.right() * axis(KeyCode::KeyD, KeyCode::KeyA)
             + Vec3::Y * axis(KeyCode::Space, KeyCode::ShiftLeft);

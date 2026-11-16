@@ -18,16 +18,29 @@ impl Scene {
     pub fn new(blocks: &Value) -> Scene {
         let registry = BlockRegistry::vanilla();
         let id = |key: &str| {
-            let (name, properties) = key.split_once('[').map_or((key, ""), |(n, p)| (n, p.trim_end_matches(']')));
-            registry.find(name, properties).unwrap_or_else(|| panic!("no Bedrock state {key}"))
+            let (name, properties) = key
+                .split_once('[')
+                .map_or((key, ""), |(n, p)| (n, p.trim_end_matches(']')));
+            registry
+                .find(name, properties)
+                .unwrap_or_else(|| panic!("no Bedrock state {key}"))
         };
         let placed = blocks
             .as_array()
             .expect("blocks")
             .iter()
-            .map(|b| (IVec3::new(coord(&b[0]), coord(&b[1]), coord(&b[2])), id(b[3].as_str().expect("state"))))
+            .map(|b| {
+                (
+                    IVec3::new(coord(&b[0]), coord(&b[1]), coord(&b[2])),
+                    id(b[3].as_str().expect("state")),
+                )
+            })
             .collect();
-        Scene { registry, placed, air: id("minecraft:air") }
+        Scene {
+            registry,
+            placed,
+            air: id("minecraft:air"),
+        }
     }
 }
 
@@ -37,7 +50,8 @@ fn coord(v: &Value) -> i32 {
 
 impl Blocks for Scene {
     fn block(&self, cell: IVec3) -> Option<&BlockState> {
-        self.registry.get(*self.placed.get(&cell).unwrap_or(&self.air))
+        self.registry
+            .get(*self.placed.get(&cell).unwrap_or(&self.air))
     }
 
     fn liquid(&self, _: IVec3) -> Option<&BlockState> {

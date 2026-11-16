@@ -20,6 +20,12 @@ impl Builder {
             return None;
         }
         let feet = cx.pos.map(|v| v.floor() as i32);
-        [feet, [feet[0], feet[1] + 1, feet[2]]].into_iter().find(|c| cx.look.block(*c).is_some_and(|v| v.solid() && !v.full && rules::thin(v.name)))
+        [feet, [feet[0], feet[1] + 1, feet[2]]]
+            .into_iter()
+            .find(|c| {
+                cx.look
+                    .block(*c)
+                    .is_some_and(|v| v.solid() && !v.full && rules::thin(v.name))
+            })
     }
 }

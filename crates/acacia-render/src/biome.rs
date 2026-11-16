@@ -40,12 +40,19 @@ pub struct BiomeTint {
 impl BiomeTint {
     /// Grass in the column of world position `(x, z)`.
     pub fn grass_at(&self, x: i32, z: i32) -> [u8; 3] {
-        self.grass_patch.filter(|_| noise::grass_patch(x, z)).unwrap_or(self.grass)
+        self.grass_patch
+            .filter(|_| noise::grass_patch(x, z))
+            .unwrap_or(self.grass)
     }
 }
 
-pub(crate) const PLAINS: BiomeTint =
-    BiomeTint { grass: rgb(0x91BD59), grass_patch: None, foliage: rgb(0x77AB2F), dry_foliage: rgb(0xA37546), water: rgb(0x44AFF5) };
+pub(crate) const PLAINS: BiomeTint = BiomeTint {
+    grass: rgb(0x91BD59),
+    grass_patch: None,
+    foliage: rgb(0x77AB2F),
+    dry_foliage: rgb(0xA37546),
+    water: rgb(0x44AFF5),
+};
 
 /// What `biomes_client.json` says of a biome. Bedrock's has the water; a look pack's can list the
 /// rest, which then replaces the colormaps.
@@ -59,7 +66,11 @@ struct Listed {
     climate: Option<Climate>,
 }
 
-pub(crate) const PLAINS_CLIMATE: Climate = Climate { temperature: 0.8, frozen: false, has_precipitation: true };
+pub(crate) const PLAINS_CLIMATE: Climate = Climate {
+    temperature: 0.8,
+    frozen: false,
+    has_precipitation: true,
+};
 
 pub struct BiomeColors {
     by_id: FxHashMap<u32, BiomeTint>,
@@ -91,7 +102,13 @@ impl BiomeColors {
         let grass = Colormap::load(root, "grass");
         let foliage = Colormap::load(root, "foliage");
         let listed = listed(root);
-        let unknown = BiomeTint { water: listed.get("default").and_then(|l| l.water).unwrap_or(PLAINS.water), ..PLAINS };
+        let unknown = BiomeTint {
+            water: listed
+                .get("default")
+                .and_then(|l| l.water)
+                .unwrap_or(PLAINS.water),
+            ..PLAINS
+        };
         let by_id = defs
             .iter()
             .filter_map(|d| {
@@ -111,17 +128,49 @@ impl BiomeColors {
             .collect();
         // The look's Java climate where it lists one; the server's has no `has_precipitation`, so
         // no downfall stands for it (deserts, savannas, badlands).
-        let server = |d: &BiomeDef| Climate { temperature: d.temperature, frozen: false, has_precipitation: d.downfall > 0.0 };
-        let climate = defs.iter().filter_map(|d| Some((u32::from(id_of(d)?), listed.get(d.name.as_str()).and_then(|l| l.climate).unwrap_or_else(|| server(d))))).collect();
-        let fluid_fogs = fog::FluidFogs::load(root, defs.iter().filter_map(|d| Some((u32::from(id_of(d)?), d.name.as_str()))));
-        let names = defs.iter().filter_map(|d| Some((u32::from(id_of(d)?), d.name.clone()))).collect();
+        let server = |d: &BiomeDef| Climate {
+            temperature: d.temperature,
+            frozen: false,
+            has_precipitation: d.downfall > 0.0,
+        };
+        let climate = defs
+            .iter()
+            .filter_map(|d| {
+                Some((
+                    u32::from(id_of(d)?),
+                    listed
+                        .get(d.name.as_str())
+                        .and_then(|l| l.climate)
+                        .unwrap_or_else(|| server(d)),
+                ))
+            })
+            .collect();
+        let fluid_fogs = fog::FluidFogs::load(
+            root,
+            defs.iter()
+                .filter_map(|d| Some((u32::from(id_of(d)?), d.name.as_str()))),
+        );
+        let names = defs
+            .iter()
+            .filter_map(|d| Some((u32::from(id_of(d)?), d.name.clone())))
+            .collect();
         let environment = crate::sky::Environment::load(root).map(std::sync::Arc::new);
-        BiomeColors { by_id, unknown, climate, fluid_fogs, names, environment }
+        BiomeColors {
+            by_id,
+            unknown,
+            climate,
+            fluid_fogs,
+            names,
+            environment,
+        }
     }
 
     #[cfg(test)]
     pub(crate) fn of(tints: &[(u32, BiomeTint)]) -> BiomeColors {
-        BiomeColors { by_id: tints.iter().copied().collect(), ..Default::default() }
+        BiomeColors {
+            by_id: tints.iter().copied().collect(),
+            ..Default::default()
+        }
     }
 
     pub fn fluid_fogs(&self) -> &fog::FluidFogs {
@@ -150,7 +199,11 @@ impl BiomeColors {
 
 /// A definition's numeric id: its own, or vanilla's for its name.
 fn id_of(d: &BiomeDef) -> Option<u16> {
-    if d.id == ids::UNSET { ids::vanilla(&d.name) } else { Some(d.id) }
+    if d.id == ids::UNSET {
+        ids::vanilla(&d.name)
+    } else {
+        Some(d.id)
+    }
 }
 
 /// Vanilla's per-biome overrides of the colormap.
@@ -162,7 +215,12 @@ fn exceptions(name: &str, grass: [u8; 3], foliage: [u8; 3]) -> ([u8; 3], [u8; 3]
         "cherry_grove" => (rgb(0xB6DB61), rgb(0xB6DB61)),
         "pale_garden" => (rgb(0x778272), rgb(0x878D76)),
         // Dark forest averages the colormap with a dark green.
-        n if n.starts_with("roofed_forest") => (grass.map2(rgb(0x28340A), |a, b| ((u16::from(a) + u16::from(b)) / 2) as u8), foliage),
+        n if n.starts_with("roofed_forest") => (
+            grass.map2(rgb(0x28340A), |a, b| {
+                ((u16::from(a) + u16::from(b)) / 2) as u8
+            }),
+            foliage,
+        ),
         _ => (grass, foliage),
     }
 }
@@ -173,7 +231,11 @@ trait Map2 {
 
 impl Map2 for [u8; 3] {
     fn map2(self, other: Self, f: impl Fn(u8, u8) -> u8) -> Self {
-        [f(self[0], other[0]), f(self[1], other[1]), f(self[2], other[2])]
+        [
+            f(self[0], other[0]),
+            f(self[1], other[1]),
+            f(self[2], other[2]),
+        ]
     }
 }
 
@@ -189,12 +251,18 @@ struct Colormap {
 impl Colormap {
     fn load(root: &Path, name: &str) -> Colormap {
         let path = root.join(format!("textures/colormap/{name}.png"));
-        let image = image::open(&path).inspect_err(|e| tracing::warn!(%e, path = %path.display(), "colormap")).ok();
-        Colormap { image: image.map(|i| i.into_rgb8()) }
+        let image = image::open(&path)
+            .inspect_err(|e| tracing::warn!(%e, path = %path.display(), "colormap"))
+            .ok();
+        Colormap {
+            image: image.map(|i| i.into_rgb8()),
+        }
     }
 
     fn sample(&self, d: &BiomeDef) -> [u8; 3] {
-        let Some(image) = &self.image else { return PLAINS.grass };
+        let Some(image) = &self.image else {
+            return PLAINS.grass;
+        };
         let t = d.temperature.clamp(0.0, 1.0);
         let rain = d.downfall.clamp(0.0, 1.0) * t;
         let (w, h) = image.dimensions();
@@ -206,23 +274,42 @@ impl Colormap {
 
 /// By biome name (namespace stripped); `default`'s water is for biomes not listed.
 fn listed(root: &Path) -> FxHashMap<String, Listed> {
-    let Ok(doc) = json::read(&root.join("biomes_client.json")) else { return FxHashMap::default() };
-    let Some(biomes) = doc.get("biomes").and_then(Value::as_object) else { return FxHashMap::default() };
+    let Ok(doc) = json::read(&root.join("biomes_client.json")) else {
+        return FxHashMap::default();
+    };
+    let Some(biomes) = doc.get("biomes").and_then(Value::as_object) else {
+        return FxHashMap::default();
+    };
     let entry = |(name, b): (&String, &Value)| {
-        let color = |key: &str| Some(rgb(u32::from_str_radix(b.get(key)?.as_str()?.strip_prefix('#')?, 16).ok()?));
+        let color = |key: &str| {
+            Some(rgb(u32::from_str_radix(
+                b.get(key)?.as_str()?.strip_prefix('#')?,
+                16,
+            )
+            .ok()?))
+        };
         let listed = Listed {
             water: color("water_surface_color"),
             grass: color("grass_color"),
             grass_patch: color("grass_patch_color"),
             foliage: color("foliage_color"),
             dry_foliage: color("dry_foliage_color"),
-            climate: b.get("temperature").and_then(Value::as_f64).map(|t| Climate {
-                temperature: t as f32,
-                frozen: b.get("temperature_modifier").and_then(Value::as_str) == Some("frozen"),
-                has_precipitation: b.get("has_precipitation").and_then(Value::as_bool).unwrap_or(true),
-            }),
+            climate: b
+                .get("temperature")
+                .and_then(Value::as_f64)
+                .map(|t| Climate {
+                    temperature: t as f32,
+                    frozen: b.get("temperature_modifier").and_then(Value::as_str) == Some("frozen"),
+                    has_precipitation: b
+                        .get("has_precipitation")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(true),
+                }),
         };
-        (name.strip_prefix("minecraft:").unwrap_or(name).to_owned(), listed)
+        (
+            name.strip_prefix("minecraft:").unwrap_or(name).to_owned(),
+            listed,
+        )
     };
     biomes.iter().map(entry).collect()
 }
@@ -233,15 +320,42 @@ mod tests {
 
     #[test]
     fn the_looks_java_climate_wins_over_the_servers() {
-        let def = |id, name: &str, temperature, downfall| BiomeDef { id, name: name.to_owned(), temperature, downfall };
+        let def = |id, name: &str, temperature, downfall| BiomeDef {
+            id,
+            name: name.to_owned(),
+            temperature,
+            downfall,
+        };
         let dir = std::env::temp_dir().join(format!("acacia-climate-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let listed = r#"{"biomes": {"minecraft:frozen_ocean": {"temperature": 0.0, "temperature_modifier": "frozen", "has_precipitation": true}, "minecraft:savanna": {"temperature": 2.0, "has_precipitation": false}}}"#;
         std::fs::write(dir.join("biomes_client.json"), listed).unwrap();
-        let biomes = BiomeColors::build(&[def(1, "plains", 0.8, 0.4), def(2, "desert", 2.0, 0.0), def(10, "frozen_ocean", 0.5, 0.5), def(35, "savanna", 1.2, 0.4)], &dir);
+        let biomes = BiomeColors::build(
+            &[
+                def(1, "plains", 0.8, 0.4),
+                def(2, "desert", 2.0, 0.0),
+                def(10, "frozen_ocean", 0.5, 0.5),
+                def(35, "savanna", 1.2, 0.4),
+            ],
+            &dir,
+        );
         let climate = |id| biomes.climate(id);
-        assert_eq!((climate(1).has_precipitation, climate(2).has_precipitation, climate(35).has_precipitation), (true, false, false));
-        assert_eq!(climate(10), Climate { temperature: 0.0, frozen: true, has_precipitation: true });
+        assert_eq!(
+            (
+                climate(1).has_precipitation,
+                climate(2).has_precipitation,
+                climate(35).has_precipitation
+            ),
+            (true, false, false)
+        );
+        assert_eq!(
+            climate(10),
+            Climate {
+                temperature: 0.0,
+                frozen: true,
+                has_precipitation: true
+            }
+        );
         assert_eq!(climate(99), PLAINS_CLIMATE);
         std::fs::remove_dir_all(&dir).unwrap();
     }

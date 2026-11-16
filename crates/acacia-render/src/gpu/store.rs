@@ -52,16 +52,27 @@ pub struct Draw {
 
 impl Store {
     pub fn new(device: &wgpu::Device) -> Self {
-        let max_quads = (device.limits().max_storage_buffer_binding_size / VERTEX_LIGHT_BYTES).min(u32::MAX as u64) as u32;
+        let max_quads = (device.limits().max_storage_buffer_binding_size / VERTEX_LIGHT_BYTES)
+            .min(u32::MAX as u64) as u32;
         let quad_capacity = INITIAL_QUADS.min(max_quads);
         Store {
             quads: buffer(device, "quads", quad_capacity as u64 * QUAD_BYTES),
-            vertex_light: buffer(device, "vertex light", quad_capacity as u64 * VERTEX_LIGHT_BYTES),
-            origins: buffer(device, "section origins", INITIAL_SLOTS as u64 * ORIGIN_BYTES),
+            vertex_light: buffer(
+                device,
+                "vertex light",
+                quad_capacity as u64 * VERTEX_LIGHT_BYTES,
+            ),
+            origins: buffer(
+                device,
+                "section origins",
+                INITIAL_SLOTS as u64 * ORIGIN_BYTES,
+            ),
             light: buffer(device, "section light", INITIAL_SLOTS as u64 * LIGHT_BYTES),
             quad_capacity,
             max_quads,
-            free: FreeList { ranges: vec![(0, quad_capacity)] },
+            free: FreeList {
+                ranges: vec![(0, quad_capacity)],
+            },
             slot_capacity: INITIAL_SLOTS,
             free_slots: Vec::new(),
             next_slot: 0,
@@ -80,7 +91,8 @@ impl Store {
     }
 
     pub fn gpu_bytes(&self) -> u64 {
-        self.quad_capacity as u64 * (QUAD_BYTES + VERTEX_LIGHT_BYTES) + self.slot_capacity as u64 * (ORIGIN_BYTES + LIGHT_BYTES)
+        self.quad_capacity as u64 * (QUAD_BYTES + VERTEX_LIGHT_BYTES)
+            + self.slot_capacity as u64 * (ORIGIN_BYTES + LIGHT_BYTES)
     }
 
     pub fn clear(&mut self) {
@@ -96,7 +108,13 @@ impl Store {
         }
     }
 
-    pub fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, key: SectionKey, mesh: SectionMesh) {
+    pub fn upload(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        key: SectionKey,
+        mesh: SectionMesh,
+    ) {
         self.remove(key);
         if mesh.is_empty() {
             return;
@@ -109,14 +127,36 @@ impl Store {
         let slot = self.slot(device, queue);
         let mut data = mesh.solid;
         data.extend_from_slice(&mesh.translucent);
-        let (words, light): (Vec<[u32; 3]>, Vec<[u32; 4]>) = data.iter().map(|q| (q.0, q.1)).unzip();
-        queue.write_buffer(&self.quads, offset as u64 * QUAD_BYTES, bytemuck::cast_slice(&words));
-        queue.write_buffer(&self.vertex_light, offset as u64 * VERTEX_LIGHT_BYTES, bytemuck::cast_slice(&light));
+        let (words, light): (Vec<[u32; 3]>, Vec<[u32; 4]>) =
+            data.iter().map(|q| (q.0, q.1)).unzip();
+        queue.write_buffer(
+            &self.quads,
+            offset as u64 * QUAD_BYTES,
+            bytemuck::cast_slice(&words),
+        );
+        queue.write_buffer(
+            &self.vertex_light,
+            offset as u64 * VERTEX_LIGHT_BYTES,
+            bytemuck::cast_slice(&light),
+        );
         let origin = [key.0 * 16, key.1 * 16, key.2 * 16, 0];
-        queue.write_buffer(&self.origins, slot as u64 * ORIGIN_BYTES, bytemuck::cast_slice(&origin));
+        queue.write_buffer(
+            &self.origins,
+            slot as u64 * ORIGIN_BYTES,
+            bytemuck::cast_slice(&origin),
+        );
         self.used_quads += u64::from(len);
         let translucent = mesh.translucent.len() as u32;
-        self.entries.insert(key, Entry { slot, offset, solid: len - translucent, translucent, light_generation: 0 });
+        self.entries.insert(
+            key,
+            Entry {
+                slot,
+                offset,
+                solid: len - translucent,
+                translucent,
+                light_generation: 0,
+            },
+        );
         if let Some(light) = mesh.light {
             self.upload_light(queue, key, &light);
         }
@@ -124,33 +164,61 @@ impl Store {
 
     /// Ignored for sections without a mesh and for light older than what the slot has.
     pub fn upload_light(&mut self, queue: &wgpu::Queue, key: SectionKey, light: &LightVolume) {
-        let Some(e) = self.entries.get_mut(&key) else { return };
+        let Some(e) = self.entries.get_mut(&key) else {
+            return;
+        };
         if light.generation < e.light_generation {
             return;
         }
         e.light_generation = light.generation;
-        queue.write_buffer(&self.light, u64::from(e.slot) * LIGHT_BYTES, &light.cells[..]);
+        queue.write_buffer(
+            &self.light,
+            u64::from(e.slot) * LIGHT_BYTES,
+            &light.cells[..],
+        );
     }
 
     /// Sections in the frustum (and in `reachable`, when culling caves): solid front to back
     /// (early depth rejection), translucent back to front.
-    pub fn draws(&self, frustum: &Frustum, cam_block: IVec3, cam_frac: Vec3, reachable: Option<&FxHashSet<SectionKey>>) -> (Vec<Draw>, Vec<Draw>) {
+    pub fn draws(
+        &self,
+        frustum: &Frustum,
+        cam_block: IVec3,
+        cam_frac: Vec3,
+        reachable: Option<&FxHashSet<SectionKey>>,
+    ) -> (Vec<Draw>, Vec<Draw>) {
         let mut visible: Vec<(i32, &Entry)> = self
             .entries
             .iter()
             .filter(|(k, _)| reachable.is_none_or(|r| r.contains(k)))
             .filter_map(|(&(x, y, z), e)| {
                 let min = (IVec3::new(x, y, z) * 16 - cam_block).as_vec3() - cam_frac;
-                frustum.intersects_box(min, min + Vec3::splat(16.0)).then(|| {
-                    let d = IVec3::new(x, y, z) * 16 + 8 - cam_block;
-                    (d.length_squared(), e)
-                })
+                frustum
+                    .intersects_box(min, min + Vec3::splat(16.0))
+                    .then(|| {
+                        let d = IVec3::new(x, y, z) * 16 + 8 - cam_block;
+                        (d.length_squared(), e)
+                    })
             })
             .collect();
         visible.sort_unstable_by_key(|(d, _)| *d);
-        let solid = visible.iter().filter(|(_, e)| e.solid > 0).map(|(_, e)| Draw { slot: e.slot, first: e.offset, count: e.solid });
-        let translucent =
-            visible.iter().rev().filter(|(_, e)| e.translucent > 0).map(|(_, e)| Draw { slot: e.slot, first: e.offset + e.solid, count: e.translucent });
+        let solid = visible
+            .iter()
+            .filter(|(_, e)| e.solid > 0)
+            .map(|(_, e)| Draw {
+                slot: e.slot,
+                first: e.offset,
+                count: e.solid,
+            });
+        let translucent = visible
+            .iter()
+            .rev()
+            .filter(|(_, e)| e.translucent > 0)
+            .map(|(_, e)| Draw {
+                slot: e.slot,
+                first: e.offset + e.solid,
+                count: e.translucent,
+            });
         (solid.collect(), translucent.collect())
     }
 
@@ -163,8 +231,22 @@ impl Store {
         if new <= old {
             return None;
         }
-        self.quads = grow(device, queue, &self.quads, "quads", old as u64 * QUAD_BYTES, new as u64 * QUAD_BYTES);
-        self.vertex_light = grow(device, queue, &self.vertex_light, "vertex light", old as u64 * VERTEX_LIGHT_BYTES, new as u64 * VERTEX_LIGHT_BYTES);
+        self.quads = grow(
+            device,
+            queue,
+            &self.quads,
+            "quads",
+            old as u64 * QUAD_BYTES,
+            new as u64 * QUAD_BYTES,
+        );
+        self.vertex_light = grow(
+            device,
+            queue,
+            &self.vertex_light,
+            "vertex light",
+            old as u64 * VERTEX_LIGHT_BYTES,
+            new as u64 * VERTEX_LIGHT_BYTES,
+        );
         self.free.release(old, new - old);
         self.quad_capacity = new;
         self.replaced = true;
@@ -178,8 +260,22 @@ impl Store {
         if self.next_slot == self.slot_capacity {
             let new = self.slot_capacity * 2;
             let (old, new64) = (u64::from(self.slot_capacity), u64::from(new));
-            self.origins = grow(device, queue, &self.origins, "section origins", old * ORIGIN_BYTES, new64 * ORIGIN_BYTES);
-            self.light = grow(device, queue, &self.light, "section light", old * LIGHT_BYTES, new64 * LIGHT_BYTES);
+            self.origins = grow(
+                device,
+                queue,
+                &self.origins,
+                "section origins",
+                old * ORIGIN_BYTES,
+                new64 * ORIGIN_BYTES,
+            );
+            self.light = grow(
+                device,
+                queue,
+                &self.light,
+                "section light",
+                old * LIGHT_BYTES,
+                new64 * LIGHT_BYTES,
+            );
             self.slot_capacity = new;
             self.replaced = true;
         }
@@ -192,16 +288,27 @@ fn buffer(device: &wgpu::Device, label: &str, size: u64) -> wgpu::Buffer {
     device.create_buffer(&wgpu::BufferDescriptor {
         label: Some(label),
         size,
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+        usage: wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_DST
+            | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     })
 }
 
 /// Copies into a larger buffer. Submitted at once: writes already queued for the old buffer run
 /// before the copy, and later writes target the new one.
-fn grow(device: &wgpu::Device, queue: &wgpu::Queue, old: &wgpu::Buffer, label: &str, old_size: u64, new_size: u64) -> wgpu::Buffer {
+fn grow(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    old: &wgpu::Buffer,
+    label: &str,
+    old_size: u64,
+    new_size: u64,
+) -> wgpu::Buffer {
     let new = buffer(device, label, new_size);
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("grow") });
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("grow"),
+    });
     encoder.copy_buffer_to_buffer(old, 0, &new, 0, old_size);
     queue.submit([encoder.finish()]);
     new
@@ -230,7 +337,8 @@ impl FreeList {
         }
         let i = self.ranges.partition_point(|&(o, _)| o < offset);
         self.ranges.insert(i, (offset, len));
-        if i + 1 < self.ranges.len() && self.ranges[i].0 + self.ranges[i].1 == self.ranges[i + 1].0 {
+        if i + 1 < self.ranges.len() && self.ranges[i].0 + self.ranges[i].1 == self.ranges[i + 1].0
+        {
             self.ranges[i].1 += self.ranges.remove(i + 1).1;
         }
         if i > 0 && self.ranges[i - 1].0 + self.ranges[i - 1].1 == self.ranges[i].0 {
@@ -245,8 +353,14 @@ mod tests {
 
     #[test]
     fn free_list_reuses_and_merges() {
-        let mut f = FreeList { ranges: vec![(0, 100)] };
-        let (a, b, c) = (f.alloc(10).unwrap(), f.alloc(20).unwrap(), f.alloc(30).unwrap());
+        let mut f = FreeList {
+            ranges: vec![(0, 100)],
+        };
+        let (a, b, c) = (
+            f.alloc(10).unwrap(),
+            f.alloc(20).unwrap(),
+            f.alloc(30).unwrap(),
+        );
         assert_eq!((a, b, c), (0, 10, 30));
         f.release(b, 20);
         assert_eq!(f.alloc(15), Some(10));

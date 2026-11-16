@@ -7,18 +7,18 @@ use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
-use acacia_nethernet::{http, Connection, Identity};
+use acacia_nethernet::{Connection, Identity, http};
 use rand_core::{OsRng, RngCore};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
+use tokio_rustls::TlsConnector;
 use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::{self, ClientConfig, RootCertStore};
-use tokio_rustls::TlsConnector;
 
+use crate::ConnectError;
 use crate::socks5::{self, Socks5Proxy};
 use crate::transport::Transport;
-use crate::ConnectError;
 
 const SIGNALING_TIMEOUT: Duration = Duration::from_secs(15);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(3);
@@ -54,7 +54,12 @@ impl Endpoint<'_> {
 
     /// The Login `ServerAddress` for a URL-addressed join: `<scheme>://host:port:port`.
     pub fn server_address(&self, scheme: Scheme) -> String {
-        format!("{}://{}:{}", scheme.name(), self.authority(), self.addr.port())
+        format!(
+            "{}://{}:{}",
+            scheme.name(),
+            self.authority(),
+            self.addr.port()
+        )
     }
 
     /// Sends one request and reads the response until the server closes the connection.
@@ -66,15 +71,23 @@ impl Endpoint<'_> {
         match scheme {
             Scheme::Http => roundtrip(tcp, request).await,
             Scheme::Https => {
-                let name = ServerName::try_from(self.host.to_owned()).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-                roundtrip(TlsConnector::from(tls_config()).connect(name, tcp).await?, request).await
+                let name = ServerName::try_from(self.host.to_owned())
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+                roundtrip(
+                    TlsConnector::from(tls_config()).connect(name, tcp).await?,
+                    request,
+                )
+                .await
             }
         }
     }
 }
 
 /// Sends `request` and reads one response: up to its Content-Length, or EOF if it has none.
-async fn roundtrip<S: AsyncRead + AsyncWrite + Unpin>(mut stream: S, request: &[u8]) -> io::Result<Vec<u8>> {
+async fn roundtrip<S: AsyncRead + AsyncWrite + Unpin>(
+    mut stream: S,
+    request: &[u8],
+) -> io::Result<Vec<u8>> {
     stream.write_all(request).await?;
     let mut response = Vec::new();
     let mut chunk = [0u8; 8192];
@@ -94,12 +107,16 @@ pub(crate) fn tls_config() -> Arc<ClientConfig> {
     static CONFIG: OnceLock<Arc<ClientConfig>> = OnceLock::new();
     CONFIG
         .get_or_init(|| {
-            let roots = RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.to_vec() };
-            let config = ClientConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
-                .with_safe_default_protocol_versions()
-                .expect("ring supports the default TLS versions")
-                .with_root_certificates(roots)
-                .with_no_client_auth();
+            let roots = RootCertStore {
+                roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+            };
+            let config = ClientConfig::builder_with_provider(Arc::new(
+                rustls::crypto::ring::default_provider(),
+            ))
+            .with_safe_default_protocol_versions()
+            .expect("ring supports the default TLS versions")
+            .with_root_certificates(roots)
+            .with_no_client_auth();
             Arc::new(config)
         })
         .clone()
@@ -128,15 +145,23 @@ pub(crate) async fn dial(
 ) -> Result<(Transport, Connection, Scheme), ConnectError> {
     let scheme = match scheme {
         Some(scheme) => scheme,
-        None => probe(endpoint).await.ok_or(ConnectError::NetherNetUnsupported)?,
+        None => probe(endpoint)
+            .await
+            .ok_or(ConnectError::NetherNetUnsupported)?,
     };
     let transport = Transport::bind(endpoint.addr, endpoint.proxy).await?;
-    let (mut conn, offer) = Connection::offer(transport.local_candidate()?, identity, Instant::now())?;
+    let (mut conn, offer) =
+        Connection::offer(transport.local_candidate()?, identity, Instant::now())?;
     let request = http::offer_request(&endpoint.authority(), OsRng.next_u64(), &offer);
     tracing::debug!(server = %endpoint.addr, local = ?conn.host_candidate(), ?scheme, "posting NetherNet offer");
-    let raw = timeout(SIGNALING_TIMEOUT, endpoint.exchange(scheme, &request)).await.map_err(|_| ConnectError::Timeout)??;
+    let raw = timeout(SIGNALING_TIMEOUT, endpoint.exchange(scheme, &request))
+        .await
+        .map_err(|_| ConnectError::Timeout)??;
     let answer = http::answer_sdp(&raw)?;
-    tracing::debug!(candidates = answer.matches("a=candidate").count(), "got NetherNet answer");
+    tracing::debug!(
+        candidates = answer.matches("a=candidate").count(),
+        "got NetherNet answer"
+    );
     conn.accept_answer(&answer, Instant::now())?;
     Ok((transport, conn, scheme))
 }

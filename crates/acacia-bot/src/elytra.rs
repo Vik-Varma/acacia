@@ -12,8 +12,8 @@ use acacia_client::proto::{Packet, RawPacket};
 use acacia_world::neutral::Item;
 
 use crate::human::HOTBAR_SWITCH;
-use crate::survival::Destination;
 use crate::state::Inventory;
+use crate::survival::Destination;
 use crate::{ActionError, Bot};
 
 #[cfg(feature = "java")]
@@ -31,12 +31,18 @@ impl Bot {
         if self.wears_elytra() {
             return Ok(());
         }
-        let from = self.find_item(Item::Elytra).ok_or_else(|| ActionError::NotPossible("no elytra in the inventory".into()))?;
+        let from = self
+            .find_item(Item::Elytra)
+            .ok_or_else(|| ActionError::NotPossible("no elytra in the inventory".into()))?;
         self.equip(from, Destination::Chest).await
     }
 
     pub fn wears_elytra(&self) -> bool {
-        self.state.inventory.armor.get(usize::from(CHEST)).is_some_and(|s| self.state.item(s) == Some(Item::Elytra))
+        self.state
+            .inventory
+            .armor
+            .get(usize::from(CHEST))
+            .is_some_and(|s| self.state.item(s) == Some(Item::Elytra))
     }
 
     /// Opens the elytra mid-air as vanilla does on a jump press while falling: the press plus
@@ -48,7 +54,9 @@ impl Bot {
             return self.java_start_gliding().await;
         }
         let Some(movement) = self.backend.movement().filter(|m| m.is_started()) else {
-            return Err(ActionError::NotPossible("gliding needs a physics bot".into()));
+            return Err(ActionError::NotPossible(
+                "gliding needs a physics bot".into(),
+            ));
         };
         if movement.on_ground() {
             return Err(ActionError::NotPossible("on the ground".into()));
@@ -59,10 +67,15 @@ impl Bot {
         self.set_glide(true);
         self.press_jump().await?;
         let me = self.state.player.runtime_entity_id;
-        match self.wait_until(GLIDE_TIMEOUT, |_, p| gliding_flag(p, me).filter(|&g| g)).await {
+        match self
+            .wait_until(GLIDE_TIMEOUT, |_, p| gliding_flag(p, me).filter(|&g| g))
+            .await
+        {
             Err(ActionError::Timeout) => {
                 self.set_glide(false);
-                Err(ActionError::Rejected("the server did not start the glide".into()))
+                Err(ActionError::Rejected(
+                    "the server did not start the glide".into(),
+                ))
             }
             other => other.map(drop),
         }
@@ -76,7 +89,9 @@ impl Bot {
             return self.java_stop_gliding().await;
         }
         let Some(movement) = self.backend.movement().filter(|m| m.is_started()) else {
-            return Err(ActionError::NotPossible("gliding needs a physics bot".into()));
+            return Err(ActionError::NotPossible(
+                "gliding needs a physics bot".into(),
+            ));
         };
         let airborne = !movement.on_ground();
         self.set_glide(false);
@@ -116,9 +131,15 @@ impl Bot {
     /// Selects a hotbar slot with firework rockets, after a human pause if it was not selected. A flight does it
     /// before taking off: switched mid-glide, the pause costs the boost's timing (live: a takeoff rocket came too late).
     pub async fn hold_fireworks(&mut self) -> Result<(), ActionError> {
-        let mut hotbar = self.state.inventory.main.iter().take(usize::from(Inventory::HOTBAR_SLOTS));
+        let mut hotbar = self
+            .state
+            .inventory
+            .main
+            .iter()
+            .take(usize::from(Inventory::HOTBAR_SLOTS));
         let slot = hotbar.position(|s| self.state.item(s) == Some(Item::FireworkRocket));
-        let slot = slot.ok_or_else(|| ActionError::NotPossible("no firework rocket in the hotbar".into()))?;
+        let slot = slot
+            .ok_or_else(|| ActionError::NotPossible("no firework rocket in the hotbar".into()))?;
         if usize::from(self.state.inventory.selected_hotbar_slot) != slot {
             self.select_hotbar(slot as u8)?;
             let delay = self.human.between(HOTBAR_SWITCH);
@@ -135,7 +156,9 @@ impl Bot {
 
     /// Holds jump for one tick, then releases it.
     async fn press_jump(&mut self) -> Result<(), ActionError> {
-        let Some(controls) = self.backend.controls_mut() else { return Ok(()) };
+        let Some(controls) = self.backend.controls_mut() else {
+            return Ok(());
+        };
         let held = std::mem::replace(&mut controls.jump, true);
         let press = self.claim(crate::cancel::Held::Jump(held));
         let ticked = self.next_tick(|_, _| false).await;
@@ -149,15 +172,23 @@ pub(crate) fn gliding_flag(packet: &RawPacket, runtime_id: u64) -> Option<bool> 
     if packet.id != SetEntityData::ID || read_varint64(&mut &packet.body[..]).ok()? != runtime_id {
         return None;
     }
-    packet.decode::<SetEntityData>().ok()?.metadata.into_iter().find_map(|m| match m.value {
-        MetadataDictionaryItemValue::Flags(f) => Some(f.0 & MetadataFlags1::GLIDING.0 != 0),
-        _ => None,
-    })
+    packet
+        .decode::<SetEntityData>()
+        .ok()?
+        .metadata
+        .into_iter()
+        .find_map(|m| match m.value {
+            MetadataDictionaryItemValue::Flags(f) => Some(f.0 & MetadataFlags1::GLIDING.0 != 0),
+            _ => None,
+        })
 }
 
 #[cfg(test)]
 mod tests {
-    use acacia_client::proto::types::{EntityProperties, MetadataDictionaryItem, MetadataDictionaryItemKey, MetadataDictionaryItemType};
+    use acacia_client::proto::types::{
+        EntityProperties, MetadataDictionaryItem, MetadataDictionaryItemKey,
+        MetadataDictionaryItemType,
+    };
 
     use super::*;
     use crate::state::queries::test_support::raw;
@@ -169,12 +200,23 @@ mod tests {
             legacy_type: 0,
             value: MetadataDictionaryItemValue::Flags(MetadataFlags1(flags)),
         };
-        raw(&SetEntityData { runtime_entity_id: runtime_id, metadata: vec![item], properties: EntityProperties { ints: vec![], floats: vec![] }, tick: 0 })
+        raw(&SetEntityData {
+            runtime_entity_id: runtime_id,
+            metadata: vec![item],
+            properties: EntityProperties {
+                ints: vec![],
+                floats: vec![],
+            },
+            tick: 0,
+        })
     }
 
     #[test]
     fn reads_the_own_gliding_flag() {
-        assert_eq!(gliding_flag(&flags(3, MetadataFlags1::GLIDING.0 | 1), 3), Some(true));
+        assert_eq!(
+            gliding_flag(&flags(3, MetadataFlags1::GLIDING.0 | 1), 3),
+            Some(true)
+        );
         assert_eq!(gliding_flag(&flags(3, 1), 3), Some(false));
         assert_eq!(gliding_flag(&flags(4, MetadataFlags1::GLIDING.0), 3), None);
     }

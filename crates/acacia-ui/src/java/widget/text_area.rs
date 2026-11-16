@@ -19,7 +19,13 @@ pub struct TextArea {
 
 impl TextArea {
     pub fn new(x: i32, y: i32, w: i32, h: i32, scroll_rate: f64) -> TextArea {
-        TextArea { base: Base::new(x, y, w, h, Default::default()), scroll: 0.0, scroll_rate, show_background: true, show_decorations: true }
+        TextArea {
+            base: Base::new(x, y, w, h, Default::default()),
+            scroll: 0.0,
+            scroll_rate,
+            show_background: true,
+            show_decorations: true,
+        }
     }
 
     pub fn inner_left(&self) -> i32 {
@@ -46,24 +52,37 @@ impl TextArea {
 
     /// `withinContentAreaTopBottom`.
     pub fn within(&self, top: i32, bottom: i32) -> bool {
-        f64::from(bottom) - self.scroll >= f64::from(self.base.y) && f64::from(top) - self.scroll <= f64::from(self.base.y + self.base.h)
+        f64::from(bottom) - self.scroll >= f64::from(self.base.y)
+            && f64::from(top) - self.scroll <= f64::from(self.base.y + self.base.h)
     }
 
     fn scroller_height(&self, inner_height: i32) -> i32 {
         let h = self.base.h;
         // Mth.clamp: max then min.
-        (((h * h) as f32 / Self::content_height(inner_height) as f32) as i32).max(32).min(h - 8)
+        (((h * h) as f32 / Self::content_height(inner_height) as f32) as i32)
+            .max(32)
+            .min(h - 8)
     }
 
     /// `extractWidgetRenderState`: frame, scissored contents under the scroll, scroll bar;
     /// `decorations` runs after when they are shown.
-    pub fn extract(&self, ctx: &mut Ctx, inner_height: i32, contents: impl FnOnce(&mut Ctx), decorations: impl FnOnce(&mut Ctx)) {
+    pub fn extract(
+        &self,
+        ctx: &mut Ctx,
+        inner_height: i32,
+        contents: impl FnOnce(&mut Ctx),
+        decorations: impl FnOnce(&mut Ctx),
+    ) {
         let b = &self.base;
         if !b.visible {
             return;
         }
         if self.show_background {
-            let sprite = if b.focused { "widget/text_field_highlighted" } else { "widget/text_field" };
+            let sprite = if b.focused {
+                "widget/text_field_highlighted"
+            } else {
+                "widget/text_field"
+            };
             ctx.gui.sprite(sprite, b.x, b.y, b.w, b.h);
         }
         ctx.enable_scissor(b.x + 1, b.y + 1, b.x + b.w - 1, b.y + b.h - 1);
@@ -76,7 +95,8 @@ impl TextArea {
             let x = b.x + b.w;
             let sh = self.scroller_height(inner_height);
             let y = b.y.max(self.scroll as i32 * (b.h - sh) / max + b.y);
-            ctx.gui.sprite("widget/scroller_background", x, b.y, SCROLLBAR_WIDTH, b.h);
+            ctx.gui
+                .sprite("widget/scroller_background", x, b.y, SCROLLBAR_WIDTH, b.h);
             ctx.gui.sprite("widget/scroller", x, y, SCROLLBAR_WIDTH, sh);
         }
         if self.show_decorations {
@@ -87,6 +107,10 @@ impl TextArea {
     /// `isMouseOver`: the frame and its scroll bar.
     pub fn over(&self, x: f64, y: f64) -> bool {
         let b = &self.base;
-        b.is_active() && x >= f64::from(b.x) && y >= f64::from(b.y) && x < f64::from(b.x + b.w + SCROLLBAR_WIDTH) && y < f64::from(b.y + b.h)
+        b.is_active()
+            && x >= f64::from(b.x)
+            && y >= f64::from(b.y)
+            && x < f64::from(b.x + b.w + SCROLLBAR_WIDTH)
+            && y < f64::from(b.y + b.h)
     }
 }

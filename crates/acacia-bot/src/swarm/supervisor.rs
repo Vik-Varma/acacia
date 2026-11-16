@@ -1,17 +1,17 @@
 use std::future::Future;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use acacia_client::{ClientBuilder, DisconnectReason, Socks5Proxy};
 use tokio::sync::{broadcast, watch};
-use tokio::time::{sleep_until, Instant};
+use tokio::time::{Instant, sleep_until};
 
 use super::events::{BotStatus, SwarmEvent};
-use super::join_queue::{noise, JoinQueue};
+use super::join_queue::{JoinQueue, noise};
 use super::keeper::Keeper;
 use super::lease::AccountLease;
-use super::login::{client_builder, Failure, NodeAuth};
+use super::login::{Failure, NodeAuth, client_builder};
 use super::policy::{Ended, Next, Policy, Retry};
 use super::registry::Registry;
 use super::spec::{BotId, BotSpec, Login, Target};
@@ -51,28 +51,56 @@ impl<S> Ctx<S> {
     pub fn fail(&self, id: &BotId, error: String, spec: Option<BotSpec<S>>) {
         tracing::warn!(%id, %error, "bot stopped");
         let taken = self.registry.failed(id, error.clone(), spec);
-        self.emit(SwarmEvent::Failed { id: id.clone(), error });
+        self.emit(SwarmEvent::Failed {
+            id: id.clone(),
+            error,
+        });
         if taken {
             self.emit(SwarmEvent::Removed { id: id.clone() });
         }
     }
 
-    async fn connect(&self, spec: &BotSpec<S>, target: &Target, proxy: Option<&Socks5Proxy>) -> Result<Bot, Failure> {
+    async fn connect(
+        &self,
+        spec: &BotSpec<S>,
+        target: &Target,
+        proxy: Option<&Socks5Proxy>,
+    ) -> Result<Bot, Failure> {
         let builder = client_builder(&spec.login, target, proxy, self.auth.as_ref()).await?;
         let builder = (self.client)(spec, builder);
-        let config = BotConfig { shared_worlds: self.worlds.clone(), ..(self.bot_config)(spec) };
-        Bot::connect(builder, config).await.map_err(Failure::Connect)
+        let config = BotConfig {
+            shared_worlds: self.worlds.clone(),
+            ..(self.bot_config)(spec)
+        };
+        Bot::connect(builder, config)
+            .await
+            .map_err(Failure::Connect)
     }
 }
 
 /// Runs one bot until it is removed, fails for good, or its task returns while connected.
-pub(crate) async fn supervise<S, F>(ctx: Arc<Ctx<S>>, task: Arc<F>, spec: BotSpec<S>, cancel: watch::Receiver<bool>)
-where
+pub(crate) async fn supervise<S, F>(
+    ctx: Arc<Ctx<S>>,
+    task: Arc<F>,
+    spec: BotSpec<S>,
+    cancel: watch::Receiver<bool>,
+) where
     F: AsyncFn(&mut Bot, &mut S),
 {
     let id = spec.id.clone();
-    let keeper = Keeper::new(ctx.leases.clone(), format!("{}/{id}", ctx.node_id), ctx.lease_ttl);
-    let mut run = Run { ctx: &ctx, task: &*task, spec, cancel, keeper, retry: Retry::default() };
+    let keeper = Keeper::new(
+        ctx.leases.clone(),
+        format!("{}/{id}", ctx.node_id),
+        ctx.lease_ttl,
+    );
+    let mut run = Run {
+        ctx: &ctx,
+        task: &*task,
+        spec,
+        cancel,
+        keeper,
+        retry: Retry::default(),
+    };
     let exit = run.until_exit().await;
     run.keeper.release().await;
     match exit {
@@ -102,7 +130,13 @@ struct Run<'a, S, F> {
 
 impl<S, F: AsyncFn(&mut Bot, &mut S)> Run<'_, S, F> {
     async fn until_exit(&mut self) -> Exit {
-        let proxy = match self.spec.proxy.as_deref().map(Socks5Proxy::parse).transpose() {
+        let proxy = match self
+            .spec
+            .proxy
+            .as_deref()
+            .map(Socks5Proxy::parse)
+            .transpose()
+        {
             Ok(p) => p,
             Err(e) => return Exit::Failed(format!("bad proxy: {e}")),
         };
@@ -127,7 +161,10 @@ impl<S, F: AsyncFn(&mut Bot, &mut S)> Run<'_, S, F> {
             match next {
                 Next::After(delay) => {
                     self.ctx.registry.set(&id, waiting);
-                    self.ctx.emit(SwarmEvent::Reconnecting { id: id.clone(), after_ms: delay.as_millis() as u64 });
+                    self.ctx.emit(SwarmEvent::Reconnecting {
+                        id: id.clone(),
+                        after_ms: delay.as_millis() as u64,
+                    });
                     if !self.idle(Some(Instant::now() + delay)).await {
                         return Exit::Removed;
                     }
@@ -139,32 +176,73 @@ impl<S, F: AsyncFn(&mut Bot, &mut S)> Run<'_, S, F> {
     }
 
     /// One lease check, join and session; returns what to do next and the status meanwhile.
-    async fn join(&mut self, target: &Target, attempt: u32, proxy: Option<&Socks5Proxy>) -> Result<(Next, BotStatus), Exit> {
+    async fn join(
+        &mut self,
+        target: &Target,
+        attempt: u32,
+        proxy: Option<&Socks5Proxy>,
+    ) -> Result<(Next, BotStatus), Exit> {
         let id = self.spec.id.clone();
         if let Login::Online { account } = &self.spec.login {
-            let acquired = or_cancel(self.keeper.acquire(account), &mut self.cancel).await.ok_or(Exit::Removed)?;
+            let acquired = or_cancel(self.keeper.acquire(account), &mut self.cancel)
+                .await
+                .ok_or(Exit::Removed)?;
             if let Err(why) = acquired {
                 return Ok(self.lease_unavailable(why));
             }
         }
         self.ctx.registry.set(&id, BotStatus::Connecting);
-        self.ctx.emit(SwarmEvent::Joining { id: id.clone(), target: target.clone(), attempt });
-        let mut bot = match guard(self.ctx.connect(&self.spec, target, proxy), &mut self.cancel, &mut self.keeper).await {
+        self.ctx.emit(SwarmEvent::Joining {
+            id: id.clone(),
+            target: target.clone(),
+            attempt,
+        });
+        let mut bot = match guard(
+            self.ctx.connect(&self.spec, target, proxy),
+            &mut self.cancel,
+            &mut self.keeper,
+        )
+        .await
+        {
             Err(Interrupt::Cancelled) => return Err(Exit::Removed),
-            Err(Interrupt::LeaseLost) => return Ok(self.lease_unavailable("lease lost while joining".into())),
-            Ok(Err(failure)) => return Ok((self.ctx.policy.next(&id, &mut self.retry, failure.ended(), noise()), BotStatus::Backoff)),
+            Err(Interrupt::LeaseLost) => {
+                return Ok(self.lease_unavailable("lease lost while joining".into()));
+            }
+            Ok(Err(failure)) => {
+                return Ok((
+                    self.ctx
+                        .policy
+                        .next(&id, &mut self.retry, failure.ended(), noise()),
+                    BotStatus::Backoff,
+                ));
+            }
             Ok(Ok(bot)) => bot,
         };
         self.ctx.registry.set(&id, BotStatus::Online);
-        self.ctx.emit(SwarmEvent::Spawned { id: id.clone(), display_name: bot.name().to_owned() });
+        self.ctx.emit(SwarmEvent::Spawned {
+            id: id.clone(),
+            display_name: bot.name().to_owned(),
+        });
         let since = Instant::now();
-        let reason = match guard((self.task)(&mut bot, &mut self.spec.state), &mut self.cancel, &mut self.keeper).await {
-            Ok(()) => bot.disconnect_reason().cloned().filter(|r| *r != DisconnectReason::LocalClose),
+        let reason = match guard(
+            (self.task)(&mut bot, &mut self.spec.state),
+            &mut self.cancel,
+            &mut self.keeper,
+        )
+        .await
+        {
+            Ok(()) => bot
+                .disconnect_reason()
+                .cloned()
+                .filter(|r| *r != DisconnectReason::LocalClose),
             Err(Interrupt::Cancelled) => None,
             Err(Interrupt::LeaseLost) => {
                 // Leave at once: the account's new holder may already be joining.
                 bot.disconnect().await;
-                self.ctx.emit(SwarmEvent::Disconnected { id: id.clone(), reason: "lease lost".into() });
+                self.ctx.emit(SwarmEvent::Disconnected {
+                    id: id.clone(),
+                    reason: "lease lost".into(),
+                });
                 return Ok(self.lease_unavailable("lease lost".into()));
             }
         };
@@ -172,9 +250,18 @@ impl<S, F: AsyncFn(&mut Bot, &mut S)> Run<'_, S, F> {
             bot.disconnect().await;
             return Err(Exit::Removed);
         };
-        self.ctx.emit(SwarmEvent::Disconnected { id: id.clone(), reason: format!("{reason:?}") });
-        let ended = Ended::Session { reason: &reason, uptime: since.elapsed() };
-        Ok((self.ctx.policy.next(&id, &mut self.retry, ended, noise()), BotStatus::Backoff))
+        self.ctx.emit(SwarmEvent::Disconnected {
+            id: id.clone(),
+            reason: format!("{reason:?}"),
+        });
+        let ended = Ended::Session {
+            reason: &reason,
+            uptime: since.elapsed(),
+        };
+        Ok((
+            self.ctx.policy.next(&id, &mut self.retry, ended, noise()),
+            BotStatus::Backoff,
+        ))
     }
 
     /// Drained: no more joins, but the bot stays listed until `remove` takes its spec for handover.
@@ -185,7 +272,12 @@ impl<S, F: AsyncFn(&mut Bot, &mut S)> Run<'_, S, F> {
     }
 
     fn lease_unavailable(&mut self, why: String) -> (Next, BotStatus) {
-        (self.ctx.policy.next(&self.spec.id, &mut self.retry, Ended::Lease(why), noise()), BotStatus::AccountBusy)
+        (
+            self.ctx
+                .policy
+                .next(&self.spec.id, &mut self.retry, Ended::Lease(why), noise()),
+            BotStatus::AccountBusy,
+        )
     }
 
     /// Waits until `until` (`None`: until cancelled), renewing any held lease; false once
@@ -207,7 +299,11 @@ impl<S, F: AsyncFn(&mut Bot, &mut S)> Run<'_, S, F> {
     }
 }
 
-async fn guard<T>(fut: impl Future<Output = T>, cancel: &mut watch::Receiver<bool>, keeper: &mut Keeper) -> Result<T, Interrupt> {
+async fn guard<T>(
+    fut: impl Future<Output = T>,
+    cancel: &mut watch::Receiver<bool>,
+    keeper: &mut Keeper,
+) -> Result<T, Interrupt> {
     // Biased so a task is polled at least once even when a cancel came first: its spawn was already announced.
     tokio::select! {
         biased;
@@ -218,7 +314,10 @@ async fn guard<T>(fut: impl Future<Output = T>, cancel: &mut watch::Receiver<boo
 }
 
 /// `None` once the bot is cancelled (or the swarm dropped its handle).
-async fn or_cancel<T>(fut: impl Future<Output = T>, cancel: &mut watch::Receiver<bool>) -> Option<T> {
+async fn or_cancel<T>(
+    fut: impl Future<Output = T>,
+    cancel: &mut watch::Receiver<bool>,
+) -> Option<T> {
     tokio::select! {
         v = fut => Some(v),
         _ = cancel.wait_for(|c| *c) => None,

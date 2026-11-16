@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use bytes::{Bytes, BytesMut};
 
 use super::CHANNELS;
-use crate::wire::datagram::{encode_acks, Frame, Split, FLAG_ACK, FLAG_NACK};
-use crate::wire::{unwrap24, U24_MASK};
+use crate::wire::datagram::{FLAG_ACK, FLAG_NACK, Frame, Split, encode_acks};
+use crate::wire::{U24_MASK, unwrap24};
 
 const MAX_ORDER_BACKLOG: usize = 8192;
 const MAX_RELIABLE_WINDOW: usize = 1 << 16;
@@ -25,9 +25,17 @@ pub struct RecvLimits {
 
 impl RecvLimits {
     /// For a client: servers send multi-megabyte messages (resource packs, chunks) back to back.
-    pub const CLIENT: Self = Self { max_split_parts: 8192, max_splits: 64, max_buffered_bytes: 64 << 20 };
+    pub const CLIENT: Self = Self {
+        max_split_parts: 8192,
+        max_splits: 64,
+        max_buffered_bytes: 64 << 20,
+    };
     /// For a server's peers, whose largest message is the login (well under 1 MiB).
-    pub const SERVER: Self = Self { max_split_parts: 512, max_splits: 16, max_buffered_bytes: 2 << 20 };
+    pub const SERVER: Self = Self {
+        max_split_parts: 512,
+        max_splits: 16,
+        max_buffered_bytes: 2 << 20,
+    };
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,7 +86,11 @@ pub(crate) struct RecvState {
 /// A frame body slices its datagram and keeps all of it alive, so a small body is copied out
 /// before it is buffered: a peer cannot pin a full datagram per byte it is charged for.
 fn detach(body: Bytes, datagram_len: usize) -> Bytes {
-    if body.len() * 2 < datagram_len { Bytes::copy_from_slice(&body) } else { body }
+    if body.len() * 2 < datagram_len {
+        Bytes::copy_from_slice(&body)
+    } else {
+        body
+    }
 }
 
 impl RecvState {
@@ -155,21 +167,36 @@ impl RecvState {
         Ok(())
     }
 
-    fn reassemble(&mut self, frame: Frame, split: Split, datagram_len: usize) -> Result<Option<Frame>, RecvError> {
-        if split.count == 0 || split.count > self.limits.max_split_parts || split.index >= split.count {
+    fn reassemble(
+        &mut self,
+        frame: Frame,
+        split: Split,
+        datagram_len: usize,
+    ) -> Result<Option<Frame>, RecvError> {
+        if split.count == 0
+            || split.count > self.limits.max_split_parts
+            || split.index >= split.count
+        {
             return Err(RecvError::BadSplit);
         }
         match self.splits.get(&split.id) {
             Some(buf) if buf.count != split.count => return Err(RecvError::BadSplit),
             Some(buf) if buf.parts.contains_key(&split.index) => return Ok(None),
             Some(_) => {}
-            None if self.splits.len() >= self.limits.max_splits => return Err(RecvError::TooManySplits),
+            None if self.splits.len() >= self.limits.max_splits => {
+                return Err(RecvError::TooManySplits);
+            }
             None => {}
         }
         self.charge(frame.body.len())?;
-        let buf = self.splits.entry(split.id).or_insert_with(|| SplitBuffer { count: split.count, parts: BTreeMap::new(), len: 0 });
+        let buf = self.splits.entry(split.id).or_insert_with(|| SplitBuffer {
+            count: split.count,
+            parts: BTreeMap::new(),
+            len: 0,
+        });
         buf.len += frame.body.len();
-        buf.parts.insert(split.index, detach(frame.body.clone(), datagram_len));
+        buf.parts
+            .insert(split.index, detach(frame.body.clone(), datagram_len));
         if buf.parts.len() < split.count as usize {
             return Ok(None);
         }
@@ -179,7 +206,11 @@ impl RecvState {
         for part in buf.parts.values() {
             whole.extend_from_slice(part);
         }
-        Ok(Some(Frame { split: None, body: whole.freeze(), ..frame }))
+        Ok(Some(Frame {
+            split: None,
+            body: whole.freeze(),
+            ..frame
+        }))
     }
 
     fn deliver(&mut self, frame: Frame, datagram_len: usize) -> Result<(), RecvError> {
@@ -195,7 +226,9 @@ impl RecvState {
                     return Err(RecvError::OrderBacklogFull);
                 }
                 self.charge(frame.body.len())?;
-                self.channels[ch].backlog.insert(idx, detach(frame.body, datagram_len));
+                self.channels[ch]
+                    .backlog
+                    .insert(idx, detach(frame.body, datagram_len));
                 return Ok(());
             }
             self.ready.push_back(frame.body);

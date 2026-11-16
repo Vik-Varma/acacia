@@ -14,7 +14,9 @@ use acacia_physics::BlockPos;
 use acacia_world::{Aabb, BlockAccess, BlockRegistry, BlockState, ChunkView};
 
 pub use super::cell::Cell;
-use super::cell::{AVOID, DANGER_NEAR, ENTITY, HURT_FLOOR, LIQUID, OPENABLE, Rect, UNLOADED, WATER, state_flags};
+use super::cell::{
+    AVOID, DANGER_NEAR, ENTITY, HURT_FLOOR, LIQUID, OPENABLE, Rect, UNLOADED, WATER, state_flags,
+};
 use super::hazard::Hazards;
 use super::memo::CellMemo;
 pub use super::palette::Palette;
@@ -69,7 +71,12 @@ pub struct Spot {
 
 impl Spot {
     pub(crate) fn stand(feet: f32, made: u8) -> Spot {
-        Spot { feet, kind: SpotKind::Stand, wet: false, made }
+        Spot {
+            feet,
+            kind: SpotKind::Stand,
+            wet: false,
+            made,
+        }
     }
 }
 
@@ -81,7 +88,8 @@ impl Hasher for PosHasher {
         for chunk in bytes.chunks(4) {
             let mut word = [0u8; 4];
             word[..chunk.len()].copy_from_slice(chunk);
-            self.0 = (self.0.rotate_left(5) ^ u64::from(u32::from_le_bytes(word))).wrapping_mul(0x517c_c1b7_2722_0a95);
+            self.0 = (self.0.rotate_left(5) ^ u64::from(u32::from_le_bytes(word)))
+                .wrapping_mul(0x517c_c1b7_2722_0a95);
         }
     }
 
@@ -102,7 +110,9 @@ pub(crate) struct Span {
 
 impl Span {
     pub fn hits(&self, boxes: &[Aabb]) -> bool {
-        boxes.iter().any(|b| self.rect.overlaps(b) && b.min[1] < self.hi - EPS && b.max[1] > self.lo + EPS)
+        boxes
+            .iter()
+            .any(|b| self.rect.overlaps(b) && b.min[1] < self.hi - EPS && b.max[1] > self.lo + EPS)
     }
 }
 
@@ -127,7 +137,15 @@ impl<'r, B: Blocks> Terrain<'r, B> {
 impl<'r, B: Blocks, P: Palette + ?Sized> Terrain<'r, B, P> {
     pub fn with_palette(blocks: B, palette: &'r P) -> Self {
         let (cells, spots, toggled, unloaded) = Default::default();
-        Self { blocks, palette, cells, spots, toggled, unloaded, hazards: None }
+        Self {
+            blocks,
+            palette,
+            cells,
+            spots,
+            toggled,
+            unloaded,
+            hazards: None,
+        }
     }
 
     /// The native ids underneath, for an edition engine that reads them itself.
@@ -161,12 +179,35 @@ impl<'r, B: Blocks, P: Palette + ?Sized> Terrain<'r, B, P> {
         const SOLID: &[Aabb] = &[Aabb::FULL];
         let Some((block, liquid)) = self.blocks.ids(p) else {
             self.unloaded.set(true);
-            return Cell { boxes: SOLID, flags: UNLOADED, block: u32::MAX, liquid: u32::MAX };
+            return Cell {
+                boxes: SOLID,
+                flags: UNLOADED,
+                block: u32::MAX,
+                liquid: u32::MAX,
+            };
         };
-        let entity = if self.hazards.as_ref().is_some_and(|h| h.closed(p)) { ENTITY | AVOID } else { 0 };
-        let Some(state) = self.palette.state(block) else { return Cell { boxes: SOLID, flags: entity, block, liquid } };
-        let liquid_flags = self.palette.state(liquid).map_or(0, |s| state_flags(s) & (WATER | LIQUID | AVOID | DANGER_NEAR));
-        Cell { boxes: state.boxes, flags: state_flags(state) | liquid_flags | entity, block, liquid }
+        let entity = if self.hazards.as_ref().is_some_and(|h| h.closed(p)) {
+            ENTITY | AVOID
+        } else {
+            0
+        };
+        let Some(state) = self.palette.state(block) else {
+            return Cell {
+                boxes: SOLID,
+                flags: entity,
+                block,
+                liquid,
+            };
+        };
+        let liquid_flags = self.palette.state(liquid).map_or(0, |s| {
+            state_flags(s) & (WATER | LIQUID | AVOID | DANGER_NEAR)
+        });
+        Cell {
+            boxes: state.boxes,
+            flags: state_flags(state) | liquid_flags | entity,
+            block,
+            liquid,
+        }
     }
 
     pub(crate) fn palette(&self) -> &'r P {
@@ -179,7 +220,11 @@ impl<'r, B: Blocks, P: Palette + ?Sized> Terrain<'r, B, P> {
 
     /// Boxes of the cell's door, gate or trapdoor once toggled.
     pub(crate) fn toggled_boxes(&self, block: u32) -> Option<&'r [Aabb]> {
-        let id = *self.toggled.borrow_mut().entry(block).or_insert_with(|| self.palette.opened(block));
+        let id = *self
+            .toggled
+            .borrow_mut()
+            .entry(block)
+            .or_insert_with(|| self.palette.opened(block));
         Some(self.palette.state(id?)?.boxes)
     }
 
@@ -205,7 +250,12 @@ impl<'r, B: Blocks, P: Palette + ?Sized> Terrain<'r, B, P> {
         let wet = here.is_water();
         if let Some((feet, floor)) = self.support(p) {
             let ok = !floor.has(AVOID | HURT_FLOOR) && self.body_clear(p, Rect::FOOT, feet);
-            return ok.then_some(Spot { feet, kind: SpotKind::Stand, wet, made: 0 });
+            return ok.then_some(Spot {
+                feet,
+                kind: SpotKind::Stand,
+                wet,
+                made: 0,
+            });
         }
         let kind = if wet {
             SpotKind::Swim
@@ -215,7 +265,12 @@ impl<'r, B: Blocks, P: Palette + ?Sized> Terrain<'r, B, P> {
             return None;
         };
         let feet = p[1] as f32;
-        self.body_clear(p, Rect::FOOT, feet).then_some(Spot { feet, kind, wet, made: 0 })
+        self.body_clear(p, Rect::FOOT, feet).then_some(Spot {
+            feet,
+            kind,
+            wet,
+            made: 0,
+        })
     }
 
     /// Feet height on the highest floor box under the footprint, and the cell it belongs to.
@@ -226,7 +281,11 @@ impl<'r, B: Blocks, P: Palette + ?Sized> Terrain<'r, B, P> {
             if c.has(UNLOADED) {
                 return None;
             }
-            for b in c.boxes.iter().filter(|b| Rect::FOOT.overlaps(b) && b.max[1] > lo + EPS && b.max[1] <= hi + EPS) {
+            for b in c
+                .boxes
+                .iter()
+                .filter(|b| Rect::FOOT.overlaps(b) && b.max[1] > lo + EPS && b.max[1] <= hi + EPS)
+            {
                 let feet = (y + dy) as f32 + b.max[1];
                 if best.is_none_or(|(f, _)| feet > f) {
                     best = Some((feet, c));
@@ -247,24 +306,44 @@ impl<'r, B: Blocks, P: Palette + ?Sized> Terrain<'r, B, P> {
         self.obstruct_from(p, from, rect, feet, |_, _, _| false)
     }
 
-    pub(crate) fn obstruct_from(&self, p: BlockPos, from: Spot, rect: Rect, feet: f32, mut ok: impl FnMut(BlockPos, Cell, Span) -> bool) -> bool {
+    pub(crate) fn obstruct_from(
+        &self,
+        p: BlockPos,
+        from: Spot,
+        rect: Rect,
+        feet: f32,
+        mut ok: impl FnMut(BlockPos, Cell, Span) -> bool,
+    ) -> bool {
         let own = |q: BlockPos| q[1] == p[1] || q[1] == p[1] + 1;
         let (carved, opened) = (from.made & CARVED != 0, from.made & OPENED != 0);
         self.obstruct(p, rect, feet, |q, c, s| {
-            let toggled = opened && own(q) && c.has(OPENABLE) && self.toggled_boxes(c.block).is_some_and(|b| !s.hits(b));
+            let toggled = opened
+                && own(q)
+                && c.has(OPENABLE)
+                && self.toggled_boxes(c.block).is_some_and(|b| !s.hits(b));
             (carved && own(q)) || toggled || ok(q, c, s)
         })
     }
 
     /// Visits every cell a standing player box over `rect` of column `p` (feet at `feet`) collides
     /// with or must avoid; `ok` decides whether that cell can be dealt with. Unloaded cells fail.
-    pub(crate) fn obstruct(&self, [x, _, z]: BlockPos, rect: Rect, feet: f32, mut ok: impl FnMut(BlockPos, Cell, Span) -> bool) -> bool {
+    pub(crate) fn obstruct(
+        &self,
+        [x, _, z]: BlockPos,
+        rect: Rect,
+        feet: f32,
+        mut ok: impl FnMut(BlockPos, Cell, Span) -> bool,
+    ) -> bool {
         let top = feet + BODY_HEIGHT;
         // One cell below the feet too: fences and walls reach 1.5 up.
         for y in feet.floor() as i32 - 1..=(top - EPS).floor() as i32 {
             let q = [x, y, z];
             let c = self.cell(q);
-            let span = Span { rect, lo: feet - y as f32, hi: top - y as f32 };
+            let span = Span {
+                rect,
+                lo: feet - y as f32,
+                hi: top - y as f32,
+            };
             if c.has(UNLOADED) {
                 return false;
             }

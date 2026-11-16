@@ -9,10 +9,10 @@ mod tests;
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use crate::turn::IceServers;
 use crate::Signal;
+use crate::turn::IceServers;
 use codec::Inbound;
 
 /// The flavour the realm's `networkProtocol` names.
@@ -61,7 +61,12 @@ pub struct SignalingSession {
 
 impl SignalingSession {
     /// Call once the WebSocket is open. JSON-RPC sessions request TURN credentials right away.
-    pub fn new(protocol: SignalingProtocol, own_network_id: u64, ping_interval: Duration, now: Instant) -> Self {
+    pub fn new(
+        protocol: SignalingProtocol,
+        own_network_id: u64,
+        ping_interval: Duration,
+        now: Instant,
+    ) -> Self {
         let mut s = Self {
             protocol,
             own_network_id,
@@ -86,8 +91,10 @@ impl SignalingSession {
             SignalingProtocol::Legacy => self.out.push_back(codec::legacy_signal(to, signal)),
             SignalingProtocol::JsonRpc => {
                 let id = codec::uuid();
-                self.out.push_back(codec::rpc_signal(&id, to, self.own_network_id, signal));
-                self.pending.insert(id, (codec::METHOD_SEND, now + REQUEST_TIMEOUT));
+                self.out
+                    .push_back(codec::rpc_signal(&id, to, self.own_network_id, signal));
+                self.pending
+                    .insert(id, (codec::METHOD_SEND, now + REQUEST_TIMEOUT));
             }
         }
     }
@@ -95,7 +102,9 @@ impl SignalingSession {
     pub fn handle_text(&mut self, text: &str) {
         for inbound in codec::decode(text) {
             match inbound {
-                Inbound::Signal { from, signal } => self.events.push_back(SignalingEvent::Signal { from, signal }),
+                Inbound::Signal { from, signal } => self
+                    .events
+                    .push_back(SignalingEvent::Signal { from, signal }),
                 Inbound::Credentials(c) => self.credentials(&c),
                 Inbound::ServerError(e) => self.events.push_back(SignalingEvent::Error(e)),
                 Inbound::Ack(id) => self.out.push_back(codec::rpc_ack(&id)),
@@ -106,11 +115,15 @@ impl SignalingSession {
     }
 
     fn handle_response(&mut self, id: &str, result: Result<Value, String>) {
-        let Some((method, _)) = self.pending.remove(id) else { return };
+        let Some((method, _)) = self.pending.remove(id) else {
+            return;
+        };
         match (method, result) {
             (codec::METHOD_TURN_AUTH, Ok(creds)) => self.credentials(&creds),
             (_, Ok(_)) => {}
-            (method, Err(e)) => self.events.push_back(SignalingEvent::Error(format!("{method}: {e}"))),
+            (method, Err(e)) => self
+                .events
+                .push_back(SignalingEvent::Error(format!("{method}: {e}"))),
         }
     }
 
@@ -126,19 +139,32 @@ impl SignalingSession {
             self.next_ping = now + self.ping_interval;
             match self.protocol {
                 SignalingProtocol::Legacy => self.out.push_back(codec::legacy_ping()),
-                SignalingProtocol::JsonRpc => self.out.push_back(codec::rpc_request(&codec::uuid(), codec::METHOD_PING, json!([]))),
+                SignalingProtocol::JsonRpc => self.out.push_back(codec::rpc_request(
+                    &codec::uuid(),
+                    codec::METHOD_PING,
+                    json!([]),
+                )),
             }
         }
-        let expired: Vec<String> = self.pending.iter().filter(|(_, (_, d))| *d <= now).map(|(id, _)| id.clone()).collect();
+        let expired: Vec<String> = self
+            .pending
+            .iter()
+            .filter(|(_, (_, d))| *d <= now)
+            .map(|(id, _)| id.clone())
+            .collect();
         for id in expired {
             if let Some((method, _)) = self.pending.remove(&id) {
-                self.events.push_back(SignalingEvent::Error(format!("{method} timed out")));
+                self.events
+                    .push_back(SignalingEvent::Error(format!("{method} timed out")));
             }
         }
     }
 
     pub fn poll_timeout(&self) -> Instant {
-        self.pending.values().map(|(_, d)| *d).fold(self.next_ping, Instant::min)
+        self.pending
+            .values()
+            .map(|(_, d)| *d)
+            .fold(self.next_ping, Instant::min)
     }
 
     pub fn poll_text(&mut self) -> Option<String> {

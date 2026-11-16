@@ -7,8 +7,8 @@ use std::collections::{BinaryHeap, HashMap};
 
 use super::PathNode;
 use super::favour::Favour;
-use super::hazard::Hazards;
 use super::goal::{Goal, Speed};
+use super::hazard::Hazards;
 use super::leap_moves::{LeapCand, Line};
 use super::mac::Macro;
 use super::moves::{Edge, MoveKind};
@@ -41,7 +41,18 @@ pub(super) struct Rec {
 
 impl Rec {
     pub fn start(key: NodeKey, spot: Spot, mom: Momentum) -> Self {
-        Self { key, spot, kind: MoveKind::Walk, parent: NONE, g: 0.0, raw: 0.0, placed: 0, work: NONE, mac: NONE, mom }
+        Self {
+            key,
+            spot,
+            kind: MoveKind::Walk,
+            parent: NONE,
+            g: 0.0,
+            raw: 0.0,
+            placed: 0,
+            work: NONE,
+            mac: NONE,
+            mom,
+        }
     }
 }
 
@@ -105,13 +116,41 @@ pub(super) struct Frontier<'s> {
 }
 
 impl<'s> Frontier<'s> {
-    pub fn new(start: Rec, goal: &'s Goal, speed: Speed, favour: Option<&'s Favour>, hazards: Option<&'s Hazards>) -> Self {
+    pub fn new(
+        start: Rec,
+        goal: &'s Goal,
+        speed: Speed,
+        favour: Option<&'s Favour>,
+        hazards: Option<&'s Hazards>,
+    ) -> Self {
         let mut index = KeyMap::default();
         index.insert(start.key, 0);
         let h = goal.estimate(start.key.pos, speed, start.key.entry == Entry::Rest);
-        let (open, recs) = (BinaryHeap::from([Open { f: 0.0, g: 0.0, index: 0, lazy: NONE }]), vec![start]);
+        let (open, recs) = (
+            BinaryHeap::from([Open {
+                f: 0.0,
+                g: 0.0,
+                index: 0,
+                lazy: NONE,
+            }]),
+            vec![start],
+        );
         let (works, macs, lazies, shorts) = Default::default();
-        Self { recs, index, open, works, macs, lazies, shorts, best: [0; 7], best_score: [h; 7], goal, speed, favour, hazards }
+        Self {
+            recs,
+            index,
+            open,
+            works,
+            macs,
+            lazies,
+            shorts,
+            best: [0; 7],
+            best_score: [h; 7],
+            goal,
+            speed,
+            favour,
+            hazards,
+        }
     }
 
     /// The next node to expand or leap to solve, skipping those a cheaper path made stale.
@@ -125,7 +164,10 @@ impl<'s> Frontier<'s> {
             }
             let l = self.lazies[lazy as usize];
             let parent = &self.recs[l.parent as usize];
-            let short = self.shorts.get(&(l.parent, l.cand.line(parent.key.pos))).is_some_and(|&k| l.cand.steps() >= k);
+            let short = self
+                .shorts
+                .get(&(l.parent, l.cand.line(parent.key.pos)))
+                .is_some_and(|&k| l.cand.steps() >= k);
             if parent.g == l.parent_g && !short {
                 return Some(Popped::Leap(l));
             }
@@ -145,18 +187,47 @@ impl<'s> Frontier<'s> {
         let parent_g = self.recs[i as usize].g;
         let g = parent_g + floor;
         let f = g + self.goal.estimate(cand.q, self.speed, false);
-        self.open.push(Open { f, g, index: NONE, lazy: self.lazies.len() as u32 });
-        self.lazies.push(Lazy { parent: i, parent_g, floor, cand });
+        self.open.push(Open {
+            f,
+            g,
+            index: NONE,
+            lazy: self.lazies.len() as u32,
+        });
+        self.lazies.push(Lazy {
+            parent: i,
+            parent_g,
+            floor,
+            cand,
+        });
     }
 
     /// Takes edge `e` from node `i` if it reaches its node cheaper than known.
     pub fn relax(&mut self, i: u32, e: &Edge) {
         let rec = self.recs[i as usize];
         let threat = self.hazards.map_or(0.0, |h| h.edge(rec.key.pos, e.pos));
-        let g = rec.g + self.favour.map_or(e.cost, |f| f.cost(rec.key.pos, e.pos, e.cost, self.speed)) + threat;
-        let key = NodeKey { pos: e.pos, entry: e.entry, ..rec.key };
+        let g = rec.g
+            + self
+                .favour
+                .map_or(e.cost, |f| f.cost(rec.key.pos, e.pos, e.cost, self.speed))
+            + threat;
+        let key = NodeKey {
+            pos: e.pos,
+            entry: e.entry,
+            ..rec.key
+        };
         let (placed, raw) = (rec.placed + e.work.places(), rec.raw + e.cost);
-        let mut next = Rec { key, spot: e.spot, kind: e.kind, parent: i, g, raw, placed, work: NONE, mac: NONE, mom: e.mom };
+        let mut next = Rec {
+            key,
+            spot: e.spot,
+            kind: e.kind,
+            parent: i,
+            g,
+            raw,
+            placed,
+            work: NONE,
+            mac: NONE,
+            mom: e.mom,
+        };
         let j = match self.index.entry(key) {
             Slot::Occupied(o) => {
                 let j = *o.get();
@@ -181,8 +252,15 @@ impl<'s> Frontier<'s> {
             self.macs.push(m);
         }
         self.recs[j as usize] = next;
-        let h = self.goal.estimate(e.pos, self.speed, e.entry == Entry::Rest);
-        self.open.push(Open { f: g + h, g, index: j, lazy: NONE });
+        let h = self
+            .goal
+            .estimate(e.pos, self.speed, e.entry == Entry::Rest);
+        self.open.push(Open {
+            f: g + h,
+            g,
+            index: j,
+            lazy: NONE,
+        });
         for (k, c) in COEFFICIENTS.iter().enumerate() {
             let score = h + g / c;
             if self.best_score[k] - score > MIN_IMPROVEMENT {
@@ -198,7 +276,17 @@ impl<'s> Frontier<'s> {
             let work = self.works.get(r.work as usize).copied().unwrap_or_default();
             let mac = self.macs.get(r.mac as usize).copied();
             let cost = r.raw - self.recs[r.parent as usize].raw;
-            nodes.push(PathNode { pos: r.key.pos, feet: r.spot.feet, kind: r.kind, wet: r.spot.wet, work, entry: r.key.entry, mom: r.mom, mac, cost });
+            nodes.push(PathNode {
+                pos: r.key.pos,
+                feet: r.spot.feet,
+                kind: r.kind,
+                wet: r.spot.wet,
+                work,
+                entry: r.key.entry,
+                mom: r.mom,
+                mac,
+                cost,
+            });
             i = r.parent;
         }
         nodes.reverse();

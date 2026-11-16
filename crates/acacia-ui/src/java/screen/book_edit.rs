@@ -4,11 +4,11 @@
 use super::book::{self, DONE, NEXT, PREVIOUS, PageButton, draw_indicator, page_indicator};
 use super::{Env, Screen, arena_children, render_all};
 use crate::java::gui::Metrics;
+use crate::java::widget::Ctx;
 use crate::java::widget::button::Button;
 use crate::java::widget::input::{Child, Key};
 use crate::java::widget::layout::Arena;
 use crate::java::widget::multiline_box::MultiLineEditBox;
-use crate::java::widget::Ctx;
 
 pub const SIGN: &str = "book.signButton";
 
@@ -38,7 +38,11 @@ impl BookEdit {
         editor.field.line_limit = Some(126 / 9);
         editor.area.base.focused = true;
         editor.focused_time = now;
-        let mut book = BookEdit { pages, page: 0, editor };
+        let mut book = BookEdit {
+            pages,
+            page: 0,
+            editor,
+        };
         book.load_page(m);
         book
     }
@@ -100,7 +104,14 @@ impl BookEdit {
 
     /// A left click at (`x`, `y`) on a `width`-wide screen: on the editor it moves the cursor and
     /// focuses it (true); elsewhere the editor loses the focus (false: the buttons take it).
-    pub fn mouse_clicked(&mut self, m: &dyn Metrics, width: i32, x: f64, y: f64, shift: bool) -> bool {
+    pub fn mouse_clicked(
+        &mut self,
+        m: &dyn Metrics,
+        width: i32,
+        x: f64,
+        y: f64,
+        shift: bool,
+    ) -> bool {
         self.editor.area.base.x = editor_x(width);
         let on = self.editor.area.over(x, y);
         self.editor.area.base.focused = on;
@@ -151,9 +162,19 @@ impl BookEditScreen {
         (sign.base.x, sign.base.y) = (env.width / 2 - 98 - 2, top);
         let mut done = Button::named(ctx, 98, DONE);
         (done.base.x, done.base.y) = (env.width / 2 + 2, top);
-        let widgets: Arena = vec![Box::new(editor), Box::new(back), Box::new(forward), Box::new(sign), Box::new(done)];
+        let widgets: Arena = vec![
+            Box::new(editor),
+            Box::new(back),
+            Box::new(forward),
+            Box::new(sign),
+            Box::new(done),
+        ];
         let indicator = page_indicator(ctx, book.page, book.pages.len());
-        BookEditScreen { env, indicator, widgets }
+        BookEditScreen {
+            env,
+            indicator,
+            widgets,
+        }
     }
 }
 

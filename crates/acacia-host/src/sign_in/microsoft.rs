@@ -3,7 +3,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use acacia_api::{ApiError, ErrorCode};
-use acacia_client::auth::{Account, AuthClient, AuthConfig, DeviceCodePrompt, Error as AuthError, FileTokenCache};
+use acacia_client::auth::{
+    Account, AuthClient, AuthConfig, DeviceCodePrompt, Error as AuthError, FileTokenCache,
+};
 use parking_lot::Mutex;
 
 use super::{DeviceCode, JavaFuture, LoginFuture, MsaAccount, OnlineLogin, Prompt, SignIn};
@@ -18,13 +20,21 @@ pub struct MicrosoftSignIn {
 
 impl MicrosoftSignIn {
     pub fn new(config: AuthConfig) -> Self {
-        Self { config, client: Mutex::new(None), caches: Mutex::new(HashMap::new()) }
+        Self {
+            config,
+            client: Mutex::new(None),
+            caches: Mutex::new(HashMap::new()),
+        }
     }
 
     fn account(&self, account: &MsaAccount) -> Result<Account, ApiError> {
         let client = match &mut *self.client.lock() {
             Some(client) => client.clone(),
-            slot => slot.insert(Arc::new(AuthClient::new(self.config.clone()).map_err(auth)?)).clone(),
+            slot => slot
+                .insert(Arc::new(
+                    AuthClient::new(self.config.clone()).map_err(auth)?,
+                ))
+                .clone(),
         };
         let cache = self.cache(&account.profiles_folder)?;
         Ok(Account::new(client, cache, account.username.clone()))
@@ -35,9 +45,16 @@ impl MicrosoftSignIn {
         if let Some(cache) = caches.get(folder) {
             return Ok(cache.clone());
         }
-        let cache = FileTokenCache::new(folder)
-            .map_err(|e| ApiError::new(ErrorCode::Auth, format!("token cache {}: {e}", folder.display())))?;
-        Ok(caches.entry(folder.to_owned()).or_insert(Arc::new(cache)).clone())
+        let cache = FileTokenCache::new(folder).map_err(|e| {
+            ApiError::new(
+                ErrorCode::Auth,
+                format!("token cache {}: {e}", folder.display()),
+            )
+        })?;
+        Ok(caches
+            .entry(folder.to_owned())
+            .or_insert(Arc::new(cache))
+            .clone())
     }
 }
 
@@ -90,11 +107,19 @@ impl SignIn for MicrosoftSignIn {
 
 async fn sign_in(account: &Account, prompt: Option<Prompt>) -> Result<(), ApiError> {
     let prompt = prompt.expect("one sign-in per login");
-    account.sign_in(move |p: &DeviceCodePrompt| prompt(device_code(p))).await.map(drop).map_err(auth)
+    account
+        .sign_in(move |p: &DeviceCodePrompt| prompt(device_code(p)))
+        .await
+        .map(drop)
+        .map_err(auth)
 }
 
 fn device_code(p: &DeviceCodePrompt) -> DeviceCode {
-    DeviceCode { user_code: p.user_code.clone(), verification_uri: p.verification_uri.clone(), expires_in: p.expires_in }
+    DeviceCode {
+        user_code: p.user_code.clone(),
+        verification_uri: p.verification_uri.clone(),
+        expires_in: p.expires_in,
+    }
 }
 
 fn auth(e: AuthError) -> ApiError {

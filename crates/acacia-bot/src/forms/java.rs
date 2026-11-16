@@ -32,9 +32,18 @@ impl Forms {
 
 impl Bot {
     /// [`Bot::answer_form`] on Java: refused before the reading delay if it does not fit.
-    pub(super) async fn java_answer_form(&mut self, id: u32, reply: FormReply) -> Result<(), ActionError> {
+    pub(super) async fn java_answer_form(
+        &mut self,
+        id: u32,
+        reply: FormReply,
+    ) -> Result<(), ActionError> {
         press(&self.open_dialog(id)?, &reply)?;
-        let form = self.state.forms.get(id).cloned().ok_or_else(|| ActionError::NotPossible(format!("form {id} is not open")))?;
+        let form = self
+            .state
+            .forms
+            .get(id)
+            .cloned()
+            .ok_or_else(|| ActionError::NotPossible(format!("form {id} is not open")))?;
         let delay = match reply {
             FormReply::Close => self.human.between(crate::human::CLICK),
             _ => self.human.reading(form.text_len(), form.inputs()),
@@ -44,16 +53,27 @@ impl Bot {
     }
 
     fn open_dialog(&self, id: u32) -> Result<Dialog, ActionError> {
-        let open = self.state.forms.java.as_ref().filter(|(open, _)| *open == id);
-        open.map(|(_, d)| d.clone()).ok_or_else(|| ActionError::NotPossible(format!("form {id} is not open")))
+        let open = self
+            .state
+            .forms
+            .java
+            .as_ref()
+            .filter(|(open, _)| *open == id);
+        open.map(|(_, d)| d.clone())
+            .ok_or_else(|| ActionError::NotPossible(format!("form {id} is not open")))
     }
 
     /// [`Bot::answer_form_now`] on Java.
-    pub(super) fn java_answer_form_now(&mut self, id: u32, reply: FormReply) -> Result<(), ActionError> {
+    pub(super) fn java_answer_form_now(
+        &mut self,
+        id: u32,
+        reply: FormReply,
+    ) -> Result<(), ActionError> {
         let dialog = self.open_dialog(id)?;
         let effect = press(&dialog, &reply)?;
         let java = self.java().ok_or(ActionError::Disconnected)?.client();
-        java.send_effect(&effect).map_err(|_| ActionError::Disconnected)?;
+        java.send_effect(&effect)
+            .map_err(|_| ActionError::Disconnected)?;
         let forms = &mut self.state.forms;
         match effect {
             Effect::Open(next) => {
@@ -85,25 +105,65 @@ fn unknown(index: usize) -> Dialog {
 
 pub(crate) fn form(id: u32, dialog: &Dialog) -> Form {
     let content = dialog.body.join("\n");
-    let buttons: Vec<Button> = dialog.buttons.iter().map(|b| Button { text: b.label.clone(), image: None }).collect();
+    let buttons: Vec<Button> = dialog
+        .buttons
+        .iter()
+        .map(|b| Button {
+            text: b.label.clone(),
+            image: None,
+        })
+        .collect();
     let kind = match (dialog.kind, dialog.inputs.is_empty()) {
         (DialogKind::Confirmation, true) => {
             let label = |i: usize| buttons.get(i).map(|b| b.text.clone()).unwrap_or_default();
-            FormKind::Modal { content, yes: label(0), no: label(1) }
+            FormKind::Modal {
+                content,
+                yes: label(0),
+                no: label(1),
+            }
         }
-        (_, true) => FormKind::Simple { content, buttons, elements: Vec::new(), positions: Vec::new() },
-        (_, false) => FormKind::Dialog { content, elements: dialog.inputs.iter().map(element).collect(), buttons },
+        (_, true) => FormKind::Simple {
+            content,
+            buttons,
+            elements: Vec::new(),
+            positions: Vec::new(),
+        },
+        (_, false) => FormKind::Dialog {
+            content,
+            elements: dialog.inputs.iter().map(element).collect(),
+            buttons,
+        },
     };
-    Form { id, title: dialog.title.clone(), kind }
+    Form {
+        id,
+        title: dialog.title.clone(),
+        kind,
+    }
 }
 
 fn element(input: &Input) -> Element {
     let text = input.label.clone();
     match &input.control {
-        Control::Text { initial, .. } => Element::Input { text, placeholder: String::new(), default: initial.clone() },
-        Control::Boolean { initial, .. } => Element::Toggle { text, default: *initial },
-        Control::SingleOption { options, initial } => Element::Dropdown { text, options: options.iter().map(|(_, shown)| shown.clone()).collect(), default: *initial },
-        Control::NumberRange { start, end, initial, step } => Element::Slider {
+        Control::Text { initial, .. } => Element::Input {
+            text,
+            placeholder: String::new(),
+            default: initial.clone(),
+        },
+        Control::Boolean { initial, .. } => Element::Toggle {
+            text,
+            default: *initial,
+        },
+        Control::SingleOption { options, initial } => Element::Dropdown {
+            text,
+            options: options.iter().map(|(_, shown)| shown.clone()).collect(),
+            default: *initial,
+        },
+        Control::NumberRange {
+            start,
+            end,
+            initial,
+            step,
+        } => Element::Slider {
             text,
             min: f64::from(*start),
             max: f64::from(*end),
@@ -117,12 +177,25 @@ fn element(input: &Input) -> Element {
 fn press(dialog: &Dialog, reply: &FormReply) -> Result<Effect, ActionError> {
     let refuse = || ActionError::NotPossible(format!("{reply:?} does not fit the dialog"));
     let (button, values) = match reply {
-        FormReply::Close if !dialog.can_close_with_escape => return Err(ActionError::NotPossible("this dialog cannot be closed".into())),
-        FormReply::Close => return Ok(dialog.cancel.as_ref().map_or(Effect::Nothing, |b| effect(&dialog.inputs, b, &initial_values(&dialog.inputs)))),
+        FormReply::Close if !dialog.can_close_with_escape => {
+            return Err(ActionError::NotPossible(
+                "this dialog cannot be closed".into(),
+            ));
+        }
+        FormReply::Close => {
+            return Ok(dialog.cancel.as_ref().map_or(Effect::Nothing, |b| {
+                effect(&dialog.inputs, b, &initial_values(&dialog.inputs))
+            }));
+        }
         FormReply::Button(i) => (*i, initial_values(&dialog.inputs)),
-        FormReply::Modal(yes) if dialog.kind == DialogKind::Confirmation => (usize::from(!yes), initial_values(&dialog.inputs)),
+        FormReply::Modal(yes) if dialog.kind == DialogKind::Confirmation => {
+            (usize::from(!yes), initial_values(&dialog.inputs))
+        }
         FormReply::Custom(values) => (0, values_for(&dialog.inputs, values).ok_or_else(refuse)?),
-        FormReply::Dialog { button, values } => (*button, values_for(&dialog.inputs, values).ok_or_else(refuse)?),
+        FormReply::Dialog { button, values } => (
+            *button,
+            values_for(&dialog.inputs, values).ok_or_else(refuse)?,
+        ),
         FormReply::Modal(_) => return Err(refuse()),
     };
     let button = dialog.buttons.get(button).ok_or_else(refuse)?;
@@ -138,12 +211,28 @@ fn values_for(inputs: &[Input], values: &[FormValue]) -> Option<Vec<Value>> {
         .iter()
         .zip(values)
         .map(|(input, value)| match (&input.control, value) {
-            (Control::Text { max_length, .. }, FormValue::Text(s)) if s.chars().count() <= *max_length => Some(Value::Text(s.clone())),
+            (Control::Text { max_length, .. }, FormValue::Text(s))
+                if s.chars().count() <= *max_length =>
+            {
+                Some(Value::Text(s.clone()))
+            }
             (Control::Boolean { .. }, FormValue::Toggle(b)) => Some(Value::Bool(*b)),
-            (Control::SingleOption { options, .. }, FormValue::Choice(i)) if *i < options.len() => Some(Value::Option(*i)),
-            (Control::NumberRange { start, end, initial, step }, FormValue::Slider(x)) => {
+            (Control::SingleOption { options, .. }, FormValue::Choice(i)) if *i < options.len() => {
+                Some(Value::Option(*i))
+            }
+            (
+                Control::NumberRange {
+                    start,
+                    end,
+                    initial,
+                    step,
+                },
+                FormValue::Slider(x),
+            ) => {
                 let x = *x as f32;
-                (start.min(*end)..=start.max(*end)).contains(&x).then(|| Value::Number(snap(x, *start, *end, *initial, *step)))
+                (start.min(*end)..=start.max(*end))
+                    .contains(&x)
+                    .then(|| Value::Number(snap(x, *start, *end, *initial, *step)))
             }
             _ => None,
         })

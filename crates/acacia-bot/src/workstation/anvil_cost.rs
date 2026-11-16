@@ -8,8 +8,8 @@ use acacia_client::proto::types::GameMode;
 use super::anvil::{nbt_int, set_nbt};
 use super::enchants::{anvil_value, enchants, merge, with_enchant_list};
 use super::repair;
-use crate::state::{GameState, ItemStack};
 use crate::ActionError;
+use crate::state::{GameState, ItemStack};
 
 const ENCHANTED_BOOK: &str = "minecraft:enchanted_book";
 /// Levels at which a non-rename craft is "too expensive"; a rename alone is capped below it.
@@ -35,17 +35,32 @@ pub enum AnvilCost {
 }
 
 /// What the anvil makes of `item` with `material` and an optional new name (`""` clears one).
-pub(crate) fn anvil_outcome(state: &GameState, item: &ItemStack, material: Option<&ItemStack>, rename: Option<&str>) -> Result<AnvilOutcome, ActionError> {
+pub(crate) fn anvil_outcome(
+    state: &GameState,
+    item: &ItemStack,
+    material: Option<&ItemStack>,
+    rename: Option<&str>,
+) -> Result<AnvilOutcome, ActionError> {
     let (outcome, cost) = anvil_priced(state, item, material, rename)?;
     match cost {
         AnvilCost::Levels(_) => Ok(outcome),
-        AnvilCost::Short(level) => Err(ActionError::NotPossible(format!("the anvil craft needs level {level}"))),
-        AnvilCost::TooExpensive => Err(ActionError::NotPossible(format!("too expensive ({} levels)", outcome.level))),
+        AnvilCost::Short(level) => Err(ActionError::NotPossible(format!(
+            "the anvil craft needs level {level}"
+        ))),
+        AnvilCost::TooExpensive => Err(ActionError::NotPossible(format!(
+            "too expensive ({} levels)",
+            outcome.level
+        ))),
     }
 }
 
 /// [`anvil_outcome`] whether or not the player can pay for it, and what it asks.
-pub(crate) fn anvil_priced(state: &GameState, item: &ItemStack, material: Option<&ItemStack>, rename: Option<&str>) -> Result<(AnvilOutcome, AnvilCost), ActionError> {
+pub(crate) fn anvil_priced(
+    state: &GameState,
+    item: &ItemStack,
+    material: Option<&ItemStack>,
+    rename: Option<&str>,
+) -> Result<(AnvilOutcome, AnvilCost), ActionError> {
     let not_possible = |why: &str| ActionError::NotPossible(why.to_owned());
     let base = nbt_int(item, "RepairCost") + material.map_or(0, |m| nbt_int(m, "RepairCost"));
     let mut result = item.clone();
@@ -65,7 +80,11 @@ pub(crate) fn anvil_priced(state: &GameState, item: &ItemStack, material: Option
         }
         Some(name) if !name.is_empty() && item.custom_name.as_deref() != Some(name) => {
             result.custom_name = Some(name.to_owned());
-            set_nbt(&mut result, "display", Value::Compound(vec![("Name".into(), Value::String(name.into()))]));
+            set_nbt(
+                &mut result,
+                "display",
+                Value::Compound(vec![("Name".into(), Value::String(name.into()))]),
+            );
             cost += 1;
             rename_cost = 1;
         }
@@ -77,7 +96,11 @@ pub(crate) fn anvil_priced(state: &GameState, item: &ItemStack, material: Option
     let creative = state.player.game_mode == GameMode::Creative;
     let total = base + cost;
     let rename_only = cost == rename_cost;
-    let level = if rename_only { total.min(TOO_EXPENSIVE - 1) } else { total };
+    let level = if rename_only {
+        total.min(TOO_EXPENSIVE - 1)
+    } else {
+        total
+    };
     let cost = match () {
         () if creative => AnvilCost::Levels(level),
         () if level >= TOO_EXPENSIVE => AnvilCost::TooExpensive,
@@ -85,13 +108,29 @@ pub(crate) fn anvil_priced(state: &GameState, item: &ItemStack, material: Option
         () => AnvilCost::Levels(level),
     };
     let kept = nbt_int(item, "RepairCost").max(material.map_or(0, |m| nbt_int(m, "RepairCost")));
-    set_nbt(&mut result, "RepairCost", Value::Int(if rename_only { kept } else { kept * 2 + 1 }));
-    Ok((AnvilOutcome { result, material_used, level }, cost))
+    set_nbt(
+        &mut result,
+        "RepairCost",
+        Value::Int(if rename_only { kept } else { kept * 2 + 1 }),
+    );
+    Ok((
+        AnvilOutcome {
+            result,
+            material_used,
+            level,
+        },
+        cost,
+    ))
 }
 
 /// Repairs or combines `result` (a copy of `item`) with `added`; returns the cost and the
 /// material it uses up.
-fn apply_material(state: &GameState, result: &mut ItemStack, item: &ItemStack, added: &ItemStack) -> Result<(i32, u16), ActionError> {
+fn apply_material(
+    state: &GameState,
+    result: &mut ItemStack,
+    item: &ItemStack,
+    added: &ItemStack,
+) -> Result<(i32, u16), ActionError> {
     let name_of = |s: &ItemStack| state.items.name(s.network_id).unwrap_or_default();
     let (item_name, added_name) = (name_of(item), name_of(added));
     let max = repair::max_durability(item_name);
@@ -104,7 +143,9 @@ fn apply_material(state: &GameState, result: &mut ItemStack, item: &ItemStack, a
     }
     let book = added_name == ENCHANTED_BOOK;
     if added_name != item_name && !book {
-        return Err(ActionError::NotPossible(format!("{added_name} does not combine with {item_name}")));
+        return Err(ActionError::NotPossible(format!(
+            "{added_name} does not combine with {item_name}"
+        )));
     }
     let mut cost = 0;
     if let Some(max) = max.filter(|_| !book) {

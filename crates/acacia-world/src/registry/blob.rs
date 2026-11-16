@@ -72,7 +72,13 @@ fn parse_tables() -> Blob {
             min_level: r.u8(),
         })
         .collect();
-    Blob { frictions, strings, shapes, mining, states_at: r.pos }
+    Blob {
+        frictions,
+        strings,
+        shapes,
+        mining,
+        states_at: r.pos,
+    }
 }
 
 /// Distinct box lists, then each state's (list index, offset byte).
@@ -81,25 +87,41 @@ type Selections = (Vec<Box<[Aabb]>>, Vec<(u16, u8)>);
 /// Every vanilla state's selection boxes and offset, in runtime-id order (layout: `tools/gen-selection.py`).
 fn selections() -> Vec<(&'static [Aabb], SelectionOffset)> {
     static SHAPES: LazyLock<Selections> = LazyLock::new(|| {
-        let mut r = Reader { blob: SELECTION, pos: 0 };
+        let mut r = Reader {
+            blob: SELECTION,
+            pos: 0,
+        };
         assert_eq!(r.bytes(4), b"BSL2", "selection.bin: bad magic");
         let shapes = (0..r.u32()).map(|_| r.boxes()).collect();
         let ids = (0..r.u32()).map(|_| (r.u16(), r.u8())).collect();
         (shapes, ids)
     });
     let (shapes, ids) = &*SHAPES;
-    ids.iter().map(|&(i, o)| (&shapes[i as usize][..], SelectionOffset::from_u8(o))).collect()
+    ids.iter()
+        .map(|&(i, o)| (&shapes[i as usize][..], SelectionOffset::from_u8(o)))
+        .collect()
 }
 
 /// Every vanilla state in runtime-id order.
 pub(super) fn vanilla_states() -> Vec<BlockState> {
     let blob: &'static Blob = &PARSED;
     let selections = selections();
-    let mut r = Reader { blob: BLOB, pos: blob.states_at };
+    let mut r = Reader {
+        blob: BLOB,
+        pos: blob.states_at,
+    };
     let n = r.u32();
-    assert_eq!(n, selections.len(), "selection.bin is stale: regenerate it with tools/gen-selection.py");
+    assert_eq!(
+        n,
+        selections.len(),
+        "selection.bin is stale: regenerate it with tools/gen-selection.py"
+    );
     let neutral = &super::neutral::TABLES.to_neutral;
-    assert_eq!(n, neutral.len(), "neutral.bin is stale: regenerate it with acacia-registry's tools/gen.mjs");
+    assert_eq!(
+        n,
+        neutral.len(),
+        "neutral.bin is stale: regenerate it with acacia-registry's tools/gen.mjs"
+    );
     (0..n)
         .map(|i| {
             let name = blob.strings[r.u16() as usize];

@@ -10,8 +10,15 @@ fn corner() -> RgbaImage {
 }
 
 fn map(rotation: u8) -> MapImage {
-    let marker = MapMarker { offset: [0, 0], rotation, kind: Kind::MarkerWhite };
-    MapImage { rgba: [10, 20, 30, 255].repeat(MAP_SIZE * MAP_SIZE), markers: vec![marker] }
+    let marker = MapMarker {
+        offset: [0, 0],
+        rotation,
+        kind: Kind::MarkerWhite,
+    };
+    MapImage {
+        rgba: [10, 20, 30, 255].repeat(MAP_SIZE * MAP_SIZE),
+        markers: vec![marker],
+    }
 }
 
 #[test]
@@ -50,5 +57,8 @@ fn the_atlas_holds_the_newest_picture() {
     changed.rgba[..4].copy_from_slice(&[1, 2, 3, 255]);
     shown.show(&mut atlas, root, &Arc::new(changed));
     assert_eq!(shown.sprite(&atlas), Some(sprite));
-    assert_eq!(atlas.image().get_pixel(sprite.x, sprite.y).0, [1, 2, 3, 255]);
+    assert_eq!(
+        atlas.image().get_pixel(sprite.x, sprite.y).0,
+        [1, 2, 3, 255]
+    );
 }

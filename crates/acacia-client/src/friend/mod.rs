@@ -12,7 +12,7 @@ use tokio::sync::oneshot;
 
 use crate::signaling::SignalingTarget;
 #[cfg(feature = "online")]
-pub use join::{friend_builder, join_friend_world, FriendJoinError};
+pub use join::{FriendJoinError, friend_builder, join_friend_world};
 
 /// A friend's world joined at the Xbox level, ready to dial with [`crate::ClientBuilder::friend`].
 /// Dropping it (or the connection made from it) leaves the friend's Xbox session.

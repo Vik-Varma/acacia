@@ -8,19 +8,20 @@ use std::net::SocketAddr;
 
 use acacia_auth::LoginCredentials;
 use acacia_proto::packets::{
-    ClientToServerHandshake, Disconnect, Login, NetworkSettings, PlayStatus, PlayStatusStatus, ServerToClientHandshake, Transfer,
+    ClientToServerHandshake, Disconnect, Login, NetworkSettings, PlayStatus, PlayStatusStatus,
+    ServerToClientHandshake, Transfer,
 };
 use acacia_proto::types::DisconnectFailReason;
-use acacia_proto::{encode_packet, Packet, RawPacket};
+use acacia_proto::{Packet, RawPacket, encode_packet};
 use acacia_session::batch::BatchCodec;
 use acacia_session::compression::Algorithm;
 use acacia_session::crypto::derive_key;
 use acacia_session::server::ServerConnection;
 use bytes::{Bytes, BytesMut};
 use p384::ecdsa::SigningKey;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use crate::intercept::{encode, Chain, Direction};
+use crate::intercept::{Chain, Direction, encode};
 use crate::login;
 use crate::record::SessionLog;
 
@@ -64,7 +65,13 @@ pub struct Relay {
 impl Relay {
     /// `wires` are the game's and the server's: they differ when a game that joined over RakNet
     /// is relayed to a realm or a friend's world.
-    pub fn new(wires: (Wire, Wire), key: SigningKey, credentials: Option<LoginCredentials>, log: Option<SessionLog>, chain: Chain) -> Self {
+    pub fn new(
+        wires: (Wire, Wire),
+        key: SigningKey,
+        credentials: Option<LoginCredentials>,
+        log: Option<SessionLog>,
+        chain: Chain,
+    ) -> Self {
         let (game_wire, server_wire) = wires;
         let game = match game_wire {
             Wire::RakNet => ServerConnection::new(key.clone()),
@@ -126,10 +133,14 @@ impl Relay {
     /// Records a game message and re-batches what the interceptors let through for the server,
     /// Login re-signed.
     pub fn on_game_message(&mut self, msg: &[u8]) -> Result<Out, String> {
-        let packets = self.game.decode(msg).map_err(|e| format!("game batch: {e}"))?;
+        let packets = self
+            .game
+            .decode(msg)
+            .map_err(|e| format!("game batch: {e}"))?;
         let mut forward = Vec::with_capacity(packets.len());
         for buf in packets {
-            let raw = RawPacket::parse(buf.clone()).map_err(|e| format!("game packet header: {e}"))?;
+            let raw =
+                RawPacket::parse(buf.clone()).map_err(|e| format!("game packet header: {e}"))?;
             if raw.id == Login::ID {
                 forward.push(self.login(&raw)?);
                 continue;
@@ -138,19 +149,23 @@ impl Relay {
             self.server_ready |= raw.id == ClientToServerHandshake::ID;
             self.record(true, &raw);
             let first = forward.len();
-            self.chain.run(true, buf.clone(), &raw, &mut forward).map_err(|e| format!("intercepted packet: {e}"))?;
+            self.chain
+                .run(true, buf.clone(), &raw, &mut forward)
+                .map_err(|e| format!("intercepted packet: {e}"))?;
             self.record_outcome(true, &raw, &buf, &forward[first..]);
         }
         let mut out = Out::default();
         if !forward.is_empty() {
-            out.to_server.push(self.up_codec.encode(forward.iter().map(|b| &b[..])));
+            out.to_server
+                .push(self.up_codec.encode(forward.iter().map(|b| &b[..])));
         }
         self.release_held(&mut out);
         Ok(out)
     }
 
     fn login(&mut self, raw: &RawPacket) -> Result<Bytes, String> {
-        let l = login::read(&raw.body, &self.key, self.credentials.as_ref()).map_err(|e| format!("game login: {e}"))?;
+        let l = login::read(&raw.body, &self.key, self.credentials.as_ref())
+            .map_err(|e| format!("game login: {e}"))?;
         let p = &l.player;
         if let Some(log) = &self.log {
             let identity = json!({ "DisplayName": p.name, "Identity": p.uuid, "XUID": p.xuid });
@@ -168,39 +183,56 @@ impl Relay {
     /// that switches the codec.
     pub fn on_server_message(&mut self, msg: &[u8]) -> Result<Out, String> {
         let mut packets = Vec::new();
-        self.up_codec.decode(msg, &mut packets).map_err(|e| format!("server batch: {e}"))?;
+        self.up_codec
+            .decode(msg, &mut packets)
+            .map_err(|e| format!("server batch: {e}"))?;
         let (mut out, mut forward) = (Out::default(), Vec::with_capacity(packets.len()));
         for buf in packets {
-            let raw = RawPacket::parse(buf.clone()).map_err(|e| format!("server packet header: {e}"))?;
+            let raw =
+                RawPacket::parse(buf.clone()).map_err(|e| format!("server packet header: {e}"))?;
             match raw.id {
                 NetworkSettings::ID => {
                     self.record(false, &raw);
                     let settings: NetworkSettings = raw.decode().map_err(|e| e.to_string())?;
-                    self.game.start_compression(&settings).map_err(|e| e.to_string())?;
-                    let alg = Algorithm::from_settings(settings.compression_algorithm).map_err(|e| e.to_string())?;
-                    self.up_codec.enable_compression(alg, settings.compression_threshold.into());
+                    self.game
+                        .start_compression(&settings)
+                        .map_err(|e| e.to_string())?;
+                    let alg = Algorithm::from_settings(settings.compression_algorithm)
+                        .map_err(|e| e.to_string())?;
+                    self.up_codec
+                        .enable_compression(alg, settings.compression_threshold.into());
                     forward.push(buf);
                     self.flush_to_game(&mut forward, &mut out.to_game);
                 }
                 ServerToClientHandshake::ID => {
                     let ours = self.handshake(&raw)?;
-                    self.record(false, &RawPacket::parse(ours.clone()).expect("encoded by us"));
+                    self.record(
+                        false,
+                        &RawPacket::parse(ours.clone()).expect("encoded by us"),
+                    );
                     forward.push(ours);
                     self.flush_to_game(&mut forward, &mut out.to_game);
                     self.game_ready = true;
                 }
                 _ => {
-                    if raw.decode::<PlayStatus>().is_ok_and(|s| s.status == PlayStatusStatus::PlayerSpawn) {
+                    if raw
+                        .decode::<PlayStatus>()
+                        .is_ok_and(|s| s.status == PlayStatusStatus::PlayerSpawn)
+                    {
                         self.note(json!({ "event": "spawned" }));
                     }
                     self.record(false, &raw);
                     let first = forward.len();
-                    self.chain.run(false, buf.clone(), &raw, &mut forward).map_err(|e| format!("intercepted packet: {e}"))?;
+                    self.chain
+                        .run(false, buf.clone(), &raw, &mut forward)
+                        .map_err(|e| format!("intercepted packet: {e}"))?;
                     self.record_outcome(false, &raw, &buf, &forward[first..]);
                     if raw.id == Transfer::ID
                         && let Some(proxy) = self.transfer_to
                     {
-                        out.transfer = self.redirect(&mut forward[first..], proxy)?.or(out.transfer);
+                        out.transfer = self
+                            .redirect(&mut forward[first..], proxy)?
+                            .or(out.transfer);
                     }
                 }
             }
@@ -211,11 +243,18 @@ impl Relay {
     }
 
     /// Points what the interceptors left of a Transfer at `proxy`; returns where it led.
-    fn redirect(&self, packets: &mut [Bytes], proxy: SocketAddr) -> Result<Option<(String, u16)>, String> {
+    fn redirect(
+        &self,
+        packets: &mut [Bytes],
+        proxy: SocketAddr,
+    ) -> Result<Option<(String, u16)>, String> {
         let mut target = None;
         for packet in packets {
-            let raw = RawPacket::parse(packet.clone()).map_err(|e| format!("intercepted packet: {e}"))?;
-            let Ok(mut transfer) = raw.decode::<Transfer>() else { continue };
+            let raw =
+                RawPacket::parse(packet.clone()).map_err(|e| format!("intercepted packet: {e}"))?;
+            let Ok(mut transfer) = raw.decode::<Transfer>() else {
+                continue;
+            };
             let host = std::mem::replace(&mut transfer.server_address, proxy.ip().to_string());
             let port = std::mem::replace(&mut transfer.port, proxy.port());
             self.note(json!({ "event": "transfer", "to": format!("{host}:{port}") }));
@@ -252,7 +291,8 @@ impl Relay {
         }
         self.flush_to_game(&mut game, &mut out.to_game);
         if !server.is_empty() {
-            out.to_server.push(self.up_codec.encode(server.iter().map(|b| &b[..])));
+            out.to_server
+                .push(self.up_codec.encode(server.iter().map(|b| &b[..])));
         }
     }
 
@@ -261,13 +301,18 @@ impl Relay {
     fn handshake(&mut self, raw: &RawPacket) -> Result<Bytes, String> {
         if self.server_wire == Wire::RakNet {
             let handshake: ServerToClientHandshake = raw.decode().map_err(|e| e.to_string())?;
-            let (server_key, salt) = acacia_auth::parse_server_handshake(&handshake.token).map_err(|e| e.to_string())?;
-            self.up_codec.enable_encryption(derive_key(&self.key, &server_key, &salt));
+            let (server_key, salt) =
+                acacia_auth::parse_server_handshake(&handshake.token).map_err(|e| e.to_string())?;
+            self.up_codec
+                .enable_encryption(derive_key(&self.key, &server_key, &salt));
         }
         if self.game_wire == Wire::NetherNet {
             return Ok(self.game.plaintext_handshake());
         }
-        let game_key = self.game_key.as_ref().ok_or("server handshake before the game's login")?;
+        let game_key = self
+            .game_key
+            .as_ref()
+            .ok_or("server handshake before the game's login")?;
         Ok(self.game.start_encryption(game_key))
     }
 
@@ -279,7 +324,14 @@ impl Relay {
             return None;
         }
         let mut packet = BytesMut::new();
-        encode_packet(&Disconnect { reason: DisconnectFailReason::Disconnected, hide_disconnect_reason: true, content: None }, &mut packet);
+        encode_packet(
+            &Disconnect {
+                reason: DisconnectFailReason::Disconnected,
+                hide_disconnect_reason: true,
+                content: None,
+            },
+            &mut packet,
+        );
         Some(self.up_codec.encode([&packet[..]]))
     }
 

@@ -4,11 +4,11 @@
 
 use acacia_auth::login::verify::{VerifiedLogin, Verifier, VerifyError};
 use acacia_proto::packets::{
-    ClientToServerHandshake, Disconnect, DisconnectContent, Login, NetworkSettings, NetworkSettingsCompressionAlgorithm, PlayStatus,
-    PlayStatusStatus, RequestNetworkSettings,
+    ClientToServerHandshake, Disconnect, DisconnectContent, Login, NetworkSettings,
+    NetworkSettingsCompressionAlgorithm, PlayStatus, PlayStatusStatus, RequestNetworkSettings,
 };
 use acacia_proto::types::DisconnectFailReason;
-use acacia_proto::{codec, encode_packet, Packet, RawPacket, PROTOCOL_VERSION};
+use acacia_proto::{PROTOCOL_VERSION, Packet, RawPacket, codec, encode_packet};
 use bytes::{Bytes, BytesMut};
 
 use super::ServerConnection;
@@ -81,7 +81,11 @@ pub struct ServerLogin {
 
 impl ServerLogin {
     pub fn new(conn: ServerConnection, config: LoginConfig) -> Self {
-        Self { conn, config, state: State::Settings }
+        Self {
+            conn,
+            config,
+            state: State::Settings,
+        }
     }
 
     /// The connection, for the rest of the session once [`Step::done`] was returned.
@@ -92,18 +96,31 @@ impl ServerLogin {
     /// Feeds one game message from the client. `now` is unix seconds, for token expiry.
     pub fn handle(&mut self, msg: &[u8], verifier: &Verifier, now: i64) -> Result<Step, Rejected> {
         let mut step = Step::default();
-        let packets = self.conn.decode(msg).map_err(|e| self.reject(e.into(), None))?;
+        let packets = self
+            .conn
+            .decode(msg)
+            .map_err(|e| self.reject(e.into(), None))?;
         for buf in packets {
-            let packet = RawPacket::parse(buf).map_err(|e| self.reject(LoginError::Malformed(e.to_string()), None))?;
+            let packet = RawPacket::parse(buf)
+                .map_err(|e| self.reject(LoginError::Malformed(e.to_string()), None))?;
             self.packet(&packet, verifier, now, &mut step)?;
         }
         Ok(step)
     }
 
-    fn packet(&mut self, packet: &RawPacket, verifier: &Verifier, now: i64, step: &mut Step) -> Result<(), Rejected> {
+    fn packet(
+        &mut self,
+        packet: &RawPacket,
+        verifier: &Verifier,
+        now: i64,
+        step: &mut Step,
+    ) -> Result<(), Rejected> {
         match (&self.state, packet.id) {
             (State::Settings, RequestNetworkSettings::ID) => {
-                let client = packet.decode::<RequestNetworkSettings>().map_err(|e| self.malformed(e))?.client_protocol;
+                let client = packet
+                    .decode::<RequestNetworkSettings>()
+                    .map_err(|e| self.malformed(e))?
+                    .client_protocol;
                 self.check_protocol(client)?;
                 let settings = NetworkSettings {
                     compression_threshold: self.config.compression_threshold,
@@ -112,29 +129,49 @@ impl ServerLogin {
                     client_throttle_threshold: 0,
                     client_throttle_scalar: 0.0,
                 };
-                self.conn.start_compression(&settings).map_err(|e| self.reject(e.into(), None))?;
+                self.conn
+                    .start_compression(&settings)
+                    .map_err(|e| self.reject(e.into(), None))?;
                 step.send.push(self.conn.encode(&[encode(&settings)]));
                 self.state = State::Login;
             }
             (State::Login, Login::ID) => {
-                let (protocol, request) = split_login(&packet.body).map_err(|e| self.reject(e, None))?;
+                let (protocol, request) =
+                    split_login(&packet.body).map_err(|e| self.reject(e, None))?;
                 self.check_protocol(protocol)?;
                 let login = verifier.verify(request, now).map_err(|e| {
-                    self.reject(e.into(), Some(disconnect(DisconnectFailReason::NotAuthenticated, "disconnectionScreen.notAuthenticated")))
+                    self.reject(
+                        e.into(),
+                        Some(disconnect(
+                            DisconnectFailReason::NotAuthenticated,
+                            "disconnectionScreen.notAuthenticated",
+                        )),
+                    )
                 })?;
                 if self.config.require_authenticated && !login.authenticated {
-                    let notice = disconnect(DisconnectFailReason::NotAuthenticated, "disconnectionScreen.notAuthenticated");
+                    let notice = disconnect(
+                        DisconnectFailReason::NotAuthenticated,
+                        "disconnectionScreen.notAuthenticated",
+                    );
                     return Err(self.reject(LoginError::NotAuthenticated, Some(notice)));
                 }
                 // NetherNet stays plaintext after the handshake: DTLS already encrypts (docs/DESIGN.md).
-                let handshake =
-                    if self.conn.is_nethernet() { self.conn.plaintext_handshake() } else { self.conn.start_encryption(&login.client_key) };
+                let handshake = if self.conn.is_nethernet() {
+                    self.conn.plaintext_handshake()
+                } else {
+                    self.conn.start_encryption(&login.client_key)
+                };
                 step.send.push(self.conn.encode(&[handshake]));
                 self.state = State::Handshake(Box::new(login));
             }
             (State::Handshake(_), ClientToServerHandshake::ID) => {
-                let State::Handshake(login) = std::mem::replace(&mut self.state, State::Done) else { unreachable!() };
-                step.send.push(self.conn.encode(&[encode(&PlayStatus { status: PlayStatusStatus::LoginSuccess })]));
+                let State::Handshake(login) = std::mem::replace(&mut self.state, State::Done)
+                else {
+                    unreachable!()
+                };
+                step.send.push(self.conn.encode(&[encode(&PlayStatus {
+                    status: PlayStatusStatus::LoginSuccess,
+                })]));
                 step.done = Some(login);
             }
             (_, id) => return Err(self.reject(LoginError::Unexpected(id), None)),
@@ -148,8 +185,15 @@ impl ServerLogin {
             return Ok(());
         }
         // FailedClient tells the client it is outdated, FailedSpawn that the server is.
-        let status = if client < server { PlayStatusStatus::FailedClient } else { PlayStatusStatus::FailedSpawn };
-        Err(self.reject(LoginError::Protocol { client, server }, Some(encode(&PlayStatus { status }))))
+        let status = if client < server {
+            PlayStatusStatus::FailedClient
+        } else {
+            PlayStatusStatus::FailedSpawn
+        };
+        Err(self.reject(
+            LoginError::Protocol { client, server },
+            Some(encode(&PlayStatus { status })),
+        ))
     }
 
     fn malformed(&mut self, e: impl ToString) -> Rejected {
@@ -158,7 +202,10 @@ impl ServerLogin {
 
     fn reject(&mut self, error: LoginError, notice: Option<Bytes>) -> Rejected {
         self.state = State::Done;
-        Rejected { error, send: notice.map(|p| self.conn.encode(&[p])) }
+        Rejected {
+            error,
+            send: notice.map(|p| self.conn.encode(&[p])),
+        }
     }
 }
 
@@ -168,13 +215,22 @@ fn split_login(body: &[u8]) -> Result<(i32, &[u8]), LoginError> {
     let malformed = |e: acacia_proto::DecodeError| LoginError::Malformed(e.to_string());
     let protocol = codec::read_i32(&mut r).map_err(malformed)?;
     let len = codec::read_varint(&mut r).map_err(malformed)? as usize;
-    let request = r.get(..len).ok_or_else(|| LoginError::Malformed("connection request truncated".into()))?;
+    let request = r
+        .get(..len)
+        .ok_or_else(|| LoginError::Malformed("connection request truncated".into()))?;
     Ok((protocol, request))
 }
 
 fn disconnect(reason: DisconnectFailReason, message: &str) -> Bytes {
-    let content = DisconnectContent { message: message.into(), filtered_message: String::new() };
-    encode(&Disconnect { reason, hide_disconnect_reason: false, content: Some(content) })
+    let content = DisconnectContent {
+        message: message.into(),
+        filtered_message: String::new(),
+    };
+    encode(&Disconnect {
+        reason,
+        hide_disconnect_reason: false,
+        content: Some(content),
+    })
 }
 
 fn encode<T: Packet>(packet: &T) -> Bytes {

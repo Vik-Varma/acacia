@@ -28,13 +28,19 @@ fn proto_err(msg: &'static str) -> Error {
 async fn handshake(proxy: &Socks5Proxy) -> io::Result<TcpStream> {
     let mut tcp = TcpStream::connect((proxy.host.as_str(), proxy.port)).await?;
     tcp.set_nodelay(true)?;
-    let methods: &[u8] = if proxy.credentials.is_some() { &[5, 2, 0, 2] } else { &[5, 1, 0] };
+    let methods: &[u8] = if proxy.credentials.is_some() {
+        &[5, 2, 0, 2]
+    } else {
+        &[5, 1, 0]
+    };
     tcp.write_all(methods).await?;
     let mut choice = [0u8; 2];
     tcp.read_exact(&mut choice).await?;
     match choice {
         [5, 0] => Ok(tcp),
-        [5, 2] => authenticate(&mut tcp, proxy.credentials.as_ref()).await.map(|()| tcp),
+        [5, 2] => authenticate(&mut tcp, proxy.credentials.as_ref())
+            .await
+            .map(|()| tcp),
         _ => Err(proto_err("socks5: no acceptable auth method")),
     }
 }
@@ -47,7 +53,10 @@ async fn command(tcp: &mut TcpStream, cmd: u8, addr: SocketAddr) -> io::Result<S
     let mut head = [0u8; 3];
     tcp.read_exact(&mut head).await?;
     if head[1] != 0 {
-        return Err(Error::other(format!("socks5: command {cmd} refused (code {})", head[1])));
+        return Err(Error::other(format!(
+            "socks5: command {cmd} refused (code {})",
+            head[1]
+        )));
     }
     read_addr(tcp).await
 }
@@ -63,14 +72,22 @@ impl Socks5Udp {
     pub async fn associate(proxy: &Socks5Proxy, target: SocketAddr) -> io::Result<Self> {
         let mut tcp = handshake(proxy).await?;
         let proxy_ip = tcp.peer_addr()?.ip();
-        let bind: SocketAddr = if proxy_ip.is_ipv4() { (Ipv4Addr::UNSPECIFIED, 0).into() } else { (Ipv6Addr::UNSPECIFIED, 0).into() };
+        let bind: SocketAddr = if proxy_ip.is_ipv4() {
+            (Ipv4Addr::UNSPECIFIED, 0).into()
+        } else {
+            (Ipv6Addr::UNSPECIFIED, 0).into()
+        };
         let socket = UdpSocket::bind(bind).await?;
         let mut relay = command(&mut tcp, 3, bind).await?;
         if relay.ip().is_unspecified() {
             relay.set_ip(proxy_ip);
         }
         socket.connect(relay).await?;
-        Ok(Self { _control: tcp, socket, target })
+        Ok(Self {
+            _control: tcp,
+            socket,
+            target,
+        })
     }
 
     pub async fn send(&self, data: &[u8]) -> io::Result<()> {
@@ -86,7 +103,10 @@ impl Socks5Udp {
     }
 
     /// Receives one datagram into `buf`, returning the payload's byte range and its source.
-    pub async fn recv_from(&self, buf: &mut [u8]) -> io::Result<(std::ops::Range<usize>, SocketAddr)> {
+    pub async fn recv_from(
+        &self,
+        buf: &mut [u8],
+    ) -> io::Result<(std::ops::Range<usize>, SocketAddr)> {
         loop {
             let n = self.socket.recv(buf).await?;
             if let Some((start, source)) = parse_udp_header(&buf[..n]) {
@@ -110,7 +130,10 @@ async fn authenticate(tcp: &mut TcpStream, creds: Option<&(String, String)>) -> 
     let mut status = [0u8; 2];
     tcp.read_exact(&mut status).await?;
     if status[1] != 0 {
-        return Err(Error::new(ErrorKind::PermissionDenied, "socks5: authentication rejected"));
+        return Err(Error::new(
+            ErrorKind::PermissionDenied,
+            "socks5: authentication rejected",
+        ));
     }
     Ok(())
 }
@@ -153,8 +176,14 @@ fn parse_udp_header(d: &[u8]) -> Option<(usize, Option<SocketAddr>)> {
         return None;
     }
     let (len, ip): (usize, Option<IpAddr>) = match d[3] {
-        1 => (4 + 4 + 2, Some(<[u8; 4]>::try_from(d.get(4..8)?).ok()?.into())),
-        4 => (4 + 16 + 2, Some(<[u8; 16]>::try_from(d.get(4..20)?).ok()?.into())),
+        1 => (
+            4 + 4 + 2,
+            Some(<[u8; 4]>::try_from(d.get(4..8)?).ok()?.into()),
+        ),
+        4 => (
+            4 + 16 + 2,
+            Some(<[u8; 16]>::try_from(d.get(4..20)?).ok()?.into()),
+        ),
         3 => (4 + 1 + usize::from(*d.get(4)?) + 2, None),
         _ => return None,
     };

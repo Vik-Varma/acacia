@@ -22,7 +22,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             checked += 1;
             if std::env::var("SHOW_ITEMS").is_ok() {
                 let stack = ItemStack::from(orig.clone());
-                println!("id {} x{} meta {} stack_id {:?} name {:?} nbt {:?}", orig.network_id, orig.count, orig.metadata, stack.stack_network_id, stack.custom_name, stack.nbt.as_ref().map(|n| format!("{n:?}").chars().take(300).collect::<String>()));
+                println!(
+                    "id {} x{} meta {} stack_id {:?} name {:?} nbt {:?}",
+                    orig.network_id,
+                    orig.count,
+                    orig.metadata,
+                    stack.stack_network_id,
+                    stack.custom_name,
+                    stack
+                        .nbt
+                        .as_ref()
+                        .map(|n| format!("{n:?}").chars().take(300).collect::<String>())
+                );
             }
             let back = to_wire(&ItemStack::from(orig.clone()));
             let (mut a, mut b) = (BytesMut::new(), BytesMut::new());
@@ -31,7 +42,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if a != b {
                 differ += 1;
                 if differ <= 3 {
-                    println!("{}: id {} differs\n  orig {:02x?}\n  ours {:02x?}", path.display(), orig.network_id, &a[..a.len().min(96)], &b[..b.len().min(96)]);
+                    println!(
+                        "{}: id {} differs\n  orig {:02x?}\n  ours {:02x?}",
+                        path.display(),
+                        orig.network_id,
+                        &a[..a.len().min(96)],
+                        &b[..b.len().min(96)]
+                    );
                 }
             }
         }

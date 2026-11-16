@@ -31,29 +31,35 @@ pub fn render_state(family: Family, query: &dyn Fn(&str) -> Value) -> RenderStat
     let mut s = RenderState::default();
     let baby = flag("is_baby");
     let aggressive = flag("is_angry");
-    s.set("walkAnimationPos", Field::Num(num("modified_distance_moved")))
-        .set("walkAnimationSpeed", Field::Num(num("modified_move_speed").min(1.0)))
-        .set("ageInTicks", Field::Num(num("life_time") * TICKS))
-        .set("yRot", Field::Num(num("target_y_rotation")))
-        .set("xRot", Field::Num(num("target_x_rotation")))
-        .set("isBaby", Field::Flag(baby))
-        .set("ageScale", Field::Num(if baby { 0.5 } else { 1.0 }))
-        .set("isCrouching", Field::Flag(flag("is_sneaking")))
-        .set("isPassenger", Field::Flag(flag("is_riding")))
-        .set("isAggressive", Field::Flag(aggressive))
-        .set("isAngry", Field::Flag(aggressive))
-        .set("isSitting", Field::Flag(flag("is_sitting")))
-        .set("isSprinting", Field::Flag(flag("is_sprinting")))
-        .set("isMoving", Field::Flag(flag("is_moving")))
-        .set("hasChest", Field::Flag(flag("is_chested")))
-        .set("isOnLand", Field::Flag(!flag("is_in_water")))
-        .set("isInWater", Field::Flag(flag("is_in_water")))
-        .set("isOnGround", Field::Flag(flag("is_on_ground")))
-        .set("isSleeping", Field::Flag(flag("is_sleeping")))
-        .set("isConverting", Field::Flag(flag("is_converting")))
-        .set("isFullyFrozen", Field::Flag(num(FREEZING) >= 1.0))
-        .set("isSuffocating", Field::Flag(flag("is_shaking")))
-        .set("swelling", Field::Num(swelling(query)));
+    s.set(
+        "walkAnimationPos",
+        Field::Num(num("modified_distance_moved")),
+    )
+    .set(
+        "walkAnimationSpeed",
+        Field::Num(num("modified_move_speed").min(1.0)),
+    )
+    .set("ageInTicks", Field::Num(num("life_time") * TICKS))
+    .set("yRot", Field::Num(num("target_y_rotation")))
+    .set("xRot", Field::Num(num("target_x_rotation")))
+    .set("isBaby", Field::Flag(baby))
+    .set("ageScale", Field::Num(if baby { 0.5 } else { 1.0 }))
+    .set("isCrouching", Field::Flag(flag("is_sneaking")))
+    .set("isPassenger", Field::Flag(flag("is_riding")))
+    .set("isAggressive", Field::Flag(aggressive))
+    .set("isAngry", Field::Flag(aggressive))
+    .set("isSitting", Field::Flag(flag("is_sitting")))
+    .set("isSprinting", Field::Flag(flag("is_sprinting")))
+    .set("isMoving", Field::Flag(flag("is_moving")))
+    .set("hasChest", Field::Flag(flag("is_chested")))
+    .set("isOnLand", Field::Flag(!flag("is_in_water")))
+    .set("isInWater", Field::Flag(flag("is_in_water")))
+    .set("isOnGround", Field::Flag(flag("is_on_ground")))
+    .set("isSleeping", Field::Flag(flag("is_sleeping")))
+    .set("isConverting", Field::Flag(flag("is_converting")))
+    .set("isFullyFrozen", Field::Flag(num(FREEZING) >= 1.0))
+    .set("isSuffocating", Field::Flag(flag("is_shaking")))
+    .set("swelling", Field::Num(swelling(query)));
     if family == Family::Parrot {
         // ParrotRenderer.getPose.
         let pose = if !flag("is_on_ground") {
@@ -70,10 +76,18 @@ pub fn render_state(family: Family, query: &dyn Fn(&str) -> Value) -> RenderStat
     // Looping keyframe animations Java runs while a condition holds, started at tick 0.
     // TODO: the one-shot ones (attacks, croaks, digs); Bedrock sends no start tick the viewer reads.
     let resting = flag("is_resting");
-    s.set("isResting", Field::Flag(resting)).set("isSwimming", Field::Flag(flag("is_swimming")));
+    s.set("isResting", Field::Flag(resting))
+        .set("isSwimming", Field::Flag(flag("is_swimming")));
     match family {
         Family::Bat => {
-            s.set(if resting { "restAnimationState" } else { "flyAnimationState" }, Field::Num(0.0));
+            s.set(
+                if resting {
+                    "restAnimationState"
+                } else {
+                    "flyAnimationState"
+                },
+                Field::Num(0.0),
+            );
         }
         Family::Breeze => {
             s.set("idle", Field::Num(0.0));
@@ -85,12 +99,20 @@ pub fn render_state(family: Family, query: &dyn Fn(&str) -> Value) -> RenderStat
     }
     if let Some(item) = &held {
         // Bedrock mobs hold in the right hand (mainArm RIGHT).
-        s.set("rightHandItemStack", Field::Text(format!("minecraft:{item}"))).set("rightHandItemState", Field::Flag(true));
+        s.set(
+            "rightHandItemStack",
+            Field::Text(format!("minecraft:{item}")),
+        )
+        .set("rightHandItemState", Field::Flag(true));
     }
     if let Some(pose) = mob_arm_pose(family, held.as_deref(), aggressive, &flag) {
         s.set("armPose", Field::Text(pose.into()));
     }
-    s.set("isCreepy", Field::Flag(family == Family::Enderman && aggressive)).set("isCharging", Field::Flag(flag("is_charging")));
+    s.set(
+        "isCreepy",
+        Field::Flag(family == Family::Enderman && aggressive),
+    )
+    .set("isCharging", Field::Flag(flag("is_charging")));
     // getArmPose: HumanoidMobRenderer's EMPTY, AbstractSkeletonRenderer's bow and
     // DrownedRenderer's trident, in the main (right) arm of an aggressive mob.
     // TODO: SPEAR for a held spear or a stab swing.
@@ -106,7 +128,8 @@ pub fn render_state(family: Family, query: &dyn Fn(&str) -> Value) -> RenderStat
     if family == Family::Sheep {
         // TODO: the grazing timer; Bedrock sends no eating ticks the viewer reads yet.
         let (position, angle) = sheep_eat_scales(0, 0.0, num("target_x_rotation"));
-        s.set("headEatPositionScale", Field::Num(position)).set("headEatAngleScale", Field::Num(angle));
+        s.set("headEatPositionScale", Field::Num(position))
+            .set("headEatAngleScale", Field::Num(angle));
     }
     s
 }
@@ -114,7 +137,12 @@ pub fn render_state(family: Family, query: &dyn Fn(&str) -> Value) -> RenderStat
 /// `AbstractIllager.getArmPose` (the pillager's, vindicator's and evoker's together) and
 /// `Piglin.getArmPose`.
 // TODO: crossbow charging and dancing piglins; the viewer answers no query for them yet.
-fn mob_arm_pose(family: Family, held: Option<&str>, aggressive: bool, flag: &dyn Fn(&str) -> bool) -> Option<&'static str> {
+fn mob_arm_pose(
+    family: Family,
+    held: Option<&str>,
+    aggressive: bool,
+    flag: &dyn Fn(&str) -> bool,
+) -> Option<&'static str> {
     let crossbow = held == Some("crossbow");
     Some(match family {
         Family::Illager if crossbow => "CROSSBOW_HOLD",
@@ -124,7 +152,12 @@ fn mob_arm_pose(family: Family, held: Option<&str>, aggressive: bool, flag: &dyn
         Family::Illager => "CROSSED",
         Family::Piglin if flag("is_admiring") => "ADMIRING_ITEM",
         Family::Piglin if aggressive && crossbow => "CROSSBOW_HOLD",
-        Family::Piglin if aggressive && held.is_some_and(|item| item.ends_with("_sword") || item.ends_with("_axe")) => "ATTACKING_WITH_MELEE_WEAPON",
+        Family::Piglin
+            if aggressive
+                && held.is_some_and(|item| item.ends_with("_sword") || item.ends_with("_axe")) =>
+        {
+            "ATTACKING_WITH_MELEE_WEAPON"
+        }
         _ => return None,
     })
 }
@@ -142,7 +175,13 @@ mod tests {
             _ => Value::Num(0.0),
         };
         let s = render_state(Family::Skeleton, &query);
-        assert_eq!((s.text("rightArmPose"), s.flag("isHoldingBow"), s.age()), (Some("BOW_AND_ARROW"), true, 40.0));
-        assert_eq!(render_state(Family::Zombie, &query).text("rightArmPose"), None);
+        assert_eq!(
+            (s.text("rightArmPose"), s.flag("isHoldingBow"), s.age()),
+            (Some("BOW_AND_ARROW"), true, 40.0)
+        );
+        assert_eq!(
+            render_state(Family::Zombie, &query).text("rightArmPose"),
+            None
+        );
     }
 }

@@ -8,10 +8,21 @@ use parking_lot::Mutex;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChunkChange {
     /// The whole column was (re)decoded.
-    Column { x: i32, z: i32 },
+    Column {
+        x: i32,
+        z: i32,
+    },
     /// One section, `section_y` = world y >> 4.
-    Section { x: i32, section_y: i32, z: i32 },
-    Block { x: i32, y: i32, z: i32 },
+    Section {
+        x: i32,
+        section_y: i32,
+        z: i32,
+    },
+    Block {
+        x: i32,
+        y: i32,
+        z: i32,
+    },
 }
 
 #[derive(Default)]

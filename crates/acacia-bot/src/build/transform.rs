@@ -65,7 +65,11 @@ impl Transform {
 
     /// The footprint's size in the world.
     pub fn world_size(&self, size: [i32; 3]) -> [i32; 3] {
-        if self.turns % 2 == 1 { [size[2], size[1], size[0]] } else { size }
+        if self.turns % 2 == 1 {
+            [size[2], size[1], size[0]]
+        } else {
+            size
+        }
     }
 
     /// `b` with its direction and axis states turned like the cells.
@@ -77,22 +81,44 @@ impl Transform {
             .props
             .split(',')
             .filter_map(|kv| kv.split_once('='))
-            .map(|(k, v)| format!("{k}={}", self.value(&b.name, k.trim_start_matches("minecraft:"), v)))
+            .map(|(k, v)| {
+                format!(
+                    "{k}={}",
+                    self.value(&b.name, k.trim_start_matches("minecraft:"), v)
+                )
+            })
             .collect();
         let turned = Block::new(&b.name, &props.join(","));
-        if self.mirror { super::rules::twocell::mirror_door(turned) } else { turned }
+        if self.mirror {
+            super::rules::twocell::mirror_door(turned)
+        } else {
+            turned
+        }
     }
 
     fn value(&self, name: &str, key: &str, v: &str) -> String {
         match key {
-            "rail_direction" => super::rules::redstone::turned_rail(v, self.turns, self.mirror).to_string(),
+            "rail_direction" => {
+                super::rules::redstone::turned_rail(v, self.turns, self.mirror).to_string()
+            }
             // Sixteenths of a turn from south, clockwise seen from above (west is 4).
             "ground_sign_direction" => match v.parse::<u32>() {
-                Ok(r) => ((if self.mirror { 16 - r } else { r } + 4 * u32::from(self.turns % 4)) % 16).to_string(),
+                Ok(r) => ((if self.mirror { 16 - r } else { r } + 4 * u32::from(self.turns % 4))
+                    % 16)
+                    .to_string(),
                 Err(_) => v.to_string(),
             },
             "lever_direction" => match v.split_once('_') {
-                Some((end, axis)) => format!("{end}_{}", self.value(name, "pillar_axis", if axis == "north_south" { "z" } else { "x" }).replace('z', "north_south").replace('x', "east_west")),
+                Some((end, axis)) => format!(
+                    "{end}_{}",
+                    self.value(
+                        name,
+                        "pillar_axis",
+                        if axis == "north_south" { "z" } else { "x" }
+                    )
+                    .replace('z', "north_south")
+                    .replace('x', "east_west")
+                ),
                 None => self.value(name, "cardinal_direction", v),
             },
             _ => self.plain(name, key, v).to_string(),
@@ -107,8 +133,13 @@ impl Transform {
                 v => v,
             };
         }
-        let trapdoor = (key == "direction" && name.ends_with("trapdoor")).then_some(&TRAPDOOR_DIRECTION);
-        let Some(names) = trapdoor.or_else(|| DIR_STATES.iter().find(|(k, _)| *k == key).map(|(_, n)| n)) else { return v };
+        let trapdoor =
+            (key == "direction" && name.ends_with("trapdoor")).then_some(&TRAPDOOR_DIRECTION);
+        let Some(names) =
+            trapdoor.or_else(|| DIR_STATES.iter().find(|(k, _)| *k == key).map(|(_, n)| n))
+        else {
+            return v;
+        };
         match names.iter().position(|n| *n == v) {
             Some(i) => names[Dir::ALL[i].turned(self) as usize],
             None => v,
@@ -122,15 +153,34 @@ mod tests {
 
     #[test]
     fn turns_cells_and_states_together() {
-        let t = Transform { origin: [10, 0, 20], turns: 1, mirror: false };
+        let t = Transform {
+            origin: [10, 0, 20],
+            turns: 1,
+            mirror: false,
+        };
         // A quarter turn clockwise: local +x (east) points south.
         assert_eq!(t.apply([4, 1, 2], [0, 0, 0]), [11, 0, 20]);
         assert_eq!(t.apply([4, 1, 2], [3, 0, 0]), [11, 0, 23]);
         let stairs = Block::new("oak_stairs", "upside_down_bit=0,weirdo_direction=0");
         assert_eq!(t.block(&stairs).prop("weirdo_direction"), Some("2"));
-        assert_eq!(t.block(&Block::new("oak_log", "pillar_axis=x")).prop("pillar_axis"), Some("z"));
-        let m = Transform { mirror: true, ..Transform::default() };
-        assert_eq!(m.block(&Block::new("furnace", "minecraft:cardinal_direction=east")).prop("minecraft:cardinal_direction"), Some("west"));
-        assert_eq!(m.block(&Block::new("ladder", "facing_direction=2")).prop("facing_direction"), Some("2"));
+        assert_eq!(
+            t.block(&Block::new("oak_log", "pillar_axis=x"))
+                .prop("pillar_axis"),
+            Some("z")
+        );
+        let m = Transform {
+            mirror: true,
+            ..Transform::default()
+        };
+        assert_eq!(
+            m.block(&Block::new("furnace", "minecraft:cardinal_direction=east"))
+                .prop("minecraft:cardinal_direction"),
+            Some("west")
+        );
+        assert_eq!(
+            m.block(&Block::new("ladder", "facing_direction=2"))
+                .prop("facing_direction"),
+            Some("2")
+        );
     }
 }

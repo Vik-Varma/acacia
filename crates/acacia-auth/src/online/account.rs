@@ -10,7 +10,7 @@ use super::friend_world::{FriendWorld, SessionRef};
 use super::live::{DeviceCodePrompt, MsaToken};
 use super::minecraft::ServiceToken;
 use super::mpsd;
-use super::realms::{self, PingRegion, Realm, RealmJoin, REALMS_RELYING_PARTY};
+use super::realms::{self, PingRegion, REALMS_RELYING_PARTY, Realm, RealmJoin};
 use super::tokens::CachedTokens;
 use super::xbox::XboxToken;
 use super::xsapi::XboxLiveAuth;
@@ -28,7 +28,11 @@ pub struct Account {
 
 impl Account {
     pub fn new(client: Arc<AuthClient>, cache: Arc<dyn TokenCache>, id: impl Into<String>) -> Self {
-        Self { client, cache, id: id.into() }
+        Self {
+            client,
+            cache,
+            id: id.into(),
+        }
     }
 
     pub fn id(&self) -> &str {
@@ -41,7 +45,11 @@ impl Account {
 
     /// True if the cache holds an MSA token, i.e. no interactive login is needed.
     pub async fn is_signed_in(&self) -> Result<bool> {
-        Ok(self.cache.load(&self.id).await?.is_some_and(|v| v.tokens.msa.is_some()))
+        Ok(self
+            .cache
+            .load(&self.id)
+            .await?
+            .is_some_and(|v| v.tokens.msa.is_some()))
     }
 
     /// Runs the device code flow: `on_prompt` shows the code to the user, then this waits for
@@ -55,7 +63,12 @@ impl Account {
             let mut tokens = read.tokens;
             tokens.msa = Some(msa.clone());
             tokens.reset_user_tokens();
-            if self.cache.store(&self.id, &tokens, Some(read.version)).await? != Stored::Conflict {
+            if self
+                .cache
+                .store(&self.id, &tokens, Some(read.version))
+                .await?
+                != Stored::Conflict
+            {
                 return Ok(msa);
             }
         }
@@ -63,7 +76,8 @@ impl Account {
 
     /// Valid credentials for `client_key`, refreshing only what has expired.
     pub async fn credentials(&self, client_key: &SigningKey) -> Result<LoginCredentials> {
-        self.with_tokens(async |t| self.client.credentials_with(t, client_key).await).await
+        self.with_tokens(async |t| self.client.credentials_with(t, client_key).await)
+            .await
     }
 
     /// The account's persisted client key and credentials bound to it. Prefer this for
@@ -79,12 +93,14 @@ impl Account {
 
     /// An XSTS token for another Xbox service, e.g. Realms (`https://pocket.realms.minecraft.net/`).
     pub async fn xsts_token(&self, relying_party: &str) -> Result<XboxToken> {
-        self.with_tokens(async |t| self.client.xsts_with(t, relying_party).await).await
+        self.with_tokens(async |t| self.client.xsts_with(t, relying_party).await)
+            .await
     }
 
     /// The Minecraft services token (`MCToken`), e.g. for the NetherNet signaling service.
     pub async fn service_token(&self) -> Result<ServiceToken> {
-        self.with_tokens(async |t| self.client.service_token_with(t).await).await
+        self.with_tokens(async |t| self.client.service_token_with(t).await)
+            .await
     }
 
     /// Realms the account owns or is a member of.
@@ -94,17 +110,37 @@ impl Account {
 
     /// The realm behind an invite code or `realms.gg` link, without joining it.
     pub async fn realm_by_invite(&self, code: &str) -> Result<Realm> {
-        realms::by_invite(&self.client, &self.xsts_token(REALMS_RELYING_PARTY).await?, code).await
+        realms::by_invite(
+            &self.client,
+            &self.xsts_token(REALMS_RELYING_PARTY).await?,
+            code,
+        )
+        .await
     }
 
     /// Accepts an invite code, making the account a member.
     pub async fn accept_realm_invite(&self, code: &str) -> Result<Realm> {
-        realms::accept_invite(&self.client, &self.xsts_token(REALMS_RELYING_PARTY).await?, code).await
+        realms::accept_invite(
+            &self.client,
+            &self.xsts_token(REALMS_RELYING_PARTY).await?,
+            code,
+        )
+        .await
     }
 
     /// Where and how to connect to a realm, waiting while it starts. See [`PingRegion`].
-    pub async fn join_realm(&self, realm_id: i64, ping_regions: &[PingRegion]) -> Result<RealmJoin> {
-        realms::join(&self.client, &self.xsts_token(REALMS_RELYING_PARTY).await?, realm_id, ping_regions).await
+    pub async fn join_realm(
+        &self,
+        realm_id: i64,
+        ping_regions: &[PingRegion],
+    ) -> Result<RealmJoin> {
+        realms::join(
+            &self.client,
+            &self.xsts_token(REALMS_RELYING_PARTY).await?,
+            realm_id,
+            ping_regions,
+        )
+        .await
     }
 
     /// Worlds hosted by people the account follows (MPSD activity handles). See [`FriendWorld`].
@@ -114,8 +150,18 @@ impl Account {
 
     /// Joins `world`'s Xbox session as an active member tied to RTA `rta_connection_id`; returns the
     /// session document. The membership lasts while that RTA connection does.
-    pub async fn join_friend_world(&self, world: &FriendWorld, rta_connection_id: &str) -> Result<Value> {
-        mpsd::join(self.client.http(), &self.xbox_live_auth().await?, &world.handle_id, rta_connection_id).await
+    pub async fn join_friend_world(
+        &self,
+        world: &FriendWorld,
+        rta_connection_id: &str,
+    ) -> Result<Value> {
+        mpsd::join(
+            self.client.http(),
+            &self.xbox_live_auth().await?,
+            &world.handle_id,
+            rta_connection_id,
+        )
+        .await
     }
 
     /// The current session document, e.g. to read the nonce the host published for us.
@@ -124,8 +170,18 @@ impl Account {
     }
 
     /// Points the membership at a new RTA connection (after an RTA reconnect).
-    pub async fn set_friend_session_connection(&self, session: &SessionRef, rta_connection_id: &str) -> Result<()> {
-        mpsd::write(self.client.http(), &self.xbox_live_auth().await?, session, &mpsd::connection_body(rta_connection_id)).await
+    pub async fn set_friend_session_connection(
+        &self,
+        session: &SessionRef,
+        rta_connection_id: &str,
+    ) -> Result<()> {
+        mpsd::write(
+            self.client.http(),
+            &self.xbox_live_auth().await?,
+            session,
+            &mpsd::connection_body(rta_connection_id),
+        )
+        .await
     }
 
     /// Publishes the account's activity in `session`, as the game does after joining.
@@ -134,28 +190,52 @@ impl Account {
     }
 
     pub async fn leave_friend_world(&self, session: &SessionRef) -> Result<()> {
-        mpsd::write(self.client.http(), &self.xbox_live_auth().await?, session, &mpsd::leave_body()).await
+        mpsd::write(
+            self.client.http(),
+            &self.xbox_live_auth().await?,
+            session,
+            &mpsd::leave_body(),
+        )
+        .await
     }
 
     /// Signed headers for an Xbox Live WebSocket (the RTA service at `url`).
-    pub async fn xbox_live_websocket_headers(&self, url: &str) -> Result<Vec<(&'static str, String)>> {
-        Ok(self.xbox_live_auth().await?.websocket_headers(self.client.http(), url))
+    pub async fn xbox_live_websocket_headers(
+        &self,
+        url: &str,
+    ) -> Result<Vec<(&'static str, String)>> {
+        Ok(self
+            .xbox_live_auth()
+            .await?
+            .websocket_headers(self.client.http(), url))
     }
 
     async fn xbox_live_auth(&self) -> Result<XboxLiveAuth> {
         self.with_tokens(async |t| {
             let token = self.client.xsts_with(t, RP_XBOXLIVE).await?;
-            Ok(XboxLiveAuth { token, key: t.xbox_key() })
+            Ok(XboxLiveAuth {
+                token,
+                key: t.xbox_key(),
+            })
         })
         .await
     }
 
     /// Runs `f` on the cached tokens and writes back whatever it refreshed, even if it failed.
-    pub(super) async fn with_tokens<T>(&self, f: impl AsyncFnOnce(&mut CachedTokens) -> Result<T>) -> Result<T> {
+    pub(super) async fn with_tokens<T>(
+        &self,
+        f: impl AsyncFnOnce(&mut CachedTokens) -> Result<T>,
+    ) -> Result<T> {
         let read = self.load().await?;
         let mut tokens = read.tokens.clone();
         let result = f(&mut tokens).await;
-        if tokens != read.tokens && self.cache.store(&self.id, &tokens, Some(read.version)).await? == Stored::Conflict {
+        if tokens != read.tokens
+            && self
+                .cache
+                .store(&self.id, &tokens, Some(read.version))
+                .await?
+                == Stored::Conflict
+        {
             tracing::debug!(account = %self.id, "tokens were refreshed concurrently; keeping the stored copy");
         }
         result

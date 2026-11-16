@@ -15,19 +15,35 @@ mod corpus;
 fn flavour<F: Flavor>(c: &mut Criterion, name: &str) {
     let mut kinds: BTreeMap<String, Vec<Vec<u8>>> = BTreeMap::new();
     for (file, bytes) in corpus::load(name) {
-        let kind = file.rsplit_once('-').map_or(file.as_str(), |(kind, _)| kind).to_owned();
+        let kind = file
+            .rsplit_once('-')
+            .map_or(file.as_str(), |(kind, _)| kind)
+            .to_owned();
         kinds.entry(kind).or_default().push(bytes);
     }
     for (kind, docs) in &kinds {
-        let trees: Vec<Nbt> = docs.iter().map(|d| read::<F>(&mut &d[..]).unwrap()).collect();
+        let trees: Vec<Nbt> = docs
+            .iter()
+            .map(|d| read::<F>(&mut &d[..]).unwrap())
+            .collect();
         let bytes: usize = docs.iter().map(Vec::len).sum();
         let mut group = c.benchmark_group(format!("{name}/{kind}"));
         group.throughput(Throughput::Bytes(bytes as u64));
-        group.warm_up_time(Duration::from_millis(500)).measurement_time(Duration::from_secs(2));
+        group
+            .warm_up_time(Duration::from_millis(500))
+            .measurement_time(Duration::from_secs(2));
         group.bench_function("read", |b| {
-            b.iter(|| docs.iter().for_each(|d| drop(black_box(read::<F>(&mut &d[..]).unwrap()))))
+            b.iter(|| {
+                docs.iter()
+                    .for_each(|d| drop(black_box(read::<F>(&mut &d[..]).unwrap())))
+            })
         });
-        group.bench_function("skip", |b| b.iter(|| docs.iter().for_each(|d| skip::<F>(&mut black_box(&d[..])).unwrap())));
+        group.bench_function("skip", |b| {
+            b.iter(|| {
+                docs.iter()
+                    .for_each(|d| skip::<F>(&mut black_box(&d[..])).unwrap())
+            })
+        });
         group.bench_function("write", |b| {
             let mut w = BytesMut::with_capacity(bytes);
             b.iter(|| {

@@ -34,7 +34,9 @@ pub fn sheet(root: &Path, picture: &Arc<MapImage>) -> Option<Arc<Skin>> {
 pub fn markers(picture: &MapImage) -> Vec<Marker> {
     let middle = MAP_SIZE as f32 / 2.0;
     let marker = |m: &acacia_bot::state::MapMarker| Marker {
-        at: m.offset.map(|half_pixels| middle + f32::from(half_pixels) / 2.0),
+        at: m
+            .offset
+            .map(|half_pixels| middle + f32::from(half_pixels) / 2.0),
         turn: 180.0 + f32::from(m.rotation) * 22.5,
         colour: match m.kind {
             Kind::MarkerGreen => [0x40, 0xC0, 0x40],

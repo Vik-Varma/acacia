@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use acacia_session::proto::{encode_packet, Packet};
+use acacia_session::proto::{Packet, encode_packet};
 use bytes::{Bytes, BytesMut};
 use tokio::sync::mpsc;
 

@@ -9,7 +9,14 @@ use super::super::structure::Block;
 use crate::interact::Face;
 use crate::pathfind::process::BlockView;
 
-const STONE: BlockView = BlockView { name: "minecraft:stone", props: "", air: false, liquid: false, full: true, interactive: false };
+const STONE: BlockView = BlockView {
+    name: "minecraft:stone",
+    props: "",
+    air: false,
+    liquid: false,
+    full: true,
+    interactive: false,
+};
 const SIDES: [Face; 4] = [Face::North, Face::South, Face::West, Face::East];
 const AT: [f32; 3] = [0.1, 0.5, 0.9];
 
@@ -22,7 +29,14 @@ fn probe(target: &Block, face: Face, against: &BlockView) -> bool {
         let a = k as f32 * std::f32::consts::FRAC_PI_4;
         [-1.0, 1.6, 3.0].map(move |y| [0.5 + 2.5 * a.cos(), y, 0.5 + 2.5 * a.sin()])
     });
-    eyes.into_iter().any(|eye| AT.iter().any(|&x| AT.iter().any(|&y| AT.iter().any(|&z| super::gives(target, face, [x, y, z], eye, [0, 0, 0], against)))))
+    eyes.into_iter().any(|eye| {
+        AT.iter().any(|&x| {
+            AT.iter().any(|&y| {
+                AT.iter()
+                    .any(|&z| super::gives(target, face, [x, y, z], eye, [0, 0, 0], against))
+            })
+        })
+    })
 }
 
 /// No side-face click gives `target`, and a top-face one does.

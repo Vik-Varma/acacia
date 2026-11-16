@@ -30,25 +30,44 @@ mod tests {
 
     fn world() -> TestWorld {
         let mut w = TestWorld::new();
-        w.fill(Some(TestBlock::Stone), [-4, 64, -4], [4, 64, 4]).set([2, 65, 0], TestBlock::Slab).set([1, 65, 3], TestBlock::Stone);
+        w.fill(Some(TestBlock::Stone), [-4, 64, -4], [4, 64, 4])
+            .set([2, 65, 0], TestBlock::Slab)
+            .set([1, 65, 3], TestBlock::Stone);
         w
     }
 
     fn cube(feet: Vec3, size: f32) -> Aabb {
         let h = size / 2.0;
-        Aabb::new(feet[0] - h, feet[1], feet[2] - h, feet[0] + h, feet[1] + size, feet[2] + h)
+        Aabb::new(
+            feet[0] - h,
+            feet[1],
+            feet[2] - h,
+            feet[0] + h,
+            feet[1] + size,
+            feet[2] + h,
+        )
     }
 
     #[test]
     fn a_fall_stops_on_the_top_face() {
         let w = world();
-        assert_eq!(collide_box(&w, &cube([0.5, 66.0, 0.5], 0.98), [0.0, -3.0, 0.0]), [0.0, -1.0, 0.0]);
-        assert_eq!(collide_box(&w, &cube([2.5, 66.0, 0.5], 0.25), [0.0, -3.0, 0.0])[1], -0.5, "a slab's top is half a block up");
+        assert_eq!(
+            collide_box(&w, &cube([0.5, 66.0, 0.5], 0.98), [0.0, -3.0, 0.0]),
+            [0.0, -1.0, 0.0]
+        );
+        assert_eq!(
+            collide_box(&w, &cube([2.5, 66.0, 0.5], 0.25), [0.0, -3.0, 0.0])[1],
+            -0.5,
+            "a slab's top is half a block up"
+        );
     }
 
     #[test]
     fn a_wall_stops_one_axis_and_the_others_go_on() {
         let moved = collide_box(&world(), &cube([0.5, 65.0, 3.5], 0.25), [0.5, 0.0, 0.2]);
-        assert!((moved[0] - 0.375).abs() < 1e-6 && moved[2] == 0.2, "{moved:?}");
+        assert!(
+            (moved[0] - 0.375).abs() < 1e-6 && moved[2] == 0.2,
+            "{moved:?}"
+        );
     }
 }

@@ -2,7 +2,7 @@ use acacia_registry::prop::{Level, Waterlogged};
 use acacia_registry::{Block, BlockState, BlockTag};
 
 use crate::aabb::Aabb;
-use crate::collide::{full_face, Blocks};
+use crate::collide::{Blocks, full_face};
 use crate::mth::{ceil, floor, normalize};
 use crate::player::Player;
 
@@ -45,13 +45,33 @@ impl Fluid {
     }
 }
 
-const SOURCE_WATER: Fluid = Fluid { lava: false, source: true, amount: 8, falling: false };
+const SOURCE_WATER: Fluid = Fluid {
+    lava: false,
+    source: true,
+    amount: 8,
+    falling: false,
+};
 
 fn from_level(lava: bool, level: u8) -> Fluid {
     match level {
-        0 => Fluid { lava, source: true, amount: 8, falling: false },
-        1..=7 => Fluid { lava, source: false, amount: 8 - level, falling: false },
-        _ => Fluid { lava, source: false, amount: 8, falling: true },
+        0 => Fluid {
+            lava,
+            source: true,
+            amount: 8,
+            falling: false,
+        },
+        1..=7 => Fluid {
+            lava,
+            source: false,
+            amount: 8 - level,
+            falling: false,
+        },
+        _ => Fluid {
+            lava,
+            source: false,
+            amount: 8,
+            falling: true,
+        },
     }
 }
 
@@ -59,7 +79,11 @@ pub fn fluid_of(state: BlockState) -> Option<Fluid> {
     match state.block() {
         Block::Water => return Some(from_level(false, state.get(Level).unwrap_or(0))),
         Block::Lava => return Some(from_level(true, state.get(Level).unwrap_or(0))),
-        Block::BubbleColumn | Block::Kelp | Block::KelpPlant | Block::Seagrass | Block::TallSeagrass => return Some(SOURCE_WATER),
+        Block::BubbleColumn
+        | Block::Kelp
+        | Block::KelpPlant
+        | Block::Seagrass
+        | Block::TallSeagrass => return Some(SOURCE_WATER),
         _ => {}
     }
     (state.get(Waterlogged) == Some(true)).then_some(SOURCE_WATER)
@@ -72,7 +96,9 @@ pub(crate) fn fluid_at(world: &impl Blocks, pos: [i32; 3]) -> Option<Fluid> {
 pub fn contains_any_liquid(world: &impl Blocks, area: &Aabb) -> bool {
     let low = area.min.map(floor);
     let high = area.max.map(ceil);
-    (low[0]..high[0]).any(|x| (low[1]..high[1]).any(|y| (low[2]..high[2]).any(|z| fluid_at(world, [x, y, z]).is_some())))
+    (low[0]..high[0]).any(|x| {
+        (low[1]..high[1]).any(|y| (low[2]..high[2]).any(|z| fluid_at(world, [x, y, z]).is_some()))
+    })
 }
 
 fn offset(pos: [i32; 3], by: [i32; 3]) -> [i32; 3] {
@@ -82,7 +108,11 @@ fn offset(pos: [i32; 3], by: [i32; 3]) -> [i32; 3] {
 /// `FluidState.getHeight`.
 pub(crate) fn height(world: &impl Blocks, pos: [i32; 3], fluid: Fluid) -> f32 {
     let above = fluid_at(world, offset(pos, [0, 1, 0]));
-    if above.is_some_and(|a| a.lava == fluid.lava) { 1.0 } else { fluid.own_height() }
+    if above.is_some_and(|a| a.lava == fluid.lava) {
+        1.0
+    } else {
+        fluid.own_height()
+    }
 }
 
 fn camera_height(world: &impl Blocks, pos: [i32; 3], fluid: Fluid) -> f32 {
@@ -94,7 +124,9 @@ fn camera_height(world: &impl Blocks, pos: [i32; 3], fluid: Fluid) -> f32 {
 
 fn solid_face(world: &impl Blocks, pos: [i32; 3], face: Face, lava: bool) -> bool {
     let state = world.block_state(pos);
-    if fluid_of(state).is_some_and(|f| f.lava == lava) || matches!(state.block(), Block::Ice | Block::FrostedIce) {
+    if fluid_of(state).is_some_and(|f| f.lava == lava)
+        || matches!(state.block(), Block::Ice | Block::FrostedIce)
+    {
         return false;
     }
     full_face(state, face)
@@ -112,7 +144,11 @@ fn flow(world: &impl Blocks, pos: [i32; 3], fluid: Fluid) -> [f64; 3] {
         let side_height = neighbour.map_or(0.0, Fluid::own_height);
         let mut distance = 0.0_f32;
         if side_height == 0.0 {
-            if !world.block_state(side).block().is(BlockTag::BlocksFluidFlow) {
+            if !world
+                .block_state(side)
+                .block()
+                .is(BlockTag::BlocksFluidFlow)
+            {
                 let below = fluid_at(world, offset(side, [0, -1, 0]));
                 if affects(below) {
                     let below_height = below.map_or(0.0, Fluid::own_height);
@@ -133,7 +169,9 @@ fn flow(world: &impl Blocks, pos: [i32; 3], fluid: Fluid) -> [f64; 3] {
     if fluid.falling {
         for (step, face) in HORIZONTAL {
             let side = offset(pos, step);
-            if solid_face(world, side, face, fluid.lava) || solid_face(world, offset(side, [0, 1, 0]), face, fluid.lava) {
+            if solid_face(world, side, face, fluid.lava)
+                || solid_face(world, offset(side, [0, 1, 0]), face, fluid.lava)
+            {
                 current = normalize(current);
                 current[1] += -6.0;
                 break;
@@ -158,7 +196,8 @@ impl Accumulator {
         }
         let share = 1.0 / self.count as f64;
         let mut impulse = t.map(|v| v * share * scale);
-        let length = (impulse[0] * impulse[0] + impulse[1] * impulse[1] + impulse[2] * impulse[2]).sqrt();
+        let length =
+            (impulse[0] * impulse[0] + impulse[1] * impulse[1] + impulse[2] * impulse[2]).sqrt();
         if delta[0].abs() < 0.003 && delta[2].abs() < 0.003 && length < MIN_IMPULSE {
             impulse = normalize(impulse).map(|v| v * MIN_IMPULSE);
         }
@@ -175,7 +214,11 @@ pub struct FluidContact {
 
 impl FluidContact {
     pub fn height(&self, lava: bool) -> f64 {
-        let (a, b) = if lava { (self.heights[2], self.heights[3]) } else { (self.heights[0], self.heights[1]) };
+        let (a, b) = if lava {
+            (self.heights[2], self.heights[3])
+        } else {
+            (self.heights[0], self.heights[1])
+        };
         a.max(b).max(0.0)
     }
 
@@ -185,7 +228,11 @@ impl FluidContact {
 }
 
 fn chunks_loaded(world: &impl Blocks, low: [i32; 3], high: [i32; 3]) -> bool {
-    [low[0], high[0]].iter().all(|&x| [low[2], high[2]].iter().all(|&z| world.has_chunk([x, low[1], z])))
+    [low[0], high[0]].iter().all(|&x| {
+        [low[2], high[2]]
+            .iter()
+            .all(|&z| world.has_chunk([x, low[1], z]))
+    })
 }
 
 /// One `EntityFluidInteraction.update`: the contact and, for an entity fluids push, the currents.
@@ -196,12 +243,24 @@ pub(crate) struct FluidScan {
 
 impl FluidScan {
     /// `bbox` is the entity's box; `eye` its eye height and block column, for the eye-in-fluid flags.
-    pub(crate) fn of(world: &impl Blocks, bbox: Aabb, eye: Option<(f64, [i32; 3])>, pushed: bool) -> FluidScan {
-        let mut scan = FluidScan { contact: FluidContact::default(), currents: [Accumulator::default(); 2] };
+    pub(crate) fn of(
+        world: &impl Blocks,
+        bbox: Aabb,
+        eye: Option<(f64, [i32; 3])>,
+        pushed: bool,
+    ) -> FluidScan {
+        let mut scan = FluidScan {
+            contact: FluidContact::default(),
+            currents: [Accumulator::default(); 2],
+        };
         let area = bbox.deflated(0.001);
         let low = area.min.map(floor);
         let high = area.max.map(|v| ceil(v) - 1);
-        if !chunks_loaded(world, [low[0] - 1, low[1], low[2] - 1], [high[0] + 1, high[1], high[2] + 1]) {
+        if !chunks_loaded(
+            world,
+            [low[0] - 1, low[1], low[2] - 1],
+            [high[0] + 1, high[1], high[2] + 1],
+        ) {
             return scan;
         }
         let fluids = &mut scan.contact;
@@ -209,7 +268,9 @@ impl FluidScan {
             for y in low[1]..=high[1] {
                 for z in low[2]..=high[2] {
                     let pos = [x, y, z];
-                    let Some(fluid) = fluid_at(world, pos) else { continue };
+                    let Some(fluid) = fluid_at(world, pos) else {
+                        continue;
+                    };
                     let bottom = y as f64;
                     let top = bottom + height(world, pos, fluid) as f64;
                     if top < area.min[1] {
@@ -249,7 +310,15 @@ impl FluidScan {
             add_current(delta, self.currents[0], WATER_CURRENT);
         }
         if self.contact.height(true) > 0.0 {
-            add_current(delta, self.currents[1], if fast_lava { FAST_LAVA_CURRENT } else { LAVA_CURRENT });
+            add_current(
+                delta,
+                self.currents[1],
+                if fast_lava {
+                    FAST_LAVA_CURRENT
+                } else {
+                    LAVA_CURRENT
+                },
+            );
         }
     }
 }
@@ -266,7 +335,12 @@ impl Player {
     /// `Entity.updateFluidInteraction`, including the push from currents.
     pub(crate) fn update_fluids(&mut self, world: &impl Blocks) {
         let pushed = self.mount.map_or(!self.flying, |m| m.pushed_by_fluids);
-        let scan = FluidScan::of(world, self.bounding_box(), Some((self.eye_y(), self.block_pos())), pushed);
+        let scan = FluidScan::of(
+            world,
+            self.bounding_box(),
+            Some((self.eye_y(), self.block_pos())),
+            pushed,
+        );
         self.fluids = scan.contact;
         self.in_water = self.fluids.height(false) > 0.0;
         if self.in_water {
@@ -282,7 +356,11 @@ impl Player {
     }
 
     pub(crate) fn fluid_above_feet(&self, world: &impl Blocks) -> bool {
-        let pos = [floor(self.pos[0]), floor(self.pos[1] + 1.0 - 0.1), floor(self.pos[2])];
+        let pos = [
+            floor(self.pos[0]),
+            floor(self.pos[1] + 1.0 - 0.1),
+            floor(self.pos[2]),
+        ];
         fluid_at(world, pos).is_some()
     }
 }

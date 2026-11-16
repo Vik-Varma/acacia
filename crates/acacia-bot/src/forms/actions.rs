@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use acacia_client::proto::packets::{ModalFormRequest, ModalFormResponse};
 use acacia_client::proto::Packet;
+use acacia_client::proto::packets::{ModalFormRequest, ModalFormResponse};
 
 use super::reply::{cancel, response};
 use super::{Form, FormReply};
@@ -59,34 +59,68 @@ impl Bot {
         #[cfg(feature = "java")]
         if self.java().is_some() {
             let before = self.state.forms.latest().map(|f| f.id);
-            let id = self.wait_until(timeout, |bot, _| bot.state.forms.latest().map(|f| f.id).filter(|&id| Some(id) != before)).await?;
-            self.out.retain(|e| !matches!(e, BotEvent::Form(f) if f.id == id));
+            let id = self
+                .wait_until(timeout, |bot, _| {
+                    bot.state
+                        .forms
+                        .latest()
+                        .map(|f| f.id)
+                        .filter(|&id| Some(id) != before)
+                })
+                .await?;
+            self.out
+                .retain(|e| !matches!(e, BotEvent::Form(f) if f.id == id));
             return self.open_form(id);
         }
         let id = self
-            .wait_until(timeout, |_, p| (p.id == ModalFormRequest::ID).then(|| p.decode::<ModalFormRequest>().ok()).flatten())
+            .wait_until(timeout, |_, p| {
+                (p.id == ModalFormRequest::ID)
+                    .then(|| p.decode::<ModalFormRequest>().ok())
+                    .flatten()
+            })
             .await?
             .form_id;
-        self.out.retain(|e| !matches!(e, BotEvent::Form(f) if f.id == id));
+        self.out
+            .retain(|e| !matches!(e, BotEvent::Form(f) if f.id == id));
         self.open_form(id)
     }
 
     fn open_form(&self, id: u32) -> Result<Form, ActionError> {
-        self.state.forms.get(id).cloned().ok_or_else(|| ActionError::NotPossible(format!("form {id} is not open")))
+        self.state
+            .forms
+            .get(id)
+            .cloned()
+            .ok_or_else(|| ActionError::NotPossible(format!("form {id} is not open")))
     }
 
     /// Waits until `delay` has passed since form `id` was shown.
-    pub(super) async fn after_shown(&mut self, id: u32, delay: Duration) -> Result<(), ActionError> {
-        let shown = self.state.forms.shown_at(id).unwrap_or_else(tokio::time::Instant::now);
+    pub(super) async fn after_shown(
+        &mut self,
+        id: u32,
+        delay: Duration,
+    ) -> Result<(), ActionError> {
+        let shown = self
+            .state
+            .forms
+            .shown_at(id)
+            .unwrap_or_else(tokio::time::Instant::now);
         let left = (shown + delay).saturating_duration_since(tokio::time::Instant::now());
         self.pause(left).await?;
         // The server may have closed it meanwhile (ClientboundCloseForm, or a disconnect).
         self.open_form(id).map(drop)
     }
 
-    fn send_form_response(&mut self, id: u32, packet: &ModalFormResponse) -> Result<(), ActionError> {
+    fn send_form_response(
+        &mut self,
+        id: u32,
+        packet: &ModalFormResponse,
+    ) -> Result<(), ActionError> {
         let b = self.backend.require("forms")?;
         self.state.forms.remove(id);
-        if b.client.send(packet) { Ok(()) } else { Err(ActionError::Disconnected) }
+        if b.client.send(packet) {
+            Ok(())
+        } else {
+            Err(ActionError::Disconnected)
+        }
     }
 }

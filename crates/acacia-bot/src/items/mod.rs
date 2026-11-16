@@ -9,24 +9,26 @@
 
 mod actions;
 mod click;
+pub(crate) mod craft;
 #[cfg(feature = "java")]
 mod java_clicks;
-pub(crate) mod craft;
 mod plan;
 mod quick;
 mod request;
 mod slot;
 pub mod ui;
 
+pub use click::Click;
 pub(crate) use plan::Plan;
-pub(crate) use quick::{onto_cursor, quick_move_up_to_ops, to_inventory_ops, to_inventory_ops_after};
-pub(crate) use request::{beacon_payment, response_for, RequestIds};
-pub(crate) use slot::{is_own_screen, open_container};
+pub(crate) use quick::{
+    onto_cursor, quick_move_up_to_ops, to_inventory_ops, to_inventory_ops_after,
+};
+pub use request::Op;
+pub(crate) use request::{RequestIds, beacon_payment, response_for};
+pub use slot::SlotRef;
 #[cfg(test)]
 pub(crate) use slot::{BlockKind, Screen};
-pub use click::Click;
-pub use request::Op;
-pub use slot::SlotRef;
+pub(crate) use slot::{is_own_screen, open_container};
 
 #[cfg(test)]
 mod tests;

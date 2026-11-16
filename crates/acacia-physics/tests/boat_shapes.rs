@@ -3,7 +3,11 @@
 use acacia_physics::test_world::{TestBlock, TestWorld};
 use acacia_physics::{BoatState, Liquid, LiquidKind, boat_tick};
 
-const WATER: TestBlock = TestBlock::Liquid(Liquid { kind: LiquidKind::Water, depth: 8, falling: false });
+const WATER: TestBlock = TestBlock::Liquid(Liquid {
+    kind: LiquidKind::Water,
+    depth: 8,
+    falling: false,
+});
 const SURFACE_Y: f32 = -60.03334;
 
 /// Still water at y -61 over x and z in `-r..=r`.
@@ -61,7 +65,10 @@ fn cruise_speed_and_stop_distance() {
     run(&mut coast, [0.0, 0.0], 60, &world);
     let coasted = coast.pos[0] - x;
     // S from cruise: about 1.1 blocks in 11 ticks; a coast drifts 1.6.
-    assert!((braked - 1.11).abs() < 0.05 && ticks == 11, "braked {braked} in {ticks}");
+    assert!(
+        (braked - 1.11).abs() < 0.05 && ticks == 11,
+        "braked {braked} in {ticks}"
+    );
     assert!((coasted - 1.61).abs() < 0.05, "coasted {coasted}");
 }
 
@@ -76,7 +83,10 @@ fn turn_radius_table() {
         run(&mut st, keys, 20, &world);
         let rate = (st.yaw - yaw0) / 20.0;
         let radius = speed(&st) / rate.abs().to_radians();
-        assert!((rate - want_rate).abs() < 0.01 && (radius - want_radius).abs() < 0.01, "{keys:?}: {rate}°/t, radius {radius}");
+        assert!(
+            (rate - want_rate).abs() < 0.01 && (radius - want_radius).abs() < 0.01,
+            "{keys:?}: {rate}°/t, radius {radius}"
+        );
     }
 }
 

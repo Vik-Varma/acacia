@@ -58,7 +58,11 @@ impl<'a> Reader<'a> {
 
     /// `createWithContext(this, ...)`.
     pub fn error(&self, kind: Kind) -> Error {
-        Error { kind, input: Some(self.string.to_vec()), cursor: self.cursor as i32 }
+        Error {
+            kind,
+            input: Some(self.string.to_vec()),
+            cursor: self.cursor as i32,
+        }
     }
 
     fn number(&mut self) -> String {
@@ -165,6 +169,9 @@ impl<'a> Reader<'a> {
 /// at least one digit.
 pub fn java_parse_float(s: &str) -> Option<f32> {
     let body = s.strip_prefix('-').unwrap_or(s);
-    let valid = !body.is_empty() && !body.contains('-') && body.matches('.').count() <= 1 && body.chars().any(|c| c.is_ascii_digit());
+    let valid = !body.is_empty()
+        && !body.contains('-')
+        && body.matches('.').count() <= 1
+        && body.chars().any(|c| c.is_ascii_digit());
     if valid { s.parse::<f32>().ok() } else { None }
 }

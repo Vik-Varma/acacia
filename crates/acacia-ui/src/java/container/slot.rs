@@ -27,7 +27,18 @@ pub struct Slot {
 
 impl Slot {
     pub fn new(index: usize, x: i32, y: i32) -> Slot {
-        Slot { index, x, y, item: None, active: true, highlightable: true, fake: false, icon: None, max_stack: 99, drag_target: true }
+        Slot {
+            index,
+            x,
+            y,
+            item: None,
+            active: true,
+            highlightable: true,
+            fake: false,
+            icon: None,
+            max_stack: 99,
+            drag_target: true,
+        }
     }
 
     pub fn has_item(&self) -> bool {
@@ -92,7 +103,11 @@ pub fn extract_slot(b: &mut Base, gui: &mut Gui, _env: &Env, i: usize) {
                 count = Some(format!("§e{max}"));
             }
             stack = Some(carried.with_count(n)).filter(|s| !s.is_empty());
-            key = if b.distinct_keys { super::QUICK + i as i32 } else { -1 };
+            key = if b.distinct_keys {
+                super::QUICK + i as i32
+            } else {
+                -1
+            };
         } else {
             let q = b.quick.as_mut().expect("checked");
             q.slots.retain(|&s| s != i);

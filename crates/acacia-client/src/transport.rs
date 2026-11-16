@@ -5,19 +5,30 @@ use std::ops::Range;
 use rand_core::{OsRng, RngCore};
 use tokio::net::UdpSocket;
 
-use crate::socks5::{Socks5Proxy, Socks5Udp};
 use crate::ConnectError;
+use crate::socks5::{Socks5Proxy, Socks5Udp};
 
 /// `host[:port]` with the default Bedrock port filled in.
 pub(crate) fn with_port(server: &str) -> String {
-    let has_port = server.rsplit_once(':').is_some_and(|(_, p)| p.parse::<u16>().is_ok());
-    if has_port { server.to_owned() } else { format!("{server}:19132") }
+    let has_port = server
+        .rsplit_once(':')
+        .is_some_and(|(_, p)| p.parse::<u16>().is_ok());
+    if has_port {
+        server.to_owned()
+    } else {
+        format!("{server}:19132")
+    }
 }
 
 /// Resolves `host[:port]` (default port 19132), preferring IPv4.
 pub(crate) async fn resolve(server: &str) -> Result<SocketAddr, ConnectError> {
     let addrs: Vec<SocketAddr> = tokio::net::lookup_host(with_port(server)).await?.collect();
-    addrs.iter().find(|a| a.is_ipv4()).or(addrs.first()).copied().ok_or(ConnectError::Resolve)
+    addrs
+        .iter()
+        .find(|a| a.is_ipv4())
+        .or(addrs.first())
+        .copied()
+        .ok_or(ConnectError::Resolve)
 }
 
 /// A RakNet client GUID as vanilla sends it: negative as an i64. go-raknet (Dragonfly) rejects a
@@ -36,13 +47,19 @@ fn is_lan(ip: IpAddr) -> bool {
 /// A random address on the most common home subnets (192.168.0.0/24 and 192.168.1.0/24).
 fn home_lan_address(port: u16) -> SocketAddr {
     let r = OsRng.next_u32();
-    SocketAddr::new(Ipv4Addr::new(192, 168, (r & 1) as u8, 2 + ((r >> 8) % 252) as u8).into(), port)
+    SocketAddr::new(
+        Ipv4Addr::new(192, 168, (r & 1) as u8, 2 + ((r >> 8) % 252) as u8).into(),
+        port,
+    )
 }
 
 /// UDP to the server, direct or relayed through a SOCKS5 proxy. A RakNet flow is connected to one
 /// target; a NetherNet flow is unconnected because ICE may pick any of the server's candidates.
 pub(crate) enum Transport {
-    Direct { socket: UdpSocket, target: SocketAddr },
+    Direct {
+        socket: UdpSocket,
+        target: SocketAddr,
+    },
     Socks5(Socks5Udp),
 }
 
@@ -61,8 +78,15 @@ impl Transport {
         if let Some(proxy) = proxy {
             return Ok(Self::Socks5(Socks5Udp::associate(proxy, target).await?));
         }
-        let bind: SocketAddr = if target.is_ipv4() { (Ipv4Addr::UNSPECIFIED, 0).into() } else { (Ipv6Addr::UNSPECIFIED, 0).into() };
-        Ok(Self::Direct { socket: UdpSocket::bind(bind).await?, target })
+        let bind: SocketAddr = if target.is_ipv4() {
+            (Ipv4Addr::UNSPECIFIED, 0).into()
+        } else {
+            (Ipv6Addr::UNSPECIFIED, 0).into()
+        };
+        Ok(Self::Direct {
+            socket: UdpSocket::bind(bind).await?,
+            target,
+        })
     }
 
     /// The host candidate to advertise. Real players list only LAN addresses (the server finds their
@@ -72,10 +96,15 @@ impl Transport {
         match self {
             Self::Direct { socket, target } => {
                 // Connecting a UDP socket sends nothing; it only asks the OS for a route.
-                let probe = std::net::UdpSocket::bind(SocketAddr::new(socket.local_addr()?.ip(), 0))?;
+                let probe =
+                    std::net::UdpSocket::bind(SocketAddr::new(socket.local_addr()?.ip(), 0))?;
                 probe.connect(target)?;
                 let route = SocketAddr::new(probe.local_addr()?.ip(), socket.local_addr()?.port());
-                Ok(if is_lan(route.ip()) { route } else { home_lan_address(route.port()) })
+                Ok(if is_lan(route.ip()) {
+                    route
+                } else {
+                    home_lan_address(route.port())
+                })
             }
             Self::Socks5(_) => Ok(home_lan_address(49152 + (OsRng.next_u32() % 16384) as u16)),
         }

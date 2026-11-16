@@ -5,10 +5,10 @@ use std::time::Duration;
 use acacia_nethernet::{Identity, Signal};
 use futures_util::{SinkExt, StreamExt};
 use p384::ecdsa::SigningKey;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::net::TcpListener;
-use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
+use tokio_tungstenite::tungstenite::Message;
 
 use super::*;
 use crate::test_host::RtcHost;
@@ -24,15 +24,26 @@ fn delivery(signal: &Signal) -> Message {
 
 async fn on_frame(ws: &mut WebSocketStream<tokio::net::TcpStream>, host: &mut RtcHost, text: &str) {
     let v: Value = serde_json::from_str(text).unwrap();
-    let reply = |result: Value| Message::Text(json!({"jsonrpc": "2.0", "id": v["id"], "result": result}).to_string().into());
+    let reply = |result: Value| {
+        Message::Text(
+            json!({"jsonrpc": "2.0", "id": v["id"], "result": result})
+                .to_string()
+                .into(),
+        )
+    };
     match v["method"].as_str() {
         Some("Signaling_TurnAuth_v1_0") => {
-            ws.send(reply(json!({"ExpirationInSeconds": 60, "TurnAuthServers": []}))).await.unwrap();
+            ws.send(reply(
+                json!({"ExpirationInSeconds": 60, "TurnAuthServers": []}),
+            ))
+            .await
+            .unwrap();
         }
         Some("Signaling_SendClientMessage_v1_0") => {
             assert_eq!(v["params"]["toPlayerId"], HOST_ID);
             ws.send(reply(Value::Null)).await.unwrap();
-            let inner: Value = serde_json::from_str(v["params"]["message"].as_str().unwrap()).unwrap();
+            let inner: Value =
+                serde_json::from_str(v["params"]["message"].as_str().unwrap()).unwrap();
             let signal = Signal::parse(inner["params"]["message"].as_str().unwrap()).unwrap();
             for out in host.on_signal(&signal) {
                 ws.send(delivery(&out)).await.unwrap();
@@ -54,12 +65,28 @@ fn friend_targets_follow_the_connection_type() {
         host_port: 0,
     };
     let host = "wss://signal.example.net/";
-    let t = |c: &WorldConnection| SignalingTarget::from_friend(c, "MCToken x".into(), host).map(|t| (t.protocol, t.peer, t.host));
+    let t = |c: &WorldConnection| {
+        SignalingTarget::from_friend(c, "MCToken x".into(), host)
+            .map(|t| (t.protocol, t.peer, t.host))
+    };
     let jsonrpc = conn(K::SignalingJsonRpc, Some("pmsg-uuid"), Some("42"));
-    assert_eq!(t(&jsonrpc), Some((SignalingProtocol::JsonRpc, "pmsg-uuid".into(), "signal.example.net".into())));
+    assert_eq!(
+        t(&jsonrpc),
+        Some((
+            SignalingProtocol::JsonRpc,
+            "pmsg-uuid".into(),
+            "signal.example.net".into()
+        ))
+    );
     let no_pmsg = conn(K::SignalingJsonRpc, None, Some("42"));
-    assert_eq!(t(&no_pmsg).map(|(p, peer, _)| (p, peer)), Some((SignalingProtocol::Legacy, "42".into())));
-    assert_eq!(t(&conn(K::SignalingLegacy, None, Some("7"))).map(|(p, ..)| p), Some(SignalingProtocol::Legacy));
+    assert_eq!(
+        t(&no_pmsg).map(|(p, peer, _)| (p, peer)),
+        Some((SignalingProtocol::Legacy, "42".into()))
+    );
+    assert_eq!(
+        t(&conn(K::SignalingLegacy, None, Some("7"))).map(|(p, ..)| p),
+        Some(SignalingProtocol::Legacy)
+    );
     assert_eq!(t(&conn(K::Lan, None, Some("7"))), None);
     assert_eq!(t(&conn(K::SignalingLegacy, None, None)), None);
 }
@@ -89,26 +116,39 @@ async fn fake_service() -> (SignalingTarget, Identity) {
         peer: HOST_ID.into(),
         mc_token: "token".into(),
     };
-    (target, Identity::multiplayer(SigningKey::from_slice(&[5; 48]).unwrap(), "token".into()))
+    (
+        target,
+        Identity::multiplayer(SigningKey::from_slice(&[5; 48]).unwrap(), "token".into()),
+    )
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn dials_through_a_fake_jsonrpc_host() {
     let (target, identity) = fake_service().await;
-    let dialed = tokio::time::timeout(Duration::from_secs(20), dial(&target, &identity, None)).await;
+    let dialed =
+        tokio::time::timeout(Duration::from_secs(20), dial(&target, &identity, None)).await;
     let dialed = dialed.expect("dial timed out").expect("dial failed");
     assert!(dialed.wire.conn.is_open());
-    assert!(dialed.wire.turn().is_none(), "a reachable host needs no TURN");
+    assert!(
+        dialed.wire.turn().is_none(),
+        "a reachable host needs no TURN"
+    );
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn a_raw_link_carries_batches_both_ways() {
     let (target, identity) = fake_service().await;
-    let link = tokio::time::timeout(Duration::from_secs(20), crate::RawLink::dial(&target, &identity, None)).await;
+    let link = tokio::time::timeout(
+        Duration::from_secs(20),
+        crate::RawLink::dial(&target, &identity, None),
+    )
+    .await;
     let mut link = link.expect("dial timed out").expect("dial failed");
     // Larger than one WebRTC message, so it crosses the link in segments.
     let batch = bytes::Bytes::from(vec![0xfe; 30_000]);
     assert!(link.send(batch.clone()));
-    let echoed = tokio::time::timeout(Duration::from_secs(10), link.recv()).await.expect("no echo within 10 s");
+    let echoed = tokio::time::timeout(Duration::from_secs(10), link.recv())
+        .await
+        .expect("no echo within 10 s");
     assert_eq!(echoed, Some(batch));
 }

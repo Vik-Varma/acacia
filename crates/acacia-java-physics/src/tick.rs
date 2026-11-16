@@ -20,10 +20,23 @@ impl Player {
             };
     }
 
-    fn start_gliding_if_asked(&mut self, world: &impl Blocks, was_jumping: bool, toggled_flight: bool) {
-        let can_glide = !self.flying && !self.on_ground && self.effects.levitation.is_none() && self.has_glider;
+    fn start_gliding_if_asked(
+        &mut self,
+        world: &impl Blocks,
+        was_jumping: bool,
+        toggled_flight: bool,
+    ) {
+        let can_glide =
+            !self.flying && !self.on_ground && self.effects.levitation.is_none() && self.has_glider;
         let in_liquid = self.in_water || self.in_lava();
-        if self.keys.jump && !toggled_flight && !was_jumping && !self.on_climbable(world) && !self.fall_flying && can_glide && !in_liquid {
+        if self.keys.jump
+            && !toggled_flight
+            && !was_jumping
+            && !self.on_climbable(world)
+            && !self.fall_flying
+            && can_glide
+            && !in_liquid
+        {
             self.fall_flying = true;
         }
     }
@@ -114,8 +127,10 @@ impl Player {
         let was_jumping = self.keys.jump;
         let was_shift = self.keys.shift;
         let had_forward = self.has_forward_impulse();
-        self.crouching =
-            !self.flying && !self.swimming && self.fits(world, Pose::Crouching) && (was_shift || !self.fits(world, Pose::Standing));
+        self.crouching = !self.flying
+            && !self.swimming
+            && self.fits(world, Pose::Crouching)
+            && (was_shift || !self.fits(world, Pose::Standing));
         self.read_keys(keys);
         self.push_out_of_blocks(world);
         self.update_sprint(was_shift, had_forward);

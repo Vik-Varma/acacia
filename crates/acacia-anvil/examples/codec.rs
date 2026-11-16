@@ -18,7 +18,9 @@ struct Chunk {
 }
 
 fn mca_files(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
     for e in rd.flatten() {
         let p = e.path();
         if p.is_dir() {
@@ -42,7 +44,12 @@ fn corpus(dirs: &[PathBuf]) -> Vec<Chunk> {
                 let (x, z) = (slot & 31, slot >> 5);
                 if let Some(nbt) = region.chunk_nbt(x, z) {
                     let ts = region.timestamp(x, z).unwrap();
-                    chunks.push(Chunk { file: rel.clone(), slot, ts, nbt });
+                    chunks.push(Chunk {
+                        file: rel.clone(),
+                        slot,
+                        ts,
+                        nbt,
+                    });
                 }
             }
         }
@@ -73,7 +80,10 @@ fn libdeflate_zlib(c: &mut libdeflater::Compressor, nbt: &[u8], out: &mut Vec<u8
 fn report(name: &str, chunks: &[Chunk], payloads: &[Vec<u8>], comp_ns: f64, iters: usize) {
     let n = chunks.len() as f64;
     let bytes: usize = payloads.iter().map(Vec::len).sum();
-    let disk: usize = payloads.iter().map(|p| (p.len() + 4).div_ceil(4096) * 4096).sum();
+    let disk: usize = payloads
+        .iter()
+        .map(|p| (p.len() + 4).div_ceil(4096) * 4096)
+        .sum();
     let mut d = libdeflater::Decompressor::new();
     let mut out = vec![0u8; 1 << 20];
     let dec_ns = time(iters, payloads.len(), || {
@@ -125,14 +135,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "--iters" => iters = args.next().ok_or("--iters N")?.parse()?,
             "--write" => {
                 let c: Compression = args.next().ok_or("--write <compression> <out>")?.parse()?;
-                target = Some((c, PathBuf::from(args.next().ok_or("--write <compression> <out>")?)));
+                target = Some((
+                    c,
+                    PathBuf::from(args.next().ok_or("--write <compression> <out>")?),
+                ));
             }
             _ => dirs.push(PathBuf::from(a)),
         }
     }
     let chunks = corpus(&dirs);
     let raw: usize = chunks.iter().map(|c| c.nbt.len()).sum();
-    println!("{} chunks, NBT {:.0} B each", chunks.len(), raw as f64 / chunks.len() as f64);
+    println!(
+        "{} chunks, NBT {:.0} B each",
+        chunks.len(),
+        raw as f64 / chunks.len() as f64
+    );
     if let Some((c, out)) = target {
         write(&chunks, c, &out)?;
         println!("wrote {} as {c:?}", out.display());
@@ -155,13 +172,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         report(name, &chunks, &payloads, ns, iters);
     }
     for level in [1, 3, 6, 9] {
-        let mut comp = libdeflater::Compressor::new(libdeflater::CompressionLvl::new(level).unwrap());
+        let mut comp =
+            libdeflater::Compressor::new(libdeflater::CompressionLvl::new(level).unwrap());
         let ns = time(iters, n, || {
             for (ch, p) in chunks.iter().zip(&mut payloads) {
                 libdeflate_zlib(&mut comp, &ch.nbt, p);
             }
         });
-        report(&format!("libdeflate {level}"), &chunks, &payloads, ns, iters);
+        report(
+            &format!("libdeflate {level}"),
+            &chunks,
+            &payloads,
+            ns,
+            iters,
+        );
     }
     Ok(())
 }

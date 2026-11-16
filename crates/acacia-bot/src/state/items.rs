@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, Weak};
 
 use acacia_client::proto::packets::ItemRegistry as ItemRegistryPacket;
-use acacia_world::neutral::Item;
 use acacia_client::proto::{DecodeError, Packet, RawPacket};
+use acacia_world::neutral::Item;
 use bytes::Bytes;
 
 /// Network item id <-> identifier (`minecraft:diamond`), from the server's `ItemRegistry`. Bots that
@@ -50,9 +50,13 @@ impl ItemRegistry {
     /// Java's items, which every Java server shares: network id = Java item id.
     pub fn java() -> Self {
         static JAVA: std::sync::LazyLock<Arc<Maps>> = std::sync::LazyLock::new(|| {
-            let mut maps = Maps { java: true, ..Maps::default() };
+            let mut maps = Maps {
+                java: true,
+                ..Maps::default()
+            };
             for item in Item::all() {
-                let (id, name): (i32, Arc<str>) = (i32::from(item.java_id()), item.bedrock().0.into());
+                let (id, name): (i32, Arc<str>) =
+                    (i32::from(item.java_id()), item.bedrock().0.into());
                 maps.ids.entry(name.clone()).or_insert(id);
                 maps.names.insert(id, name);
             }
@@ -75,7 +79,10 @@ impl ItemRegistry {
         if self.0.java {
             return Item::from_java_id(u16::try_from(network_id).ok()?);
         }
-        Item::from_bedrock(self.name(network_id)?, i16::try_from(metadata).unwrap_or(-1))
+        Item::from_bedrock(
+            self.name(network_id)?,
+            i16::try_from(metadata).unwrap_or(-1),
+        )
     }
 
     /// The network id and metadata this server uses for `item`.
@@ -127,14 +134,20 @@ mod tests {
     #[test]
     fn maps_both_directions_and_replaces_on_resend() {
         let mut items = ItemRegistry::default();
-        let packet = ItemRegistryPacket { itemstates: vec![entry("minecraft:stone", 1), entry("minecraft:diamond", 304)] };
+        let packet = ItemRegistryPacket {
+            itemstates: vec![entry("minecraft:stone", 1), entry("minecraft:diamond", 304)],
+        };
         items.apply(&raw(&packet)).unwrap();
         assert_eq!(items.len(), 2);
         assert_eq!(items.name(304), Some("minecraft:diamond"));
         assert_eq!(items.id("minecraft:stone"), Some(1));
         assert_eq!(items.name(5), None);
 
-        items.apply(&raw(&ItemRegistryPacket { itemstates: vec![entry("minecraft:apple", 257)] })).unwrap();
+        items
+            .apply(&raw(&ItemRegistryPacket {
+                itemstates: vec![entry("minecraft:apple", 257)],
+            }))
+            .unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items.id("minecraft:stone"), None);
     }
@@ -142,7 +155,13 @@ mod tests {
     #[test]
     fn java_ids_name_bedrock_spellings() {
         let items = ItemRegistry::java();
-        let bed = Item::from_java_id(Item::all().find(|i| i.name() == "minecraft:red_bed").unwrap().java_id()).unwrap();
+        let bed = Item::from_java_id(
+            Item::all()
+                .find(|i| i.name() == "minecraft:red_bed")
+                .unwrap()
+                .java_id(),
+        )
+        .unwrap();
         let (id, data) = items.network_id(bed).unwrap();
         assert_eq!(items.item(id, data), Some(bed));
         assert_eq!(items.name(id), Some("minecraft:bed"));

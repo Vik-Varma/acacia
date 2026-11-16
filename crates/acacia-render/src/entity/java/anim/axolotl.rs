@@ -24,8 +24,16 @@ fn gills(p: &mut Poses, top: f32, sides: f32) {
 }
 
 pub(super) fn axolotl(p: &mut Poses, s: &RenderState) {
-    let water = if s.has("inWaterFactor") { s.num("inWaterFactor") } else { 1.0 };
-    let (dead, ground, moving) = (s.num("playingDeadFactor"), s.num("onGroundFactor"), s.num("movingFactor"));
+    let water = if s.has("inWaterFactor") {
+        s.num("inWaterFactor")
+    } else {
+        1.0
+    };
+    let (dead, ground, moving) = (
+        s.num("playingDeadFactor"),
+        s.num("onGroundFactor"),
+        s.num("movingFactor"),
+    );
     let still = 1.0 - moving;
     let mirrored = 1.0 - ground.min(moving);
     let age = s.age();
@@ -35,14 +43,33 @@ pub(super) fn axolotl(p: &mut Poses, s: &RenderState) {
     crawling(p, age, moving.min(ground));
     lying(p, age, still.min(ground));
     if dead > QUIET {
-        add(p, "left_hind_leg", [1.413_716_7 * dead, 1.099_557_4 * dead, pi_div(4.0) * dead]);
-        add(p, "left_front_leg", [pi_div(4.0) * dead, 2.042_035 * dead, 0.0]);
+        add(
+            p,
+            "left_hind_leg",
+            [1.413_716_7 * dead, 1.099_557_4 * dead, pi_div(4.0) * dead],
+        );
+        add(
+            p,
+            "left_front_leg",
+            [pi_div(4.0) * dead, 2.042_035 * dead, 0.0],
+        );
         add(p, "body", [-0.15 * dead, 0.0, 0.35 * dead]);
     }
     if mirrored > QUIET {
-        for (right, left) in [("right_hind_leg", "left_hind_leg"), ("right_front_leg", "left_front_leg")] {
+        for (right, left) in [
+            ("right_hind_leg", "left_hind_leg"),
+            ("right_front_leg", "left_front_leg"),
+        ] {
             let from = p.read(left);
-            add(p, right, [from.x_rot * mirrored, -from.y_rot * mirrored, -from.z_rot * mirrored]);
+            add(
+                p,
+                right,
+                [
+                    from.x_rot * mirrored,
+                    -from.y_rot * mirrored,
+                    -from.z_rot * mirrored,
+                ],
+            );
         }
     }
 }
@@ -59,8 +86,16 @@ fn swimming(p: &mut Poses, age: f32, x_rot: f32, f: f32) {
     p.get("body").y -= 0.45 * cosine * f;
     gills(p, (-0.5 * sine - 0.8) * f, (0.3 * sine + 0.9) * f);
     p.get("tail").y_rot += 0.3 * cos(speed * 0.9) * f;
-    add(p, "left_hind_leg", [1.884_955_8 * f, -0.4 * sine * f, PI / 2.0 * f]);
-    add(p, "left_front_leg", [1.884_955_8 * f, (-0.2 * cosine - 0.1) * f, PI / 2.0 * f]);
+    add(
+        p,
+        "left_hind_leg",
+        [1.884_955_8 * f, -0.4 * sine * f, PI / 2.0 * f],
+    );
+    add(
+        p,
+        "left_front_leg",
+        [1.884_955_8 * f, (-0.2 * cosine - 0.1) * f, PI / 2.0 * f],
+    );
 }
 
 fn hovering(p: &mut Poses, age: f32, f: f32) {
@@ -77,8 +112,20 @@ fn hovering(p: &mut Poses, age: f32, f: f32) {
     let side = (-0.3 * cosine - 0.19) * f;
     p.get("left_gills").y_rot += side;
     p.get("right_gills").y_rot -= side;
-    add(p, "left_hind_leg", [((std::f64::consts::PI * 3.0 / 4.0) as f32 - cosine * 0.11) * f, 0.471_238_94 * f, 1.727_876_1 * f]);
-    add(p, "left_front_leg", [(pi_div(4.0) - cosine * 0.2) * f, 2.042_035 * f, 0.0]);
+    add(
+        p,
+        "left_hind_leg",
+        [
+            ((std::f64::consts::PI * 3.0 / 4.0) as f32 - cosine * 0.11) * f,
+            0.471_238_94 * f,
+            1.727_876_1 * f,
+        ],
+    );
+    add(
+        p,
+        "left_front_leg",
+        [(pi_div(4.0) - cosine * 0.2) * f, 2.042_035 * f, 0.0],
+    );
     p.get("tail").y_rot += 0.5 * cosine * f;
 }
 
@@ -96,10 +143,22 @@ fn crawling(p: &mut Poses, age: f32, f: f32) {
     let gill = (0.6 - 0.08 * (cosine * cosine + 2.0 * sin(speed))) * f;
     gills(p, gill, -gill);
     let (hind_x, front_x) = (0.942_477_9 * f, 1.099_557_4 * f);
-    add(p, "left_hind_leg", [hind_x, (1.5 - hind_sway) * f, -0.1 * f]);
-    add(p, "left_front_leg", [front_x, (PI / 2.0 - front_sway) * f, 0.0]);
+    add(
+        p,
+        "left_hind_leg",
+        [hind_x, (1.5 - hind_sway) * f, -0.1 * f],
+    );
+    add(
+        p,
+        "left_front_leg",
+        [front_x, (PI / 2.0 - front_sway) * f, 0.0],
+    );
     add(p, "right_hind_leg", [hind_x, (-1.0 - hind_sway) * f, 0.0]);
-    add(p, "right_front_leg", [front_x, (-PI / 2.0 - front_sway) * f, 0.0]);
+    add(
+        p,
+        "right_front_leg",
+        [front_x, (-PI / 2.0 - front_sway) * f, 0.0],
+    );
 }
 
 fn lying(p: &mut Poses, age: f32, f: f32) {

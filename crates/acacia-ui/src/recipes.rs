@@ -26,7 +26,10 @@ fn layout(layout: Layout, size: [f32; 2], count: usize) -> ([f32; 4], Vec<[f32; 
     let rows = ((height - GRID[1] - 6.0) / CELL).floor().max(0.0) as usize;
     let cells = (0..count.min(rows * COLUMNS))
         .map(|i| {
-            let (x, y) = (book[0] + GRID[0] + (i % COLUMNS) as f32 * CELL, book[1] + GRID[1] + (i / COLUMNS) as f32 * CELL);
+            let (x, y) = (
+                book[0] + GRID[0] + (i % COLUMNS) as f32 * CELL,
+                book[1] + GRID[1] + (i / COLUMNS) as f32 * CELL,
+            );
             [x, y, x + CELL - 1.0, y + CELL - 1.0]
         })
         .collect();
@@ -35,12 +38,22 @@ fn layout(layout: Layout, size: [f32; 2], count: usize) -> ([f32; 4], Vec<[f32; 
 
 /// The result under `mouse`, by index.
 pub fn hit(screen: Layout, size: [f32; 2], count: usize, mouse: [f32; 2]) -> Option<usize> {
-    layout(screen, size, count).1.iter().position(|r| (r[0]..r[2]).contains(&mouse[0]) && (r[1]..r[3]).contains(&mouse[1]))
+    layout(screen, size, count)
+        .1
+        .iter()
+        .position(|r| (r[0]..r[2]).contains(&mouse[0]) && (r[1]..r[3]).contains(&mouse[1]))
 }
 
 /// `results`: each craftable item's icon and the stack one craft makes. Bedrock's look draws its
 /// panel and cells, others flat greys (the Java look's book is `java::container::recipe_book`).
-pub fn draw(list: &mut DrawList, theme: &Theme, screen: Layout, results: &[Item], mouse: [f32; 2], size: [f32; 2]) {
+pub fn draw(
+    list: &mut DrawList,
+    theme: &Theme,
+    screen: Layout,
+    results: &[Item],
+    mouse: [f32; 2],
+    size: [f32; 2],
+) {
     let white = theme.atlas.white();
     let (book, cells) = layout(screen, size, results.len());
     let bedrock = match &theme.widgets {
@@ -51,11 +64,23 @@ pub fn draw(list: &mut DrawList, theme: &Theme, screen: Layout, results: &[Item]
         Some(kit) => kit.paint(list, kit.panel, book, WHITE, 0xC6C6C6),
         None => {
             list.fill(white, book, EDGE);
-            list.fill(white, [book[0] + 1.0, book[1] + 1.0, book[2] - 1.0, book[3] - 1.0], PANEL);
+            list.fill(
+                white,
+                [book[0] + 1.0, book[1] + 1.0, book[2] - 1.0, book[3] - 1.0],
+                PANEL,
+            );
         }
     }
     if let Some(font) = theme.font.as_ref() {
-        font.draw(list, "Recipe Book", book[0] + 8.0, book[1] + 6.0, 0x404040, 1.0, false);
+        font.draw(
+            list,
+            "Recipe Book",
+            book[0] + 8.0,
+            book[1] + 6.0,
+            0x404040,
+            1.0,
+            false,
+        );
     }
     let hovered = hit(screen, size, results.len(), mouse);
     for (i, (rect, item)) in cells.iter().zip(results).enumerate() {
@@ -67,7 +92,13 @@ pub fn draw(list: &mut DrawList, theme: &Theme, screen: Layout, results: &[Item]
         stack(list, theme.font.as_ref(), *item, x + 4.0, y + 4.0);
         if hovered == Some(i) {
             match bedrock {
-                Some(kit) => kit.paint(list, kit.highlight, [x + 4.0, y + 4.0, x + 20.0, y + 20.0], [255, 255, 255, 204], 0x62B531),
+                Some(kit) => kit.paint(
+                    list,
+                    kit.highlight,
+                    [x + 4.0, y + 4.0, x + 20.0, y + 20.0],
+                    [255, 255, 255, 204],
+                    0x62B531,
+                ),
                 None => list.fill(white, *rect, HOVER),
             }
         }
@@ -85,7 +116,14 @@ mod tests {
         let (book, cells) = layout(screen, size, 12);
         assert_eq!(book[2], ox - 2.0);
         assert_eq!(cells.len(), 12);
-        assert_eq!([cells[5][0], cells[5][1]], [book[0] + 11.0, oy + 20.0 + 25.0], "a new row every five");
-        assert_eq!(hit(screen, size, 12, [cells[3][0] + 1.0, cells[3][1] + 1.0]), Some(3));
+        assert_eq!(
+            [cells[5][0], cells[5][1]],
+            [book[0] + 11.0, oy + 20.0 + 25.0],
+            "a new row every five"
+        );
+        assert_eq!(
+            hit(screen, size, 12, [cells[3][0] + 1.0, cells[3][1] + 1.0]),
+            Some(3)
+        );
     }
 }

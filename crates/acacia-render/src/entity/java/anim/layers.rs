@@ -6,7 +6,10 @@ impl Family {
     /// The family of a layer (`minecraft:cow#main`, `minecraft:zombie_baby#main`); `None` for
     /// one not ported yet.
     pub fn of_layer(layer: &str) -> Option<Family> {
-        let (name, part) = layer.trim_start_matches("minecraft:").split_once('#').unwrap_or((layer, "main"));
+        let (name, part) = layer
+            .trim_start_matches("minecraft:")
+            .split_once('#')
+            .unwrap_or((layer, "main"));
         if let Some(gear) = super::super::gear::family(&format!("minecraft:{name}#{part}")) {
             return Some(gear);
         }
@@ -17,9 +20,13 @@ impl Family {
             return None;
         }
         Some(match name.trim_end_matches("_baby") {
-            "cow" | "cold_cow" | "warm_cow" | "mooshroom" | "pig" | "cold_pig" | "warm_pig" => Family::Quadruped,
+            "cow" | "cold_cow" | "warm_cow" | "mooshroom" | "pig" | "cold_pig" | "warm_pig" => {
+                Family::Quadruped
+            }
             "sheep" => Family::Sheep,
-            "chicken" | "cold_chicken" | "warm_chicken" if name.ends_with("_baby") => Family::BabyChicken,
+            "chicken" | "cold_chicken" | "warm_chicken" if name.ends_with("_baby") => {
+                Family::BabyChicken
+            }
             "chicken" | "cold_chicken" | "warm_chicken" => Family::Chicken,
             "creeper" => Family::Creeper,
             "spider" | "cave_spider" => Family::Spider,

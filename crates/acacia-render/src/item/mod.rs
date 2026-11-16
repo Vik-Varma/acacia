@@ -23,9 +23,9 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::LookPack;
 use crate::blocks::{BlockTable, Shape};
 use crate::entity::{Layer, NO_MODEL, NO_TEXTURE, Skin};
-use crate::LookPack;
 use crate::look::Dropped;
 pub use icon::{block_icon, model_icon, pattern_icon};
 pub use icons::ItemIcons;
@@ -103,7 +103,14 @@ impl ItemModels {
     /// `table` is the look pack's for the world's registry ([`LookPack::block_table`]).
     pub fn new(pack: Arc<LookPack>, table: Arc<BlockTable>) -> ItemModels {
         let layers = [Layer::plain(NO_MODEL, NO_TEXTURE)].into();
-        ItemModels { icons: ItemIcons::load(pack.files()), java: JavaItems::shared(pack.files()), pack, table, layers, cache: HashMap::new() }
+        ItemModels {
+            icons: ItemIcons::load(pack.files()),
+            java: JavaItems::shared(pack.files()),
+            pack,
+            table,
+            layers,
+            cache: HashMap::new(),
+        }
     }
 
     /// How the look's dropped items move.
@@ -122,25 +129,53 @@ impl ItemModels {
             self.cache.insert(key.clone(), model);
         }
         let model = self.cache.get(key)?.clone()?;
-        Some(ItemModel { glint: model.glint || enchanted, ..model })
+        Some(ItemModel {
+            glint: model.glint || enchanted,
+            ..model
+        })
     }
 
     fn build(&self, key: &ItemKey) -> Option<ItemModel> {
         let glint = self.pack.look.foil.always(&key.name);
-        let model = |skin: Skin, form| Some(ItemModel { skin: Arc::new(skin), layers: self.layers.clone(), form, glint, java: None, ground: None, fixed: None });
+        let model = |skin: Skin, form| {
+            Some(ItemModel {
+                skin: Arc::new(skin),
+                layers: self.layers.clone(),
+                form,
+                glint,
+                java: None,
+                ground: None,
+                fixed: None,
+            })
+        };
         let shield = |root| shield::skin(root, key.banner.as_deref());
-        if let Some(skin) = (key.name == shield::ITEM).then_some(self.pack.files()).and_then(shield) {
+        if let Some(skin) = (key.name == shield::ITEM)
+            .then_some(self.pack.files())
+            .and_then(shield)
+        {
             return model(skin, Form::Shield);
         }
-        if let Some(skin) = key.banner.as_deref().and_then(|cloth| held_banner::skin(self.pack.files(), cloth)) {
+        if let Some(skin) = key
+            .banner
+            .as_deref()
+            .and_then(|cloth| held_banner::skin(self.pack.files(), cloth))
+        {
             return model(skin, Form::Banner);
         }
-        if let Some(model) = self.java.as_deref().and_then(|java| self.java_model(java, key, glint)) {
+        if let Some(model) = self
+            .java
+            .as_deref()
+            .and_then(|java| self.java_model(java, key, glint))
+        {
             return Some(model);
         }
         // An item with an icon of its own shows it, even when it places a block (doors, beds).
         let dye = leather::dyeable(&key.name).then_some(key.dye);
-        if let Some(skin) = self.icons.path(&key.name, key.aux).and_then(|path| icon(self.pack.files(), path, dye)) {
+        if let Some(skin) = self
+            .icons
+            .path(&key.name, key.aux)
+            .and_then(|path| icon(self.pack.files(), path, dye))
+        {
             return model(skin, Form::Flat);
         }
         if key.block == 0 {
@@ -148,7 +183,10 @@ impl ItemModels {
         }
         let block = self.table.get(key.block);
         if block.shape == Shape::Cross {
-            let rgba = block::texels(self.pack.atlas.layers.get(block.textures[0] as usize), block::tile_of(block, 0));
+            let rgba = block::texels(
+                self.pack.atlas.layers.get(block.textures[0] as usize),
+                block::tile_of(block, 0),
+            );
             return model(flat(16, 16, rgba), Form::Flat);
         }
         model(block::skin(block, &self.pack.atlas)?, Form::Block)
@@ -157,13 +195,29 @@ impl ItemModels {
     /// The Java item's held geometry (the right hand's, as worn, dropped and framed too).
     fn java_model(&self, java: &JavaItems, key: &ItemKey, glint: bool) -> Option<ItemModel> {
         let name = &java.stack_name(&key.name, key.aux, key.trim.as_deref());
-        let (hand, tint) = (java::context::hand(false, false), first_tint(&key.name, key.aux, key.dye));
+        let (hand, tint) = (
+            java::context::hand(false, false),
+            first_tint(&key.name, key.aux, key.dye),
+        );
         let mesh = java.mesh(name, hand, tint)?;
         let form = if mesh.solid { Form::Block } else { Form::Flat };
-        let own = |context| (java.drawn_context(name, context) != hand).then(|| java.mesh(name, context, tint)).flatten().map(|m| Arc::new(m.skin));
+        let own = |context| {
+            (java.drawn_context(name, context) != hand)
+                .then(|| java.mesh(name, context, tint))
+                .flatten()
+                .map(|m| Arc::new(m.skin))
+        };
         let (ground, fixed) = (own(java::context::GROUND), own(java::context::FIXED));
         let displays = Some(Arc::new(java.displays(name)));
-        Some(ItemModel { skin: Arc::new(mesh.skin), layers: self.layers.clone(), form, glint: glint || mesh.foil, java: displays, ground, fixed })
+        Some(ItemModel {
+            skin: Arc::new(mesh.skin),
+            layers: self.layers.clone(),
+            form,
+            glint: glint || mesh.foil,
+            java: displays,
+            ground,
+            fixed,
+        })
     }
 }
 
@@ -188,5 +242,10 @@ fn icon(root: &Path, path: &str, dye: Option<Option<[u8; 3]>>) -> Option<Skin> {
 
 fn flat(width: u32, height: u32, rgba: Vec<u8>) -> Skin {
     let mesh = extrude::extrude(width, height, &rgba);
-    Skin { width, height, rgba, mesh: Some(mesh) }
+    Skin {
+        width,
+        height,
+        rgba,
+        mesh: Some(mesh),
+    }
 }

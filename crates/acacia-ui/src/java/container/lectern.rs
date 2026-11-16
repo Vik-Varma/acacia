@@ -14,7 +14,11 @@ const TOP: i32 = 2;
 
 /// `PAGE_TEXT_STYLE`: black, no shadow.
 fn page_style() -> Style {
-    Style { color: Some(0), shadow_color: Some(0), ..Style::default() }
+    Style {
+        color: Some(0),
+        shadow_color: Some(0),
+        ..Style::default()
+    }
 }
 
 /// `PageButton`: its arrow sprite, lit while hovered or focused.
@@ -31,9 +35,19 @@ impl Widget for PageButton {
         &mut self.base
     }
     fn extract(&mut self, ctx: &mut Ctx, hovered: bool) {
-        let lit = if hovered || self.base.focused { "_highlighted" } else { "" };
+        let lit = if hovered || self.base.focused {
+            "_highlighted"
+        } else {
+            ""
+        };
         let dir = if self.forward { "forward" } else { "backward" };
-        ctx.gui.sprite(format!("widget/page_{dir}{lit}"), self.base.x, self.base.y, 23, 13);
+        ctx.gui.sprite(
+            format!("widget/page_{dir}{lit}"),
+            self.base.x,
+            self.base.y,
+            23,
+            13,
+        );
     }
 }
 
@@ -60,15 +74,51 @@ impl Lectern {
         let mut buttons: Vec<Box<dyn Widget>> = if self.may_build {
             let middle = self.width / 2;
             vec![
-                Box::new(Button::new(middle - 98 - 2, controls_top, 98, 20, ctx.tr("gui.done"))),
-                Box::new(Button::new(middle + 2, controls_top, 98, 20, ctx.tr("lectern.take_book"))),
+                Box::new(Button::new(
+                    middle - 98 - 2,
+                    controls_top,
+                    98,
+                    20,
+                    ctx.tr("gui.done"),
+                )),
+                Box::new(Button::new(
+                    middle + 2,
+                    controls_top,
+                    98,
+                    20,
+                    ctx.tr("lectern.take_book"),
+                )),
             ]
         } else {
-            vec![Box::new(Button::new((self.width - 200) / 2, controls_top, 200, 20, ctx.tr("gui.done")))]
+            vec![Box::new(Button::new(
+                (self.width - 200) / 2,
+                controls_top,
+                200,
+                20,
+                ctx.tr("gui.done"),
+            ))]
         };
         let count = self.pages.len() as i32;
-        let mut forward = PageButton { base: Base::new(left + 116, TOP + 157, 23, 13, ctx.tr("book.page_button.next")), forward: true };
-        let mut back = PageButton { base: Base::new(left + 43, TOP + 157, 23, 13, ctx.tr("book.page_button.previous")), forward: false };
+        let mut forward = PageButton {
+            base: Base::new(
+                left + 116,
+                TOP + 157,
+                23,
+                13,
+                ctx.tr("book.page_button.next"),
+            ),
+            forward: true,
+        };
+        let mut back = PageButton {
+            base: Base::new(
+                left + 43,
+                TOP + 157,
+                23,
+                13,
+                ctx.tr("book.page_button.previous"),
+            ),
+            forward: false,
+        };
         forward.base.visible = self.page < count - 1;
         back.base.visible = self.page > 0;
         buttons.push(Box::new(forward));
@@ -82,14 +132,26 @@ impl Lectern {
             (Text::default(), Vec::new())
         } else {
             let style = page_style();
-            let args = [Text::literal((self.page + 1).to_string()), Text::literal(count.max(1).to_string())];
-            let page = usize::try_from(self.page).ok().and_then(|p| self.pages.get(p)).cloned().unwrap_or_default();
-            (Text::translate("book.pageIndicator", &args, lang).with_style(&style), split(font, &page.with_style(&style), 114))
+            let args = [
+                Text::literal((self.page + 1).to_string()),
+                Text::literal(count.max(1).to_string()),
+            ];
+            let page = usize::try_from(self.page)
+                .ok()
+                .and_then(|p| self.pages.get(p))
+                .cloned()
+                .unwrap_or_default();
+            (
+                Text::translate("book.pageIndicator", &args, lang).with_style(&style),
+                split(font, &page.with_style(&style), 114),
+            )
         };
         let w = font.width(&indicator);
-        ctx.gui.text(indicator, left + 148 - w, TOP + 16, 0xFFFF_FFFF, true);
+        ctx.gui
+            .text(indicator, left + 148 - w, TOP + 16, 0xFFFF_FFFF, true);
         for (i, line) in lines.into_iter().take(128 / 9).enumerate() {
-            ctx.gui.text(line, left + 36, TOP + 30 + i as i32 * 9, 0xFFFF_FFFF, true);
+            ctx.gui
+                .text(line, left + 36, TOP + 30 + i as i32 * 9, 0xFFFF_FFFF, true);
         }
         Deferred::default().extract(gui, font);
     }

@@ -85,7 +85,11 @@ impl Wire for VarInt {
 /// `ByteBufCodecs.optional`: a presence flag, then the value.
 impl Wire for Option<VarInt> {
     fn read(input: &mut &[u8]) -> Result<Self, Error> {
-        if bool::read(input)? { VarInt::read(input).map(Some) } else { Ok(None) }
+        if bool::read(input)? {
+            VarInt::read(input).map(Some)
+        } else {
+            Ok(None)
+        }
     }
     fn write(&self, out: &mut Vec<u8>) {
         self.is_some().write(out);
@@ -152,13 +156,22 @@ mod tests {
 
     #[test]
     fn varints_match_the_protocol_examples() {
-        for (value, bytes) in [(0, &[0x00][..]), (127, &[0x7f]), (128, &[0x80, 0x01]), (25565, &[0xdd, 0xc7, 0x01]), (-1, &[0xff, 0xff, 0xff, 0xff, 0x0f])] {
+        for (value, bytes) in [
+            (0, &[0x00][..]),
+            (127, &[0x7f]),
+            (128, &[0x80, 0x01]),
+            (25565, &[0xdd, 0xc7, 0x01]),
+            (-1, &[0xff, 0xff, 0xff, 0xff, 0x0f]),
+        ] {
             let mut out = Vec::new();
             write_varint(value, &mut out);
             assert_eq!(out, bytes);
             assert_eq!(read_varint(&mut &out[..]), Ok(value));
         }
-        assert_eq!(read_varint(&mut &[0x80, 0x80, 0x80, 0x80, 0x80, 0x01][..]), Err(Error::VarIntTooLong));
+        assert_eq!(
+            read_varint(&mut &[0x80, 0x80, 0x80, 0x80, 0x80, 0x01][..]),
+            Err(Error::VarIntTooLong)
+        );
     }
 
     #[test]

@@ -12,7 +12,7 @@ mod tests;
 pub use field::{Hazards, Sphere};
 pub use kinds::{Class, Kind, of as kind};
 pub use perceive::{Senses, View, clear_line};
-pub use strike::{Body, Striker, INVULNERABLE_TICKS};
+pub use strike::{Body, INVULNERABLE_TICKS, Striker};
 
 use std::sync::Arc;
 
@@ -51,7 +51,10 @@ impl Threat {
         let kind = kinds::of(&e.kind)?;
         let feet = e.feet();
         let scale = e.metadata.scale();
-        let size = e.metadata.bounding_box().unwrap_or((kind.size.0 * scale, kind.size.1 * scale));
+        let size = e
+            .metadata
+            .bounding_box()
+            .unwrap_or((kind.size.0 * scale, kind.size.1 * scale));
         let flags = e.metadata.flags();
         let m = &e.motion;
         Some(Threat {
@@ -64,7 +67,9 @@ impl Threat {
             age: now.saturating_sub(e.moved_at),
             lit: flags.contains(MetadataFlags1::IGNITED),
             angry: flags.contains(MetadataFlags1::ANGRY),
-            target: e.metadata.entity(acacia_client::proto::types::MetadataDictionaryItemKey::TargetEid),
+            target: e
+                .metadata
+                .entity(acacia_client::proto::types::MetadataDictionaryItemKey::TargetEid),
         })
     }
 
@@ -77,7 +82,8 @@ impl Threat {
 
     /// Hostile now: melee, creepers, ranged, and neutrals while angry.
     pub fn hostile(&self) -> bool {
-        matches!(self.class, Class::Melee | Class::Creeper | Class::Ranged) || self.class == Class::Neutral && self.angry
+        matches!(self.class, Class::Melee | Class::Creeper | Class::Ranged)
+            || self.class == Class::Neutral && self.angry
     }
 
     /// Hits in melee now: melee mobs and neutrals while angry.
@@ -98,8 +104,14 @@ impl Threats {
     /// The tracked entities within `radius` of `centre` (feet) that a path cares about.
     pub fn near(entities: &Entities, centre: Vec3, radius: f32) -> Threats {
         let now = entities.now();
-        let close = |t: &Threat| (0..3).map(|i| (t.feet[i] - centre[i]).powi(2)).sum::<f32>() <= radius * radius;
-        let list = entities.iter().filter_map(|e| Threat::of(e, now)).filter(close).collect();
+        let close = |t: &Threat| {
+            (0..3).map(|i| (t.feet[i] - centre[i]).powi(2)).sum::<f32>() <= radius * radius
+        };
+        let list = entities
+            .iter()
+            .filter_map(|e| Threat::of(e, now))
+            .filter(close)
+            .collect();
         Threats { list, at: now }
     }
 
@@ -120,5 +132,8 @@ pub fn field(threats: &Threats, profile: MovementProfile) -> Option<Arc<Hazards>
 /// The collision boxes (min, max) of the solid ones among `threats`, for physics.
 pub fn solid_boxes(threats: &Threats) -> Vec<acacia_physics::Aabb> {
     let solid = threats.list.iter().filter(|t| t.class == Class::Solid);
-    solid.map(|t| t.bounds()).map(|(a, b)| acacia_physics::Aabb::new(a[0], a[1], a[2], b[0], b[1], b[2])).collect()
+    solid
+        .map(|t| t.bounds())
+        .map(|(a, b)| acacia_physics::Aabb::new(a[0], a[1], a[2], b[0], b[1], b[2]))
+        .collect()
 }

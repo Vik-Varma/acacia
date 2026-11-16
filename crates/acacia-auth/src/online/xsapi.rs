@@ -35,7 +35,14 @@ impl XboxLiveAuth {
     }
 
     /// A signed request in XSAPI's header order; `body` is empty for GETs.
-    pub(crate) fn request(&self, http: &Http, method: Method, url: &str, contract: &str, body: Vec<u8>) -> RequestBuilder {
+    pub(crate) fn request(
+        &self,
+        http: &Http,
+        method: Method,
+        url: &str,
+        contract: &str,
+        body: Vec<u8>,
+    ) -> RequestBuilder {
         let authorization = self.token.authorization();
         let signature = http.signature(&self.key, method.as_str(), url, &authorization, &body);
         http.client

@@ -23,11 +23,11 @@ pub mod signaling;
 pub mod turn;
 
 pub use conn::{Connection, Event, LocalCandidate, Transmit};
-pub use offer_identity::{verify_offer, OfferIdentity};
-pub use signal::{Signal, SignalKind};
-pub use error::{signaling_error_name, Error};
-pub use identity::{Identity, AUTH_DOMAIN};
+pub use error::{Error, signaling_error_name};
+pub use identity::{AUTH_DOMAIN, Identity};
+pub use offer_identity::{OfferIdentity, verify_offer};
 pub use server_identity::sign_answer;
+pub use signal::{Signal, SignalKind};
 
 /// `GET` path whose 2xx answer means the server speaks NetherNet.
 pub const PROBE_PATH: &str = "/v1/join";

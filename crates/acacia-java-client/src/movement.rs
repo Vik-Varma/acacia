@@ -1,11 +1,13 @@
 //! Runs the local player's physics and tells the server, as `LocalPlayer.sendChanges` does.
 
 use acacia_java_physics::{Blocks, Keys, Placement, Player};
-use acacia_java_proto::packets::{
-    COMMAND_START_FALL_FLYING, COMMAND_START_SPRINTING, COMMAND_STOP_SPRINTING, ClientboundAbilities, Empty, MovePlayerPos, MovePlayerPosRot, MovePlayerRot, MovePlayerStatusOnly,
-    PlayerCommand, PlayerInput, PlayerPosition, PositionMoveRotation, ServerboundAbilities,
-};
 use acacia_java_proto::entity::read_lp_vec3;
+use acacia_java_proto::packets::{
+    COMMAND_START_FALL_FLYING, COMMAND_START_SPRINTING, COMMAND_STOP_SPRINTING,
+    ClientboundAbilities, Empty, MovePlayerPos, MovePlayerPosRot, MovePlayerRot,
+    MovePlayerStatusOnly, PlayerCommand, PlayerInput, PlayerPosition, PositionMoveRotation,
+    ServerboundAbilities,
+};
 use acacia_java_proto::{Error as WireError, VarInt, Wire, ids, read_varint};
 
 use crate::frame::Error;
@@ -74,20 +76,40 @@ impl Default for Movement {
 
 /// A teleport packet's change as a [`Placement`].
 pub(crate) fn placement(c: &PositionMoveRotation) -> Placement {
-    Placement { pos: [c.x, c.y, c.z], delta: [c.delta_x, c.delta_y, c.delta_z], y_rot: c.y_rot, x_rot: c.x_rot }
+    Placement {
+        pos: [c.x, c.y, c.z],
+        delta: [c.delta_x, c.delta_y, c.delta_z],
+        y_rot: c.y_rot,
+        x_rot: c.x_rot,
+    }
 }
 
 impl Movement {
     /// `setValuesFromPositionPacket` on the player; returns where it put it.
     pub(crate) fn teleported(&mut self, packet: &PlayerPosition) -> Placement {
         let p = &self.player;
-        let source = Placement { pos: p.pos, delta: p.delta, y_rot: p.yaw, x_rot: p.pitch };
+        let source = Placement {
+            pos: p.pos,
+            delta: p.delta,
+            y_rot: p.yaw,
+            x_rot: p.pitch,
+        };
         let to = source.teleported(&placement(&packet.change), packet.relatives);
-        (self.player.pos, self.player.delta, self.player.yaw, self.player.pitch) = (to.pos, to.delta, to.y_rot, to.x_rot);
+        (
+            self.player.pos,
+            self.player.delta,
+            self.player.yaw,
+            self.player.pitch,
+        ) = (to.pos, to.delta, to.y_rot, to.x_rot);
         to
     }
 
-    pub(crate) fn apply(&mut self, id: i32, mut input: &[u8], player_id: i32) -> Result<(), WireError> {
+    pub(crate) fn apply(
+        &mut self,
+        id: i32,
+        mut input: &[u8],
+        player_id: i32,
+    ) -> Result<(), WireError> {
         if id == from::SET_ENTITY_MOTION && read_varint(&mut input)? == player_id {
             self.player.delta = read_lp_vec3(&mut input)?;
         } else if id == from::SET_ENTITY_DATA && read_varint(&mut input)? == player_id {
@@ -139,7 +161,12 @@ impl Movement {
 }
 
 fn input_flags(k: Keys) -> u8 {
-    [k.forward, k.backward, k.left, k.right, k.jump, k.shift, k.sprint].iter().enumerate().fold(0, |flags, (bit, on)| flags | u8::from(*on) << bit)
+    [
+        k.forward, k.backward, k.left, k.right, k.jump, k.shift, k.sprint,
+    ]
+    .iter()
+    .enumerate()
+    .fold(0, |flags, (bit, on)| flags | u8::from(*on) << bit)
 }
 
 impl Client {
@@ -156,11 +183,17 @@ impl Client {
             self.ride_step(keys)?;
         } else {
             let feet = self.movement.player.pos[1];
-            self.movement.player.solid_entities = self.world.collision_boxes(Mover::Player { feet }, &[]);
+            self.movement.player.solid_entities =
+                self.world.collision_boxes(Mover::Player { feet }, &[]);
             self.movement.player.tick(&self.world, keys);
             self.send_changes()?;
             let me = self.world.player_id;
-            for _ in self.world.entities.values().filter(|e| e.attached_to == Some(me)) {
+            for _ in self
+                .world
+                .entities
+                .values()
+                .filter(|e| e.attached_to == Some(me))
+            {
                 self.movement.player.firework_boost();
             }
         }
@@ -176,15 +209,27 @@ impl Client {
     }
 
     pub(crate) fn send_command_with(&mut self, action: i32, data: i32) -> Result<(), Error> {
-        let packet = PlayerCommand { entity: VarInt(self.world.player_id), action: VarInt(action), data: VarInt(data) };
+        let packet = PlayerCommand {
+            entity: VarInt(self.world.player_id),
+            action: VarInt(action),
+            data: VarInt(data),
+        };
         self.send(to::PLAYER_COMMAND, &packet)
     }
 
     fn send_changes(&mut self) -> Result<(), Error> {
-        let (flying, gliding) = (self.movement.player.flying, self.movement.player.fall_flying);
+        let (flying, gliding) = (
+            self.movement.player.flying,
+            self.movement.player.fall_flying,
+        );
         // Vanilla sends these two from aiStep, so they arrive before the tick's input; Grim's ElytraB relies on it.
         if flying != self.movement.sent_flying {
-            self.send(to::PLAYER_ABILITIES, &ServerboundAbilities { flags: if flying { ABILITY_FLYING } else { 0 } })?;
+            self.send(
+                to::PLAYER_ABILITIES,
+                &ServerboundAbilities {
+                    flags: if flying { ABILITY_FLYING } else { 0 },
+                },
+            )?;
             self.movement.sent_flying = flying;
         }
         if gliding && !self.movement.sent_gliding {
@@ -200,7 +245,12 @@ impl Client {
     pub(crate) fn send_keys(&mut self) -> Result<(), Error> {
         let keys = self.movement.player.keys;
         if keys != self.movement.sent_keys {
-            self.send(to::PLAYER_INPUT, &PlayerInput { flags: input_flags(keys) })?;
+            self.send(
+                to::PLAYER_INPUT,
+                &PlayerInput {
+                    flags: input_flags(keys),
+                },
+            )?;
             self.movement.sent_keys = keys;
         }
         Ok(())
@@ -209,7 +259,11 @@ impl Client {
     pub(crate) fn send_sprint(&mut self) -> Result<(), Error> {
         let sprinting = self.movement.player.sprinting;
         if sprinting != self.movement.sent_sprinting {
-            self.send_command(if sprinting { COMMAND_START_SPRINTING } else { COMMAND_STOP_SPRINTING })?;
+            self.send_command(if sprinting {
+                COMMAND_START_SPRINTING
+            } else {
+                COMMAND_STOP_SPRINTING
+            })?;
             self.movement.sent_sprinting = sprinting;
         }
         Ok(())
@@ -220,11 +274,14 @@ impl Client {
         let [x, y, z] = m.player.pos;
         let (y_rot, x_rot) = (m.player.yaw, m.player.pitch);
         let flags = m.collision_flags();
-        let moved: f64 = (0..3).map(|a| (m.player.pos[a] - m.sent_pos[a]).powi(2)).sum();
+        let moved: f64 = (0..3)
+            .map(|a| (m.player.pos[a] - m.sent_pos[a]).powi(2))
+            .sum();
         m.position_reminder += 1;
         let send_pos = moved > MIN_MOVE_SQUARED || m.position_reminder >= POSITION_REMINDER_TICKS;
         let send_rot = m.sent_rot != [y_rot, x_rot];
-        let status_changed = m.sent_on_ground != m.player.on_ground || m.sent_collision != m.player.horizontal_collision;
+        let status_changed = m.sent_on_ground != m.player.on_ground
+            || m.sent_collision != m.player.horizontal_collision;
         if send_pos {
             m.sent_pos = m.player.pos;
             m.position_reminder = 0;
@@ -233,10 +290,29 @@ impl Client {
         m.sent_on_ground = m.player.on_ground;
         m.sent_collision = m.player.horizontal_collision;
         match (send_pos, send_rot) {
-            (true, true) => self.send(to::MOVE_PLAYER_POS_ROT, &MovePlayerPosRot { x, y, z, y_rot, x_rot, flags }),
+            (true, true) => self.send(
+                to::MOVE_PLAYER_POS_ROT,
+                &MovePlayerPosRot {
+                    x,
+                    y,
+                    z,
+                    y_rot,
+                    x_rot,
+                    flags,
+                },
+            ),
             (true, false) => self.send(to::MOVE_PLAYER_POS, &MovePlayerPos { x, y, z, flags }),
-            (false, true) => self.send(to::MOVE_PLAYER_ROT, &MovePlayerRot { y_rot, x_rot, flags }),
-            (false, false) if status_changed => self.send(to::MOVE_PLAYER_STATUS_ONLY, &MovePlayerStatusOnly { flags }),
+            (false, true) => self.send(
+                to::MOVE_PLAYER_ROT,
+                &MovePlayerRot {
+                    y_rot,
+                    x_rot,
+                    flags,
+                },
+            ),
+            (false, false) if status_changed => {
+                self.send(to::MOVE_PLAYER_STATUS_ONLY, &MovePlayerStatusOnly { flags })
+            }
             (false, false) => Ok(()),
         }
     }

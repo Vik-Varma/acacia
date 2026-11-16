@@ -9,17 +9,26 @@ use support::Error;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Error> {
-    let _ = tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
     let mut args = std::env::args().skip(1);
     let server = args.next().unwrap_or_else(|| "127.0.0.1:19170".into());
     let name = args.next().unwrap_or_else(|| "Probe".into());
     let max: u32 = args.next().and_then(|a| a.parse().ok()).unwrap_or(14);
     let (mut bot, _pad) = support::connect(&server, &name).await?;
     // AUX=5,6,13 picks the values; peaceful stops hunger, so the drain runs on easy
-    let list: Vec<u32> = std::env::var("AUX").map_or_else(|_| (0..=max).collect(), |v| v.split(',').filter_map(|a| a.parse().ok()).collect());
+    let list: Vec<u32> = std::env::var("AUX").map_or_else(
+        |_| (0..=max).collect(),
+        |v| v.split(',').filter_map(|a| a.parse().ok()).collect(),
+    );
     bot.command("/difficulty easy");
     for aux in list {
-        for cmd in ["/effect @s clear".to_string(), "/clear @s".into(), format!("/give @s suspicious_stew 1 {aux}")] {
+        for cmd in [
+            "/effect @s clear".to_string(),
+            "/clear @s".into(),
+            format!("/give @s suspicious_stew 1 {aux}"),
+        ] {
             bot.command(&cmd);
             bot.wait_ticks(6).await?;
         }
@@ -40,9 +49,18 @@ async fn main() -> Result<(), Error> {
         bot.equip(slot, Destination::Hand).await?;
         let eaten = bot.consume().await;
         bot.wait_ticks(10).await?;
-        let effects: Vec<_> = bot.state().player.effects.iter().map(|e| (e.id, e.amplifier, e.duration)).collect();
+        let effects: Vec<_> = bot
+            .state()
+            .player
+            .effects
+            .iter()
+            .map(|e| (e.id, e.amplifier, e.duration))
+            .collect();
         let p = &bot.state().player;
-        println!("aux {aux}: eat {eaten:?}, effects (id, amplifier, ticks) {effects:?}, food {food} -> {}, saturation {sat} -> {}", p.hunger, p.saturation);
+        println!(
+            "aux {aux}: eat {eaten:?}, effects (id, amplifier, ticks) {effects:?}, food {food} -> {}, saturation {sat} -> {}",
+            p.hunger, p.saturation
+        );
     }
     Ok(())
 }

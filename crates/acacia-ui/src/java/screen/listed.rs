@@ -26,7 +26,10 @@ pub struct Build {
 
 impl Build {
     pub fn new(header_h: i32, footer_h: i32) -> Build {
-        Build { widgets: Vec::new(), layout: HeaderFooter::new(header_h, footer_h) }
+        Build {
+            widgets: Vec::new(),
+            layout: HeaderFooter::new(header_h, footer_h),
+        }
     }
 
     /// The widget pushed, as a layout element.
@@ -40,7 +43,8 @@ impl Build {
     /// `lists` with their `defaultEntryHeight`.
     pub fn finish(mut self, env: Env, lists: Vec<(SelectionList, i32)>) -> ListedScreen {
         let (lists, row_heights) = lists.into_iter().unzip();
-        self.layout.arrange(&mut self.widgets, env.width, env.height);
+        self.layout
+            .arrange(&mut self.widgets, env.width, env.height);
         let mut order = Vec::new();
         self.layout.header.visit_widgets(&mut order);
         self.layout.contents.visit_widgets(&mut order);
@@ -48,7 +52,13 @@ impl Build {
         self.layout.footer.visit_widgets(&mut order);
         let mut slots: Vec<Option<Box<dyn Widget>>> = self.widgets.into_iter().map(Some).collect();
         let widgets = order.into_iter().filter_map(|i| slots[i].take()).collect();
-        ListedScreen { env, widgets, split, lists, row_heights }
+        ListedScreen {
+            env,
+            widgets,
+            split,
+            lists,
+            row_heights,
+        }
     }
 }
 
@@ -137,7 +147,9 @@ impl Screen for ListedScreen {
 
     /// `AbstractScrollArea.mouseScrolled`: `scrollRate` is half the default row height.
     fn mouse_scrolled(&mut self, s: &mut Interaction, x: f64, y: f64, amount: f64) -> bool {
-        let Some(i) = self.list_at(x, y) else { return false };
+        let Some(i) = self.list_at(x, y) else {
+            return false;
+        };
         let l = &mut self.lists[i];
         let rate = f64::from(self.row_heights[i] / 2);
         l.set_scroll(l.scroll - amount * rate);

@@ -39,7 +39,11 @@ fn shrink(bb: Aabb, o: Vec3) -> Aabb {
 
 /// The cells, `min` inclusive to `max` exclusive, a player box touches liquid of `kind` in.
 fn touched_cells(player_box: Aabb, kind: LiquidKind) -> (BlockPos, BlockPos) {
-    let o = if kind == LiquidKind::Lava { [0.1, 0.4, 0.1] } else { [0.001, 0.401, 0.001] };
+    let o = if kind == LiquidKind::Lava {
+        [0.1, 0.4, 0.1]
+    } else {
+        [0.001, 0.401, 0.001]
+    };
     let bb = shrink(player_box, o);
     (block_pos(bb.min), block_pos(add(bb.max, [1.0; 3])))
 }
@@ -51,16 +55,31 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
 
     /// Liquid cells the shrunk box overlaps, however shallow the liquid: BDS (and Boar) push a player
     /// standing in the thinnest puddle, where bedsim requires the box to reach below the surface.
-    pub(crate) fn touching_liquid_blocks(&self, st: &PlayerState, kind: LiquidKind) -> Vec<BlockPos> {
+    pub(crate) fn touching_liquid_blocks(
+        &self,
+        st: &PlayerState,
+        kind: LiquidKind,
+    ) -> Vec<BlockPos> {
         self.liquid_blocks_touching(st.liquid_box.unwrap_or_else(|| st.bounding_box()), kind)
     }
 
     /// [`Self::touching_liquid_blocks`] for both kinds, each cell looked up once.
-    pub(crate) fn touching_water_and_lava(&self, st: &PlayerState) -> (Vec<BlockPos>, Vec<BlockPos>) {
+    pub(crate) fn touching_water_and_lava(
+        &self,
+        st: &PlayerState,
+    ) -> (Vec<BlockPos>, Vec<BlockPos>) {
         let player_box = st.liquid_box.unwrap_or_else(|| st.bounding_box());
-        let (water, lava) = (touched_cells(player_box, LiquidKind::Water), touched_cells(player_box, LiquidKind::Lava));
-        let (min, max) = ([0, 1, 2].map(|a| water.0[a].min(lava.0[a])), [0, 1, 2].map(|a| water.1[a].max(lava.1[a])));
-        let within = |(lo, hi): (BlockPos, BlockPos), p: BlockPos| (0..3).all(|a| lo[a] <= p[a] && p[a] < hi[a]);
+        let (water, lava) = (
+            touched_cells(player_box, LiquidKind::Water),
+            touched_cells(player_box, LiquidKind::Lava),
+        );
+        let (min, max) = (
+            [0, 1, 2].map(|a| water.0[a].min(lava.0[a])),
+            [0, 1, 2].map(|a| water.1[a].max(lava.1[a])),
+        );
+        let within = |(lo, hi): (BlockPos, BlockPos), p: BlockPos| {
+            (0..3).all(|a| lo[a] <= p[a] && p[a] < hi[a])
+        };
         let (mut w, mut l) = (Vec::new(), Vec::new());
         for x in min[0]..max[0] {
             for y in min[1]..max[1] {
@@ -78,7 +97,11 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
     }
 
     /// [`Self::touching_liquid_blocks`] for an explicit player box.
-    pub(crate) fn liquid_blocks_touching(&self, player_box: Aabb, kind: LiquidKind) -> Vec<BlockPos> {
+    pub(crate) fn liquid_blocks_touching(
+        &self,
+        player_box: Aabb,
+        kind: LiquidKind,
+    ) -> Vec<BlockPos> {
         let (min, max) = touched_cells(player_box, kind);
         let mut out = Vec::new();
         for x in min[0]..max[0] {
@@ -98,8 +121,14 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
     pub(crate) fn point_under(&self, p: Vec3, kind: LiquidKind) -> bool {
         let pos = block_pos(p);
         self.liquid_at(pos).is_some_and(|l| {
-            let above = self.liquid_at([pos[0], pos[1] + 1, pos[2]]).is_some_and(|a| a.kind == kind);
-            let surface = if l.falling || above { 1.0 } else { l.depth as f32 / 9.0 };
+            let above = self
+                .liquid_at([pos[0], pos[1] + 1, pos[2]])
+                .is_some_and(|a| a.kind == kind);
+            let surface = if l.falling || above {
+                1.0
+            } else {
+                l.depth as f32 / 9.0
+            };
             l.kind == kind && p[1] < pos[1] as f32 + surface
         })
     }
@@ -119,7 +148,11 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
     /// BDS `PlayerInputRequestComponent::mBreathingPoint` outside the swim pose: the eyes (a daylight-detector
     /// drill puts it within 0.005 of feet + 1.62).
     fn breathing_point(&self, st: &PlayerState) -> Vec3 {
-        let eye = if st.sneaking { SNEAKING_PLAYER_HEIGHT_OFFSET } else { DEFAULT_PLAYER_HEIGHT_OFFSET };
+        let eye = if st.sneaking {
+            SNEAKING_PLAYER_HEIGHT_OFFSET
+        } else {
+            DEFAULT_PLAYER_HEIGHT_OFFSET
+        };
         let size = if st.size[2] <= 0.0 { 1.0 } else { st.size[2] };
         add(st.pos, [0.0, eye * size, 0.0])
     }
@@ -130,7 +163,11 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
         let p = self.breathing_point(st);
         let pos = block_pos(p);
         self.liquid_at(pos).is_some_and(|l| {
-            let surface = if l.falling { 1.0 } else { (1 + l.depth) as f32 / 9.0 };
+            let surface = if l.falling {
+                1.0
+            } else {
+                (1 + l.depth) as f32 / 9.0
+            };
             l.kind == kind && p[1] < pos[1] as f32 + surface
         })
     }
@@ -146,8 +183,13 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
             return true;
         }
         let bb = st.bounding_box();
-        let centre = block_pos([(bb.min[0] + bb.max[0]) * 0.5, (bb.min[1] + bb.max[1]) * 0.5, (bb.min[2] + bb.max[2]) * 0.5]);
-        !self.w.block(block_pos(self.breathing_point(st))).air && !self.w.block([centre[0], centre[1] + 1, centre[2]]).air
+        let centre = block_pos([
+            (bb.min[0] + bb.max[0]) * 0.5,
+            (bb.min[1] + bb.max[1]) * 0.5,
+            (bb.min[2] + bb.max[2]) * 0.5,
+        ]);
+        !self.w.block(block_pos(self.breathing_point(st))).air
+            && !self.w.block([centre[0], centre[1] + 1, centre[2]]).air
     }
 
     /// BDS `SwimTriggerSystem`'s look-up stop: swimming with the breathing point (the swim eye) in an air block
@@ -157,18 +199,32 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
         let (look_y, horizontal) = (mc_sin(a), mc_cos(a));
         look_y > 0.0
             && (horizontal * horizontal).acos() * 57.29578 > 45.0
-            && self.w.block(block_pos(add(st.pos, [0.0, COMPACT_PLAYER_HEIGHT_OFFSET, 0.0]))).air
+            && self
+                .w
+                .block(block_pos(add(
+                    st.pos,
+                    [0.0, COMPACT_PLAYER_HEIGHT_OFFSET, 0.0],
+                )))
+                .air
     }
 
     /// Whether the box overlaps any liquid cell by more than 1e-5, however shallow (BDS; bedsim tests the
     /// liquid's height and counts a box merely touching the cell).
     pub(crate) fn contains_any_liquid(&self, bb: &Aabb) -> bool {
         let bb = &shrink(*bb, [1e-5; 3]);
-        crate::collide::overlapped_cells(bb)
-            .any(|pos| self.liquid_at(pos).is_some() && bb.max[1] > pos[1] as f32 && bb.min[1] < pos[1] as f32 + 1.0)
+        crate::collide::overlapped_cells(bb).any(|pos| {
+            self.liquid_at(pos).is_some()
+                && bb.max[1] > pos[1] as f32
+                && bb.min[1] < pos[1] as f32 + 1.0
+        })
     }
 
-    pub(crate) fn apply_liquid_flow(&self, st: &mut PlayerState, positions: &[BlockPos], kind: LiquidKind) -> bool {
+    pub(crate) fn apply_liquid_flow(
+        &self,
+        st: &mut PlayerState,
+        positions: &[BlockPos],
+        kind: LiquidKind,
+    ) -> bool {
         if positions.is_empty() {
             return true;
         }
@@ -185,7 +241,11 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
         }
         let length = len(flow);
         if length >= 1e-4 {
-            let strength = if kind == LiquidKind::Lava { 0.0035 } else { 0.014 };
+            let strength = if kind == LiquidKind::Lava {
+                0.0035
+            } else {
+                0.014
+            };
             st.set_vel(add(st.vel, scale(flow, strength / length)));
         }
         true
@@ -238,7 +298,11 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
             }
         }
         let length = len(flow);
-        if length > 1e-4 { scale(flow, 1.0 / length) } else { [0.0; 3] }
+        if length > 1e-4 {
+            scale(flow, 1.0 / length)
+        } else {
+            [0.0; 3]
+        }
     }
 
     /// Collision above carpet height: a carpet lets flow pass over it (fuzz).
@@ -261,7 +325,10 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
         let target = -mc_sin(st.pitch * PI32 / 180.0);
         let rate = if target < -0.2 { 0.085 } else { 0.06 };
         if target > 0.0 && !st.pressing_descend {
-            let below = self.w.block(block_pos(add(st.pos, [0.0, DEFAULT_PLAYER_HEIGHT_OFFSET - 1.1, 0.0])));
+            let below = self.w.block(block_pos(add(
+                st.pos,
+                [0.0, DEFAULT_PLAYER_HEIGHT_OFFSET - 1.1, 0.0],
+            )));
             // Liquid at the swim pose's eye keeps steering (BDS brackets it to 0.346..0.412; bedsim 0.42).
             let liquid = block_pos(add(st.pos, [0.0, COMPACT_PLAYER_HEIGHT_OFFSET, 0.0]));
             if below.air && below.liquid.is_none() && self.liquid_at(liquid).is_none() {

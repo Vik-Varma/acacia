@@ -21,7 +21,11 @@ impl Parser<'_> {
     }
 
     pub(crate) fn wrap(&mut self, (of, post): Term) -> u32 {
-        if post.is_identity() { of } else { self.push(Node::Post { of, post }) }
+        if post.is_identity() {
+            of
+        } else {
+            self.push(Node::Post { of, post })
+        }
     }
 
     /// A number literal's own value, as BDS's folding reads it: without its post-op.
@@ -61,7 +65,11 @@ impl Parser<'_> {
         }
         match (function, args) {
             (MathFn::Min | MathFn::Max, &[a, _]) if self.raw(a).is_some() => Some(0),
-            (MathFn::Min | MathFn::Max | MathFn::Pow | MathFn::Mod, &[_, b]) if self.raw(b).is_some() => Some(1),
+            (MathFn::Min | MathFn::Max | MathFn::Pow | MathFn::Mod, &[_, b])
+                if self.raw(b).is_some() =>
+            {
+                Some(1)
+            }
             _ => None,
         }
     }
@@ -107,14 +115,21 @@ impl Parser<'_> {
 
     pub(crate) fn logic(&mut self, any: bool, left: u32, right: u32) -> u32 {
         if let (Some(a), Some(b)) = (self.raw(left), self.raw(right)) {
-            let result = if any { a != 0.0 || b != 0.0 } else { a != 0.0 && b != 0.0 };
+            let result = if any {
+                a != 0.0 || b != 0.0
+            } else {
+                a != 0.0 && b != 0.0
+            };
             return self.push(Node::Const(Value::flag(result)));
         }
         let mut terms = Vec::new();
         for child in [left, right] {
             // A nested chain of the same operator joins this one, its post-op dropped.
             match self.node(self.split(child).0) {
-                Node::Logic { any: same, terms: list } if same == any => terms.extend_from_slice(self.items(list)),
+                Node::Logic {
+                    any: same,
+                    terms: list,
+                } if same == any => terms.extend_from_slice(self.items(list)),
                 _ => terms.push(child),
             }
         }

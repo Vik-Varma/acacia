@@ -4,13 +4,18 @@
 use std::io::{BufRead, BufReader, BufWriter, Write};
 
 use acacia_render::sky::Environment;
-use acacia_render::sky::fog::{FogInputs, FogType, PlayerFog, RainFog, night_vision_scale, setup_fog, water_vision};
+use acacia_render::sky::fog::{
+    FogInputs, FogType, PlayerFog, RainFog, night_vision_scale, setup_fog, water_vision,
+};
 use serde_json::{Value, json};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let [_, cases, environment, out] = &args[..] else { panic!("usage: fog_probe <cases.jsonl> <environment.json> <out.jsonl>") };
-    let doc: Value = serde_json::from_slice(&std::fs::read(environment).expect("environment.json")).expect("environment.json is JSON");
+    let [_, cases, environment, out] = &args[..] else {
+        panic!("usage: fog_probe <cases.jsonl> <environment.json> <out.jsonl>")
+    };
+    let doc: Value = serde_json::from_slice(&std::fs::read(environment).expect("environment.json"))
+        .expect("environment.json is JSON");
     let env = Environment::parse(&doc);
     let mut out = BufWriter::new(std::fs::File::create(out).expect("out file"));
     for line in BufReader::new(std::fs::File::open(cases).expect("cases")).lines() {
@@ -24,9 +29,20 @@ fn fog(env: &Environment, doc: &Value, c: &Value) -> Value {
     let i = |key: &str| c[key].as_i64().unwrap_or_else(|| panic!("{key}")) as i32;
     let b = |key: &str| c[key].as_bool().unwrap_or_else(|| panic!("{key}"));
     let java = c["biome"].as_str().unwrap();
-    let biome = doc["biomes"][java]["bedrock"][0].as_str().map_or_else(|| format!("java:{java}"), str::to_owned);
-    let dimension = env.dimension(c["dimension"].as_str().unwrap()).expect("a dimension in environment.json");
-    let attributes = env.sample(dimension, c["ticks"].as_i64().unwrap(), &[(biome.as_str(), 1.0)], f("rain"), f("thunder"), false);
+    let biome = doc["biomes"][java]["bedrock"][0]
+        .as_str()
+        .map_or_else(|| format!("java:{java}"), str::to_owned);
+    let dimension = env
+        .dimension(c["dimension"].as_str().unwrap())
+        .expect("a dimension in environment.json");
+    let attributes = env.sample(
+        dimension,
+        c["ticks"].as_i64().unwrap(),
+        &[(biome.as_str(), 1.0)],
+        f("rain"),
+        f("thunder"),
+        false,
+    );
 
     let fog_type = match c["fog_type"].as_str().unwrap() {
         "water" => FogType::Water,
@@ -36,20 +52,32 @@ fn fog(env: &Environment, doc: &Value, c: &Value) -> Value {
     };
     let partial = f("partial");
     let darkness = c["darkness"].as_array().map(|blend| {
-        let (factor, previous) = (blend[0].as_f64().unwrap() as f32, blend[1].as_f64().unwrap() as f32);
+        let (factor, previous) = (
+            blend[0].as_f64().unwrap() as f32,
+            blend[1].as_f64().unwrap() as f32,
+        );
         previous + (factor - previous) * partial
     });
     let player = PlayerFog {
         blindness: c["blindness"].as_i64().map(|d| (d as i32, d == -1)),
         darkness,
-        night_vision: c["night_vision"].as_i64().map(|d| night_vision_scale(d as i32, partial)),
+        night_vision: c["night_vision"]
+            .as_i64()
+            .map(|d| night_vision_scale(d as i32, partial)),
         fire_resistance: b("fire_resistance"),
         spectator: b("spectator"),
         darken_world: f("darken_world"),
         boss_world_fog: b("boss_fog"),
     };
-    let mut rain_fog = RainFog { multiplier: f("rain_fog_before") };
-    rain_fog.update(f("rain"), i("sky_light") as u8, b("has_precipitation"), f("delta_ticks"));
+    let mut rain_fog = RainFog {
+        multiplier: f("rain_fog_before"),
+    };
+    rain_fog.update(
+        f("rain"),
+        i("sky_light") as u8,
+        b("has_precipitation"),
+        f("delta_ticks"),
+    );
     let forward = c["forward"].as_array().unwrap();
     let input = FogInputs {
         fog_type,

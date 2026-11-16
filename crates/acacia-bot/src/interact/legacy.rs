@@ -4,8 +4,9 @@
 
 use acacia_client::proto::packets::InventoryTransaction;
 use acacia_client::proto::types::{
-    ItemV4, Transaction, TransactionActionsItem, TransactionActionsItemSourceType, TransactionLegacy,
-    TransactionLegacyLegacyTransactionsItem, TransactionLegacyLegacyTransactionsItemChangedSlotsItem, TransactionTransactionData,
+    ItemV4, Transaction, TransactionActionsItem, TransactionActionsItemSourceType,
+    TransactionLegacy, TransactionLegacyLegacyTransactionsItem,
+    TransactionLegacyLegacyTransactionsItemChangedSlotsItem, TransactionTransactionData,
     TransactionTransactionType,
 };
 
@@ -26,15 +27,38 @@ pub(crate) struct SlotChange<'a> {
 }
 
 fn item(stack: &ItemStack) -> ItemV4 {
-    ItemV4 { has_stack_id: false, stack_id: None, ..to_wire(stack) }
+    ItemV4 {
+        has_stack_id: false,
+        stack_id: None,
+        ..to_wire(stack)
+    }
 }
 
-fn action(source_type: TransactionActionsItemSourceType, window_id: Option<i8>, slot: u32, old: &ItemStack, new: &ItemStack) -> TransactionActionsItem {
-    TransactionActionsItem { source_type, window_id, flags: None, slot, old_item: item(old), new_item: item(new) }
+fn action(
+    source_type: TransactionActionsItemSourceType,
+    window_id: Option<i8>,
+    slot: u32,
+    old: &ItemStack,
+    new: &ItemStack,
+) -> TransactionActionsItem {
+    TransactionActionsItem {
+        source_type,
+        window_id,
+        flags: None,
+        slot,
+        old_item: item(old),
+        new_item: item(new),
+    }
 }
 
 fn container_action(change: &SlotChange) -> TransactionActionsItem {
-    action(TransactionActionsItemSourceType::Container, Some(0), u32::from(change.slot), change.old, change.new)
+    action(
+        TransactionActionsItemSourceType::Container,
+        Some(0),
+        u32::from(change.slot),
+        change.old,
+        change.new,
+    )
 }
 
 /// `legacy_request_id` with the changed slot listed, or 0 and no list.
@@ -42,14 +66,23 @@ fn legacy(id: Option<i32>, slot: u8) -> TransactionLegacy {
     let listed = |_| {
         vec![TransactionLegacyLegacyTransactionsItem {
             container_id: INVENTORY_CONTAINER,
-            changed_slots: vec![TransactionLegacyLegacyTransactionsItemChangedSlotsItem { slot_id: slot }],
+            changed_slots: vec![TransactionLegacyLegacyTransactionsItemChangedSlotsItem {
+                slot_id: slot,
+            }],
         }]
     };
-    TransactionLegacy { legacy_request_id: id.unwrap_or(0), legacy_transactions: id.map(listed) }
+    TransactionLegacy {
+        legacy_request_id: id.unwrap_or(0),
+        legacy_transactions: id.map(listed),
+    }
 }
 
 /// Adds the held slot's change to an item-use transaction.
-pub(crate) fn with_slot_change(mut packet: InventoryTransaction, legacy_id: Option<i32>, change: &SlotChange) -> InventoryTransaction {
+pub(crate) fn with_slot_change(
+    mut packet: InventoryTransaction,
+    legacy_id: Option<i32>,
+    change: &SlotChange,
+) -> InventoryTransaction {
     packet.transaction.legacy = legacy(legacy_id, change.slot);
     packet.transaction.actions = vec![container_action(change)];
     packet
@@ -61,8 +94,20 @@ pub(crate) fn rewrite_slot(legacy_id: Option<i32>, change: &SlotChange) -> Inven
     let air = ItemStack::default();
     let actions = vec![
         container_action(change),
-        action(TransactionActionsItemSourceType::Creative, None, CREATIVE_DELETE, &air, change.old),
-        action(TransactionActionsItemSourceType::Creative, None, CREATIVE_CREATE, change.new, &air),
+        action(
+            TransactionActionsItemSourceType::Creative,
+            None,
+            CREATIVE_DELETE,
+            &air,
+            change.old,
+        ),
+        action(
+            TransactionActionsItemSourceType::Creative,
+            None,
+            CREATIVE_CREATE,
+            change.new,
+            &air,
+        ),
     ];
     InventoryTransaction {
         transaction: Transaction {

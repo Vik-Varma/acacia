@@ -51,7 +51,14 @@ impl Default for Compiler {
     fn default() -> Compiler {
         let mut strings = Names::default();
         strings.intern("");
-        Compiler { engine: Engine::LATEST, documented_queries_only: true, strings, variables: Names::default(), queries: Names::default(), contexts: Names::default() }
+        Compiler {
+            engine: Engine::LATEST,
+            documented_queries_only: true,
+            strings,
+            variables: Names::default(),
+            queries: Names::default(),
+            contexts: Names::default(),
+        }
     }
 }
 
@@ -70,7 +77,13 @@ impl Compiler {
     }
 
     pub fn constant(value: f32) -> Program {
-        Program { nodes: Box::new([Node::Const(Value::Num(value))]), lists: Box::new([]), root: 0, complex: false, temps: 0 }
+        Program {
+            nodes: Box::new([Node::Const(Value::Num(value))]),
+            lists: Box::new([]),
+            root: 0,
+            complex: false,
+            temps: 0,
+        }
     }
 
     /// Strings keep their case; only names are case-insensitive.
@@ -86,7 +99,11 @@ impl Compiler {
 
     /// Empty for [`Symbol::OTHER`].
     pub fn text(&self, symbol: Symbol) -> &str {
-        if symbol == Symbol::OTHER { "" } else { self.strings.name(symbol.0) }
+        if symbol == Symbol::OTHER {
+            ""
+        } else {
+            self.strings.name(symbol.0)
+        }
     }
 
     pub fn variable(&mut self, name: &str) -> Variable {

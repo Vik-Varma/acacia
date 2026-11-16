@@ -14,7 +14,12 @@ use super::terrain::{PosHasher, PosMap};
 /// Front slots (a power of two).
 const FRONT: usize = 2048;
 const NOWHERE: BlockPos = [i32::MIN; 3];
-const BLANK: Cell = Cell { boxes: &[], flags: UNLOADED, block: u32::MAX, liquid: u32::MAX };
+const BLANK: Cell = Cell {
+    boxes: &[],
+    flags: UNLOADED,
+    block: u32::MAX,
+    liquid: u32::MAX,
+};
 
 /// One memoized cell and the recording epoch that last saw it read.
 #[derive(Clone, Copy)]
@@ -36,13 +41,28 @@ pub(crate) struct CellMemo {
 
 impl Default for CellMemo {
     fn default() -> Self {
-        let front = RefCell::new(Box::new([Slot { pos: NOWHERE, cell: BLANK, seen: 0 }; FRONT]));
-        Self { front, map: RefCell::default(), physics: RefCell::default(), epoch: Shared::new(0), recordings: Shared::new(0), reads: RefCell::default() }
+        let front = RefCell::new(Box::new(
+            [Slot {
+                pos: NOWHERE,
+                cell: BLANK,
+                seen: 0,
+            }; FRONT],
+        ));
+        Self {
+            front,
+            map: RefCell::default(),
+            physics: RefCell::default(),
+            epoch: Shared::new(0),
+            recordings: Shared::new(0),
+            reads: RefCell::default(),
+        }
     }
 }
 
 fn slot(p: BlockPos) -> usize {
-    let h = (p[0] as u32).wrapping_mul(0x9e37_79b1) ^ (p[1] as u32).wrapping_mul(0x85eb_ca77) ^ (p[2] as u32).wrapping_mul(0xc2b2_ae3d);
+    let h = (p[0] as u32).wrapping_mul(0x9e37_79b1)
+        ^ (p[1] as u32).wrapping_mul(0x85eb_ca77)
+        ^ (p[2] as u32).wrapping_mul(0xc2b2_ae3d);
     (h >> 7) as usize & (FRONT - 1)
 }
 
@@ -64,13 +84,21 @@ impl CellMemo {
             e.1 = epoch;
             self.reads.borrow_mut().push((p, e.0.id()));
         }
-        self.front.borrow_mut()[i] = Slot { pos: p, cell: e.0, seen: e.1 };
+        self.front.borrow_mut()[i] = Slot {
+            pos: p,
+            cell: e.0,
+            seen: e.1,
+        };
         e.0
     }
 
     /// The block physics of cell `c`, computed by `compute` once per block and liquid pair.
     pub fn physics(&self, c: Cell, compute: impl FnOnce() -> BlockPhysics) -> BlockPhysics {
-        *self.physics.borrow_mut().entry(c.id()).or_insert_with(compute)
+        *self
+            .physics
+            .borrow_mut()
+            .entry(c.id())
+            .or_insert_with(compute)
     }
 
     pub fn recording(&self) -> bool {

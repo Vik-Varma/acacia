@@ -24,13 +24,17 @@ pub struct Shard {
 impl Shard {
     /// Starts thread `swarm-shard-{index}`; `on_panic` hears of each job that panics.
     pub fn start(index: usize, on_panic: OnPanic) -> std::io::Result<Self> {
-        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
         let (jobs, queue) = mpsc::unbounded_channel();
         let (exit, exited) = oneshot::channel();
-        std::thread::Builder::new().name(format!("swarm-shard-{index}")).spawn(move || {
-            LocalSet::new().block_on(&runtime, run(queue, on_panic));
-            let _ = exit.send(());
-        })?;
+        std::thread::Builder::new()
+            .name(format!("swarm-shard-{index}"))
+            .spawn(move || {
+                LocalSet::new().block_on(&runtime, run(queue, on_panic));
+                let _ = exit.send(());
+            })?;
         Ok(Self { jobs, exited })
     }
 

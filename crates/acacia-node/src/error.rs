@@ -18,7 +18,9 @@ impl From<Status> for Code {
 
 impl From<ErrorCode> for Code {
     fn from(code: ErrorCode) -> Self {
-        let name = serde_json::to_value(code).ok().and_then(|v| v.as_str().map(str::to_owned));
+        let name = serde_json::to_value(code)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_owned));
         Self(name.unwrap_or_else(|| "INTERNAL".into()))
     }
 }

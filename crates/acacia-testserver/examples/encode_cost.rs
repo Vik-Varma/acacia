@@ -60,10 +60,17 @@ fn main() -> Result<(), String> {
         let before = out.len();
         encode(&mut out);
         let name = packet_name(raw.id).unwrap_or("?");
-        if args.first().is_some_and(|only| only != "all" && only != name) {
+        if args
+            .first()
+            .is_some_and(|only| only != "all" && only != name)
+        {
             continue;
         }
-        let group = groups.entry(name).or_insert(Group { encoders: Vec::new(), bytes: 0, nanos: u128::MAX });
+        let group = groups.entry(name).or_insert(Group {
+            encoders: Vec::new(),
+            bytes: 0,
+            nanos: u128::MAX,
+        });
         group.bytes += out.len() - before;
         group.encoders.push(encode);
     }
@@ -72,11 +79,17 @@ fn main() -> Result<(), String> {
     }
 
     if !args.is_empty() {
-        let seconds = args.get(1).map_or(Ok(5.0), |s| s.parse::<f64>()).map_err(|e| e.to_string())?;
+        let seconds = args
+            .get(1)
+            .map_or(Ok(5.0), |s| s.parse::<f64>())
+            .map_err(|e| e.to_string())?;
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs_f64(seconds) {
             out.clear();
-            groups.values().flat_map(|g| &g.encoders).for_each(|encode| encode(&mut out));
+            groups
+                .values()
+                .flat_map(|g| &g.encoders)
+                .for_each(|encode| encode(&mut out));
             black_box(out.len());
         }
         return Ok(());
@@ -93,11 +106,27 @@ fn main() -> Result<(), String> {
     }
     let mut rows: Vec<_> = groups.into_iter().collect();
     rows.sort_by_key(|(_, g)| std::cmp::Reverse(g.nanos));
-    let (packets, bytes, nanos) = rows.iter().fold((0, 0, 0), |t, (_, g)| (t.0 + g.encoders.len(), t.1 + g.bytes, t.2 + g.nanos));
-    println!("{packets} packets, {bytes} bytes: {:.2} ms, {:.0} MB/s", nanos as f64 / 1e6, bytes as f64 * 1e3 / nanos as f64);
-    println!("{:<30} {:>6} {:>9} {:>9} {:>7}", "packet", "count", "bytes", "µs", "MB/s");
+    let (packets, bytes, nanos) = rows.iter().fold((0, 0, 0), |t, (_, g)| {
+        (t.0 + g.encoders.len(), t.1 + g.bytes, t.2 + g.nanos)
+    });
+    println!(
+        "{packets} packets, {bytes} bytes: {:.2} ms, {:.0} MB/s",
+        nanos as f64 / 1e6,
+        bytes as f64 * 1e3 / nanos as f64
+    );
+    println!(
+        "{:<30} {:>6} {:>9} {:>9} {:>7}",
+        "packet", "count", "bytes", "µs", "MB/s"
+    );
     for (name, g) in rows.iter().take(14) {
-        println!("{:<30} {:>6} {:>9} {:>9.1} {:>7.0}", name, g.encoders.len(), g.bytes, g.nanos as f64 / 1e3, g.bytes as f64 * 1e3 / g.nanos.max(1) as f64);
+        println!(
+            "{:<30} {:>6} {:>9} {:>9.1} {:>7.0}",
+            name,
+            g.encoders.len(),
+            g.bytes,
+            g.nanos as f64 / 1e3,
+            g.bytes as f64 * 1e3 / g.nanos.max(1) as f64
+        );
     }
     Ok(())
 }

@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 use acacia_client::proto::codec::read_zigzag32;
 use acacia_client::proto::packets::{
-    BossEvent, BossEventColor, BossEventOverlay, BossEventType, ChangeDimension, LevelEvent, LevelEventEvent, SetTime, StartGame,
-    SyncWorldClocks, SyncWorldClocksContent,
+    BossEvent, BossEventColor, BossEventOverlay, BossEventType, ChangeDimension, LevelEvent,
+    LevelEventEvent, SetTime, StartGame, SyncWorldClocks, SyncWorldClocksContent,
 };
 use acacia_client::proto::{DecodeError, Packet, RawPacket};
 
@@ -39,7 +39,14 @@ const DAY_CLOCK: &str = "minecraft:overworld";
 const LEVEL_EVENT_SCALE: f32 = 65535.0;
 
 impl Environment {
-    pub const PACKETS: &'static [u32] = &[StartGame::ID, SetTime::ID, SyncWorldClocks::ID, LevelEvent::ID, BossEvent::ID, ChangeDimension::ID];
+    pub const PACKETS: &'static [u32] = &[
+        StartGame::ID,
+        SetTime::ID,
+        SyncWorldClocks::ID,
+        LevelEvent::ID,
+        BossEvent::ID,
+        ChangeDimension::ID,
+    ];
 
     pub fn is_raining(&self) -> bool {
         self.rain > 0.0
@@ -60,13 +67,18 @@ impl Environment {
             SyncWorldClocks::ID => match packet.decode::<SyncWorldClocks>()?.content {
                 SyncWorldClocksContent::InitializeRegistry(r) => {
                     if let Some(c) = r.clocks.iter().find(|c| c.name == DAY_CLOCK) {
-                        (self.day_clock, self.time, self.time_paused) = (Some(c.id), c.time, c.paused);
+                        (self.day_clock, self.time, self.time_paused) =
+                            (Some(c.id), c.time, c.paused);
                     }
                 }
                 SyncWorldClocksContent::SyncState(s) => {
                     // The first state can precede the registry that names the clocks.
                     let known = self.day_clock;
-                    if let Some(c) = s.sync_states.iter().find(|c| known.is_none_or(|id| id == c.clock_id)) {
+                    if let Some(c) = s
+                        .sync_states
+                        .iter()
+                        .find(|c| known.is_none_or(|id| id == c.clock_id))
+                    {
                         (self.time, self.time_paused) = (c.time, c.paused);
                     }
                 }
@@ -75,11 +87,19 @@ impl Environment {
             // Mostly sounds and particles: peek the event so those cost no decode.
             LevelEvent::ID => {
                 let event = LevelEventEvent::from_raw(read_zigzag32(&mut &packet.body[..])?.into());
-                if matches!(event, LevelEventEvent::StartRain | LevelEventEvent::StopRain | LevelEventEvent::StartThunder | LevelEventEvent::StopThunder) {
+                if matches!(
+                    event,
+                    LevelEventEvent::StartRain
+                        | LevelEventEvent::StopRain
+                        | LevelEventEvent::StartThunder
+                        | LevelEventEvent::StopThunder
+                ) {
                     let level = packet.decode::<LevelEvent>()?.data as f32 / LEVEL_EVENT_SCALE;
                     match event {
                         LevelEventEvent::StartRain => self.rain = level.max(f32::MIN_POSITIVE),
-                        LevelEventEvent::StartThunder => self.thunder = level.max(f32::MIN_POSITIVE),
+                        LevelEventEvent::StartThunder => {
+                            self.thunder = level.max(f32::MIN_POSITIVE)
+                        }
                         LevelEventEvent::StopRain => self.rain = 0.0,
                         _ => self.thunder = 0.0,
                     }
@@ -97,7 +117,15 @@ impl Environment {
         let id = p.target_entity_id;
         match p.r#type {
             BossEventType::ShowBar => {
-                self.boss_bars.insert(id, BossBar { title: p.title, progress: p.progress, color: p.color, overlay: p.overlay });
+                self.boss_bars.insert(
+                    id,
+                    BossBar {
+                        title: p.title,
+                        progress: p.progress,
+                        color: p.color,
+                        overlay: p.overlay,
+                    },
+                );
             }
             BossEventType::HideBar => {
                 self.boss_bars.remove(&id);

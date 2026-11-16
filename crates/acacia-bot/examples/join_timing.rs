@@ -12,7 +12,9 @@ use acacia_bot::{Bot, BotConfig, BotEvent};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
     let mut args = std::env::args().skip(1);
     let server = args.next().unwrap_or_else(|| "127.0.0.1:19140".into());
     let name = args.next().unwrap_or_else(|| "Timer".into());
@@ -21,11 +23,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let limit = Duration::from_secs(args.next().map_or(Ok(120), |s| s.parse())?);
 
     let start = Instant::now();
-    let builder = Client::builder(&server).offline(&name).chunk_radius(radius).login_timeout(limit);
-    let config = BotConfig { physics: true, subscribe: PacketFilter::none().with(Subchunk::ID), ..BotConfig::default() };
+    let builder = Client::builder(&server)
+        .offline(&name)
+        .chunk_radius(radius)
+        .login_timeout(limit);
+    let config = BotConfig {
+        physics: true,
+        subscribe: PacketFilter::none().with(Subchunk::ID),
+        ..BotConfig::default()
+    };
     let mut bot = Bot::connect(builder, config).await?;
     let spawned = start.elapsed();
-    let want: Vec<[i32; 2]> = (-radius..=radius).flat_map(|dx| (-radius..=radius).map(move |dz| [dx, dz])).filter(|[dx, dz]| dx * dx + dz * dz <= radius * radius).collect();
+    let want: Vec<[i32; 2]> = (-radius..=radius)
+        .flat_map(|dx| (-radius..=radius).map(move |dz| [dx, dz]))
+        .filter(|[dx, dz]| dx * dx + dz * dz <= radius * radius)
+        .collect();
     let (mut columns_at, mut last_section, mut subchunks, mut have) = (None, start, 0usize, 0usize);
     let mut poll = tokio::time::interval(Duration::from_millis(20));
     let outcome = loop {
@@ -59,7 +71,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let ms = |at: Option<Duration>| at.map_or("-".to_owned(), |at| at.as_millis().to_string());
     let sections = (subchunks > 0).then(|| last_section - start);
-    println!("join {outcome} spawn_ms={} columns_ms={} sections_ms={} columns={have}/{} subchunks={subchunks}", spawned.as_millis(), ms(columns_at), ms(sections), want.len());
+    println!(
+        "join {outcome} spawn_ms={} columns_ms={} sections_ms={} columns={have}/{} subchunks={subchunks}",
+        spawned.as_millis(),
+        ms(columns_at),
+        ms(sections),
+        want.len()
+    );
     bot.close();
     Ok(())
 }

@@ -23,9 +23,21 @@ pub fn draw(list: &mut DrawList, theme: &Theme, names: &[String], width: f32) {
     let column = names.iter().map(|n| font.width(n)).fold(0.0, f32::max) + GAP;
     let total = column * columns as f32;
     let left = ((width - total) / 2.0).floor();
-    list.fill(white, [left - 1.0, TOP - 1.0, left + total, TOP + rows as f32 * LINE_HEIGHT], BACKGROUND);
+    list.fill(
+        white,
+        [
+            left - 1.0,
+            TOP - 1.0,
+            left + total,
+            TOP + rows as f32 * LINE_HEIGHT,
+        ],
+        BACKGROUND,
+    );
     for (i, name) in names.iter().enumerate() {
-        let (x, y) = (left + (i / rows) as f32 * column, TOP + (i % rows) as f32 * LINE_HEIGHT);
+        let (x, y) = (
+            left + (i / rows) as f32 * column,
+            TOP + (i % rows) as f32 * LINE_HEIGHT,
+        );
         list.fill(white, [x, y, x + column - 1.0, y + 8.0], ROW);
         font.draw(list, name, x, y, 0xFFFFFF, 1.0, true);
     }

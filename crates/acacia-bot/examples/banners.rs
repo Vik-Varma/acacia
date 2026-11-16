@@ -11,18 +11,55 @@ use acacia_bot::{Bot, BotConfig};
 type Error = Box<dyn std::error::Error>;
 
 /// Item aux of the banner (0 black to 15 white) and its layers: pattern code, dye, pattern item.
-type Spec = (u8, &'static [(&'static str, &'static str, Option<&'static str>)]);
+type Spec = (
+    u8,
+    &'static [(&'static str, &'static str, Option<&'static str>)],
+);
 
 const STANDING: [Spec; 5] = [
-    (15, &[("tl", "blue_dye", None), ("bs", "green_dye", None), ("bo", "red_dye", None)]),
+    (
+        15,
+        &[
+            ("tl", "blue_dye", None),
+            ("bs", "green_dye", None),
+            ("bo", "red_dye", None),
+        ],
+    ),
     (1, &[("ld", "yellow_dye", None), ("mc", "black_dye", None)]),
     (4, &[("gra", "white_dye", None), ("cr", "orange_dye", None)]),
-    (11, &[("vh", "purple_dye", None), ("drs", "light_blue_dye", None), ("tts", "black_dye", None)]),
-    (0, &[("cre", "lime_dye", Some("creeper_banner_pattern")), ("cbo", "pink_dye", Some("bordure_indented_banner_pattern"))]),
+    (
+        11,
+        &[
+            ("vh", "purple_dye", None),
+            ("drs", "light_blue_dye", None),
+            ("tts", "black_dye", None),
+        ],
+    ),
+    (
+        0,
+        &[
+            ("cre", "lime_dye", Some("creeper_banner_pattern")),
+            ("cbo", "pink_dye", Some("bordure_indented_banner_pattern")),
+        ],
+    ),
 ];
 const WALL: [Spec; 3] = [
-    (10, &[("hh", "white_dye", None), ("mr", "cyan_dye", None), ("bt", "magenta_dye", None)]),
-    (14, &[("sc", "white_dye", None), ("bts", "brown_dye", None), ("glb", "blue_dye", Some("globe_banner_pattern"))]),
+    (
+        10,
+        &[
+            ("hh", "white_dye", None),
+            ("mr", "cyan_dye", None),
+            ("bt", "magenta_dye", None),
+        ],
+    ),
+    (
+        14,
+        &[
+            ("sc", "white_dye", None),
+            ("bts", "brown_dye", None),
+            ("glb", "blue_dye", Some("globe_banner_pattern")),
+        ],
+    ),
     (7, &[("ss", "yellow_dye", None), ("rud", "red_dye", None)]),
 ];
 const OMINOUS_LOOT: &str = "entities/pillager_captain_equipment";
@@ -33,9 +70,16 @@ async fn main() -> Result<(), Error> {
     let server = args.next().unwrap_or_else(|| "127.0.0.1:19176".into());
     let mut coordinate = |default: i32| args.next().and_then(|a| a.parse().ok()).unwrap_or(default);
     let [x, y, z] = [coordinate(5000), coordinate(-60), coordinate(5000)];
-    let config = BotConfig { physics: true, ..BotConfig::default() };
+    let config = BotConfig {
+        physics: true,
+        ..BotConfig::default()
+    };
     let mut bot = Bot::connect(Client::builder(&server).offline("BannerSmith"), config).await?;
-    while bot.bedrock().and_then(|b| b.movement()).is_none_or(|m| !m.is_started()) {
+    while bot
+        .bedrock()
+        .and_then(|b| b.movement())
+        .is_none_or(|m| !m.is_started())
+    {
         bot.wait_ticks(1).await?;
     }
     let loom = [x - 2, y, z];
@@ -44,8 +88,22 @@ async fn main() -> Result<(), Error> {
         "/gamemode creative @s".to_owned(),
         format!("/kill @e[type=slime,x={x},y={y},z={z},r=40]"),
         format!("/tp @s {} {y} {}", x as f32 + 0.5, z as f32 + 0.5),
-        format!("/fill {} {y} {} {} {} {} air", x - 3, z - 1, x + 18, y + 5, z + 6),
-        format!("/fill {} {y} {} {} {} {} stone", x + 10, z + 5, x + 16, y + 3, z + 5),
+        format!(
+            "/fill {} {y} {} {} {} {} air",
+            x - 3,
+            z - 1,
+            x + 18,
+            y + 5,
+            z + 6
+        ),
+        format!(
+            "/fill {} {y} {} {} {} {} stone",
+            x + 10,
+            z + 5,
+            x + 16,
+            y + 3,
+            z + 5
+        ),
         format!("/setblock {} {y} {} loom", loom[0], loom[2]),
     ];
     // A bot that died here last time respawns at the world spawn first.
@@ -56,12 +114,24 @@ async fn main() -> Result<(), Error> {
         // Off to a side by a different step each: the banner turns to face its placer.
         let stand = column as f32 + 0.5 + (index as f32 - 2.0) * 0.75;
         make(&mut bot, [x, y, z], loom, Some(spec)).await?;
-        place(&mut bot, [stand, y as f32, z as f32 + 1.5], [column, y - 1, z + 3], Face::Up).await?;
+        place(
+            &mut bot,
+            [stand, y as f32, z as f32 + 1.5],
+            [column, y - 1, z + 3],
+            Face::Up,
+        )
+        .await?;
     }
     for (index, spec) in WALL.iter().map(Some).chain([None]).enumerate() {
         let column = x + 10 + 2 * index as i32;
         make(&mut bot, [x, y, z], loom, spec).await?;
-        place(&mut bot, [column as f32 + 0.5, y as f32, z as f32 + 2.5], [column, y + 2, z + 5], Face::North).await?;
+        place(
+            &mut bot,
+            [column as f32 + 0.5, y as f32, z as f32 + 2.5],
+            [column, y + 2, z + 5],
+            Face::North,
+        )
+        .await?;
     }
     run(&mut bot, &["/clear @s".to_owned()], 10).await?;
     for (position, nbt) in bot.state().block_entities.iter() {
@@ -79,14 +149,37 @@ async fn run(bot: &mut Bot, commands: &[String], settle: u32) -> Result<(), Erro
 }
 
 /// Leaves the inventory holding only the banner of `spec`, or the ominous banner without one.
-async fn make(bot: &mut Bot, [x, y, z]: [i32; 3], loom: [i32; 3], spec: Option<&Spec>) -> Result<(), Error> {
+async fn make(
+    bot: &mut Bot,
+    [x, y, z]: [i32; 3],
+    loom: [i32; 3],
+    spec: Option<&Spec>,
+) -> Result<(), Error> {
     let home = format!("/tp @s {} {y} {} 90 0", x as f32 + 0.5, z as f32 + 0.5);
     let Some((aux, layers)) = spec else {
-        return run(bot, &[home, "/clear @s".into(), format!("/loot give @s loot \"{OMINOUS_LOOT}\"")], 20).await;
+        return run(
+            bot,
+            &[
+                home,
+                "/clear @s".into(),
+                format!("/loot give @s loot \"{OMINOUS_LOOT}\""),
+            ],
+            20,
+        )
+        .await;
     };
-    run(bot, &[home, "/clear @s".into(), format!("/give @s banner 1 {aux}")], 20).await?;
+    run(
+        bot,
+        &[home, "/clear @s".into(), format!("/give @s banner 1 {aux}")],
+        20,
+    )
+    .await?;
     for (pattern, dye, item) in *layers {
-        let gives: Vec<String> = [Some(*dye), *item].into_iter().flatten().map(|name| format!("/give @s {name}")).collect();
+        let gives: Vec<String> = [Some(*dye), *item]
+            .into_iter()
+            .flatten()
+            .map(|name| format!("/give @s {name}"))
+            .collect();
         run(bot, &gives, 10).await?;
         let (banner, dye) = (find(bot, "banner").await?, find(bot, dye).await?);
         let item = match item {
@@ -107,12 +200,21 @@ async fn find(bot: &mut Bot, name: &str) -> Result<SlotRef, Error> {
         }
         bot.wait_ticks(1).await?;
     }
-    Err(format!("no {name} in the inventory: {:?}", bot.state().inventory_summary()).into())
+    Err(format!(
+        "no {name} in the inventory: {:?}",
+        bot.state().inventory_summary()
+    )
+    .into())
 }
 
 /// Stands at `feet` and places the held banner against `face` of the block at `against`.
 async fn place(bot: &mut Bot, feet: [f32; 3], against: [i32; 3], face: Face) -> Result<(), Error> {
-    run(bot, &[format!("/tp @s {} {} {}", feet[0], feet[1], feet[2])], 20).await?;
+    run(
+        bot,
+        &[format!("/tp @s {} {} {}", feet[0], feet[1], feet[2])],
+        20,
+    )
+    .await?;
     let banner = find(bot, "banner").await?;
     let hotbar = match banner {
         SlotRef::Main(slot) if slot < 9 => slot,
@@ -123,7 +225,10 @@ async fn place(bot: &mut Bot, feet: [f32; 3], against: [i32; 3], face: Face) -> 
     };
     bot.select_hotbar(hotbar)?;
     bot.wait_ticks(5).await?;
-    println!("placing against {against:?} {face:?}: {:?}", bot.state().held_item().nbt.as_ref().map(|nbt| &nbt.value));
+    println!(
+        "placing against {against:?} {face:?}: {:?}",
+        bot.state().held_item().nbt.as_ref().map(|nbt| &nbt.value)
+    );
     bot.place_block(against, face).await?;
     Ok(bot.wait_ticks(10).await?)
 }

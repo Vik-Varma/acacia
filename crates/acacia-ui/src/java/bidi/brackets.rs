@@ -49,7 +49,11 @@ impl BracketData {
     pub fn new(level: i8) -> BracketData {
         let mut run = IsoRun::default();
         run.reset(level, level);
-        BracketData { openings: Vec::new(), iso_runs: vec![run], last: 0 }
+        BracketData {
+            openings: Vec::new(),
+            iso_runs: vec![run],
+            last: 0,
+        }
     }
 
     /// `bracketProcessB`.
@@ -83,7 +87,13 @@ impl BracketData {
 
     fn add_opening(&mut self, matched: u16, position: usize) {
         let run = self.iso_runs[self.last];
-        let opening = Opening { position, matched: i32::from(matched), context_pos: run.context_pos, flags: 0, context_dir: run.context_dir };
+        let opening = Opening {
+            position,
+            matched: i32::from(matched),
+            context_pos: run.context_pos,
+            flags: 0,
+            context_dir: run.context_dir,
+        };
         if run.limit == self.openings.len() {
             self.openings.push(opening);
         } else {
@@ -95,18 +105,34 @@ impl BracketData {
 
 impl Bidi {
     /// `bracketProcessBoundary`.
-    pub(super) fn bracket_process_boundary(&self, bd: &mut BracketData, last_cc_pos: usize, context: i8, embedding: i8) {
+    pub(super) fn bracket_process_boundary(
+        &self,
+        bd: &mut BracketData,
+        last_cc_pos: usize,
+        context: i8,
+        embedding: i8,
+    ) {
         if flag(self.dir_props[last_cc_pos]) & MASK_ISO != 0 {
             return;
         }
-        let context = if no_override(embedding) > no_override(context) { embedding } else { context };
+        let context = if no_override(embedding) > no_override(context) {
+            embedding
+        } else {
+            context
+        };
         let run = &mut bd.iso_runs[bd.last];
         run.limit = run.start;
         run.reset(embedding, context);
         run.context_pos = last_cc_pos;
     }
 
-    fn fix_n0c(&mut self, bd: &mut BracketData, opening_index: usize, new_prop_position: usize, new_prop: u8) {
+    fn fix_n0c(
+        &mut self,
+        bd: &mut BracketData,
+        opening_index: usize,
+        new_prop_position: usize,
+        new_prop: u8,
+    ) {
         let limit = bd.iso_runs[bd.last].limit;
         for k in opening_index + 1..limit {
             let q = bd.openings[k];
@@ -131,16 +157,27 @@ impl Bidi {
     }
 
     /// `bracketProcessClosing`: the pair's resolved class, or ON when nothing strong is inside.
-    fn bracket_process_closing(&mut self, bd: &mut BracketData, open_idx: usize, position: usize) -> u8 {
+    fn bracket_process_closing(
+        &mut self,
+        bd: &mut BracketData,
+        open_idx: usize,
+        position: usize,
+    ) -> u8 {
         let run = bd.iso_runs[bd.last];
         let o = bd.openings[open_idx];
         let direction = lr(run.level);
         let mut stable = true;
-        let new_prop = if (direction == L && o.flags & FOUND_L != 0) || (direction == R && o.flags & FOUND_R != 0) {
+        let new_prop = if (direction == L && o.flags & FOUND_L != 0)
+            || (direction == R && o.flags & FOUND_R != 0)
+        {
             direction
         } else if o.flags & (FOUND_L | FOUND_R) != 0 {
             stable = open_idx == run.start;
-            if direction != o.context_dir { o.context_dir } else { direction }
+            if direction != o.context_dir {
+                o.context_dir
+            } else {
+                direction
+            }
         } else {
             bd.iso_runs[bd.last].limit = open_idx;
             return ON;
@@ -180,7 +217,10 @@ impl Bidi {
             let c = self.text[position];
             let run = bd.iso_runs[bd.last];
             let mut opener = true;
-            if let Some(idx) = (run.start..run.limit).rev().find(|&i| bd.openings[i].matched == i32::from(c)) {
+            if let Some(idx) = (run.start..run.limit)
+                .rev()
+                .find(|&i| bd.openings[i].matched == i32::from(c))
+            {
                 let new_prop = self.bracket_process_closing(bd, idx, position);
                 if new_prop != ON {
                     let run = &mut bd.iso_runs[bd.last];
@@ -219,11 +259,21 @@ impl Bidi {
             if !matches!(dir_prop, S | WS | ON) {
                 self.dir_props[position] = p;
             }
-            (run.last_base, run.last_strong, run.context_dir, run.context_pos) = (p, p, p, position);
+            (
+                run.last_base,
+                run.last_strong,
+                run.context_dir,
+                run.context_pos,
+            ) = (p, p, p, position);
             p
         } else if dir_prop <= R || dir_prop == AL {
             let p = if dir_prop == L { L } else { R };
-            (run.last_base, run.last_strong, run.context_dir, run.context_pos) = (dir_prop, dir_prop, p, position);
+            (
+                run.last_base,
+                run.last_strong,
+                run.context_dir,
+                run.context_pos,
+            ) = (dir_prop, dir_prop, p, position);
             p
         } else if dir_prop == EN {
             run.last_base = EN;

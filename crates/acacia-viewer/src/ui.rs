@@ -15,6 +15,7 @@ use std::time::Instant;
 use acacia_bot::events::{Title, TitleKind};
 use acacia_render::LookPack;
 use acacia_render::blocks::BlockTable;
+use acacia_ui::blur::Blur;
 use acacia_ui::chat::{self, Chat};
 use acacia_ui::effects::Active;
 use acacia_ui::hud::{self, HudState, sprite};
@@ -22,7 +23,6 @@ use acacia_ui::inventory::Layout;
 use acacia_ui::lang::Lang;
 use acacia_ui::overlay::{self, Boss, Titles};
 use acacia_ui::theme::{Theme, bedrock, java};
-use acacia_ui::blur::Blur;
 use acacia_ui::{DrawList, Quad};
 
 use crate::control::Inventory;
@@ -97,23 +97,52 @@ impl Ui {
     /// The Java look's files lend the Bedrock theme their font; a Java look without HUD sprites of
     /// its own (not baked) draws Bedrock's, which are the same pixels.
     pub fn new(looks: &Looks) -> Ui {
-        let (bedrock_root, java_root) = (looks.get(LookChoice::Bedrock).files().to_owned(), looks.get(LookChoice::Java).files().to_owned());
-        let font_root = java_root.join("textures/font/ascii.png").is_file().then_some(java_root.as_path());
+        let (bedrock_root, java_root) = (
+            looks.get(LookChoice::Bedrock).files().to_owned(),
+            looks.get(LookChoice::Java).files().to_owned(),
+        );
+        let font_root = java_root
+            .join("textures/font/ascii.png")
+            .is_file()
+            .then_some(java_root.as_path());
         let bedrock_theme = bedrock::load(&bedrock_root, font_root);
         let java_theme = java::load(&java_root);
-        let java_theme = if java_root.join(format!("textures/gui/sprites/{}.png", sprite::HOTBAR)).is_file() {
+        let java_theme = if java_root
+            .join(format!("textures/gui/sprites/{}.png", sprite::HOTBAR))
+            .is_file()
+        {
             java_theme
         } else {
-            Theme { style: java::STYLE, ..bedrock::load(&bedrock_root, font_root) }
+            Theme {
+                style: java::STYLE,
+                ..bedrock::load(&bedrock_root, font_root)
+            }
         };
         match font_root {
             Some(_) => tracing::info!("ui themes"),
-            None => tracing::warn!(looked = %java_root.display(), "no font, so no text: bake the Java look (tools/lookbake) or point ACACIA_LOOKS at one"),
+            None => {
+                tracing::warn!(looked = %java_root.display(), "no font, so no text: bake the Java look (tools/lookbake) or point ACACIA_LOOKS at one")
+            }
         }
         let lang = Lang::load(&bedrock_root.join("texts/en_US.lang"));
         let foil = |look| looks.get(look).look.foil;
-        let (bedrock, java) = (Skin::new(bedrock_theme, &bedrock_root, foil(LookChoice::Bedrock)), Skin::new(java_theme, &java_root, foil(LookChoice::Java)));
-        Ui { bedrock, java, chat: Chat::default(), titles: Titles::default(), sidebar: None, lang, quads: Vec::new(), selected: None, effects_seen: HashMap::new(), java_gui: java_gui::JavaGui::new(&java_root), pictures: Vec::new() }
+        let (bedrock, java) = (
+            Skin::new(bedrock_theme, &bedrock_root, foil(LookChoice::Bedrock)),
+            Skin::new(java_theme, &java_root, foil(LookChoice::Java)),
+        );
+        Ui {
+            bedrock,
+            java,
+            chat: Chat::default(),
+            titles: Titles::default(),
+            sidebar: None,
+            lang,
+            quads: Vec::new(),
+            selected: None,
+            effects_seen: HashMap::new(),
+            java_gui: java_gui::JavaGui::new(&java_root),
+            pictures: Vec::new(),
+        }
     }
 
     pub fn show_title(&mut self, title: Title) {
@@ -156,9 +185,17 @@ impl Ui {
     /// A chat message, translated; a player's is shown as `<name> text`.
     /// `rawtext` is the message as JSON when the server sent it so: translated here, where the
     /// language files are, in place of `message` (the bot's flattening, keys untranslated).
-    pub fn push_chat(&mut self, sender: Option<&str>, message: &str, params: &[String], rawtext: Option<&str>) {
+    pub fn push_chat(
+        &mut self,
+        sender: Option<&str>,
+        message: &str,
+        params: &[String],
+        rawtext: Option<&str>,
+    ) {
         tracing::debug!(target: "chat", message, ?params, rawtext, "raw");
-        let text = rawtext.and_then(|json| self.lang.rawtext(json)).unwrap_or_else(|| self.lang.translate(message, params));
+        let text = rawtext
+            .and_then(|json| self.lang.rawtext(json))
+            .unwrap_or_else(|| self.lang.translate(message, params));
         let line = sender.map_or_else(|| text.clone(), |s| format!("<{s}> {text}"));
         tracing::info!(target: "chat", "{line}");
         self.java_gui.add_chat(&line, self.chat.is_open());
@@ -167,8 +204,28 @@ impl Ui {
 
     /// This frame's quads for a window `size` pixels big at GUI `scale`, the atlas they sample,
     /// the menu blur under some of them, and the pictures-in-picture the renderer draws for them.
-    pub fn draw(&mut self, frame: Frame) -> (&acacia_ui::Atlas, &[Quad], Option<Blur>, &[PictureRequest]) {
-        let Frame { look, me, debug, screen, menu, java_screens, form, sign, book, players, tags, mouse, size, scale, now, menu_blur } = frame;
+    pub fn draw(
+        &mut self,
+        frame: Frame,
+    ) -> (&acacia_ui::Atlas, &[Quad], Option<Blur>, &[PictureRequest]) {
+        let Frame {
+            look,
+            me,
+            debug,
+            screen,
+            menu,
+            java_screens,
+            form,
+            sign,
+            book,
+            players,
+            tags,
+            mouse,
+            size,
+            scale,
+            now,
+            menu_blur,
+        } = frame;
         self.java_gui.menu_blur = menu_blur;
         let menu_open = menu.is_some() || java_screens.as_ref().is_some_and(|s| s.menu.is_some());
         self.pictures.clear();
@@ -183,37 +240,92 @@ impl Ui {
         // In the world, so under the HUD.
         acacia_ui::nametags::draw(&mut list, &skin.theme, &tags);
         if let Some(me) = me {
-            let state = HudState { crosshair: screen.is_none() && !menu_open && form.is_none() && sign.is_none() && book.is_none(), ..skin.state(me) };
+            let state = HudState {
+                crosshair: screen.is_none()
+                    && !menu_open
+                    && form.is_none()
+                    && sign.is_none()
+                    && book.is_none(),
+                ..skin.state(me)
+            };
             if !java {
                 hud::draw(&mut list, &skin.theme, &state, gui);
             }
-            let selected = me.items[me.hotbar as usize % 9].as_ref().map(|stack| (me.hotbar, stack.name.clone()));
+            let selected = me.items[me.hotbar as usize % 9]
+                .as_ref()
+                .map(|stack| (me.hotbar, stack.name.clone()));
             if selected != self.selected {
                 if let Some((_, name)) = &selected {
-                    self.titles.item_name(self.lang.item_name(name), now, state.survival);
+                    self.titles
+                        .item_name(self.lang.item_name(name), now, state.survival);
                 }
                 self.selected = selected;
             }
-            self.effects_seen.retain(|key, _| me.effects.iter().any(|&(id, ticks, tick, _)| *key == (id, ticks, tick)));
+            self.effects_seen.retain(|key, _| {
+                me.effects
+                    .iter()
+                    .any(|&(id, ticks, tick, _)| *key == (id, ticks, tick))
+            });
             let active: Vec<Active> = me
                 .effects
                 .iter()
                 .map(|&(id, ticks, tick, ambient)| {
                     let seen = *self.effects_seen.entry((id, ticks, tick)).or_insert(now);
                     let elapsed = (now.saturating_duration_since(seen).as_secs_f32() * 20.0) as i32;
-                    Active { id, ticks: if ticks < 0 { ticks } else { (ticks - elapsed).max(0) }, ambient }
+                    Active {
+                        id,
+                        ticks: if ticks < 0 {
+                            ticks
+                        } else {
+                            (ticks - elapsed).max(0)
+                        },
+                        ambient,
+                    }
                 })
                 .collect();
             if java {
-                let open = java_gui::screen_info(screen.map(|s| s.layout), book.is_some() || sign.is_some(), menu_open || form.is_some() || self.chat.is_open(), java_size[0]);
-                let view = java_gui::HudView { me, effects: &active, screen: open, chat_open: self.chat.is_open(), debug: debug.is_some(), sidebar: self.sidebar.as_ref(), players, lang: &self.lang };
+                let open = java_gui::screen_info(
+                    screen.map(|s| s.layout),
+                    book.is_some() || sign.is_some(),
+                    menu_open || form.is_some() || self.chat.is_open(),
+                    java_size[0],
+                );
+                let view = java_gui::HudView {
+                    me,
+                    effects: &active,
+                    screen: open,
+                    chat_open: self.chat.is_open(),
+                    debug: debug.is_some(),
+                    sidebar: self.sidebar.as_ref(),
+                    players,
+                    lang: &self.lang,
+                };
                 let calls = self.java_gui.hud(&view, java_size, now);
-                self.java_gui.paint(skin, &|key| java_gui::hotbar_stack(me, key), &calls, &mut list, &mut self.pictures);
+                self.java_gui.paint(
+                    skin,
+                    &|key| java_gui::hotbar_stack(me, key),
+                    &calls,
+                    &mut list,
+                    &mut self.pictures,
+                );
             } else {
                 acacia_ui::effects::draw(&mut list, &skin.theme, &active, gui[0]);
                 // A vanilla boss's title is its name's key (`entity.ender_dragon.name`).
-                let titles: Vec<String> = me.bosses.iter().map(|(title, ..)| self.lang.translate(title, &[])).collect();
-                let bosses: Vec<Boss> = me.bosses.iter().zip(&titles).map(|((_, progress, colour), title)| Boss { title, progress: *progress, colour: *colour }).collect();
+                let titles: Vec<String> = me
+                    .bosses
+                    .iter()
+                    .map(|(title, ..)| self.lang.translate(title, &[]))
+                    .collect();
+                let bosses: Vec<Boss> = me
+                    .bosses
+                    .iter()
+                    .zip(&titles)
+                    .map(|((_, progress, colour), title)| Boss {
+                        title,
+                        progress: *progress,
+                        colour: *colour,
+                    })
+                    .collect();
                 overlay::draw_bosses(&mut list, &skin.theme, &bosses, gui);
             }
         }
@@ -231,7 +343,18 @@ impl Ui {
             acacia_ui::debug::draw(&mut list, &skin.theme, &left, &right, gui[0]);
         }
         if let Some(screen) = screen {
-            java_gui::screens::draw(&mut self.java_gui, java, skin, &self.lang, &screen, me, (size, scale), (mouse, now), &mut list, &mut self.pictures);
+            java_gui::screens::draw(
+                &mut self.java_gui,
+                java,
+                skin,
+                &self.lang,
+                &screen,
+                me,
+                (size, scale),
+                (mouse, now),
+                &mut list,
+                &mut self.pictures,
+            );
         }
         if let Some(names) = players.filter(|_| !java) {
             acacia_ui::players::draw(&mut list, &skin.theme, names, gui[0]);
@@ -246,10 +369,22 @@ impl Ui {
         if let Some(sign) = sign.filter(|_| look == LookChoice::Bedrock) {
             acacia_ui::sign_editor::draw(&mut list, &skin.theme, sign, mouse, gui);
         }
-        java_screens::draw(&mut self.java_gui, skin, menu, java_screens, mouse, size, scale, now, &mut list, &mut self.pictures);
+        java_screens::draw(
+            &mut self.java_gui,
+            skin,
+            menu,
+            java_screens,
+            mouse,
+            size,
+            scale,
+            now,
+            &mut list,
+            &mut self.pictures,
+        );
         if java && me.is_some() {
             let calls = self.java_gui.deferred_subtitles(java_size);
-            self.java_gui.paint(skin, &|_| None, &calls, &mut list, &mut self.pictures);
+            self.java_gui
+                .paint(skin, &|_| None, &calls, &mut list, &mut self.pictures);
         }
         self.quads = list.quads;
         (&skin.theme.atlas, &self.quads, list.blur, &self.pictures)

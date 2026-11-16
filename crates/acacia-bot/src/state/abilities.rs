@@ -17,13 +17,24 @@ pub struct Abilities {
 
 impl Default for Abilities {
     fn default() -> Self {
-        Self { may_fly: false, flying: false, no_clip: false, fly_speed: 0.05, vertical_fly_speed: 1.0, walk_speed: 0.1 }
+        Self {
+            may_fly: false,
+            flying: false,
+            no_clip: false,
+            fly_speed: 0.05,
+            vertical_fly_speed: 1.0,
+            walk_speed: 0.1,
+        }
     }
 }
 
 impl Abilities {
     pub(crate) fn apply(&mut self, p: &UpdateAbilities) {
-        let mut layers: Vec<&AbilityLayers> = p.abilities.iter().filter(|l| l.r#type != AbilityLayersType::Cache).collect();
+        let mut layers: Vec<&AbilityLayers> = p
+            .abilities
+            .iter()
+            .filter(|l| l.r#type != AbilityLayersType::Cache)
+            .collect();
         layers.sort_by_key(|l| l.r#type != AbilityLayersType::Base);
         for layer in layers {
             let allows = |a: AbilitySet| layer.allowed.contains(a);
@@ -39,8 +50,16 @@ impl Abilities {
             }
             for (ability, value, field) in [
                 (AbilitySet::FLY_SPEED, layer.fly_speed, &mut self.fly_speed),
-                (AbilitySet::VERTICAL_FLY_SPEED, layer.vertical_fly_speed, &mut self.vertical_fly_speed),
-                (AbilitySet::WALK_SPEED, layer.walk_speed, &mut self.walk_speed),
+                (
+                    AbilitySet::VERTICAL_FLY_SPEED,
+                    layer.vertical_fly_speed,
+                    &mut self.vertical_fly_speed,
+                ),
+                (
+                    AbilitySet::WALK_SPEED,
+                    layer.walk_speed,
+                    &mut self.walk_speed,
+                ),
             ] {
                 if allows(ability) {
                     *field = value;

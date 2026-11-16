@@ -7,7 +7,10 @@ mod lanes;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use acacia_api::{ApiError, Auth, CallId, CreateBotParams, CreateBotResult, Edition, EndReason, ErrorCode, Event, Method, Reply, Transport};
+use acacia_api::{
+    ApiError, Auth, CallId, CreateBotParams, CreateBotResult, Edition, EndReason, ErrorCode, Event,
+    Method, Reply, Transport,
+};
 use acacia_bot::client::{Client, TransportKind};
 use acacia_bot::events::channel;
 use acacia_bot::state::Trackers;
@@ -17,7 +20,7 @@ use acacia_bot::{Bot, BotConfig};
 use parking_lot::Mutex;
 use tokio::sync::mpsc;
 
-use crate::calls::{action, Cancellable};
+use crate::calls::{Cancellable, action};
 use crate::convert;
 use crate::registry::{BotOut, Msg, Registry};
 use crate::sign_in::SignIns;
@@ -44,7 +47,19 @@ pub(crate) struct Spawn {
 }
 
 pub(crate) async fn run(spawn: Spawn) {
-    let Spawn { out, mut rx, registry, call, params, shared_worlds, joins, sign_ins, event_capacity, snapshots, max_batch_bytes } = spawn;
+    let Spawn {
+        out,
+        mut rx,
+        registry,
+        call,
+        params,
+        shared_worlds,
+        joins,
+        sign_ins,
+        event_capacity,
+        snapshots,
+        max_batch_bytes,
+    } = spawn;
     let (sink, events) = channel(event_capacity);
     let transport = match params.transport.unwrap_or(Transport::Auto) {
         Transport::Auto => TransportKind::Auto,
@@ -52,10 +67,17 @@ pub(crate) async fn run(spawn: Spawn) {
         Transport::Nethernet => TransportKind::NetherNet,
     };
     let edition = params.edition.unwrap_or(Edition::Bedrock);
-    let port = params.port.unwrap_or(if edition == Edition::Java { JAVA_PORT } else { BEDROCK_PORT });
+    let port = params.port.unwrap_or(if edition == Edition::Java {
+        JAVA_PORT
+    } else {
+        BEDROCK_PORT
+    });
     let address = format!("{}:{port}", params.host);
     let config = BotConfig {
-        trackers: Trackers { entities: params.entities.unwrap_or(false), ..Trackers::default() },
+        trackers: Trackers {
+            entities: params.entities.unwrap_or(false),
+            ..Trackers::default()
+        },
         physics: params.physics.unwrap_or(false),
         auto_respawn: params.auto_respawn.unwrap_or(true),
         auto_eat: params.auto_eat.as_ref().map(convert::auto_eat),
@@ -70,24 +92,40 @@ pub(crate) async fn run(spawn: Spawn) {
         let connect = async {
             if edition == Edition::Java {
                 let prompt = out.clone();
-                return join::connect_java(&params, port, &sign_ins, Box::new(move |code| prompt.msa_code(call, code)), config.clone()).await;
+                return join::connect_java(
+                    &params,
+                    port,
+                    &sign_ins,
+                    Box::new(move |code| prompt.msa_code(call, code)),
+                    config.clone(),
+                )
+                .await;
             }
             let login = match params.auth.unwrap_or(Auth::Offline) {
                 Auth::Offline => None,
                 Auth::Microsoft => {
-                    let account = sign_ins.account(&params.username, params.profiles_folder.as_deref());
+                    let account =
+                        sign_ins.account(&params.username, params.profiles_folder.as_deref());
                     let prompt = out.clone();
-                    Some(sign_ins.login(account, Box::new(move |code| prompt.msa_code(call, code))).await?)
+                    Some(
+                        sign_ins
+                            .login(account, Box::new(move |code| prompt.msa_code(call, code)))
+                            .await?,
+                    )
                 }
             };
             let builder = || {
-                let builder = Client::builder(&address).transport(transport).max_batch_bytes(max_batch_bytes);
+                let builder = Client::builder(&address)
+                    .transport(transport)
+                    .max_batch_bytes(max_batch_bytes);
                 match &login {
                     Some(l) => builder.online(l.credentials.clone(), l.key.clone()),
                     None => builder.offline(&params.username),
                 }
             };
-            join::connect(&joins, &address, builder, &config).await.map_err(convert::connect_error)
+            join::connect(&joins, &address, builder, &config)
+                .await
+                .map_err(convert::connect_error)
         };
         tokio::pin!(connect);
         loop {
@@ -113,13 +151,23 @@ pub(crate) async fn run(spawn: Spawn) {
         Err(e) => {
             out.done(call, Err(e));
             registry.lock().remove(&out.id);
-            answer_after_end(&out, early.into_iter().chain(std::iter::from_fn(|| rx.try_recv().ok())));
+            answer_after_end(
+                &out,
+                early
+                    .into_iter()
+                    .chain(std::iter::from_fn(|| rx.try_recv().ok())),
+            );
             return;
         }
     };
     registry.lock().set_reader(&out.id, bot.snapshot_reader());
     out.event(Event::Spawn);
-    out.done(call, Ok(Reply::CreateBot(CreateBotResult { bot: out.id.clone() })));
+    out.done(
+        call,
+        Ok(Reply::CreateBot(CreateBotResult {
+            bot: out.id.clone(),
+        })),
+    );
     let lanes = Lanes {
         out: out.clone(),
         rx,
@@ -177,7 +225,10 @@ async fn play(mut bot: Bot, mut lanes: Lanes, early: VecDeque<Msg>) -> Lanes {
     }
     lanes.drain_events();
     if !lanes.ended {
-        lanes.out.event(Event::End { reason: EndReason::Closed, message: "closed".into() });
+        lanes.out.event(Event::End {
+            reason: EndReason::Closed,
+            message: "closed".into(),
+        });
     }
     lanes.fail_open();
     lanes

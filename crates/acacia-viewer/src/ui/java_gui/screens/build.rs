@@ -13,9 +13,11 @@ use acacia_ui::java::container::{Base, CARRIED, Env, QUICK, quick_craft_count};
 use acacia_ui::java::text::Text;
 use acacia_ui::java::tooltip::stack::ItemStack;
 
-use super::super::items::item_stack;
 use super::super::items::JavaLang;
-use super::{Built, JavaGui, JavaScreen, Open, State, Target, benches, containers, creative, player};
+use super::super::items::item_stack;
+use super::{
+    Built, JavaGui, JavaScreen, Open, State, Target, benches, containers, creative, player,
+};
 use crate::control::{Inventory, Stack};
 use crate::creative_items::CreativeEntry;
 use crate::me::Me;
@@ -36,9 +38,25 @@ pub struct View<'a> {
 }
 
 impl<'a> View<'a> {
-    pub fn new(inventory: &'a Inventory, java: &JavaScreen<'a>, me: Option<&'a Me>, size: [i32; 2], mouse: [f64; 2], now: Instant) -> View<'a> {
+    pub fn new(
+        inventory: &'a Inventory,
+        java: &JavaScreen<'a>,
+        me: Option<&'a Me>,
+        size: [i32; 2],
+        mouse: [f64; 2],
+        now: Instant,
+    ) -> View<'a> {
         let name = (java.name.text(), java.name.before_caret().chars().count());
-        View { inventory, creative: java.creative, entries: java.entries, name, me, size, mouse, now }
+        View {
+            inventory,
+            creative: java.creative,
+            entries: java.entries,
+            name,
+            me,
+            size,
+            mouse,
+            now,
+        }
     }
 }
 
@@ -82,12 +100,20 @@ impl Kit<'_> {
     /// The player's levels and whether they build with infinite materials.
     pub fn station(&self, data: Vec<i32>) -> Station {
         let me = self.view.me;
-        Station { xp: me.map_or(0, |m| m.xp_level), creative: me.is_some_and(|m| m.game_mode == GameMode::Creative), data }
+        Station {
+            xp: me.map_or(0, |m| m.xp_level),
+            creative: me.is_some_and(|m| m.game_mode == GameMode::Creative),
+            data,
+        }
     }
 
     /// The window's title: the name it was given, else `key`.
     pub fn title(&self, key: &str) -> Text {
-        self.view.inventory.custom_title.as_deref().map_or_else(|| self.tr(key), Text::legacy)
+        self.view
+            .inventory
+            .custom_title
+            .as_deref()
+            .map_or_else(|| self.tr(key), Text::legacy)
     }
 
     pub fn inventory_title(&self) -> Text {
@@ -101,7 +127,10 @@ impl Kit<'_> {
 
 /// `addStandardInventorySlots`' targets: the three rows, then the hotbar.
 pub(super) fn player_targets() -> Vec<Target> {
-    (9..36).chain(0..9).map(|i| Target::Slot(SlotRef::Main(i))).collect()
+    (9..36)
+        .chain(0..9)
+        .map(|i| Target::Slot(SlotRef::Main(i)))
+        .collect()
 }
 
 /// The stack a target shows.
@@ -112,11 +141,16 @@ pub(super) fn stack_at<'a>(view: &'a View, state: &State, target: &Target) -> Op
         Target::Slot(SlotRef::Armor(i)) => inv.armor.get(usize::from(i))?.as_ref(),
         Target::Slot(SlotRef::Offhand) => inv.offhand.as_ref(),
         Target::Slot(SlotRef::Cursor) => inv.cursor.as_ref(),
-        Target::Slot(SlotRef::Container(i)) => inv.container.as_ref()?.slots.get(usize::from(i))?.as_ref(),
+        Target::Slot(SlotRef::Container(i)) => {
+            inv.container.as_ref()?.slots.get(usize::from(i))?.as_ref()
+        }
         Target::Slot(SlotRef::Ui(i)) => inv.ui.get(usize::from(i))?.as_ref(),
         Target::Crafted => inv.crafted.as_ref(),
         Target::Cut(_) => state.pick.and_then(|i| inv.picks.get(i)).map(|p| &p.1),
-        Target::Loom(_) => state.pick.and_then(|i| inv.patterns.get(i)).and_then(|p| p.1.as_ref()),
+        Target::Loom(_) => state
+            .pick
+            .and_then(|i| inv.patterns.get(i))
+            .and_then(|p| p.1.as_ref()),
         Target::Creative(id) => view.entries.iter().find(|e| e.id == id).map(|e| &e.stack),
         Target::Destroy | Target::None => None,
     }
@@ -131,28 +165,64 @@ pub(super) fn fill(kit: &mut Kit, base: &mut Base, targets: &[Target]) {
             slot.drag_target = false;
         }
     }
-    let Some(cursor) = &view.inventory.cursor else { return };
+    let Some(cursor) = &view.inventory.cursor else {
+        return;
+    };
     base.carried = Some(kit.keyed(cursor, CARRIED));
     base.distinct_keys = true;
     base.quick = kit.state.pointer.quick();
     base.recalculate_quick_craft();
-    let (Some(quick), Some(carried)) = (base.quick.clone(), base.carried().cloned()) else { return };
+    let (Some(quick), Some(carried)) = (base.quick.clone(), base.carried().cloned()) else {
+        return;
+    };
     for &i in &quick.slots {
         let slot = &base.slots[i];
         let carry = slot.item.as_ref().map_or(0, |s| s.count);
-        let n = (quick_craft_count(quick.slots.len(), quick.kind, &carried) + carry).min(carried.max_stack_size().min(slot.max_stack));
-        kit.keys.insert(QUICK + i as i32, Stack { count: n.max(0) as u16, ..cursor.clone() });
+        let n = (quick_craft_count(quick.slots.len(), quick.kind, &carried) + carry)
+            .min(carried.max_stack_size().min(slot.max_stack));
+        kit.keys.insert(
+            QUICK + i as i32,
+            Stack {
+                count: n.max(0) as u16,
+                ..cursor.clone()
+            },
+        );
     }
-    kit.keys.insert(QUICK - 1, Stack { count: quick.remainder.max(0) as u16, ..cursor.clone() });
+    kit.keys.insert(
+        QUICK - 1,
+        Stack {
+            count: quick.remainder.max(0) as u16,
+            ..cursor.clone()
+        },
+    );
 }
 
 impl JavaGui {
     /// The open screen for `view` as `state` leaves it.
-    pub(in crate::ui) fn build(&self, items: Option<&JavaItems>, bedrock: &acacia_ui::lang::Lang, view: &View, state: &State) -> Built {
+    pub(in crate::ui) fn build(
+        &self,
+        items: Option<&JavaItems>,
+        bedrock: &acacia_ui::lang::Lang,
+        view: &View,
+        state: &State,
+    ) -> Built {
         self.with_env(|env| {
-            let mut kit = Kit { env, items, lang: &self.lang, bedrock, view, state, keys: HashMap::new(), next: LIST_KEYS };
+            let mut kit = Kit {
+                env,
+                items,
+                lang: &self.lang,
+                bedrock,
+                view,
+                state,
+                keys: HashMap::new(),
+                next: LIST_KEYS,
+            };
             let (open, targets) = choose(&mut kit);
-            Built { open, keys: kit.keys, targets }
+            Built {
+                open,
+                keys: kit.keys,
+                targets,
+            }
         })
     }
 }

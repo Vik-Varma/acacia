@@ -125,10 +125,18 @@ mod tests {
         assert_eq!(repair_units(250, 200, 2), 2);
         assert_eq!(repair_units(250, 62, 8), 1);
         assert_eq!(repair_units(250, 0, 8), 0);
-        assert_eq!(repair_units(3, 2, 8), 0, "a quarter of 3 is 0: no result on BDS");
+        assert_eq!(
+            repair_units(3, 2, 8),
+            0,
+            "a quarter of 3 is 0: no result on BDS"
+        );
         assert_eq!(combined_damage(250, 200, 200), 120);
         assert_eq!(combined_damage(250, 10, 10), 0);
-        assert_eq!(grindstone_damage(250, 200, 200), 138, "200 + 200 - 250 - 12");
+        assert_eq!(
+            grindstone_damage(250, 200, 200),
+            138,
+            "200 + 200 - 250 - 12"
+        );
         assert_eq!(grindstone_damage(250, 100, 10), 0);
     }
 }

@@ -47,7 +47,9 @@ impl LightmapState {
         let mut color = [0.0f32; 3];
         for i in 0..3 {
             let block_color = lerp(0.9 * parabolic, self.block_tint[i], 1.0);
-            let c = self.ambient[i].max(vision[i]) + self.sky_color[i] * sky_brightness + block_color * block_brightness;
+            let c = self.ambient[i].max(vision[i])
+                + self.sky_color[i] * sky_brightness
+                + block_color * block_brightness;
             let c = lerp(self.boss_darkening, c, c * BOSS_DARKENED[i]);
             color[i] = (c - self.darkness).clamp(0.0, 1.0);
         }
@@ -134,16 +136,31 @@ mod tests {
         assert_eq!(t[15 * 16], [255; 4]);
         assert_eq!(t[0], [0, 0, 0, 255]);
         let lamp = t[12];
-        assert!(lamp[0] > lamp[1] && lamp[1] > lamp[2], "block light is warm: {lamp:?}");
+        assert!(
+            lamp[0] > lamp[1] && lamp[1] > lamp[2],
+            "block light is warm: {lamp:?}"
+        );
     }
 
     #[test]
     fn night_vision_and_ambient_lift_the_dark() {
-        let vision = LightmapState { night_vision: 1.0, ..DAY }.table();
+        let vision = LightmapState {
+            night_vision: 1.0,
+            ..DAY
+        }
+        .table();
         assert!(vision[0][0] > 150, "{:?}", vision[0]);
-        let nether = LightmapState { ambient: [0.1; 3], ..DAY }.table();
+        let nether = LightmapState {
+            ambient: [0.1; 3],
+            ..DAY
+        }
+        .table();
         assert!(nether[0][0] > 20);
-        let dark = LightmapState { darkness: 1.0, ..DAY }.table();
+        let dark = LightmapState {
+            darkness: 1.0,
+            ..DAY
+        }
+        .table();
         assert_eq!(dark[15 * 16], [0, 0, 0, 255]);
     }
 
@@ -151,7 +168,10 @@ mod tests {
     fn samples_blend_neighbouring_levels() {
         let t = DAY.table();
         let at = |b: usize, s: usize| t[s * 16 + b].map(|c| f32::from(c) / 255.0);
-        assert_eq!(sample(&t, 7.0, 3.0), [at(7, 3)[0], at(7, 3)[1], at(7, 3)[2]]);
+        assert_eq!(
+            sample(&t, 7.0, 3.0),
+            [at(7, 3)[0], at(7, 3)[1], at(7, 3)[2]]
+        );
         let half = sample(&t, 7.5, 0.0);
         assert!((half[0] - (at(7, 0)[0] + at(8, 0)[0]) / 2.0).abs() < 1e-6);
         assert_eq!(sample(&t, 20.0, -1.0), sample(&t, 15.0, 0.0));

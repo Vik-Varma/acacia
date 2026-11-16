@@ -24,7 +24,9 @@ pub struct Sample<'a> {
     pub data: &'a [u8],
 }
 
-const RATES: [u32; 11] = [4000, 8000, 11000, 11025, 16000, 22050, 24000, 32000, 44100, 48000, 96000];
+const RATES: [u32; 11] = [
+    4000, 8000, 11000, 11025, 16000, 22050, 24000, 32000, 44100, 48000, 96000,
+];
 const CHANNELS: [u16; 4] = [1, 2, 6, 8];
 
 /// Parses an FSB5 bank into its samples, in bank order.
@@ -46,7 +48,9 @@ pub fn parse(bytes: &[u8]) -> Result<Vec<Sample<'_>>, Error> {
     let names_at = base + headers_size;
     let data_at = names_at + names_size;
     if data_at + data_size != bytes.len() {
-        return Err(Error::Malformed("section sizes don't add up to the file size"));
+        return Err(Error::Malformed(
+            "section sizes don't add up to the file size",
+        ));
     }
     let data = &bytes[data_at..];
 
@@ -62,9 +66,15 @@ pub fn parse(bytes: &[u8]) -> Result<Vec<Sample<'_>>, Error> {
     for (i, e) in entries.iter().enumerate() {
         let end = entries.get(i + 1).map_or(data_size, |n| n.data_offset);
         if end <= e.data_offset || end > data_size {
-            return Err(Error::Malformed("sample data offsets out of order or out of range"));
+            return Err(Error::Malformed(
+                "sample data offsets out of order or out of range",
+            ));
         }
-        let name = if names_size == 0 { None } else { Some(name_at(bytes, names_at, data_at, i)?) };
+        let name = if names_size == 0 {
+            None
+        } else {
+            Some(name_at(bytes, names_at, data_at, i)?)
+        };
         samples.push(Sample {
             codec,
             flags,
@@ -98,12 +108,18 @@ fn sample_header(bytes: &[u8], mut offset: usize, end: usize) -> Result<(Entry, 
         num_samples: (mode >> 34) as u32 & 0x3fff_ffff,
         data_offset: (((mode >> 7) & 0x07ff_ffff) << 5) as usize,
         channels: CHANNELS[(mode >> 5) as usize & 0x03],
-        sample_rate: *RATES.get((mode >> 1) as usize & 0x0f).ok_or(Error::Malformed("sample rate code"))?,
+        sample_rate: *RATES
+            .get((mode >> 1) as usize & 0x0f)
+            .ok_or(Error::Malformed("sample rate code"))?,
         looping: None,
     };
     let mut more = mode & 1 != 0;
     while more {
-        let flag = if offset + 4 <= end { u32_at(bytes, offset)? } else { return Err(Error::Truncated) };
+        let flag = if offset + 4 <= end {
+            u32_at(bytes, offset)?
+        } else {
+            return Err(Error::Truncated);
+        };
         let kind = (flag >> 25) & 0x7f;
         let size = ((flag >> 1) & 0x00ff_ffff) as usize;
         more = flag & 1 != 0;
@@ -117,7 +133,11 @@ fn sample_header(bytes: &[u8], mut offset: usize, end: usize) -> Result<(Entry, 
             // vgmstream's "unwanted loop" heuristic is playback policy, not parsing; callers decide.
             0x03 => {
                 let start = u32_at(body, 0)?;
-                let end = if size > 4 { u32_at(body, 4)? + 1 } else { entry.num_samples };
+                let end = if size > 4 {
+                    u32_at(body, 4)? + 1
+                } else {
+                    entry.num_samples
+                };
                 entry.looping = Some((start, end));
             }
             _ => {}
@@ -133,7 +153,9 @@ fn sample_header(bytes: &[u8], mut offset: usize, end: usize) -> Result<(Entry, 
 /// Sample `i`'s name: the name table starts with one u32 offset per sample, relative to the table.
 fn name_at(bytes: &[u8], names_at: usize, data_at: usize, i: usize) -> Result<&str, Error> {
     let start = names_at + u32_at(bytes, names_at + 4 * i)? as usize;
-    let table = bytes.get(start..data_at).ok_or(Error::Malformed("name offset out of range"))?;
+    let table = bytes
+        .get(start..data_at)
+        .ok_or(Error::Malformed("name offset out of range"))?;
     let len = table.iter().position(|&b| b == 0).unwrap_or(table.len());
     std::str::from_utf8(&table[..len]).map_err(|_| Error::Malformed("sample name isn't UTF-8"))
 }

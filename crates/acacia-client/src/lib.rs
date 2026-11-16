@@ -43,27 +43,27 @@ mod transport;
 mod trickle;
 
 pub use acacia_auth as auth;
+pub use acacia_nethernet::lan::ServerData as LanServerData;
 pub use acacia_session::blob_store::{BlobStore, MemoryBlobStore};
 pub use acacia_session::pack_store::{EveryPack, MemoryPackStore, PackStore};
-pub use acacia_session::{proto, DisconnectReason, Reason, Violation};
+pub use acacia_session::{DisconnectReason, Reason, Violation, proto};
 pub use blob_cache::DiskBlobStore;
-pub use pack_cache::DiskPackStore;
 pub use client::{ClientBuilder, Login, TransportKind};
-pub use handle::Client;
-pub use sender::ClientSender;
-pub use acacia_nethernet::lan::ServerData as LanServerData;
 pub use filter::PacketFilter;
 pub use friend::FriendJoin;
 #[cfg(feature = "online")]
-pub use friend::{friend_builder, join_friend_world, FriendJoinError};
+pub use friend::{FriendJoinError, friend_builder, join_friend_world};
+pub use handle::Client;
+pub use lan::{LanServer, discover_lan};
+pub use pack_cache::DiskPackStore;
 pub use packet_trace::PacketTraceSummary;
-pub use lan::{discover_lan, LanServer};
-pub use ping::{ping, ServerStatus};
+pub use ping::{ServerStatus, ping};
 #[cfg(feature = "online")]
 pub use qos::measure_ping_regions;
-#[cfg(feature = "online")]
-pub use realm::{realm_builder, realm_route, RealmJoinError, RealmRoute};
 pub use raw::RawLink;
+#[cfg(feature = "online")]
+pub use realm::{RealmJoinError, RealmRoute, realm_builder, realm_route};
+pub use sender::ClientSender;
 pub use signaling::{SignalingProtocol, SignalingTarget};
 pub use socks5::{ProxyParseError, Socks5Proxy};
 
@@ -88,7 +88,9 @@ pub enum ConnectError {
     Timeout,
     #[error("NetherNet: {0}")]
     NetherNet(#[from] acacia_nethernet::Error),
-    #[error("NetherNet needs the account's MultiplayerToken for its identity assertion; these credentials have none")]
+    #[error(
+        "NetherNet needs the account's MultiplayerToken for its identity assertion; these credentials have none"
+    )]
     NetherNetNeedsOnline,
     #[error("the server does not answer NetherNet signaling (GET /v1/join)")]
     NetherNetUnsupported,

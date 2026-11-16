@@ -81,7 +81,14 @@ impl BlockRegistry {
             .iter()
             .position(|s| s.name == "minecraft:air")
             .expect("palette has minecraft:air") as u32;
-        BlockRegistry { states, air, by_hash: OnceLock::new(), by_name: OnceLock::new(), from_vanilla: OnceLock::new(), ids_are_neutral: false }
+        BlockRegistry {
+            states,
+            air,
+            by_hash: OnceLock::new(),
+            by_name: OnceLock::new(),
+            from_vanilla: OnceLock::new(),
+            ids_are_neutral: false,
+        }
     }
 
     /// The runtime id of an edition-neutral state. `None` past the neutral range.
@@ -91,7 +98,11 @@ impl BlockRegistry {
         }
         let vanilla = *neutral::TABLES.from_neutral.get(state.id() as usize)?;
         let from_vanilla = self.from_vanilla.get_or_init(|| {
-            (0u32..).zip(&self.states).filter(|(_, s)| s.neutral.is_some()).map(|(id, _)| id).collect()
+            (0u32..)
+                .zip(&self.states)
+                .filter(|(_, s)| s.neutral.is_some())
+                .map(|(id, _)| id)
+                .collect()
         });
         from_vanilla.get(vanilla as usize).copied()
     }
@@ -101,7 +112,10 @@ impl BlockRegistry {
         let index = self.by_name.get_or_init(|| {
             let mut index: FxHashMap<&'static str, Range<u32>> = FxHashMap::default();
             for (id, state) in (0u32..).zip(&self.states) {
-                index.entry(state.name).and_modify(|ids| ids.end = id + 1).or_insert(id..id + 1);
+                index
+                    .entry(state.name)
+                    .and_modify(|ids| ids.end = id + 1)
+                    .or_insert(id..id + 1);
             }
             index
         });
@@ -111,7 +125,11 @@ impl BlockRegistry {
     /// Runtime id for a hashed network id (see [`BlockState::network_hash`]).
     pub fn runtime_id_from_hash(&self, hash: u32) -> Option<u32> {
         let map = self.by_hash.get_or_init(|| {
-            let hashed = self.states.iter().enumerate().filter(|(_, s)| s.network_hash != 0);
+            let hashed = self
+                .states
+                .iter()
+                .enumerate()
+                .filter(|(_, s)| s.network_hash != 0);
             hashed.map(|(i, s)| (s.network_hash, i as u32)).collect()
         });
         map.get(&hash).copied()
@@ -146,7 +164,9 @@ impl BlockRegistry {
 
     fn new_blocks<'a>(&self, blocks: &'a [CustomBlock]) -> impl Iterator<Item = &'a CustomBlock> {
         let known: FxHashSet<&str> = self.states.iter().map(|s| s.name).collect();
-        blocks.iter().filter(move |b| !known.contains(b.name.as_str()))
+        blocks
+            .iter()
+            .filter(move |b| !known.contains(b.name.as_str()))
     }
 
     pub fn get(&self, runtime_id: u32) -> Option<&BlockState> {
@@ -170,7 +190,9 @@ impl BlockRegistry {
         let mut want: Vec<&str> = properties.split(',').filter(|s| !s.is_empty()).collect();
         want.sort_unstable();
         let want = want.join(",");
-        self.states_of(name).find(|(_, s)| s.properties == want).map(|(id, _)| id)
+        self.states_of(name)
+            .find(|(_, s)| s.properties == want)
+            .map(|(id, _)| id)
     }
 
     /// All `(runtime_id, state)` of one block.

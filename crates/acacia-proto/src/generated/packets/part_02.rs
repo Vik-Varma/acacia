@@ -662,6 +662,7 @@ pub struct Animate {
     pub data: f32,
     pub has_swing_source: bool,
     pub swing_source: Option<String>,
+    pub hand: AnimateHand,
 }
 impl Animate {
     pub fn read(r: &mut &[u8]) -> Result<Self> {
@@ -683,12 +684,15 @@ impl Animate {
             })
         })()
         .map_err(|e| e.at("Animate.swing_source"))?;
+        let f_hand =
+            (|| -> Result<_> { Ok(AnimateHand::read(r)?) })().map_err(|e| e.at("Animate.hand"))?;
         Ok(Self {
             action_id: f_action_id,
             runtime_entity_id: f_runtime_entity_id,
             data: f_data,
             has_swing_source: f_has_swing_source,
             swing_source: f_swing_source,
+            hand: f_hand,
         })
     }
     pub fn write(&self, w: &mut BytesMut) {
@@ -703,6 +707,7 @@ impl Animate {
                 write_slice(w, b);
             }
         }
+        self.hand.write(w);
     }
 }
 impl crate::Packet for Animate {
@@ -754,6 +759,42 @@ impl AnimateActionId {
         if let Self::Unknown(value) = v {
             crate::strict::note(crate::strict::Leniency::UnknownEnum {
                 ty: "AnimateActionId",
+                value,
+            });
+        }
+        Ok(v)
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        write_u8(w, self.to_raw() as u8)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AnimateHand {
+    MainHand,
+    OffHand,
+    Unknown(i64),
+}
+impl AnimateHand {
+    pub fn from_raw(v: i64) -> Self {
+        match v {
+            0 => Self::MainHand,
+            1 => Self::OffHand,
+            v => Self::Unknown(v),
+        }
+    }
+    pub fn to_raw(self) -> i64 {
+        match self {
+            Self::MainHand => 0,
+            Self::OffHand => 1,
+            Self::Unknown(v) => v,
+        }
+    }
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let v = Self::from_raw(read_u8(r)? as i64);
+        if let Self::Unknown(value) = v {
+            crate::strict::note(crate::strict::Leniency::UnknownEnum {
+                ty: "AnimateHand",
                 value,
             });
         }
@@ -1631,6 +1672,7 @@ pub struct LevelChunk {
     pub cache_enabled: bool,
     pub blobs: Vec<u64>,
     pub payload: Bytes,
+    pub client_biome_update: bool,
 }
 impl LevelChunk {
     pub fn read(r: &mut &[u8]) -> Result<Self> {
@@ -1670,6 +1712,8 @@ impl LevelChunk {
             })
         })()
         .map_err(|e| e.at("LevelChunk.payload"))?;
+        let f_client_biome_update = (|| -> Result<_> { Ok(read_bool(r)?) })()
+            .map_err(|e| e.at("LevelChunk.client_biome_update"))?;
         Ok(Self {
             x: f_x,
             z: f_z,
@@ -1679,6 +1723,7 @@ impl LevelChunk {
             cache_enabled: f_cache_enabled,
             blobs: f_blobs,
             payload: f_payload,
+            client_biome_update: f_client_biome_update,
         })
     }
     pub fn write(&self, w: &mut BytesMut) {
@@ -1700,6 +1745,7 @@ impl LevelChunk {
         }
         write_varint(w, self.payload.len() as u32);
         write_slice(w, &self.payload[..]);
+        write_bool(w, self.client_biome_update);
     }
 }
 impl crate::Packet for LevelChunk {

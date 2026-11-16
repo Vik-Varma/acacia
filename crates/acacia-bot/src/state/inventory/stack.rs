@@ -1,6 +1,7 @@
 use acacia_client::proto::nbt::{Nbt, Value};
 use acacia_client::proto::types::{
-    ItemLegacy, ItemLegacyExtra, ItemStackResponsesItemContainersItemSlotsItem as ResponseSlot, ItemV4, ItemV4Extra,
+    ItemLegacy, ItemLegacyExtra, ItemStackResponsesItemContainersItemSlotsItem as ResponseSlot,
+    ItemV4, ItemV4Extra,
 };
 
 /// An item in a slot. `network_id` 0 is air; resolve it with [`crate::state::ItemRegistry`].
@@ -145,8 +146,14 @@ impl From<&ItemLegacy> for ItemStack {
             return ItemStack::default();
         }
         let nbt = match &item.extra {
-            ItemLegacyExtra::Default(extra) => extra.as_ref().and_then(|e| e.nbt.as_ref()).map(|n| n.nbt.clone()),
-            ItemLegacyExtra::ShieldItemID(extra) => extra.as_ref().and_then(|e| e.nbt.as_ref()).map(|n| n.nbt.clone()),
+            ItemLegacyExtra::Default(extra) => extra
+                .as_ref()
+                .and_then(|e| e.nbt.as_ref())
+                .map(|n| n.nbt.clone()),
+            ItemLegacyExtra::ShieldItemID(extra) => extra
+                .as_ref()
+                .and_then(|e| e.nbt.as_ref())
+                .map(|n| n.nbt.clone()),
         };
         let stack = ItemStack {
             network_id: item.network_id,

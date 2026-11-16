@@ -16,12 +16,20 @@ const MAX_TICKS: u32 = 600;
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let [host, port] = &args[..2] else { return Err("usage: java_elytra <host> <port> [name]".into()) };
+    let [host, port] = &args[..2] else {
+        return Err("usage: java_elytra <host> <port> [name]".into());
+    };
     let name = args.get(2).map_or("Glider", String::as_str);
-    let mut bot = Bot::connect_java_offline(host, port.parse()?, name, BotConfig::default()).await?;
+    let mut bot =
+        Bot::connect_java_offline(host, port.parse()?, name, BotConfig::default()).await?;
     for _ in 0..TELEPORT_TICKS {
         bot.wait_ticks(1).await?;
-        let given = bot.state().inventory.main.iter().any(|s| bot.state().item(s) == Some(Item::Elytra));
+        let given = bot
+            .state()
+            .inventory
+            .main
+            .iter()
+            .any(|s| bot.state().item(s) == Some(Item::Elytra));
         if given && position(&bot)[1] > AIRBORNE_ABOVE {
             break;
         }
@@ -47,11 +55,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     bot.wait_ticks(20).await?;
     let to = position(&bot);
-    println!("landed {to:.2?} flew {:.1}", (to[0] - from[0]).hypot(to[2] - from[2]));
+    println!(
+        "landed {to:.2?} flew {:.1}",
+        (to[0] - from[0]).hypot(to[2] - from[2])
+    );
     bot.disconnect().await;
     Ok(())
 }
 
 fn position(bot: &Bot) -> [f64; 3] {
-    bot.java().map_or([f64::NAN; 3], |j| j.client().movement.player.pos)
+    bot.java()
+        .map_or([f64::NAN; 3], |j| j.client().movement.player.pos)
 }

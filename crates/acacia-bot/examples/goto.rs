@@ -19,18 +19,30 @@ use acacia_world::BlockAccess;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let _ = tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let server = args.first().cloned().unwrap_or_else(|| "127.0.0.1:19140".into());
+    let server = args
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "127.0.0.1:19140".into());
     let name = args.get(1).cloned().unwrap_or_else(|| "Walker".into());
-    let offset: Vec<i32> = args.iter().skip(2).map(|a| a.parse()).collect::<Result<_, _>>()?;
+    let offset: Vec<i32> = args
+        .iter()
+        .skip(2)
+        .map(|a| a.parse())
+        .collect::<Result<_, _>>()?;
     let (dx, dz, dy) = match offset[..] {
         [dx, dz] => (dx, dz, None),
         [dx, dz, dy] => (dx, dz, Some(dy)),
         [] => (10, 0, None),
         _ => return Err("expected <dx> <dz> [dy]".into()),
     };
-    let proxy = std::env::var("BEDROCK_PROXY").ok().map(|p| Socks5Proxy::parse(&p)).transpose()?;
+    let proxy = std::env::var("BEDROCK_PROXY")
+        .ok()
+        .map(|p| Socks5Proxy::parse(&p))
+        .transpose()?;
 
     let mut builder = Client::builder(&server);
     if let Some(p) = &proxy {
@@ -38,18 +50,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     builder = match name.strip_prefix('@') {
         Some(account) => {
-            let config = AuthConfig { proxy: proxy.as_ref().map(Socks5Proxy::to_url), ..AuthConfig::default() };
-            let account = Account::new(Arc::new(AuthClient::new(config)?), Arc::new(FileTokenCache::new(".tokens")?), account);
+            let config = AuthConfig {
+                proxy: proxy.as_ref().map(Socks5Proxy::to_url),
+                ..AuthConfig::default()
+            };
+            let account = Account::new(
+                Arc::new(AuthClient::new(config)?),
+                Arc::new(FileTokenCache::new(".tokens")?),
+                account,
+            );
             let (key, credentials) = account.login_credentials().await?;
             builder.online(credentials, key)
         }
         None => builder.offline(&name),
     };
-    let config = BotConfig { physics: true, trackers: Trackers { entities: true, ..Trackers::default() }, ..BotConfig::default() };
+    let config = BotConfig {
+        physics: true,
+        trackers: Trackers {
+            entities: true,
+            ..Trackers::default()
+        },
+        ..BotConfig::default()
+    };
     let mut bot = Bot::connect(builder, config).await?;
     println!("spawned as {}", bot.name());
 
-    while bot.bedrock().and_then(|b| b.movement()).is_none_or(|m| !m.is_started()) {
+    while bot
+        .bedrock()
+        .and_then(|b| b.movement())
+        .is_none_or(|m| !m.is_started())
+    {
         bot.wait_ticks(1).await?;
     }
     // BEDROCK_TP="x y z": teleport there first (needs operator), so routes start somewhere repeatable.
@@ -58,7 +88,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         bot.wait_ticks(40).await?;
     }
     // BEDROCK_CMDS="effect @s saturation 600 10 true;...": commands to run first (operator).
-    for cmd in std::env::var("BEDROCK_CMDS").unwrap_or_default().split(';').filter(|c| !c.trim().is_empty()) {
+    for cmd in std::env::var("BEDROCK_CMDS")
+        .unwrap_or_default()
+        .split(';')
+        .filter(|c| !c.trim().is_empty())
+    {
         bot.command(&format!("/{}", cmd.trim()));
         bot.wait_ticks(5).await?;
     }
@@ -80,16 +114,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if std::env::var("BEDROCK_PROFILE").is_ok_and(|p| p == "human") {
         opts.search.profile = MovementProfile::Human;
     }
-    opts.seed = std::env::var("BEDROCK_SEED").ok().and_then(|s| s.parse().ok());
+    opts.seed = std::env::var("BEDROCK_SEED")
+        .ok()
+        .and_then(|s| s.parse().ok());
     let mut nav = Navigator::new(goal, opts);
     let mut report = tokio::time::Instant::now();
     let started = report;
     let mut seen = 0;
     let mut track = Vec::new();
     let result = loop {
-        track.extend(bot.bedrock().and_then(|b| b.movement()).and_then(|m| m.position()));
+        track.extend(
+            bot.bedrock()
+                .and_then(|b| b.movement())
+                .and_then(|m| m.position()),
+        );
         let status = nav.tick(&mut bot).await;
-        let corrections = bot.bedrock().and_then(|b| b.movement()).map_or(0, |m| m.corrections);
+        let corrections = bot
+            .bedrock()
+            .and_then(|b| b.movement())
+            .map_or(0, |m| m.corrections);
         if corrections > seen {
             seen = corrections;
             print_surroundings(&bot);
@@ -111,7 +154,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     print_joins(&nav, &track);
     bot.wait_ticks(20).await?;
-    if bot.bedrock().and_then(|b| b.movement()).is_some_and(|m| m.corrections > seen) {
+    if bot
+        .bedrock()
+        .and_then(|b| b.movement())
+        .is_some_and(|m| m.corrections > seen)
+    {
         print_surroundings(&bot);
     }
     bot.disconnect().await;
@@ -122,12 +169,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// `.` air, `#` full cube, `0`-`7` water decay (`F` falling), `~` water in the liquid layer only,
 /// `+` waterlogged block, letters = other blocks.
 fn print_surroundings(bot: &Bot) {
-    let Some(feet) = bot.bedrock().and_then(|b| b.movement()).and_then(|m| m.position()) else { return };
-    let at = Vec3f { x: feet[0], y: feet[1], z: feet[2] };
-    let near: Vec<_> = bot.state().entities.iter().filter(|e| e.distance_sq(&at) < 9.0).map(|e| e.kind.as_str()).collect();
-    println!("CORRECTION at ({:.3}, {:.3}, {:.3}) entities {near:?}", feet[0], feet[1], feet[2]);
-    let Some((w, r)) = bot.bedrock().and_then(|b| b.world()).and_then(|w| Some((w.view()?, w.registry()?))) else { return };
-    let [x, y, z] = [feet[0].floor() as i32, feet[1].floor() as i32, feet[2].floor() as i32];
+    let Some(feet) = bot
+        .bedrock()
+        .and_then(|b| b.movement())
+        .and_then(|m| m.position())
+    else {
+        return;
+    };
+    let at = Vec3f {
+        x: feet[0],
+        y: feet[1],
+        z: feet[2],
+    };
+    let near: Vec<_> = bot
+        .state()
+        .entities
+        .iter()
+        .filter(|e| e.distance_sq(&at) < 9.0)
+        .map(|e| e.kind.as_str())
+        .collect();
+    println!(
+        "CORRECTION at ({:.3}, {:.3}, {:.3}) entities {near:?}",
+        feet[0], feet[1], feet[2]
+    );
+    let Some((w, r)) = bot
+        .bedrock()
+        .and_then(|b| b.world())
+        .and_then(|w| Some((w.view()?, w.registry()?)))
+    else {
+        return;
+    };
+    let [x, y, z] = [
+        feet[0].floor() as i32,
+        feet[1].floor() as i32,
+        feet[2].floor() as i32,
+    ];
     let mut legend: Vec<&str> = Vec::new();
     for dy in (-1..=1).rev() {
         let rows: Vec<String> = (-2..=2)
@@ -135,12 +211,18 @@ fn print_surroundings(bot: &Bot) {
                 (-2..=2)
                     .map(|dx| {
                         let (bx, by, bz) = (x + dx, y + dy, z + dz);
-                        let Some(s) = r.get(w.block(bx, by, bz)) else { return '?' };
+                        let Some(s) = r.get(w.block(bx, by, bz)) else {
+                            return '?';
+                        };
                         let waterlogged = r.get(w.liquid(bx, by, bz)).is_some_and(|l| l.is_water());
                         if s.is_air() {
                             if waterlogged { '~' } else { '.' }
                         } else if s.is_water() {
-                            if s.liquid_depth >= 8 { 'F' } else { char::from(b'0' + s.liquid_depth) }
+                            if s.liquid_depth >= 8 {
+                                'F'
+                            } else {
+                                char::from(b'0' + s.liquid_depth)
+                            }
                         } else if waterlogged {
                             '+'
                         } else if s.is_full_cube() {
@@ -159,27 +241,55 @@ fn print_surroundings(bot: &Bot) {
         println!("  dy {dy:+}: {}", rows.join(" | "));
     }
     if !legend.is_empty() {
-        println!("  legend: {}", legend.iter().enumerate().map(|(i, n)| format!("{}={n}", char::from(b'a' + i as u8))).collect::<Vec<_>>().join(" "));
+        println!(
+            "  legend: {}",
+            legend
+                .iter()
+                .enumerate()
+                .map(|(i, n)| format!("{}={n}", char::from(b'a' + i as u8)))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
     }
 }
 
 /// Ticks, searches and each segment join with the slowest horizontal speed (blocks/tick) within 10 ticks of passing it.
 fn print_joins(nav: &Navigator, track: &[[f32; 3]]) {
     let p = nav.pilot();
-    println!("ticks {} | searches {} | replans {} | diverged {} | joins {}", track.len(), p.searches(), p.replans(), p.divergences(), p.joins().len());
+    println!(
+        "ticks {} | searches {} | replans {} | diverged {} | joins {}",
+        track.len(),
+        p.searches(),
+        p.replans(),
+        p.divergences(),
+        p.joins().len()
+    );
     let speed = |t: usize| (track[t + 1][0] - track[t][0]).hypot(track[t + 1][2] - track[t][2]);
     for j in p.joins() {
         let d = |q: &[f32; 3]| (q[0] - j[0] as f32 - 0.5).hypot(q[2] - j[2] as f32 - 0.5);
-        let Some(at) = (0..track.len().saturating_sub(1)).min_by(|&a, &b| d(&track[a]).total_cmp(&d(&track[b]))) else { continue };
-        let slowest = (at.saturating_sub(10)..(at + 10).min(track.len() - 1)).map(speed).fold(f32::INFINITY, f32::min);
+        let Some(at) = (0..track.len().saturating_sub(1))
+            .min_by(|&a, &b| d(&track[a]).total_cmp(&d(&track[b])))
+        else {
+            continue;
+        };
+        let slowest = (at.saturating_sub(10)..(at + 10).min(track.len() - 1))
+            .map(speed)
+            .fold(f32::INFINITY, f32::min);
         println!("JOIN {j:?} passed at tick {at}: slowest {slowest:.3} b/t");
     }
 }
 
 fn print_progress(bot: &Bot, nav: &Navigator, status: NavStatus) {
-    let m = bot.bedrock().and_then(|b| b.movement()).expect("physics enabled");
-    let pos = m.position().map_or("-".into(), |p| format!("({:.2}, {:.2}, {:.2})", p[0], p[1], p[2]));
-    let next = nav.follower().and_then(|f| f.ahead().first().map(|n| (n.pos, n.kind)));
+    let m = bot
+        .bedrock()
+        .and_then(|b| b.movement())
+        .expect("physics enabled");
+    let pos = m.position().map_or("-".into(), |p| {
+        format!("({:.2}, {:.2}, {:.2})", p[0], p[1], p[2])
+    });
+    let next = nav
+        .follower()
+        .and_then(|f| f.ahead().first().map(|n| (n.pos, n.kind)));
     println!(
         "{status:?} pos {pos} | remaining {}{} next {next:?} | replans {} | corrections {} teleports {}",
         nav.remaining(),

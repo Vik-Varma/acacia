@@ -72,7 +72,19 @@ struct Painter<'a> {
 
 /// `draws` on a `screen`-sized GUI (GUI pixels) at `scale` window pixels per GUI pixel.
 pub fn paint(draws: &[GuiDraw], screen: [i32; 2], scale: f32, src: &mut dyn Source) -> Painted {
-    let mut p = Painter { src, scale, screen: Rect { x: 0, y: 0, w: screen[0], h: screen[1] }, poses: vec![IDENTITY], scissors: Vec::new(), layers: Layers::default() };
+    let mut p = Painter {
+        src,
+        scale,
+        screen: Rect {
+            x: 0,
+            y: 0,
+            w: screen[0],
+            h: screen[1],
+        },
+        poses: vec![IDENTITY],
+        scissors: Vec::new(),
+        layers: Layers::default(),
+    };
     p.draws(draws);
     let (quads, blur_at) = p.layers.flatten();
     Painted { quads, blur_at }
@@ -103,7 +115,8 @@ impl Painter<'_> {
     fn push_scissor(&mut self, x0: i32, y0: i32, x1: i32, y1: i32) {
         let r = Rect::corners(x0, y0, x1, y1).axis_aligned(&self.pose());
         let last = self.scissor().unwrap_or(self.screen);
-        self.scissors.push(r.intersection(last).unwrap_or(Rect::EMPTY));
+        self.scissors
+            .push(r.intersection(last).unwrap_or(Rect::EMPTY));
     }
 
     fn draws(&mut self, draws: &[GuiDraw]) {
@@ -132,8 +145,23 @@ impl Painter<'_> {
             }
             GuiDraw::Stratum => self.layers.next_stratum(),
             GuiDraw::Blur => self.layers.blur(),
-            GuiDraw::Sprite { sprite, x, y, w, h, region, color, blend } => {
-                let Some((s, scaling)) = self.src.sprite(sprite).or_else(|| self.src.sprite(assets::MISSING)) else { return };
+            GuiDraw::Sprite {
+                sprite,
+                x,
+                y,
+                w,
+                h,
+                region,
+                color,
+                blend,
+            } => {
+                let Some((s, scaling)) = self
+                    .src
+                    .sprite(sprite)
+                    .or_else(|| self.src.sprite(assets::MISSING))
+                else {
+                    return;
+                };
                 let mut prims = Vec::new();
                 match region {
                     Some([sw, sh, u, v]) if scaling != Scaling::Stretch => {
@@ -143,26 +171,83 @@ impl Painter<'_> {
                         self.scissors.pop();
                         return;
                     }
-                    Some([sw, sh, u, v]) => blit::region([*sw, *sh], [*u, *v], *x, *y, *w, *h, &mut prims),
+                    Some([sw, sh, u, v]) => {
+                        blit::region([*sw, *sh], [*u, *v], *x, *y, *w, *h, &mut prims)
+                    }
                     None => blit::sprite(scaling, *x, *y, *w, *h, &mut prims),
                 }
                 self.prims(s, &prims, *color, quad_blend(*blend));
             }
-            GuiDraw::AtlasSprite { sprite, x, y, w, h, color } => {
-                let Some(s) = self.src.block_sprite(sprite) else { return };
+            GuiDraw::AtlasSprite {
+                sprite,
+                x,
+                y,
+                w,
+                h,
+                color,
+            } => {
+                let Some(s) = self.src.block_sprite(sprite) else {
+                    return;
+                };
                 let mut prims = Vec::new();
                 blit::sprite(Scaling::Stretch, *x, *y, *w, *h, &mut prims);
                 self.prims(s, &prims, *color, QuadBlend::Alpha);
             }
-            GuiDraw::Blit { texture, blend, x, y, w, h, uv, src, tex, color } => {
-                let Some(s) = self.src.texture(texture) else { return };
+            GuiDraw::Blit {
+                texture,
+                blend,
+                x,
+                y,
+                w,
+                h,
+                uv,
+                src,
+                tex,
+                color,
+            } => {
+                let Some(s) = self.src.texture(texture) else {
+                    return;
+                };
                 let (tw, th) = (tex[0] as f32, tex[1] as f32);
-                let uv = [uv[0] / tw, (uv[0] + src[0] as f32) / tw, uv[1] / th, (uv[1] + src[1] as f32) / th];
-                self.prims(s, &[Prim { rect: [*x, *y, x + w, y + h], uv, tile: None }], *color, quad_blend(*blend));
+                let uv = [
+                    uv[0] / tw,
+                    (uv[0] + src[0] as f32) / tw,
+                    uv[1] / th,
+                    (uv[1] + src[1] as f32) / th,
+                ];
+                self.prims(
+                    s,
+                    &[Prim {
+                        rect: [*x, *y, x + w, y + h],
+                        uv,
+                        tile: None,
+                    }],
+                    *color,
+                    quad_blend(*blend),
+                );
             }
-            GuiDraw::Fill { x0, y0, x1, y1, color } => self.fill([*x0, *y0, *x1, *y1], *color, *color, QuadBlend::Alpha),
-            GuiDraw::Gradient { x0, y0, x1, y1, top, bottom } => self.fill([*x0, *y0, *x1, *y1], *top, *bottom, QuadBlend::Alpha),
-            GuiDraw::Highlight { x0, y0, x1, y1, invert } => {
+            GuiDraw::Fill {
+                x0,
+                y0,
+                x1,
+                y1,
+                color,
+            } => self.fill([*x0, *y0, *x1, *y1], *color, *color, QuadBlend::Alpha),
+            GuiDraw::Gradient {
+                x0,
+                y0,
+                x1,
+                y1,
+                top,
+                bottom,
+            } => self.fill([*x0, *y0, *x1, *y1], *top, *bottom, QuadBlend::Alpha),
+            GuiDraw::Highlight {
+                x0,
+                y0,
+                x1,
+                y1,
+                invert,
+            } => {
                 let rect = [*x0, *y0, *x1, *y1];
                 if *invert {
                     self.fill(rect, 0xFFFF_FFFF, 0xFFFF_FFFF, QuadBlend::Invert);
@@ -171,18 +256,42 @@ impl Painter<'_> {
             }
             // GuiGraphicsExtractor.text and the text collectors add nothing without alpha.
             GuiDraw::Text { color, .. } if color >> 24 == 0 => {}
-            GuiDraw::Text { text, x, y, color, shadow } => {
+            GuiDraw::Text {
+                text,
+                x,
+                y,
+                color,
+                shadow,
+            } => {
                 let glyphs = self.src.text(text, *x, *y, *color, *shadow);
-                let Some([l, t, r, b]) = glyphs.bounds.filter(|[l, t, r, b]| l < r && t < b) else { return };
+                let Some([l, t, r, b]) = glyphs.bounds.filter(|[l, t, r, b]| l < r && t < b) else {
+                    return;
+                };
                 let (pose, scissor) = (self.pose(), self.scissor());
-                let bounds = Rect::corners(l.floor() as i32, t.floor() as i32, r.ceil() as i32, b.ceil() as i32).bounds(&pose, scissor);
+                let bounds = Rect::corners(
+                    l.floor() as i32,
+                    t.floor() as i32,
+                    r.ceil() as i32,
+                    b.ceil() as i32,
+                )
+                .bounds(&pose, scissor);
                 if self.layers.place(bounds) {
-                    let quads: Vec<Quad> = glyphs.quads.iter().filter_map(|q| self.place_quad(q)).collect();
+                    let quads: Vec<Quad> = glyphs
+                        .quads
+                        .iter()
+                        .filter_map(|q| self.place_quad(q))
+                        .collect();
                     self.layers.glyphs().extend(quads);
                 }
             }
             GuiDraw::Item { key, x, y, seed } => {
-                let bounds = Rect { x: *x, y: *y, w: 16, h: 16 }.bounds(&self.pose(), self.scissor());
+                let bounds = Rect {
+                    x: *x,
+                    y: *y,
+                    w: 16,
+                    h: 16,
+                }
+                .bounds(&self.pose(), self.scissor());
                 if self.layers.place(bounds) {
                     let icon = self.src.item(*key, *x, *y, *seed);
                     let quads: Vec<Quad> = icon.iter().filter_map(|q| self.place_quad(q)).collect();
@@ -193,7 +302,15 @@ impl Painter<'_> {
                 let draws = self.src.decorations(*key, *x, *y, count.as_deref());
                 self.draws(&draws);
             }
-            GuiDraw::Scrolling { text, center_x, x0, x1, y0, y1, color } => self.scrolling(text, *center_x, [*x0, *y0, *x1, *y1], *color),
+            GuiDraw::Scrolling {
+                text,
+                center_x,
+                x0,
+                x1,
+                y0,
+                y1,
+                color,
+            } => self.scrolling(text, *center_x, [*x0, *y0, *x1, *y1], *color),
             GuiDraw::Picture(p) => self.picture(p),
         }
     }
@@ -208,33 +325,66 @@ impl Painter<'_> {
             let max = f64::from(width - room);
             let time = self.src.millis() as f64 / 1000.0;
             let period = (max * 0.5).max(3.0);
-            let alpha = (std::f64::consts::FRAC_PI_2 * (std::f64::consts::TAU * time / period).cos()).sin() / 2.0 + 0.5;
+            let alpha =
+                (std::f64::consts::FRAC_PI_2 * (std::f64::consts::TAU * time / period).cos()).sin()
+                    / 2.0
+                    + 0.5;
             let pos = alpha * max;
             self.push_scissor(x0, y0, x1, y1);
-            self.draw(&GuiDraw::Text { text: text.clone(), x: x0 - pos as i32, y: top, color, shadow: true });
+            self.draw(&GuiDraw::Text {
+                text: text.clone(),
+                x: x0 - pos as i32,
+                y: top,
+                color,
+                shadow: true,
+            });
             self.scissors.pop();
         } else {
             let (lo, hi) = (x0 + width / 2, x1 - width / 2);
-            let x = if center_x < lo { lo } else if center_x > hi { hi } else { center_x };
-            self.draw(&GuiDraw::Text { text: text.clone(), x: x - width / 2, y: top, color, shadow: true });
+            let x = if center_x < lo {
+                lo
+            } else if center_x > hi {
+                hi
+            } else {
+                center_x
+            };
+            self.draw(&GuiDraw::Text {
+                text: text.clone(),
+                x: x - width / 2,
+                y: top,
+                color,
+                shadow: true,
+            });
         }
     }
 
     /// Blits of `sprite`, each its own element.
     fn prims(&mut self, sprite: Sprite, prims: &[Prim], color: u32, blend: QuadBlend) {
         let (pose, scissor) = (self.pose(), self.scissor());
-        let texel = |u: f32, v: f32| [sprite.x as f32 + u * sprite.width as f32, sprite.y as f32 + v * sprite.height as f32];
+        let texel = |u: f32, v: f32| {
+            [
+                sprite.x as f32 + u * sprite.width as f32,
+                sprite.y as f32 + v * sprite.height as f32,
+            ]
+        };
         let ([x0, y0], [x1, y1]) = (texel(0.0, 0.0), texel(1.0, 1.0));
         for p in prims {
             let repeats = p.uv.iter().any(|&t| !(0.0..=1.0).contains(&t));
             let wrap = repeats.then_some([x0, y0, x1, y1]);
             let [x0, y0, x1, y1] = p.rect;
-            if !self.layers.place(Rect::corners(x0, y0, x1, y1).bounds(&pose, scissor)) {
+            if !self
+                .layers
+                .place(Rect::corners(x0, y0, x1, y1).bounds(&pose, scissor))
+            {
                 continue;
             }
             for (rect, [u0, u1, v0, v1]) in blit::tiles(p) {
                 let ([ul, vt], [ur, vb]) = (texel(u0, v0), texel(u1, v1));
-                let q = Quad { blend, wrap, ..Quad::plain(rect.map(|v| v as f32), [ul, vt, ur, vb], argb(color)) };
+                let q = Quad {
+                    blend,
+                    wrap,
+                    ..Quad::plain(rect.map(|v| v as f32), [ul, vt, ur, vb], argb(color))
+                };
                 if let Some(q) = self.place_quad(&q) {
                     self.layers.blits().push(q);
                 }
@@ -243,12 +393,19 @@ impl Painter<'_> {
     }
 
     fn fill(&mut self, [x0, y0, x1, y1]: [i32; 4], top: u32, bottom: u32, blend: QuadBlend) {
-        if !self.layers.place(Rect::corners(x0, y0, x1, y1).bounds(&self.pose(), self.scissor())) {
+        if !self
+            .layers
+            .place(Rect::corners(x0, y0, x1, y1).bounds(&self.pose(), self.scissor()))
+        {
             return;
         }
         let white = self.src.white();
         let (u, v) = (white.x as f32 + 0.5, white.y as f32 + 0.5);
-        let q = Quad { bottom: argb(bottom), blend, ..Quad::plain([x0, y0, x1, y1].map(|v| v as f32), [u, v, u, v], argb(top)) };
+        let q = Quad {
+            bottom: argb(bottom),
+            blend,
+            ..Quad::plain([x0, y0, x1, y1].map(|v| v as f32), [u, v, u, v], argb(top))
+        };
         if let Some(q) = self.place_quad(&q) {
             self.layers.blits().push(q);
         }
@@ -267,9 +424,17 @@ impl Painter<'_> {
             std::mem::swap(&mut vt, &mut vb);
         }
         let rect = [x0.min(x1), y0.min(y1), x0.max(x1), y0.max(y1)];
-        let mut out = Quad { rect, uv: [ul, vt, ur, vb], skew: q.skew.map(|s| s * pose[0]), ..*q };
+        let mut out = Quad {
+            rect,
+            uv: [ul, vt, ur, vb],
+            skew: q.skew.map(|s| s * pose[0]),
+            ..*q
+        };
         if let Some(s) = self.scissor() {
-            out = cut(out, [s.x as f32, s.y as f32, s.right() as f32, s.bottom() as f32])?;
+            out = cut(
+                out,
+                [s.x as f32, s.y as f32, s.right() as f32, s.bottom() as f32],
+            )?;
         }
         out.rect = out.rect.map(|v| v * self.scale);
         out.skew = out.skew.map(|v| v * self.scale);
@@ -280,17 +445,43 @@ impl Painter<'_> {
 /// `q` cut to `clip`, its UVs and gradient cut in proportion.
 fn cut(q: Quad, clip: [f32; 4]) -> Option<Quad> {
     let [l, t, r, b] = q.rect;
-    let (nl, nt, nr, nb) = (l.max(clip[0]), t.max(clip[1]), r.min(clip[2]), b.min(clip[3]));
+    let (nl, nt, nr, nb) = (
+        l.max(clip[0]),
+        t.max(clip[1]),
+        r.min(clip[2]),
+        b.min(clip[3]),
+    );
     if nl >= nr || nt >= nb {
         return None;
     }
-    let frac = |from: f32, to: f32, at: f32| if to == from { 0.0 } else { (at - from) / (to - from) };
+    let frac = |from: f32, to: f32, at: f32| {
+        if to == from {
+            0.0
+        } else {
+            (at - from) / (to - from)
+        }
+    };
     let lerp = |a: f32, b: f32, t: f32| a + (b - a) * t;
     let [ul, vt, ur, vb] = q.uv;
     let (ft, fb) = (frac(t, b, nt), frac(t, b, nb));
-    let mix = |t: f32| std::array::from_fn(|i| lerp(f32::from(q.color[i]), f32::from(q.bottom[i]), t).round() as u8);
-    let uv = [lerp(ul, ur, frac(l, r, nl)), lerp(vt, vb, ft), lerp(ul, ur, frac(l, r, nr)), lerp(vt, vb, fb)];
-    Some(Quad { rect: [nl, nt, nr, nb], uv, color: mix(ft), bottom: mix(fb), ..q })
+    let mix = |t: f32| {
+        std::array::from_fn(|i| {
+            lerp(f32::from(q.color[i]), f32::from(q.bottom[i]), t).round() as u8
+        })
+    };
+    let uv = [
+        lerp(ul, ur, frac(l, r, nl)),
+        lerp(vt, vb, ft),
+        lerp(ul, ur, frac(l, r, nr)),
+        lerp(vt, vb, fb),
+    ];
+    Some(Quad {
+        rect: [nl, nt, nr, nb],
+        uv,
+        color: mix(ft),
+        bottom: mix(fb),
+        ..q
+    })
 }
 
 #[cfg(test)]

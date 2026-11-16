@@ -49,7 +49,9 @@ pub fn celestial_frame(angle_degrees: f32) -> Mat4 {
 
 /// `applyCelestialBodyTransform`: a body's unit quad 100 blocks out, `size` its half-width.
 pub fn body_frame(angle_degrees: f32, size: f32) -> Mat4 {
-    celestial_frame(angle_degrees) * Mat4::from_translation(Vec3::new(0.0, 100.0, 0.0)) * Mat4::from_scale(Vec3::new(size, 1.0, size))
+    celestial_frame(angle_degrees)
+        * Mat4::from_translation(Vec3::new(0.0, 100.0, 0.0))
+        * Mat4::from_scale(Vec3::new(size, 1.0, size))
 }
 
 /// `buildCelestialQuad`: the sun's unit quad, its sprite whole.
@@ -63,7 +65,12 @@ pub fn moon_quad() -> Quad {
 }
 
 fn unit_quad(uvs: [[f32; 2]; 4]) -> Quad {
-    [([-1.0, 0.0, -1.0], uvs[0]), ([1.0, 0.0, -1.0], uvs[1]), ([1.0, 0.0, 1.0], uvs[2]), ([-1.0, 0.0, 1.0], uvs[3])]
+    [
+        ([-1.0, 0.0, -1.0], uvs[0]),
+        ([1.0, 0.0, -1.0], uvs[1]),
+        ([1.0, 0.0, 1.0], uvs[2]),
+        ([-1.0, 0.0, 1.0], uvs[3]),
+    ]
 }
 
 /// `SkyRenderer.buildStars`: up to 1500 quads from seed 10842, 100 blocks out, each turned to face
@@ -72,7 +79,11 @@ pub fn stars() -> Vec<[[f32; 3]; 4]> {
     let mut random = JavaRandom::new(10842);
     let mut out = Vec::with_capacity(1500);
     for _ in 0..1500 {
-        let (x, y, z) = (random.next_float() * 2.0 - 1.0, random.next_float() * 2.0 - 1.0, random.next_float() * 2.0 - 1.0);
+        let (x, y, z) = (
+            random.next_float() * 2.0 - 1.0,
+            random.next_float() * 2.0 - 1.0,
+            random.next_float() * 2.0 - 1.0,
+        );
         let size = 0.15 + random.next_float() * 0.1;
         let l = x * x + y * y + z * z;
         if l <= 0.010_000_001 || l >= 1.0 {
@@ -87,7 +98,12 @@ pub fn stars() -> Vec<[[f32; 3]; 4]> {
         let (s, c) = (-spin).sin_cos();
         let (r, u) = (right * c + up * s, up * c - right * s);
         let corner = |a: f32, b: f32| (center + r * a + u * b).to_array();
-        out.push([corner(size, -size), corner(size, size), corner(-size, size), corner(-size, -size)]);
+        out.push([
+            corner(size, -size),
+            corner(size, size),
+            corner(-size, size),
+            corner(-size, -size),
+        ]);
     }
     out
 }
@@ -107,8 +123,14 @@ pub fn sunrise_fan_model() -> [[f32; 3]; 18] {
 /// `renderSunriseAndSunset`'s pose: rotateX(90°), rotateZ(180° once the sun is past its zenith,
 /// plus 90°), scaled by the colour's alpha along z.
 pub fn sunrise_frame(sun_angle_degrees: f32, alpha: f32) -> Mat4 {
-    let flip = if mth::sin(f64::from(radians(sun_angle_degrees))) < 0.0 { 180.0f32 } else { 0.0 };
-    joml::rotation_x(radians(90.0)) * joml::rotation_z(radians(flip + 90.0)) * Mat4::from_scale(Vec3::new(1.0, 1.0, alpha))
+    let flip = if mth::sin(f64::from(radians(sun_angle_degrees))) < 0.0 {
+        180.0f32
+    } else {
+        0.0
+    };
+    joml::rotation_x(radians(90.0))
+        * joml::rotation_z(radians(flip + 90.0))
+        * Mat4::from_scale(Vec3::new(1.0, 1.0, alpha))
 }
 
 /// The fan as drawn: [`sunrise_fan_model`] through [`sunrise_frame`].
@@ -129,7 +151,11 @@ pub fn sky_disc_fog(model: [f32; 3], sky_end: f32) -> f32 {
     let p = Vec3::from_array(model);
     let cylindrical = p.x.hypot(p.z).max(p.y.abs());
     let spherical = (p.length() / sky_end).clamp(0.0, 1.0);
-    if cylindrical >= sky_end { 1.0 } else { spherical }
+    if cylindrical >= sky_end {
+        1.0
+    } else {
+        spherical
+    }
 }
 
 /// `buildEndSky`: six faces 100 blocks out, each `end_sky.png` tiled 16 times (texture
@@ -145,8 +171,18 @@ pub fn end_sky() -> [Quad; 6] {
         Mat4::from_rotation_z(-FRAC_PI_2),
     ];
     poses.map(|pose| {
-        let corner = |x: f32, z: f32, uv: [f32; 2]| (pose.transform_point3(Vec3::new(x, -100.0, z)).to_array(), uv);
-        [corner(-100.0, -100.0, [0.0, 0.0]), corner(-100.0, 100.0, [0.0, 16.0]), corner(100.0, 100.0, [16.0, 16.0]), corner(100.0, -100.0, [16.0, 0.0])]
+        let corner = |x: f32, z: f32, uv: [f32; 2]| {
+            (
+                pose.transform_point3(Vec3::new(x, -100.0, z)).to_array(),
+                uv,
+            )
+        };
+        [
+            corner(-100.0, -100.0, [0.0, 0.0]),
+            corner(-100.0, 100.0, [0.0, 16.0]),
+            corner(100.0, 100.0, [16.0, 16.0]),
+            corner(100.0, -100.0, [16.0, 0.0]),
+        ]
     })
 }
 
@@ -169,13 +205,28 @@ mod tests {
 
     #[test]
     fn the_sun_is_overhead_at_noon_and_sets_in_the_west() {
-        let centre = |angle: f32| celestial_quad().iter().fold(Vec3::ZERO, |s, c| s + body_frame(angle, SUN_SIZE).transform_point3(Vec3::from_array(c.0))) / 4.0;
+        let centre = |angle: f32| {
+            celestial_quad().iter().fold(Vec3::ZERO, |s, c| {
+                s + body_frame(angle, SUN_SIZE).transform_point3(Vec3::from_array(c.0))
+            }) / 4.0
+        };
         assert!((centre(0.0) - Vec3::new(0.0, 100.0, 0.0)).length() < 1e-3);
-        assert!((centre(90.0) - Vec3::new(-100.0, 0.0, 0.0)).length() < 1e-3, "{}", centre(90.0));
+        assert!(
+            (centre(90.0) - Vec3::new(-100.0, 0.0, 0.0)).length() < 1e-3,
+            "{}",
+            centre(90.0)
+        );
         // The fan sits under the setting sun, its centre on the west horizon.
         let fan = sunrise_fan(90.0, 1.0);
-        assert!((Vec3::from_array(fan[0]) - Vec3::new(-100.0, 0.0, 0.0)).length() < 1e-3, "{:?}", fan[0]);
-        assert!(Vec3::from_array(sunrise_fan(270.0, 1.0)[0]).x > 99.0, "sunrise in the east");
+        assert!(
+            (Vec3::from_array(fan[0]) - Vec3::new(-100.0, 0.0, 0.0)).length() < 1e-3,
+            "{:?}",
+            fan[0]
+        );
+        assert!(
+            Vec3::from_array(sunrise_fan(270.0, 1.0)[0]).x > 99.0,
+            "sunrise in the east"
+        );
         assert_eq!(fan[1], fan[17]);
     }
 
@@ -184,14 +235,36 @@ mod tests {
         let disc = sky_disc(SKY_DISC_Y);
         assert_eq!(disc[0], [0.0, 16.0, 0.0]);
         assert!((disc[1][0] + 512.0).abs() < 1e-3 && disc[1][2].abs() < 1e-3);
-        assert!(disc[1..].iter().all(|p| (p[0].hypot(p[2]) - 512.0).abs() < 0.03) && disc[1][0] == disc[9][0]);
+        assert!(
+            disc[1..]
+                .iter()
+                .all(|p| (p[0].hypot(p[2]) - 512.0).abs() < 0.03)
+                && disc[1][0] == disc[9][0]
+        );
         // Mth.cos(-45°) truncates its table index towards zero: one rim point sits a little in.
         assert_eq!(disc[4][0], 362.003_97);
-        assert!((sky_disc(-16.0)[1][0] - 512.0).abs() < 1e-3, "mirrored below");
-        assert!(dark_disc_shown(62.9, 63.0, false) && !dark_disc_shown(63.0, 63.0, false) && !dark_disc_shown(10.0, 63.0, true));
-        assert_eq!((sky_disc_fog([0.0, 16.0, 0.0], 192.0), sky_disc_fog([192.0, 16.0, 0.0], 192.0)), (16.0 / 192.0, 1.0));
+        assert!(
+            (sky_disc(-16.0)[1][0] - 512.0).abs() < 1e-3,
+            "mirrored below"
+        );
+        assert!(
+            dark_disc_shown(62.9, 63.0, false)
+                && !dark_disc_shown(63.0, 63.0, false)
+                && !dark_disc_shown(10.0, 63.0, true)
+        );
+        assert_eq!(
+            (
+                sky_disc_fog([0.0, 16.0, 0.0], 192.0),
+                sky_disc_fog([192.0, 16.0, 0.0], 192.0)
+            ),
+            (16.0 / 192.0, 1.0)
+        );
         let (sun, moon) = (celestial_quad(), moon_quad());
-        assert!(sun.iter().zip(moon).all(|(s, m)| s.0 == m.0 && s.1 == [1.0 - m.1[0], 1.0 - m.1[1]]));
+        assert!(
+            sun.iter()
+                .zip(moon)
+                .all(|(s, m)| s.0 == m.0 && s.1 == [1.0 - m.1[0], 1.0 - m.1[1]])
+        );
         for face in end_sky() {
             for (p, _) in face {
                 assert!(p.iter().any(|c| (c.abs() - 100.0).abs() < 1e-3));

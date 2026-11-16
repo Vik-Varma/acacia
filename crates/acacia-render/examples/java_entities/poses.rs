@@ -17,7 +17,11 @@ pub fn posed(layers: &BTreeMap<String, Part>, record: &Value, report: &mut Repor
 
 /// The case's model posed by our `setupAnim`; `None` (with the divergence noted) when the oracle
 /// failed, the look lacks the layer or its `setupAnim` is not ported.
-pub fn setup<'a>(layers: &'a BTreeMap<String, Part>, record: &Value, case: &mut Case) -> Option<(&'a Part, Poses, RenderState)> {
+pub fn setup<'a>(
+    layers: &'a BTreeMap<String, Part>,
+    record: &Value,
+    case: &mut Case,
+) -> Option<(&'a Part, Poses, RenderState)> {
     if let Some(error) = record["error"].as_str() {
         case.diverge("oracle", "a pose", error);
         return None;

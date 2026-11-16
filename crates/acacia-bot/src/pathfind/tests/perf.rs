@@ -35,17 +35,74 @@ fn gap5() -> Grid {
 }
 
 pub fn cases() -> Vec<Case> {
-    let off = SearchOpts { macros: false, ..macro_opts(OPTIMAL) };
-    let case = |name, grid, from, goal, opts| Case { name, grid, from, goal, opts };
+    let off = SearchOpts {
+        macros: false,
+        ..macro_opts(OPTIMAL)
+    };
+    let case = |name, grid, from, goal, opts| Case {
+        name,
+        grid,
+        from,
+        goal,
+        opts,
+    };
     vec![
-        case("gap course Optimal", gap3 as fn() -> Grid, [-8.5, 1.0, 0.5], Goal::Block([10, 1, 0]), macro_opts(OPTIMAL)),
-        case("gap course Human", gap3, [-8.5, 1.0, 0.5], Goal::Block([10, 1, 0]), macro_opts(HUMAN)),
-        case("flat 80 macros off", flat, [-31.5, 1.0, 0.5], Goal::Block([47, 1, 0]), off),
-        case("flat 80 Optimal", flat, [-31.5, 1.0, 0.5], Goal::Block([47, 1, 0]), macro_opts(OPTIMAL)),
-        case("flat 80 Human", flat, [-31.5, 1.0, 0.5], Goal::Block([47, 1, 0]), macro_opts(HUMAN)),
-        case("diagonal 30x11 Optimal", flat, [-15.5, 1.0, -5.5], Goal::Block([15, 1, 6]), macro_opts(OPTIMAL)),
-        case("diagonal 30x11 Human", flat, [-15.5, 1.0, -5.5], Goal::Block([15, 1, 6]), macro_opts(HUMAN)),
-        case("5-gap refusal Human", gap5, [0.5, 1.0, 0.5], Goal::Block([9, 1, 0]), macro_opts(HUMAN)),
+        case(
+            "gap course Optimal",
+            gap3 as fn() -> Grid,
+            [-8.5, 1.0, 0.5],
+            Goal::Block([10, 1, 0]),
+            macro_opts(OPTIMAL),
+        ),
+        case(
+            "gap course Human",
+            gap3,
+            [-8.5, 1.0, 0.5],
+            Goal::Block([10, 1, 0]),
+            macro_opts(HUMAN),
+        ),
+        case(
+            "flat 80 macros off",
+            flat,
+            [-31.5, 1.0, 0.5],
+            Goal::Block([47, 1, 0]),
+            off,
+        ),
+        case(
+            "flat 80 Optimal",
+            flat,
+            [-31.5, 1.0, 0.5],
+            Goal::Block([47, 1, 0]),
+            macro_opts(OPTIMAL),
+        ),
+        case(
+            "flat 80 Human",
+            flat,
+            [-31.5, 1.0, 0.5],
+            Goal::Block([47, 1, 0]),
+            macro_opts(HUMAN),
+        ),
+        case(
+            "diagonal 30x11 Optimal",
+            flat,
+            [-15.5, 1.0, -5.5],
+            Goal::Block([15, 1, 6]),
+            macro_opts(OPTIMAL),
+        ),
+        case(
+            "diagonal 30x11 Human",
+            flat,
+            [-15.5, 1.0, -5.5],
+            Goal::Block([15, 1, 6]),
+            macro_opts(HUMAN),
+        ),
+        case(
+            "5-gap refusal Human",
+            gap5,
+            [0.5, 1.0, 0.5],
+            Goal::Block([9, 1, 0]),
+            macro_opts(HUMAN),
+        ),
     ]
 }
 
@@ -53,7 +110,13 @@ pub fn cases() -> Vec<Case> {
 pub fn run(c: &Case, g: &Grid, cache: &RolloutCache) -> (Path, f32) {
     let m = standing(c.from);
     let t0 = Instant::now();
-    let p = search_cached(&g.terrain(), &Rollout::new(m.state().expect("started").clone()),&c.goal, &c.opts, cache);
+    let p = search_cached(
+        &g.terrain(),
+        &Rollout::new(m.state().expect("started").clone()),
+        &c.goal,
+        &c.opts,
+        cache,
+    );
     (p, t0.elapsed().as_secs_f32() * 1000.0)
 }
 
@@ -82,11 +145,28 @@ fn cost_skew_report() {
             // Away from the grid's edge: physics freezes a body near unloaded chunks.
             for to in [-16, -11, -1, 19, 39] {
                 let goal = Goal::Block([to, 1, 0]);
-                let opts = SearchOpts { macros, ..macro_opts(profile) };
+                let opts = SearchOpts {
+                    macros,
+                    ..macro_opts(profile)
+                };
                 let mut m = standing([-20.5, 1.0, 0.5]);
                 let p = super::drive::plan(&g, &m, &goal, &opts);
-                let o = super::drive::drive(&g, &mut m, p.nodes.clone(), &goal, &opts, super::drive::Style::default(), |_, _| {});
-                eprintln!("STAT {profile:?} macros {macros} {} blocks: cost {:.1}, near the goal after {:?}, executed {} ticks", to + 21, p.cost, o.near, o.ticks);
+                let o = super::drive::drive(
+                    &g,
+                    &mut m,
+                    p.nodes.clone(),
+                    &goal,
+                    &opts,
+                    super::drive::Style::default(),
+                    |_, _| {},
+                );
+                eprintln!(
+                    "STAT {profile:?} macros {macros} {} blocks: cost {:.1}, near the goal after {:?}, executed {} ticks",
+                    to + 21,
+                    p.cost,
+                    o.near,
+                    o.ticks
+                );
             }
         }
     }
@@ -105,10 +185,26 @@ fn perf_report() {
         }
         // Cold: a fresh grid (terrain memo) and cache; replan: the navigator's cache kept. Best of five (a
         // shared testbox is noisy).
-        let best = |runs: Vec<(Path, f32)>| runs.into_iter().min_by(|a, b| a.1.total_cmp(&b.1)).expect("runs");
-        report(c.name, "cold", &best((0..5).map(|_| run(&c, &(c.grid)(), &RolloutCache::default())).collect()));
+        let best = |runs: Vec<(Path, f32)>| {
+            runs.into_iter()
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+                .expect("runs")
+        };
+        report(
+            c.name,
+            "cold",
+            &best(
+                (0..5)
+                    .map(|_| run(&c, &(c.grid)(), &RolloutCache::default()))
+                    .collect(),
+            ),
+        );
         let cache = RolloutCache::default();
         run(&c, &g, &cache);
-        report(c.name, "replan", &best((0..5).map(|_| run(&c, &(c.grid)(), &cache)).collect()));
+        report(
+            c.name,
+            "replan",
+            &best((0..5).map(|_| run(&c, &(c.grid)(), &cache)).collect()),
+        );
     }
 }

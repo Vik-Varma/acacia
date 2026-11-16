@@ -13,7 +13,11 @@ pub(super) struct StageClock {
 impl StageClock {
     pub(super) fn start() -> StageClock {
         let now = Instant::now();
-        StageClock { start: now, last: now, stages: Vec::with_capacity(10) }
+        StageClock {
+            start: now,
+            last: now,
+            stages: Vec::with_capacity(10),
+        }
     }
 
     pub(super) fn mark(&mut self, stage: &'static str) {
@@ -25,7 +29,11 @@ impl StageClock {
     pub(super) fn report(&self) {
         let total = self.last - self.start;
         if total >= SLOW {
-            let stages: Vec<String> = self.stages.iter().map(|(s, d)| format!("{s}={:.1}ms", d.as_secs_f64() * 1e3)).collect();
+            let stages: Vec<String> = self
+                .stages
+                .iter()
+                .map(|(s, d)| format!("{s}={:.1}ms", d.as_secs_f64() * 1e3))
+                .collect();
             tracing::warn!(target: "frame", total_ms = total.as_millis() as u64, stages = %stages.join(" "), "slow render");
         }
     }

@@ -37,7 +37,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if p.id == ClientCacheMissResponse::ID
                     && let Ok(r) = p.decode::<ClientCacheMissResponse>()
                 {
-                    r.blobs.iter().for_each(|b| blobs.insert(b.hash, &b.payload));
+                    r.blobs
+                        .iter()
+                        .for_each(|b| blobs.insert(b.hash, &b.payload));
                 }
                 let _ = world.apply(&p);
             }
@@ -59,16 +61,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn scene(world: &World, label: &str, (cx, cz): (i32, i32), radius: i32) -> Option<serde_json::Value> {
+fn scene(
+    world: &World,
+    label: &str,
+    (cx, cz): (i32, i32),
+    radius: i32,
+) -> Option<serde_json::Value> {
     let dim = world.dimension();
     let registry = world.registry();
     let mut palette: Vec<String> = Vec::new();
     let mut index: HashMap<u32, usize> = HashMap::new();
     let mut key = |id: u32| -> usize {
         *index.entry(id).or_insert_with(|| {
-            let s = registry.get(id).map_or_else(|| "minecraft:air".to_owned(), |s| {
-                if s.properties.is_empty() { s.name.to_owned() } else { format!("{}[{}]", s.name, s.properties) }
-            });
+            let s = registry.get(id).map_or_else(
+                || "minecraft:air".to_owned(),
+                |s| {
+                    if s.properties.is_empty() {
+                        s.name.to_owned()
+                    } else {
+                        format!("{}[{}]", s.name, s.properties)
+                    }
+                },
+            );
             palette.push(s);
             palette.len() - 1
         })
@@ -103,5 +117,7 @@ fn scene(world: &World, label: &str, (cx, cz): (i32, i32), radius: i32) -> Optio
         (_, 128) => "the_nether",
         _ => "the_end",
     };
-    Some(json!({ "scene": label, "dimension": name, "min_y": dim.min_y, "height": dim.height, "centre": [cx, cz], "radius": radius, "palette": palette, "chunks": chunks }))
+    Some(
+        json!({ "scene": label, "dimension": name, "min_y": dim.min_y, "height": dim.height, "centre": [cx, cz], "radius": radius, "palette": palette, "chunks": chunks }),
+    )
 }

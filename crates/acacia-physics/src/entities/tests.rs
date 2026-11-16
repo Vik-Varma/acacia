@@ -20,15 +20,25 @@ fn walk(yaw: f32, boxes: &[Aabb], ticks: usize) -> Vec<[f32; 3]> {
     let world = WithEntities { world: &w, boxes };
     let mut st = PlayerState::new([0.5, 20.0, 0.5]);
     st.on_ground = true;
-    let input = Input { move_vector: [0.0, 1.0], yaw, ..Input::default() };
-    (0..ticks).map(|_| tick(&mut st, &input, &world).position).collect()
+    let input = Input {
+        move_vector: [0.0, 1.0],
+        yaw,
+        ..Input::default()
+    };
+    (0..ticks)
+        .map(|_| tick(&mut st, &input, &world).position)
+        .collect()
 }
 
 #[test]
 fn walking_into_a_boat_steps_onto_it() {
     let path = walk(-90.0, &[boat(0.7)], 60);
     let on = path.iter().position(|p| p[1] > 20.0).expect("stepped up");
-    assert!((path[on][1] - 20.455).abs() < 1e-6 && path[on][0] + 0.3 > 4.0 - 0.12, "{:?}", path[on]);
+    assert!(
+        (path[on][1] - 20.455).abs() < 1e-6 && path[on][0] + 0.3 > 4.0 - 0.12,
+        "{:?}",
+        path[on]
+    );
     assert!(path.iter().all(|p| p[1] <= 20.455 + 1e-6));
 }
 
@@ -45,5 +55,11 @@ fn offaxis_step_onto_a_boat() {
     }
     let on = path.iter().position(|p| p[1] > 20.0).expect("stepped up");
     // Strict BDS stepped up on the tick whose box first reached x 4.0 (drill: x 3.7043629, z 1.6662927).
-    assert_eq!(path[on - 1][0] + 0.3 < 4.0, true, "{:?} then {:?}", path[on - 1], path[on]);
+    assert_eq!(
+        path[on - 1][0] + 0.3 < 4.0,
+        true,
+        "{:?} then {:?}",
+        path[on - 1],
+        path[on]
+    );
 }

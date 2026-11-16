@@ -45,7 +45,10 @@ pub fn regions(
         }
         store.flush(true)?;
         let name = region_file_name(rx, rz);
-        let (a, b) = (Region::load(&crawled.join(&name))?, Region::load(&scratch.join(&name))?);
+        let (a, b) = (
+            Region::load(&crawled.join(&name))?,
+            Region::load(&scratch.join(&name))?,
+        );
         for i in 0..1024 {
             let (x, z) = (i & 31, i >> 5);
             let (na, nb) = (a.chunk_nbt(x, z), b.chunk_nbt(x, z));
@@ -56,7 +59,11 @@ pub fn regions(
             if na != nb {
                 differ += 1;
                 if differ <= 10 {
-                    println!("  differs: chunk {} {}", rx * 32 + x as i32, rz * 32 + z as i32);
+                    println!(
+                        "  differs: chunk {} {}",
+                        rx * 32 + x as i32,
+                        rz * 32 + z as i32
+                    );
                 }
             }
         }

@@ -15,9 +15,9 @@ use acacia_client::auth::{Account, LoginCredentials};
 use p384::ecdsa::SigningKey;
 
 #[cfg(feature = "fake-sign-in")]
-pub use fake::{FakeSignIn, FAKE_USER_CODE};
+pub use fake::{FAKE_USER_CODE, FakeSignIn};
 pub use microsoft::MicrosoftSignIn;
-pub(crate) use runner::{msa_code, SignIns};
+pub(crate) use runner::{SignIns, msa_code};
 
 /// The account a sign-in is for: its key in the token cache, and the cache's directory.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -56,7 +56,12 @@ pub trait SignIn: Send + Sync {
     /// `account` signed in with a Java profile, calling `prompt` when no cached sign-in will do; fails `AUTH`.
     fn java_account(&self, account: MsaAccount, prompt: Prompt) -> JavaFuture {
         drop((account, prompt));
-        Box::pin(async { Err(ApiError::new(ErrorCode::Auth, "this sign-in has no Java accounts")) })
+        Box::pin(async {
+            Err(ApiError::new(
+                ErrorCode::Auth,
+                "this sign-in has no Java accounts",
+            ))
+        })
     }
 }
 
@@ -68,5 +73,8 @@ impl fmt::Debug for dyn SignIn {
 
 /// `~/.acacia/auth` of the user running the host (the current directory's `.acacia/auth` without a home).
 pub fn default_profiles_folder() -> PathBuf {
-    std::env::home_dir().unwrap_or_default().join(".acacia").join("auth")
+    std::env::home_dir()
+        .unwrap_or_default()
+        .join(".acacia")
+        .join("auth")
 }

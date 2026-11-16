@@ -107,14 +107,31 @@ fn shield_id_scan_agrees_with_the_decoder() {
         version: ItemstatesItemVersion::DataDriven,
         nbt: nbt.into(),
     };
-    let components = Nbt { name: String::new(), value: Value::Compound(vec![("minecraft:shield".into(), Value::Int(1))]) };
-    let mut registries: Vec<ItemRegistry> = samples::<ItemRegistry>().into_iter().map(|(p, _)| p).collect();
-    registries.push(ItemRegistry { itemstates: vec![entry("minecraft:stone", 1, components), entry("minecraft:shield", 380, Nbt::default())] });
-    registries.push(ItemRegistry { itemstates: vec![entry("minecraft:stone", 1, Nbt::default())] });
+    let components = Nbt {
+        name: String::new(),
+        value: Value::Compound(vec![("minecraft:shield".into(), Value::Int(1))]),
+    };
+    let mut registries: Vec<ItemRegistry> = samples::<ItemRegistry>()
+        .into_iter()
+        .map(|(p, _)| p)
+        .collect();
+    registries.push(ItemRegistry {
+        itemstates: vec![
+            entry("minecraft:stone", 1, components),
+            entry("minecraft:shield", 380, Nbt::default()),
+        ],
+    });
+    registries.push(ItemRegistry {
+        itemstates: vec![entry("minecraft:stone", 1, Nbt::default())],
+    });
     for registry in &registries {
         let mut body = bytes::BytesMut::new();
         registry.encode(&mut body);
-        let decoded = registry.itemstates.iter().find(|i| i.name == "minecraft:shield").map(|i| i32::from(i.runtime_id));
+        let decoded = registry
+            .itemstates
+            .iter()
+            .find(|i| i.name == "minecraft:shield")
+            .map(|i| i32::from(i.runtime_id));
         assert_eq!(shield_item_id_in_registry(&body).unwrap(), decoded);
     }
     assert_eq!(shield_item_id_in_registry(&[]).ok(), None);

@@ -39,7 +39,11 @@ pub fn visual_order(text: &Text) -> Vec<VisualChar> {
     let mut out = Vec::new();
     if text.forward {
         for span in &text.spans {
-            forward(&span.text.encode_utf16().collect::<Vec<_>>(), &span.style, &mut out);
+            forward(
+                &span.text.encode_utf16().collect::<Vec<_>>(),
+                &span.style,
+                &mut out,
+            );
         }
         return out;
     }
@@ -69,12 +73,24 @@ pub fn visual_order(text: &Text) -> Vec<VisualChar> {
 /// characters every paragraph is level 0 and `directionFromFlags` says LTR.
 fn may_reorder(c: char) -> bool {
     let c = u32::from(c);
-    (0x0600..=0x06FF).contains(&c) || (0xFE70..=0xFEFF).contains(&c) || matches!(props::class(c), props::R | props::AL | props::AN | props::RLE | props::RLO | props::RLI | props::FSI)
+    (0x0600..=0x06FF).contains(&c)
+        || (0xFE70..=0xFEFF).contains(&c)
+        || matches!(
+            props::class(c),
+            props::R | props::AL | props::AN | props::RLE | props::RLO | props::RLI | props::FSI
+        )
 }
 
 /// `SubStringSource.substring(start, length, reverse)`, fed to the sink: pieces split where the
 /// style changes, in reverse order when `reverse`.
-fn substring(plain: &[u16], styles: &[&Style], start: usize, len: usize, reverse: bool, out: &mut Vec<VisualChar>) {
+fn substring(
+    plain: &[u16],
+    styles: &[&Style],
+    start: usize,
+    len: usize,
+    reverse: bool,
+    out: &mut Vec<VisualChar>,
+) {
     if len == 0 {
         return;
     }
@@ -111,12 +127,22 @@ fn pair(high: u16, low: u16) -> u32 {
 }
 
 fn unit(u: u16) -> u32 {
-    if is_high(u) || is_low(u) { REPLACEMENT } else { u32::from(u) }
+    if is_high(u) || is_low(u) {
+        REPLACEMENT
+    } else {
+        u32::from(u)
+    }
 }
 
 /// `StringDecomposer.iterate`: positions count UTF-16 units from the piece's start.
 fn forward(units: &[u16], style: &Style, out: &mut Vec<VisualChar>) {
-    let mut emit = |position: usize, codepoint: u32| out.push(VisualChar { first: position == 0, style: style.clone(), codepoint });
+    let mut emit = |position: usize, codepoint: u32| {
+        out.push(VisualChar {
+            first: position == 0,
+            style: style.clone(),
+            codepoint,
+        })
+    };
     let mut i = 0;
     while i < units.len() {
         let u = units[i];
@@ -133,7 +159,13 @@ fn forward(units: &[u16], style: &Style, out: &mut Vec<VisualChar>) {
 
 /// `StringDecomposer.iterateBackwards` through `UCharacter.getMirror`.
 fn backward(units: &[u16], style: &Style, out: &mut Vec<VisualChar>) {
-    let mut emit = |position: usize, codepoint: u32| out.push(VisualChar { first: position == 0, style: style.clone(), codepoint: props::mirror(codepoint) });
+    let mut emit = |position: usize, codepoint: u32| {
+        out.push(VisualChar {
+            first: position == 0,
+            style: style.clone(),
+            codepoint: props::mirror(codepoint),
+        })
+    };
     let mut i = units.len();
     while i > 0 {
         i -= 1;

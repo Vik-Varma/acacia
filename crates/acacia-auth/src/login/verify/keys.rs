@@ -45,9 +45,19 @@ impl SigningKeys {
     /// Parses a JWKS document (`{"keys":[..]}`), keeping its RSA signing keys. Fails if a kept key
     /// is malformed or none is usable.
     pub fn from_jwks(json: &str) -> Result<Self, VerifyError> {
-        let jwks: Jwks = serde_json::from_str(json).map_err(|e| VerifyError::Jwks(e.to_string()))?;
-        let usable = |k: &Jwk| k.kty == "RSA" && k.usage.as_deref().is_none_or(|u| u == "sig") && k.alg.as_deref().is_none_or(|a| a == "RS256");
-        let keys = jwks.keys.into_iter().filter(usable).map(rsa_key).collect::<Result<Vec<_>, _>>()?;
+        let jwks: Jwks =
+            serde_json::from_str(json).map_err(|e| VerifyError::Jwks(e.to_string()))?;
+        let usable = |k: &Jwk| {
+            k.kty == "RSA"
+                && k.usage.as_deref().is_none_or(|u| u == "sig")
+                && k.alg.as_deref().is_none_or(|a| a == "RS256")
+        };
+        let keys = jwks
+            .keys
+            .into_iter()
+            .filter(usable)
+            .map(rsa_key)
+            .collect::<Result<Vec<_>, _>>()?;
         if keys.is_empty() {
             return Err(VerifyError::Jwks("no RSA signing keys".into()));
         }
@@ -70,11 +80,18 @@ impl SigningKeys {
     /// Verifies an RS256 token against the key its `kid` names (any key if it names none).
     pub(super) fn verify(&self, token: &Unverified) -> Result<(), VerifyError> {
         let kid = token.kid();
-        let mut candidates = self.keys.iter().filter(|(k, _)| kid.is_none() || k.as_deref() == kid).peekable();
+        let mut candidates = self
+            .keys
+            .iter()
+            .filter(|(k, _)| kid.is_none() || k.as_deref() == kid)
+            .peekable();
         if candidates.peek().is_none() {
-            return Err(VerifyError::UnknownSigningKey { kid: kid.map(str::to_owned) });
+            return Err(VerifyError::UnknownSigningKey {
+                kid: kid.map(str::to_owned),
+            });
         }
-        let signature = Signature::try_from(token.signature()).map_err(|_| VerifyError::Signature { part: Part::Token })?;
+        let signature = Signature::try_from(token.signature())
+            .map_err(|_| VerifyError::Signature { part: Part::Token })?;
         if candidates.any(|(_, key)| key.verify(token.signing_input(), &signature).is_ok()) {
             return Ok(());
         }
@@ -84,13 +101,21 @@ impl SigningKeys {
 
 fn rsa_key(jwk: Jwk) -> Result<(Option<String>, VerifyingKey<Sha256>), VerifyError> {
     let field = |name: &str, value: &Option<String>| {
-        let b64 = value.as_deref().ok_or_else(|| VerifyError::Jwks(format!("RSA key without {name}")))?;
-        let bytes = URL_SAFE_NO_PAD.decode(b64.trim_end_matches('=')).map_err(|e| VerifyError::Jwks(format!("{name}: {e}")))?;
+        let b64 = value
+            .as_deref()
+            .ok_or_else(|| VerifyError::Jwks(format!("RSA key without {name}")))?;
+        let bytes = URL_SAFE_NO_PAD
+            .decode(b64.trim_end_matches('='))
+            .map_err(|e| VerifyError::Jwks(format!("{name}: {e}")))?;
         Ok::<_, VerifyError>(BigUint::from_bytes_be(&bytes))
     };
-    let key = RsaPublicKey::new(field("n", &jwk.n)?, field("e", &jwk.e)?).map_err(|e| VerifyError::Jwks(e.to_string()))?;
+    let key = RsaPublicKey::new(field("n", &jwk.n)?, field("e", &jwk.e)?)
+        .map_err(|e| VerifyError::Jwks(e.to_string()))?;
     if key.n().bits() < MIN_MODULUS_BITS {
-        return Err(VerifyError::Jwks(format!("{}-bit RSA key is too short", key.n().bits())));
+        return Err(VerifyError::Jwks(format!(
+            "{}-bit RSA key is too short",
+            key.n().bits()
+        )));
     }
     Ok((jwk.kid, VerifyingKey::new(key)))
 }

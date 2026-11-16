@@ -10,7 +10,9 @@ use acacia_bot::{Bot, BotConfig, BotEvent, Events};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let _ = tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
     let mut args = std::env::args().skip(1);
     let server = args.next().unwrap_or_else(|| "127.0.0.1:19160".into());
     let name = args.next().unwrap_or_else(|| "Bot".into());
@@ -38,12 +40,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("form {}: {:?}", form.id, form.kind);
                 let reply = match &form.kind {
                     _ if forms % 4 == 0 => FormReply::Close,
-                    FormKind::Simple { buttons, .. } => FormReply::Button(buttons.len().saturating_sub(1)),
+                    FormKind::Simple { buttons, .. } => {
+                        FormReply::Button(buttons.len().saturating_sub(1))
+                    }
                     FormKind::Modal { .. } => FormReply::Modal(true),
                     FormKind::Custom { .. } => FormReply::Custom(form.defaults()),
-                    FormKind::Dialog { .. } => FormReply::Dialog { button: 0, values: form.defaults() },
+                    FormKind::Dialog { .. } => FormReply::Dialog {
+                        button: 0,
+                        values: form.defaults(),
+                    },
                 };
-                println!("  -> {reply:?}: {:?}", bot.answer_form(form.id, reply.clone()).await);
+                println!(
+                    "  -> {reply:?}: {:?}",
+                    bot.answer_form(form.id, reply.clone()).await
+                );
             }
             Some(BotEvent::Disconnected(r)) => {
                 println!("disconnected: {r:?}");

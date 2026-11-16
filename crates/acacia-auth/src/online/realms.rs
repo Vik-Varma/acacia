@@ -77,17 +77,30 @@ impl RealmJoin {
             Some("NETHERNET_JSONRPC") => RealmProtocol::NetherNetJsonRpc,
             Some(other) => RealmProtocol::Other(other.to_owned()),
         };
-        Self { address: s("/address").unwrap_or_default(), protocol, region: s("/sessionRegionData/regionName") }
+        Self {
+            address: s("/address").unwrap_or_default(),
+            protocol,
+            region: s("/sessionRegionData/regionName"),
+        }
     }
 }
 
 /// An invite code or `https://realms.gg/<code>` link.
 fn invite_code(code: &str) -> &str {
-    code.trim().trim_end_matches('/').rsplit('/').next().unwrap_or(code)
+    code.trim()
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or(code)
 }
 
 /// Vanilla's header set in vanilla's order (content-type even on GETs, no accept).
-fn request(client: &AuthClient, xsts: &XboxToken, method: reqwest::Method, path: &str) -> RequestBuilder {
+fn request(
+    client: &AuthClient,
+    xsts: &XboxToken,
+    method: reqwest::Method,
+    path: &str,
+) -> RequestBuilder {
     client
         .http()
         .client
@@ -109,20 +122,39 @@ pub(crate) async fn list(client: &AuthClient, xsts: &XboxToken) -> Result<Vec<Re
         servers: Vec<Realm>,
     }
     let url = format!("{BASE}/worlds");
-    let worlds: Worlds = client.http().json(request(client, xsts, reqwest::Method::GET, "/worlds"), &url).await?;
+    let worlds: Worlds = client
+        .http()
+        .json(request(client, xsts, reqwest::Method::GET, "/worlds"), &url)
+        .await?;
     Ok(worlds.servers)
 }
 
 /// Looks up the realm behind an invite code without joining it.
 pub(crate) async fn by_invite(client: &AuthClient, xsts: &XboxToken, code: &str) -> Result<Realm> {
     let path = format!("/worlds/v1/link/{}", invite_code(code));
-    client.http().json(request(client, xsts, reqwest::Method::GET, &path), &format!("{BASE}{path}")).await
+    client
+        .http()
+        .json(
+            request(client, xsts, reqwest::Method::GET, &path),
+            &format!("{BASE}{path}"),
+        )
+        .await
 }
 
 /// Accepts an invite code, making the account a member of the realm.
-pub(crate) async fn accept_invite(client: &AuthClient, xsts: &XboxToken, code: &str) -> Result<Realm> {
+pub(crate) async fn accept_invite(
+    client: &AuthClient,
+    xsts: &XboxToken,
+    code: &str,
+) -> Result<Realm> {
     let path = format!("/invites/v1/link/accept/{}", invite_code(code));
-    client.http().json(request(client, xsts, reqwest::Method::POST, &path), &format!("{BASE}{path}")).await
+    client
+        .http()
+        .json(
+            request(client, xsts, reqwest::Method::POST, &path),
+            &format!("{BASE}{path}"),
+        )
+        .await
 }
 
 /// The join target, waiting while the realm starts up (503). `ping_regions` are QoS latencies in
@@ -135,14 +167,16 @@ pub(crate) async fn join(
 ) -> Result<RealmJoin> {
     let path = format!("/worlds/{realm_id}/join");
     let url = format!("{BASE}{path}");
-    let body = serde_json::json!({"joinIntention": "VANILLA", "pingRegions": ping_regions}).to_string();
+    let body =
+        serde_json::json!({"joinIntention": "VANILLA", "pingRegions": ping_regions}).to_string();
     for attempt in 1..=JOIN_ATTEMPTS {
         let req = request(client, xsts, reqwest::Method::POST, &path).body(body.clone());
         match client.http().json::<Value>(req, &url).await {
             Ok(v) => return Ok(RealmJoin::from_json(&v)),
             Err(Error::Status { status: 503, .. }) if attempt < JOIN_ATTEMPTS => {
                 tracing::debug!(realm_id, attempt, "realm starting, retrying join");
-                let jitter = Duration::from_millis(100 + u64::from(rand_core::OsRng.next_u32() % 61));
+                let jitter =
+                    Duration::from_millis(100 + u64::from(rand_core::OsRng.next_u32() % 61));
                 tokio::time::sleep(JOIN_RETRY + jitter).await;
             }
             Err(e) => return Err(e),
@@ -162,9 +196,17 @@ mod tests {
             "address": "abc-123", "networkProtocol": "NETHERNET_JSONRPC", "pendingUpdate": false,
             "sessionRegionData": {"regionName": "WestEurope", "serviceQuality": 1}
         }));
-        assert_eq!((j.protocol, j.region.as_deref()), (RealmProtocol::NetherNetJsonRpc, Some("WestEurope")));
-        let r = RealmJoin::from_json(&json!({"address": "1.2.3.4:19132", "networkProtocol": "DEFAULT"}));
-        assert_eq!((r.protocol, r.address.as_str(), r.region), (RealmProtocol::RakNet, "1.2.3.4:19132", None));
+        assert_eq!(
+            (j.protocol, j.region.as_deref()),
+            (RealmProtocol::NetherNetJsonRpc, Some("WestEurope"))
+        );
+        let r = RealmJoin::from_json(
+            &json!({"address": "1.2.3.4:19132", "networkProtocol": "DEFAULT"}),
+        );
+        assert_eq!(
+            (r.protocol, r.address.as_str(), r.region),
+            (RealmProtocol::RakNet, "1.2.3.4:19132", None)
+        );
     }
 
     #[test]

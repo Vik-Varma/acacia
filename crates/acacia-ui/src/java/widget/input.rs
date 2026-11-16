@@ -63,14 +63,21 @@ pub struct Child<'a> {
 impl Child<'_> {
     /// `getChildAt`'s test: inside the list holding it and `isMouseOver` (active and inside).
     fn over(&self, x: f64, y: f64) -> bool {
-        let inside = |[x0, y0, x1, y1]: [i32; 4]| x >= f64::from(x0) && y >= f64::from(y0) && x < f64::from(x1) && y < f64::from(y1);
+        let inside = |[x0, y0, x1, y1]: [i32; 4]| {
+            x >= f64::from(x0) && y >= f64::from(y0) && x < f64::from(x1) && y < f64::from(y1)
+        };
         let w = &*self.widget;
         let b = w.base();
-        self.clip.is_none_or(inside) && b.is_active() && inside([b.x, b.y, b.x + w.width(), b.y + w.height()])
+        self.clip.is_none_or(inside)
+            && b.is_active()
+            && inside([b.x, b.y, b.x + w.width(), b.y + w.height()])
     }
 
     fn fired(&self, action: Option<Action>) -> Option<Fired> {
-        action.map(|action| Fired { id: self.widget.base().id.clone(), action })
+        action.map(|action| Fired {
+            id: self.widget.base().id.clone(),
+            action,
+        })
     }
 }
 
@@ -108,7 +115,13 @@ pub fn focus(children: &mut [Child], s: &mut Interaction, i: Option<usize>, poin
 
 /// `ContainerEventHandler.mouseClicked` with the left button: the first child under the mouse is
 /// clicked and focused.
-pub fn mouse_clicked(children: &mut [Child], s: &mut Interaction, x: f64, y: f64, shift: bool) -> Option<Fired> {
+pub fn mouse_clicked(
+    children: &mut [Child],
+    s: &mut Interaction,
+    x: f64,
+    y: f64,
+    shift: bool,
+) -> Option<Fired> {
     let i = children.iter().position(|c| c.over(x, y))?;
     let action = children[i].widget.on_click(x, shift);
     focus(children, s, Some(i), true);
@@ -135,7 +148,12 @@ pub fn mouse_dragged(children: &mut [Child], s: &Interaction, x: f64) -> Option<
 
 /// `Screen.keyPressed` after Escape: the focused child's `keyPressed`, else Tab moves the focus.
 /// Arrow-key focus navigation (`createArrowEvent`) is not ported.
-pub fn key_pressed(children: &mut [Child], s: &mut Interaction, key: Key, shift: bool) -> Option<Fired> {
+pub fn key_pressed(
+    children: &mut [Child],
+    s: &mut Interaction,
+    key: Key,
+    shift: bool,
+) -> Option<Fired> {
     if let Some(c) = s.focused.and_then(|i| children.get_mut(i))
         && let Some(action) = c.widget.key_pressed(key, shift)
     {

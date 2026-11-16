@@ -2518,10 +2518,12 @@ impl EducationSettings {
         let f_agent_capabilities = (|| -> Result<_> {
             Ok(if (f_has_agent_capabilities == true) {
                 Some({
-                    let f1_has = read_bool(r)?;
-                    let f1_can_modify_blocks = read_bool(r)?;
+                    let f1_can_modify_blocks = if read_bool(r)? {
+                        Some(read_bool(r)?)
+                    } else {
+                        None
+                    };
                     EducationSettingsAgentCapabilities {
-                        has: f1_has,
                         can_modify_blocks: f1_can_modify_blocks,
                     }
                 })
@@ -2613,8 +2615,13 @@ impl EducationSettings {
         if let Some(x0) = &self.agent_capabilities {
             {
                 let x1 = x0;
-                write_bool(w, x1.has);
-                write_bool(w, x1.can_modify_blocks);
+                match &x1.can_modify_blocks {
+                    Some(x2) => {
+                        write_bool(w, true);
+                        write_bool(w, *x2);
+                    }
+                    None => write_bool(w, false),
+                }
             }
         }
         write_bool(w, self.has_override_uri);
@@ -2658,8 +2665,7 @@ impl crate::Packet for EducationSettings {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EducationSettingsAgentCapabilities {
-    pub has: bool,
-    pub can_modify_blocks: bool,
+    pub can_modify_blocks: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

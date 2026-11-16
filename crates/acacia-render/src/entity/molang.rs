@@ -4,7 +4,9 @@
 use std::cell::RefCell;
 
 pub use acacia_molang::Program;
-use acacia_molang::{Arrays, Compiler, Env, Host, Query, Scratch, Structs, Symbol, Variable, Variables};
+use acacia_molang::{
+    Arrays, Compiler, Env, Host, Query, Scratch, Structs, Symbol, Variable, Variables,
+};
 
 /// What a query answers.
 #[derive(Debug, Clone, PartialEq)]
@@ -40,7 +42,9 @@ pub(super) fn compile(loading: &Loading, source: &str, arrays: Option<&Arrays>) 
         Some(arrays) => compiler.compile_with(source, arrays),
         None => compiler.compile(source),
     };
-    compiled.inspect_err(|error| tracing::debug!(%error, source, "molang rejected")).ok()
+    compiled
+        .inspect_err(|error| tracing::debug!(%error, source, "molang rejected"))
+        .ok()
 }
 
 struct Asked<'a> {
@@ -49,7 +53,12 @@ struct Asked<'a> {
 }
 
 impl Host for Asked<'_> {
-    fn query(&self, query: Query, args: &[acacia_molang::Value], _structs: &mut Structs<'_>) -> acacia_molang::Value {
+    fn query(
+        &self,
+        query: Query,
+        args: &[acacia_molang::Value],
+        _structs: &mut Structs<'_>,
+    ) -> acacia_molang::Value {
         let name = self.compiler.query_name(query);
         // Nothing is named.
         if name == "get_name" {
@@ -58,21 +67,29 @@ impl Host for Asked<'_> {
         // Asked once per kind listed.
         if name == "is_riding_any_entity_of_type" {
             let rides = |kind: &acacia_molang::Value| match kind {
-                acacia_molang::Value::Str(kind) => (self.query)(&format!("{name}:{}", self.compiler.text(*kind))).truthy(),
+                acacia_molang::Value::Str(kind) => {
+                    (self.query)(&format!("{name}:{}", self.compiler.text(*kind))).truthy()
+                }
                 _ => false,
             };
             return acacia_molang::Value::Num(f32::from(u8::from(args.iter().any(rides))));
         }
         let answer = match args.first() {
-            Some(acacia_molang::Value::Str(argument)) => (self.query)(&format!("{name}:{}", self.compiler.text(*argument))),
+            Some(acacia_molang::Value::Str(argument)) => {
+                (self.query)(&format!("{name}:{}", self.compiler.text(*argument)))
+            }
             _ => (self.query)(name),
         };
         match answer {
             // An item's name the host does not answer is no item.
-            Value::Num(_) if name == "get_equipped_item_name" => acacia_molang::Value::Str(Symbol::EMPTY),
+            Value::Num(_) if name == "get_equipped_item_name" => {
+                acacia_molang::Value::Str(Symbol::EMPTY)
+            }
             Value::Num(n) => acacia_molang::Value::Num(n),
             Value::Text(text) if text.is_empty() => acacia_molang::Value::Str(Symbol::EMPTY),
-            Value::Text(text) => acacia_molang::Value::Str(self.compiler.find(&text).unwrap_or(Symbol::OTHER)),
+            Value::Text(text) => {
+                acacia_molang::Value::Str(self.compiler.find(&text).unwrap_or(Symbol::OTHER))
+            }
         }
     }
 }
@@ -91,7 +108,13 @@ pub struct Scope<'a> {
 
 impl<'a> Scope<'a> {
     pub(super) fn new(compiler: &'a Compiler, query: &'a dyn Fn(&str) -> Value) -> Scope<'a> {
-        Scope { compiler, query, variables: Variables::new(), scratch: Scratch::new(), this: 0.0 }
+        Scope {
+            compiler,
+            query,
+            variables: Variables::new(),
+            scratch: Scratch::new(),
+            this: 0.0,
+        }
     }
 
     /// Sets `variable`, or its member at `path`.
@@ -100,8 +123,16 @@ impl<'a> Scope<'a> {
     }
 
     fn eval(&mut self, program: &Program) -> acacia_molang::Value {
-        let host = Asked { compiler: self.compiler, query: self.query };
-        program.eval(&mut Env { host: &host, variables: &mut self.variables, scratch: &mut self.scratch, this: self.this })
+        let host = Asked {
+            compiler: self.compiler,
+            query: self.query,
+        };
+        program.eval(&mut Env {
+            host: &host,
+            variables: &mut self.variables,
+            scratch: &mut self.scratch,
+            this: self.this,
+        })
     }
 
     /// For scripts, which are run for the variables they set.

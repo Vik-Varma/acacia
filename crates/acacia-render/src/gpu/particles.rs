@@ -28,10 +28,21 @@ impl ParticlePass {
     pub fn new(device: &wgpu::Device, color: wgpu::TextureFormat) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("particles"),
-            source: wgpu::ShaderSource::Wgsl(concat!(include_str!("globals.wgsl"), include_str!("particles.wgsl")).into()),
+            source: wgpu::ShaderSource::Wgsl(
+                concat!(include_str!("globals.wgsl"), include_str!("particles.wgsl")).into(),
+            ),
         });
-        let entry = |binding, ty| wgpu::BindGroupLayoutEntry { binding, visibility: wgpu::ShaderStages::VERTEX_FRAGMENT, ty, count: None };
-        let uniform = wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None };
+        let entry = |binding, ty| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty,
+            count: None,
+        };
+        let uniform = wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        };
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("particles"),
             entries: &[
@@ -45,10 +56,17 @@ impl ParticlePass {
                         multisampled: false,
                     },
                 ),
-                entry(3, wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering)),
+                entry(
+                    3,
+                    wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                ),
             ],
         });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("particles"), bind_group_layouts: &[Some(&layout)], immediate_size: 0 });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("particles"),
+            bind_group_layouts: &[Some(&layout)],
+            immediate_size: 0,
+        });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("particles"),
             layout: Some(&pipeline_layout),
@@ -86,13 +104,29 @@ impl ParticlePass {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        ParticlePass { pipeline, layout, view, instances: instance_buffer(device, 1024), count: 0 }
+        ParticlePass {
+            pipeline,
+            layout,
+            view,
+            instances: instance_buffer(device, 1024),
+            count: 0,
+        }
     }
 
     /// Uploads this frame's chips `partial` of a tick past their last tick; `light` gives
     /// (block, sky) at a world position.
     #[allow(clippy::too_many_arguments)]
-    pub fn prepare(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, chips: &[Chip], partial: f64, camera: DVec3, right: Vec3, up: Vec3, light: impl Fn(DVec3) -> [f32; 2]) {
+    pub fn prepare(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        chips: &[Chip],
+        partial: f64,
+        camera: DVec3,
+        right: Vec3,
+        up: Vec3,
+        light: impl Fn(DVec3) -> [f32; 2],
+    ) {
         let data: Vec<Instance> = chips
             .iter()
             .map(|p| {
@@ -119,7 +153,14 @@ impl ParticlePass {
     }
 
     /// `textures` is the block texture array the terrain draws with.
-    pub fn draw(&self, device: &wgpu::Device, pass: &mut wgpu::RenderPass<'_>, globals: &wgpu::Buffer, textures: &wgpu::TextureView, sampler: &wgpu::Sampler) {
+    pub fn draw(
+        &self,
+        device: &wgpu::Device,
+        pass: &mut wgpu::RenderPass<'_>,
+        globals: &wgpu::Buffer,
+        textures: &wgpu::TextureView,
+        sampler: &wgpu::Sampler,
+    ) {
         if self.count == 0 {
             return;
         }
@@ -127,10 +168,22 @@ impl ParticlePass {
             label: Some("particles"),
             layout: &self.layout,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: globals.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: self.view.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(textures) },
-                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::Sampler(sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: globals.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: self.view.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(textures),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(sampler),
+                },
             ],
         });
         pass.set_pipeline(&self.pipeline);

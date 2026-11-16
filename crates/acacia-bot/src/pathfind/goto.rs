@@ -9,10 +9,10 @@ use acacia_world::{BlockRegistry, ChunkView};
 use super::execute;
 use super::goal::Goal;
 use super::hazard::{self, Body, Hazards};
-use super::work::Step;
 use super::kit::DEFAULT_SCAFFOLD;
 use super::pilot::Pilot;
 use super::terrain::Terrain;
+use super::work::Step;
 use super::{Follower, SearchOpts};
 use crate::movement::{Live, Movement, Sim};
 use crate::state::GameState;
@@ -42,7 +42,16 @@ pub struct GotoOpts {
 
 impl Default for GotoOpts {
     fn default() -> Self {
-        Self { search: SearchOpts::default(), max_replans: 10, tolerance: 0.25, scaffold: DEFAULT_SCAFFOLD.to_vec(), shortcuts: true, seed: None, give_up_ticks: Some(600), settle: false }
+        Self {
+            search: SearchOpts::default(),
+            max_replans: 10,
+            tolerance: 0.25,
+            scaffold: DEFAULT_SCAFFOLD.to_vec(),
+            shortcuts: true,
+            seed: None,
+            give_up_ticks: Some(600),
+            settle: false,
+        }
     }
 }
 
@@ -63,7 +72,9 @@ pub struct Navigator {
 
 impl Navigator {
     pub fn new(goal: Goal, opts: GotoOpts) -> Self {
-        Self { pilot: Pilot::new(goal, opts) }
+        Self {
+            pilot: Pilot::new(goal, opts),
+        }
     }
 
     /// Macro moves that diverged live (each re-planned without stopping).
@@ -134,18 +145,38 @@ pub(super) struct Worked {
 }
 
 /// The pilot's field this tick from the entities around the bot ([`Pilot::perceive`]).
-fn perceive(pilot: &mut Pilot, state: &GameState, movement: &Movement, view: &ChunkView, registry: &BlockRegistry) -> Option<Arc<Hazards>> {
+fn perceive(
+    pilot: &mut Pilot,
+    state: &GameState,
+    movement: &Movement,
+    view: &ChunkView,
+    registry: &BlockRegistry,
+) -> Option<Arc<Hazards>> {
     let st = movement.state()?;
     let threats = hazard::Threats::near(&state.entities, st.pos, hazard::FIELD_RADIUS);
     let blocks = Terrain::new(view, registry);
     let sees = |a, b| hazard::clear_line(&blocks, a, b);
-    let eye = [st.pos[0], st.pos[1] + <Movement as Live>::Sim::envelope().eye_height, st.pos[2]];
-    pilot.perceive(threats, &hazard::View { eye, yaw: st.yaw, health: state.player.health, sees: &sees })
+    let eye = [
+        st.pos[0],
+        st.pos[1] + <Movement as Live>::Sim::envelope().eye_height,
+        st.pos[2],
+    ];
+    pilot.perceive(
+        threats,
+        &hazard::View {
+            eye,
+            yaw: st.yaw,
+            health: state.player.health,
+            sees: &sees,
+        },
+    )
 }
 
 /// [`perceive`] for a pilot not driven this tick (one that holds at its goal still notices a threat leave).
 pub(super) fn sense(pilot: &mut Pilot, bot: &Bot) {
-    let Some((world, movement)) = bot.backend.physics() else { return };
+    let Some((world, movement)) = bot.backend.physics() else {
+        return;
+    };
     if let (Some(view), Some(registry)) = (world.view(), world.registry()) {
         perceive(pilot, &bot.state, movement, view, registry.as_ref());
     }
@@ -157,13 +188,25 @@ fn strike_back(pilot: &mut Pilot, bot: &mut Bot) {
     if bot.java().is_some() {
         return super::java_goto::strike_back(pilot, bot);
     }
-    let Some((world, movement)) = bot.backend.physics() else { return };
-    let (Some(view), Some(registry), Some(st)) = (world.view(), world.registry(), movement.state()) else { return };
+    let Some((world, movement)) = bot.backend.physics() else {
+        return;
+    };
+    let (Some(view), Some(registry), Some(st)) = (world.view(), world.registry(), movement.state())
+    else {
+        return;
+    };
     let mut controls = movement.controls;
     let id = {
         let blocks = Terrain::new(view, registry.as_ref());
         let sees = |a, b| hazard::clear_line(&blocks, a, b);
-        let body = Body { eye: bot.eye_position(), feet: st.pos, vel: st.vel, me: bot.state.player.unique_entity_id, tick: bot.state.entities.now(), sees: &sees };
+        let body = Body {
+            eye: bot.eye_position(),
+            feet: st.pos,
+            vel: st.vel,
+            me: bot.state.player.unique_entity_id,
+            tick: bot.state.entities.now(),
+            sees: &sees,
+        };
         pilot.strike(&body, &mut controls)
     };
     strike(bot, controls, id);
@@ -182,7 +225,11 @@ pub(super) fn strike(bot: &mut Bot, controls: crate::movement::Controls, id: Opt
 }
 
 /// Steers for this tick from the edition's world and movement; `None` while they are not known yet.
-fn drive(pilot: &mut Pilot, bot: &mut Bot, mut opts: SearchOpts) -> Result<Option<NavStatus>, ActionError> {
+fn drive(
+    pilot: &mut Pilot,
+    bot: &mut Bot,
+    mut opts: SearchOpts,
+) -> Result<Option<NavStatus>, ActionError> {
     #[cfg(feature = "java")]
     if bot.java().is_some() {
         return super::java_goto::drive(pilot, bot, opts).map(Some);
@@ -190,18 +237,34 @@ fn drive(pilot: &mut Pilot, bot: &mut Bot, mut opts: SearchOpts) -> Result<Optio
     if opts.boats {
         opts.boat_source = bot.boat_source();
     }
-    let Some((world, movement)) = bot.backend.physics_mut() else { return Ok(None) };
-    let (Some(view), Some(registry)) = (world.view(), world.registry()) else { return Ok(None) };
+    let Some((world, movement)) = bot.backend.physics_mut() else {
+        return Ok(None);
+    };
+    let (Some(view), Some(registry)) = (world.view(), world.registry()) else {
+        return Ok(None);
+    };
     opts.hazards = perceive(pilot, &bot.state, movement, view, registry.as_ref());
     let terrain = Terrain::new(view, registry.as_ref()).with_hazards(opts.hazards.clone());
     let (snapshot, reg) = (view.world().clone(), registry.clone());
-    pilot.drive(&terrain, movement, opts, &mut |job| job.spawn_blocking(snapshot.clone(), reg.clone())).map(Some)
+    pilot
+        .drive(&terrain, movement, opts, &mut |job| {
+            job.spawn_blocking(snapshot.clone(), reg.clone())
+        })
+        .map(Some)
 }
 
 /// Drives `pilot` for one tick (without letting it pass) and does any work due; also returns what the work changed.
-pub(super) async fn step(pilot: &mut Pilot, bot: &mut Bot) -> (Result<NavStatus, ActionError>, Worked) {
+pub(super) async fn step(
+    pilot: &mut Pilot,
+    bot: &mut Bot,
+) -> (Result<NavStatus, ActionError>, Worked) {
     if !bot.backend.moves() {
-        return (Err(ActionError::NotPossible("pathfinding needs a physics bot (BotConfig.physics)".into())), Worked::default());
+        return (
+            Err(ActionError::NotPossible(
+                "pathfinding needs a physics bot (BotConfig.physics)".into(),
+            )),
+            Worked::default(),
+        );
     }
     let s = &pilot.opts().search;
     let kit = (s.allow_dig || s.allow_bridge).then(|| bot.path_kit(&pilot.opts().scaffold));
@@ -212,16 +275,63 @@ pub(super) async fn step(pilot: &mut Pilot, bot: &mut Bot) -> (Result<NavStatus,
         Err(e) => return (Err(e), Worked::default()),
     };
     strike_back(pilot, bot);
-    let Some(node) = pilot.pending_work().filter(|_| status == NavStatus::Working) else { return (Ok(status), Worked::default()) };
-    let solid = |bot: &Bot, p: BlockPos| bot.block_at(p).is_some_and(|(_, s)| !s.is_air() && !s.is_liquid());
-    let name = |bot: &Bot, p: BlockPos| bot.block_at(p).filter(|(_, s)| !s.is_air() && !s.is_liquid()).map(|(_, s)| s.name.to_string());
-    let breaks: Vec<_> = node.work.steps().filter_map(|s| if let Step::Break(p) = s { Some(p) } else { None }).collect();
-    let places: Vec<_> = node.work.steps().filter_map(|s| if let Step::Place { against, face } = s { Some(face.adjacent(against)) } else { None }).collect();
-    let before: Vec<_> = breaks.into_iter().filter_map(|p| Some((p, name(bot, p)?))).collect();
+    let Some(node) = pilot
+        .pending_work()
+        .filter(|_| status == NavStatus::Working)
+    else {
+        return (Ok(status), Worked::default());
+    };
+    let solid = |bot: &Bot, p: BlockPos| {
+        bot.block_at(p)
+            .is_some_and(|(_, s)| !s.is_air() && !s.is_liquid())
+    };
+    let name = |bot: &Bot, p: BlockPos| {
+        bot.block_at(p)
+            .filter(|(_, s)| !s.is_air() && !s.is_liquid())
+            .map(|(_, s)| s.name.to_string())
+    };
+    let breaks: Vec<_> = node
+        .work
+        .steps()
+        .filter_map(|s| {
+            if let Step::Break(p) = s {
+                Some(p)
+            } else {
+                None
+            }
+        })
+        .collect();
+    let places: Vec<_> = node
+        .work
+        .steps()
+        .filter_map(|s| {
+            if let Step::Place { against, face } = s {
+                Some(face.adjacent(against))
+            } else {
+                None
+            }
+        })
+        .collect();
+    let before: Vec<_> = breaks
+        .into_iter()
+        .filter_map(|p| Some((p, name(bot, p)?)))
+        .collect();
     let empty: Vec<_> = places.into_iter().filter(|p| !solid(bot, *p)).collect();
-    let done = execute::perform(bot, &node, &pilot.opts().scaffold, pilot.opts().search.profile).await;
-    let dug = before.into_iter().filter(|(p, _)| !solid(bot, *p)).collect();
-    let worked = Worked { dug, placed: empty.into_iter().filter(|p| solid(bot, *p)).collect() };
+    let done = execute::perform(
+        bot,
+        &node,
+        &pilot.opts().scaffold,
+        pilot.opts().search.profile,
+    )
+    .await;
+    let dug = before
+        .into_iter()
+        .filter(|(p, _)| !solid(bot, *p))
+        .collect();
+    let worked = Worked {
+        dug,
+        placed: empty.into_iter().filter(|p| solid(bot, *p)).collect(),
+    };
     let status = match done {
         Ok(()) => Ok(status).inspect(|_| pilot.work_done()),
         Err(ActionError::Disconnected) => Err(ActionError::Disconnected),

@@ -1,10 +1,10 @@
 use std::collections::{HashMap, VecDeque};
 
+use acacia_client::proto::nbt::{Network, root_string};
 use acacia_client::proto::packets::{
-    BlockEntityData, ContainerClose, ContainerOpen, ContainerSetData, InventoryContent, InventorySlot, ItemStackResponse,
-    UpdateTrade,
+    BlockEntityData, ContainerClose, ContainerOpen, ContainerSetData, InventoryContent,
+    InventorySlot, ItemStackResponse, UpdateTrade,
 };
-use acacia_client::proto::nbt::{root_string, Network};
 use acacia_client::proto::types::{BlockCoordinates, ContainerSlotType, WindowType};
 use acacia_client::proto::{DecodeError, Packet, RawPacket};
 
@@ -76,7 +76,10 @@ impl Containers {
                 // Named runtime_entity_id in the schema, but it is the unique id; -1 means a block container.
                 let entity = (p.runtime_entity_id != -1).then_some(p.runtime_entity_id);
                 tracing::debug!(window = ?p.window_type, id = ?p.window_id, "container open");
-                let title = entity.is_none().then(|| self.title_at(&p.coordinates)).flatten();
+                let title = entity
+                    .is_none()
+                    .then(|| self.title_at(&p.coordinates))
+                    .flatten();
                 self.opened(Container {
                     window_id: p.window_id.to_raw() as i32,
                     window_type: p.window_type,
@@ -91,7 +94,11 @@ impl Containers {
                 tracing::debug!(id = ?p.window_id, server = p.server, "container close");
                 let id = p.window_id.to_raw() as i32;
                 // A late close for a reused id must not wipe a newer window; -1 (WindowID::None) names none, so it closes any.
-                if self.open.as_ref().is_some_and(|c| c.window_id == id || id == -1) {
+                if self
+                    .open
+                    .as_ref()
+                    .is_some_and(|c| c.window_id == id || id == -1)
+                {
                     self.open = None;
                     self.data.clear();
                 }
@@ -151,7 +158,11 @@ impl Containers {
     }
 
     /// A block entity's update: remembers its `CustomName` for titling windows.
-    pub(crate) fn block_entity(&mut self, position: &BlockCoordinates, nbt: &[u8]) -> Result<(), DecodeError> {
+    pub(crate) fn block_entity(
+        &mut self,
+        position: &BlockCoordinates,
+        nbt: &[u8],
+    ) -> Result<(), DecodeError> {
         // Most never carry a name (a piston's on every move): skip the walk.
         if memchr::memmem::find(nbt, b"CustomName").is_none() {
             return Ok(());
@@ -163,7 +174,11 @@ impl Containers {
     }
 
     /// The open container's slot an `ItemStackResponse` entry of container `kind` refers to.
-    pub(crate) fn response_target(&mut self, kind: ContainerSlotType, slot: u8) -> Option<&mut ItemStack> {
+    pub(crate) fn response_target(
+        &mut self,
+        kind: ContainerSlotType,
+        slot: u8,
+    ) -> Option<&mut ItemStack> {
         let open = self.open.as_mut()?;
         if !is_container_slot(kind) {
             return None;
@@ -178,17 +193,27 @@ impl Containers {
     }
 
     fn open_window(&mut self, window: i32) -> Option<&mut Container> {
-        self.open.as_mut().filter(|c| c.window_id == window && !Inventory::is_player_window(window))
+        self.open
+            .as_mut()
+            .filter(|c| c.window_id == window && !Inventory::is_player_window(window))
     }
 
     fn title_at(&self, pos: &BlockCoordinates) -> Option<String> {
         let key = [pos.x, pos.y, pos.z];
-        self.titles.iter().rev().find(|(at, _)| *at == key).map(|(_, name)| name.clone())
+        self.titles
+            .iter()
+            .rev()
+            .find(|(at, _)| *at == key)
+            .map(|(_, name)| name.clone())
     }
 
     /// Remembers a block entity's name; also titles the open window if it is that block.
     fn name_block(&mut self, pos: &BlockCoordinates, name: &str) {
-        if let Some(open) = self.open.as_mut().filter(|c| c.position.as_ref() == Some(pos)) {
+        if let Some(open) = self
+            .open
+            .as_mut()
+            .filter(|c| c.position.as_ref() == Some(pos))
+        {
             open.title = Some(name.to_owned());
         }
         let key = [pos.x, pos.y, pos.z];

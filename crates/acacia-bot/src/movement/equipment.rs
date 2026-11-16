@@ -13,9 +13,17 @@ const LEGS: usize = 2;
 const FEET: usize = 3;
 
 pub(crate) fn worn(inventory: &Inventory, items: &ItemRegistry) -> Equipment {
-    let level = |slot: usize, id| inventory.armor.get(slot).map_or(0, |s| i32::from(enchantment_level(s, id)));
+    let level = |slot: usize, id| {
+        inventory
+            .armor
+            .get(slot)
+            .map_or(0, |s| i32::from(enchantment_level(s, id)))
+    };
     let wears = |slot: usize, name| {
-        inventory.armor.get(slot).is_some_and(|s| !s.is_empty() && items.name(s.network_id) == Some(name))
+        inventory
+            .armor
+            .get(slot)
+            .is_some_and(|s| !s.is_empty() && items.name(s.network_id) == Some(name))
     };
     Equipment {
         depth_strider: level(FEET, DEPTH_STRIDER),

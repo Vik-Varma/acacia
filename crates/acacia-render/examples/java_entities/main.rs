@@ -21,9 +21,14 @@ fn main() {
         std::process::exit(2);
     };
     keyframes::install(&std::path::Path::new(models).with_file_name("entity_animations.json"));
-    let layers: BTreeMap<String, Part> = parse_layers(&std::fs::read_to_string(models).expect("entity models")).expect("entity models json");
+    let layers: BTreeMap<String, Part> =
+        parse_layers(&std::fs::read_to_string(models).expect("entity models"))
+            .expect("entity models json");
     let records = std::fs::read_to_string(records).expect("oracle records");
-    let records = records.lines().filter(|l| !l.trim().is_empty()).map(|l| serde_json::from_str(l).expect("oracle record"));
+    let records = records
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("oracle record"));
     let mut out = compare::Report::default();
     match mode.as_str() {
         "models" => records.for_each(|r| drawn::rest(&layers, &r, &mut out)),

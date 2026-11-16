@@ -93,8 +93,16 @@ pub fn pieces(s: &Shadow, distance_sq: f64, ground: &impl Ground, ambient: f32) 
                 }
                 let power = pow - (s.feet.y - f64::from(y)) as f32 * 0.5;
                 let alpha = (power * 0.5 * light_brightness(ambient, brightness)).clamp(0.0, 1.0);
-                let relative = [(f64::from(x) - s.feet.x) as f32, (f64::from(y) - s.feet.y) as f32, (f64::from(z) - s.feet.z) as f32];
-                out.push(Piece { cell: [x, y, z], relative, alpha });
+                let relative = [
+                    (f64::from(x) - s.feet.x) as f32,
+                    (f64::from(y) - s.feet.y) as f32,
+                    (f64::from(z) - s.feet.z) as f32,
+                ];
+                out.push(Piece {
+                    cell: [x, y, z],
+                    relative,
+                    alpha,
+                });
             }
         }
     }
@@ -107,16 +115,30 @@ pub fn corners(piece: &Piece, radius: f32) -> [[f32; 5]; 4] {
     let radius = radius.min(32.0);
     let (x1, z1) = (x + 1.0, z + 1.0);
     let across = |d: f32| -d / 2.0 / radius + 0.5;
-    [[x, y, z, across(x), across(z)], [x, y, z1, across(x), across(z1)], [x1, y, z1, across(x1), across(z1)], [x1, y, z, across(x1), across(z)]]
+    [
+        [x, y, z, across(x), across(z)],
+        [x, y, z1, across(x), across(z1)],
+        [x1, y, z1, across(x1), across(z1)],
+        [x1, y, z, across(x1), across(z)],
+    ]
 }
 
 /// The shadows' triangles, relative to the camera.
-pub fn quads(shadows: &[Shadow], camera: DVec3, ground: &impl Ground, ambient: f32) -> Vec<ShadowVertex> {
+pub fn quads(
+    shadows: &[Shadow],
+    camera: DVec3,
+    ground: &impl Ground,
+    ambient: f32,
+) -> Vec<ShadowVertex> {
     let mut out = Vec::new();
     for s in shadows {
         let feet = (s.feet - camera).as_vec3() + Vec3::Y * LIFT;
         for piece in pieces(s, s.feet.distance_squared(camera), ground, ambient) {
-            let v = corners(&piece, s.radius).map(|[x, y, z, u, v]| ShadowVertex { position: (feet + Vec3::new(x, y, z)).to_array(), uv: [u, v], alpha: piece.alpha });
+            let v = corners(&piece, s.radius).map(|[x, y, z, u, v]| ShadowVertex {
+                position: (feet + Vec3::new(x, y, z)).to_array(),
+                uv: [u, v],
+                alpha: piece.alpha,
+            });
             out.extend([v[0], v[1], v[2], v[0], v[2], v[3]]);
         }
     }
@@ -134,14 +156,18 @@ pub struct WorldGround<'a, L: Fn(DVec3) -> [f32; 2]> {
 
 impl<L: Fn(DVec3) -> [f32; 2]> Ground for WorldGround<'_, L> {
     fn floor(&self, x: i32, y: i32, z: i32) -> bool {
-        let Some(chunk) = self.world.get(x >> 4, z >> 4) else { return false };
+        let Some(chunk) = self.world.get(x >> 4, z >> 4) else {
+            return false;
+        };
         let block = self.table.get(chunk.read().block(x, y, z));
         block.light.full_collision && block.shape != crate::blocks::Shape::None
     }
 
     fn brightness(&self, x: i32, y: i32, z: i32) -> u8 {
         let [block, sky] = (self.light)(DVec3::new(f64::from(x), f64::from(y), f64::from(z)) + 0.5);
-        (block as i32).max(sky as i32 - self.sky_darken).clamp(0, 15) as u8
+        (block as i32)
+            .max(sky as i32 - self.sky_darken)
+            .clamp(0, 15) as u8
     }
 }
 
@@ -163,17 +189,35 @@ mod tests {
 
     #[test]
     fn a_shadow_lies_on_the_ground_under_the_entity_and_fades() {
-        let shadow = Shadow { feet: DVec3::new(0.5, 64.0, 0.5), radius: 0.4, strength: 1.0 };
+        let shadow = Shadow {
+            feet: DVec3::new(0.5, 64.0, 0.5),
+            radius: 0.4,
+            strength: 1.0,
+        };
         let near = pieces(&shadow, 9.0, &Flat, 0.0);
         // The radius stays inside the cell: a piece on the ground's top, and a fainter one a block
         // down (Java does not look at the cell between).
-        assert_eq!(near.iter().map(|p| p.relative).collect::<Vec<_>>(), [[-0.5, -1.0, -0.5], [-0.5, 0.0, -0.5]]);
+        assert_eq!(
+            near.iter().map(|p| p.relative).collect::<Vec<_>>(),
+            [[-0.5, -1.0, -0.5], [-0.5, 0.0, -0.5]]
+        );
         assert!(near[0].alpha < near[1].alpha);
         // The blob's centre is under the feet: the cell's corners lie just outside the image.
         let c = corners(&near[1], shadow.radius);
-        assert!((c[0][3] - 1.125).abs() < 1e-6 && (c[2][3] + 0.125).abs() < 1e-6, "{c:?}");
+        assert!(
+            (c[0][3] - 1.125).abs() < 1e-6 && (c[2][3] + 0.125).abs() < 1e-6,
+            "{c:?}"
+        );
         // Standing higher thins it; 16 blocks from the camera there is none.
-        let raised = pieces(&Shadow { feet: DVec3::new(0.5, 64.4, 0.5), ..shadow }, 9.0, &Flat, 0.0);
+        let raised = pieces(
+            &Shadow {
+                feet: DVec3::new(0.5, 64.4, 0.5),
+                ..shadow
+            },
+            9.0,
+            &Flat,
+            0.0,
+        );
         assert!(raised[0].alpha < near[1].alpha && raised[0].alpha > 0.0);
         assert!(pieces(&shadow, 256.0, &Flat, 0.0).is_empty());
     }

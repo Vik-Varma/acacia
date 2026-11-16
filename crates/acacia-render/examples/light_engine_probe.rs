@@ -17,7 +17,10 @@ use serde_json::Value;
 
 /// Divergent cells shown per case and channel, unless `LIGHT_SHOWN` says otherwise.
 fn shown_limit() -> usize {
-    std::env::var("LIGHT_SHOWN").ok().and_then(|v| v.parse().ok()).unwrap_or(3)
+    std::env::var("LIGHT_SHOWN")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(3)
 }
 
 struct Layout {
@@ -46,7 +49,8 @@ impl LightBlocks for Layout {
     }
 
     fn cell(&self, x: i32, y: i32, z: i32) -> Option<Cell> {
-        let loaded = (0..self.chunks[0]).contains(&(x >> 4)) && (0..self.chunks[1]).contains(&(z >> 4));
+        let loaded =
+            (0..self.chunks[0]).contains(&(x >> 4)) && (0..self.chunks[1]).contains(&(z >> 4));
         loaded.then(|| self.cells.get(&[x, y, z]).copied().unwrap_or_default())
     }
 
@@ -78,7 +82,11 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let input = BufReader::new(std::fs::File::open(&args[1]).expect("layouts"));
     let (mut cases, mut cells_compared, mut cells_wrong) = (0, 0usize, 0usize);
-    for line in input.lines().map(Result::unwrap).filter(|l| !l.trim().is_empty()) {
+    for line in input
+        .lines()
+        .map(Result::unwrap)
+        .filter(|l| !l.trim().is_empty())
+    {
         let row: Value = serde_json::from_str(&line).expect("layout");
         let case = row["case"].as_str().unwrap();
         let mut shapes: Vec<FaceShapes> = Vec::new();
@@ -92,13 +100,41 @@ fn main() {
                 }
                 None => 0,
             };
-            cell_of.insert(state, Cell { props: props(level("emission"), level("dampening")), shape });
+            cell_of.insert(
+                state,
+                Cell {
+                    props: props(level("emission"), level("dampening")),
+                    shape,
+                },
+            );
         }
-        let chunks = [row["chunks"][0].as_i64().unwrap() as i32, row["chunks"][1].as_i64().unwrap() as i32];
+        let chunks = [
+            row["chunks"][0].as_i64().unwrap() as i32,
+            row["chunks"][1].as_i64().unwrap() as i32,
+        ];
         let height = row["height"].as_i64().unwrap() as i32;
-        let cells = row["blocks"].as_array().unwrap().iter().map(place).map(|(p, s)| (p, cell_of[s])).collect();
-        let dim = Dimension { min_y: 0, height: height as u32, air: 0, sky: row["sky"].as_bool().unwrap() };
-        let mut lighter = Lighter { blocks: Layout { chunks, height, cells }, rules: Rules::Java(&shapes), dim };
+        let cells = row["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(place)
+            .map(|(p, s)| (p, cell_of[s]))
+            .collect();
+        let dim = Dimension {
+            min_y: 0,
+            height: height as u32,
+            air: 0,
+            sky: row["sky"].as_bool().unwrap(),
+        };
+        let mut lighter = Lighter {
+            blocks: Layout {
+                chunks,
+                height,
+                cells,
+            },
+            rules: Rules::Java(&shapes),
+            dim,
+        };
         let mut data = LightData::default();
         for cx in 0..chunks[0] {
             for cz in 0..chunks[1] {
@@ -138,7 +174,9 @@ fn main() {
                         if want != got {
                             cells_wrong += 1;
                             if shown < shown_limit() {
-                                println!("DIVERGENCE\t{case}\t{channel}@{x},{y},{z}\t{want}\t{got}");
+                                println!(
+                                    "DIVERGENCE\t{case}\t{channel}@{x},{y},{z}\t{want}\t{got}"
+                                );
                                 shown += 1;
                             }
                         }

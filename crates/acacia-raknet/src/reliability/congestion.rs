@@ -46,7 +46,9 @@ impl Rtt {
     }
 
     fn rto(&self) -> Duration {
-        self.srtt.map_or(INITIAL_RTO, |s| (s + self.rttvar * 4).clamp(MIN_RTO, MAX_RTO))
+        self.srtt.map_or(INITIAL_RTO, |s| {
+            (s + self.rttvar * 4).clamp(MIN_RTO, MAX_RTO)
+        })
     }
 }
 
@@ -76,7 +78,16 @@ pub(crate) struct Congestion {
 impl Congestion {
     pub fn new(windowed: bool) -> Self {
         let window = windowed.then_some(INITIAL_WINDOW);
-        Self { rtt: Rtt::default(), window, threshold: u32::MAX, acked: 0, recover: 0, backoff: 0, nacked: 0, undo: None }
+        Self {
+            rtt: Rtt::default(),
+            window,
+            threshold: u32::MAX,
+            acked: 0,
+            recover: 0,
+            backoff: 0,
+            nacked: 0,
+            undo: None,
+        }
     }
 
     pub fn srtt(&self) -> Option<Duration> {
@@ -96,7 +107,9 @@ impl Congestion {
     pub fn on_ack(&mut self, rtt: Duration, limited: bool) {
         self.rtt.sample(rtt);
         self.backoff = 0;
-        let Some(window) = &mut self.window else { return };
+        let Some(window) = &mut self.window else {
+            return;
+        };
         if !limited {
             return;
         }
@@ -136,7 +149,11 @@ impl Congestion {
             self.recover = next;
             self.backoff = (self.backoff + 1).min(MAX_BACKOFF);
             if let Some(window) = &mut self.window {
-                self.undo = Some(Undo { seq, window: *window, threshold: self.threshold });
+                self.undo = Some(Undo {
+                    seq,
+                    window: *window,
+                    threshold: self.threshold,
+                });
                 self.threshold = (*window / 2).max(MIN_WINDOW);
                 *window = MIN_WINDOW;
                 self.acked = 0;
@@ -178,7 +195,11 @@ mod tests {
         c.on_nack(5, 30);
         assert_eq!(c.window(), 20, "a NACK keeps the window");
         acks(&mut c, 20);
-        assert_eq!(c.window(), 21, "after slow start, one more per window of ACKs");
+        assert_eq!(
+            c.window(),
+            21,
+            "after slow start, one more per window of ACKs"
+        );
         acks(&mut c, 20);
         assert_eq!(c.window(), 21);
     }
@@ -203,7 +224,11 @@ mod tests {
         c.on_resend_timeout(4, 30);
         assert_eq!((c.window(), c.rto()), (2, MIN_RTO * 2));
         c.on_received(0..=3);
-        assert_eq!(c.window(), 2, "older datagrams say nothing of the one that timed out");
+        assert_eq!(
+            c.window(),
+            2,
+            "older datagrams say nothing of the one that timed out"
+        );
         c.on_received(4..=6);
         assert_eq!((c.window(), c.rto()), (20, MIN_RTO));
         c.on_received(4..=6);

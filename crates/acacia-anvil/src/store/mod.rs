@@ -163,12 +163,17 @@ impl AnvilStore {
             &mut self.buf,
         );
         let pos = (col.x, col.z);
-        if col.is_air() && (self.columns.contains_key(&pos) || self.disk.has(pos).unwrap_or(false)) {
+        if col.is_air() && (self.columns.contains_key(&pos) || self.disk.has(pos).unwrap_or(false))
+        {
             return false;
         }
         // Sent again as it was (relog, overlapping views): nothing around it changes.
         let now = Instant::now();
-        if let Some(e) = self.columns.get_mut(&pos).filter(|e| !e.fixed && e.col == col) {
+        if let Some(e) = self
+            .columns
+            .get_mut(&pos)
+            .filter(|e| !e.fixed && e.col == col)
+        {
             e.converted = now;
             return true;
         }
@@ -218,7 +223,9 @@ impl AnvilStore {
         let mut by_region: HashMap<Pos, (Vec<Pos>, Instant)> = HashMap::new();
         for (&pos, &since) in &self.dirty {
             if force || now.duration_since(since) >= self.cfg.max_wait || self.present(pos) == ALL {
-                let e = by_region.entry(region_of(pos)).or_insert((Vec::new(), since));
+                let e = by_region
+                    .entry(region_of(pos))
+                    .or_insert((Vec::new(), since));
                 e.0.push(pos);
                 e.1 = e.1.min(since);
             }
@@ -237,8 +244,10 @@ impl AnvilStore {
             stats.columns += cols.len();
             stats.regions += 1;
         }
-        self.region_written.retain(|_, t| now.duration_since(*t) < interval);
-        self.touched.retain(|_, t| now.duration_since(*t) < interval);
+        self.region_written
+            .retain(|_, t| now.duration_since(*t) < interval);
+        self.touched
+            .retain(|_, t| now.duration_since(*t) < interval);
         stats.waiting = self.dirty.len();
         self.evict();
         Ok(stats)

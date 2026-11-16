@@ -73,10 +73,16 @@ fn layout(effects: &[Active], width: f32) -> Vec<(&'static str, Active, [f32; 2]
     let (mut good, mut bad) = (0.0, 0.0);
     let mut out = Vec::new();
     for active in effects {
-        let Some(&(_, name, harmful)) = EFFECTS.iter().find(|(id, ..)| *id == active.id) else { continue };
+        let Some(&(_, name, harmful)) = EFFECTS.iter().find(|(id, ..)| *id == active.id) else {
+            continue;
+        };
         let column = if harmful { &mut bad } else { &mut good };
         *column += 1.0;
-        out.push((name, *active, [width - 25.0 * *column, if harmful { 27.0 } else { 1.0 }]));
+        out.push((
+            name,
+            *active,
+            [width - 25.0 * *column, if harmful { 27.0 } else { 1.0 }],
+        ));
     }
     out
 }
@@ -87,18 +93,37 @@ fn alpha(ticks: i32) -> f32 {
         return 1.0;
     }
     let (d, left) = (ticks as f32, 10.0 - (ticks / 20) as f32);
-    ((d / 10.0 / 5.0 * 0.5).clamp(0.0, 0.5) + (d * std::f32::consts::PI / 5.0).cos() * (left / 10.0 * 0.25).clamp(0.0, 0.25)).clamp(0.0, 1.0)
+    ((d / 10.0 / 5.0 * 0.5).clamp(0.0, 0.5)
+        + (d * std::f32::consts::PI / 5.0).cos() * (left / 10.0 * 0.25).clamp(0.0, 0.25))
+    .clamp(0.0, 1.0)
 }
 
 pub fn draw(list: &mut DrawList, theme: &Theme, effects: &[Active], width: f32) {
     for (name, active, [x, y]) in layout(effects, width) {
-        let backing = if active.ambient { BACKGROUND_AMBIENT } else { BACKGROUND };
-        if let Some(sprite) = theme.atlas.get(backing).or_else(|| theme.atlas.get(BACKGROUND)) {
+        let backing = if active.ambient {
+            BACKGROUND_AMBIENT
+        } else {
+            BACKGROUND
+        };
+        if let Some(sprite) = theme
+            .atlas
+            .get(backing)
+            .or_else(|| theme.atlas.get(BACKGROUND))
+        {
             list.sprite(sprite, x, y, crate::draw::WHITE);
         }
-        let alpha = if active.ambient { 1.0 } else { alpha(active.ticks) };
+        let alpha = if active.ambient {
+            1.0
+        } else {
+            alpha(active.ticks)
+        };
         if let Some(icon) = theme.atlas.get(&sprite(name)) {
-            list.sprite(icon, x + 3.0, y + 3.0, [255, 255, 255, (alpha * 255.0) as u8]);
+            list.sprite(
+                icon,
+                x + 3.0,
+                y + 3.0,
+                [255, 255, 255, (alpha * 255.0) as u8],
+            );
         }
     }
 }
@@ -109,13 +134,29 @@ mod tests {
 
     #[test]
     fn good_effects_fill_the_first_row_from_the_right_and_bad_ones_the_second() {
-        let active = |id| Active { id, ticks: 600, ambient: false };
+        let active = |id| Active {
+            id,
+            ticks: 600,
+            ambient: false,
+        };
         let placed = layout(&[active(1), active(19), active(5), active(99)], 320.0);
         let at: Vec<_> = placed.iter().map(|(name, _, at)| (*name, *at)).collect();
-        assert_eq!(at, [("speed", [295.0, 1.0]), ("poison", [295.0, 27.0]), ("strength", [270.0, 1.0])]);
+        assert_eq!(
+            at,
+            [
+                ("speed", [295.0, 1.0]),
+                ("poison", [295.0, 27.0]),
+                ("strength", [270.0, 1.0])
+            ]
+        );
         assert_eq!(bedrock_file("hero_of_the_village"), "village_hero_effect");
         // Steady, then a pulse: full at 200 ticks (cos 40π = 1), dark near the end.
         assert_eq!((alpha(600), alpha(-1)), (1.0, 1.0));
-        assert!((alpha(200) - 0.5).abs() < 1e-3 && alpha(5) < 0.1, "{} {}", alpha(200), alpha(5));
+        assert!(
+            (alpha(200) - 0.5).abs() < 1e-3 && alpha(5) < 0.1,
+            "{} {}",
+            alpha(200),
+            alpha(5)
+        );
     }
 }

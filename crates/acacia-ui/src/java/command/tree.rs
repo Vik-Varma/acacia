@@ -35,14 +35,22 @@ impl ArgType {
                 let v = r.read_int()?;
                 if v < min || v > max {
                     r.cursor = start;
-                    return Err(r.error(if v < min { Kind::IntegerTooLow { found: v, min } } else { Kind::IntegerTooHigh { found: v, max } }));
+                    return Err(r.error(if v < min {
+                        Kind::IntegerTooLow { found: v, min }
+                    } else {
+                        Kind::IntegerTooHigh { found: v, max }
+                    }));
                 }
             }
             ArgType::Float { min, max } => {
                 let v = r.read_float()?;
                 if v < min || v > max {
                     r.cursor = start;
-                    return Err(r.error(if v < min { Kind::FloatTooLow { found: v, min } } else { Kind::FloatTooHigh { found: v, max } }));
+                    return Err(r.error(if v < min {
+                        Kind::FloatTooLow { found: v, min }
+                    } else {
+                        Kind::FloatTooHigh { found: v, max }
+                    }));
                 }
             }
             ArgType::Bool => {
@@ -69,7 +77,11 @@ pub enum NodeKind {
     Literal(String),
     /// An argument; `suggestions` are its custom ones (`SharedSuggestionProvider.suggest` over
     /// the list), else the type's own.
-    Argument { name: String, ty: ArgType, suggestions: Option<Vec<String>> },
+    Argument {
+        name: String,
+        ty: ArgType,
+        suggestions: Option<Vec<String>>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -113,7 +125,13 @@ pub struct Tree {
 
 impl Default for Tree {
     fn default() -> Tree {
-        Tree { nodes: vec![Node { kind: NodeKind::Root, executable: false, children: Vec::new() }] }
+        Tree {
+            nodes: vec![Node {
+                kind: NodeKind::Root,
+                executable: false,
+                children: Vec::new(),
+            }],
+        }
     }
 }
 
@@ -124,8 +142,16 @@ impl Tree {
 
     /// `parent.addChild`: a child of the same name is reused (and made executable if this one is).
     pub fn add(&mut self, parent: usize, kind: NodeKind, executable: bool) -> usize {
-        let node = Node { kind, executable, children: Vec::new() };
-        if let Some(&existing) = self.nodes[parent].children.iter().find(|&&c| self.nodes[c].name() == node.name()) {
+        let node = Node {
+            kind,
+            executable,
+            children: Vec::new(),
+        };
+        if let Some(&existing) = self.nodes[parent]
+            .children
+            .iter()
+            .find(|&&c| self.nodes[c].name() == node.name())
+        {
             self.nodes[existing].executable |= executable;
             return existing;
         }
@@ -148,8 +174,16 @@ impl Tree {
             let kind = match (c["literal"].as_str(), c["argument"].as_str()) {
                 (Some(l), _) => NodeKind::Literal(l.to_owned()),
                 (_, Some(name)) => {
-                    let suggestions = c["suggest"].as_array().map(|a| a.iter().filter_map(|s| s.as_str().map(str::to_owned)).collect());
-                    NodeKind::Argument { name: name.to_owned(), ty: arg_type(c), suggestions }
+                    let suggestions = c["suggest"].as_array().map(|a| {
+                        a.iter()
+                            .filter_map(|s| s.as_str().map(str::to_owned))
+                            .collect()
+                    });
+                    NodeKind::Argument {
+                        name: name.to_owned(),
+                        ty: arg_type(c),
+                        suggestions,
+                    }
                 }
                 _ => continue,
             };
@@ -163,8 +197,14 @@ fn arg_type(c: &Value) -> ArgType {
     let int = |k: &str, d: i32| c[k].as_i64().map_or(d, |v| v as i32);
     let float = |k: &str, d: f32| c[k].as_f64().map_or(d, |v| v as f32);
     match c["type"].as_str().unwrap_or("token") {
-        "integer" => ArgType::Integer { min: int("min", i32::MIN), max: int("max", i32::MAX) },
-        "float" => ArgType::Float { min: float("min", -f32::MAX), max: float("max", f32::MAX) },
+        "integer" => ArgType::Integer {
+            min: int("min", i32::MIN),
+            max: int("max", i32::MAX),
+        },
+        "float" => ArgType::Float {
+            min: float("min", -f32::MAX),
+            max: float("max", f32::MAX),
+        },
         "bool" => ArgType::Bool,
         "word" => ArgType::Word,
         "string" => ArgType::Quotable,

@@ -17,20 +17,39 @@ const MAX_TICKS: u32 = 3000;
 const BOX: ([i32; 3], [i32; 3]) = ([-1, -3, -4], [16, 4, 4]);
 
 fn env<T: std::str::FromStr>(name: &str, default: T) -> T {
-    std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
 }
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Error> {
-    let _ = tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
     let mut args = std::env::args().skip(1);
     let server = args.next().unwrap_or_else(|| "127.0.0.1:19170".into());
     let name = args.next().unwrap_or_else(|| "LagA".into());
     let observer = args.next().unwrap_or_else(|| "LagObs".into());
     let only = std::env::var("ONLY").ok();
-    let lag = Lag { delay: Duration::from_millis(env("LAG_MS", 150)), jitter: Duration::from_millis(20), loss: env("LOSS", 0.05), spike: Duration::from_millis(300), seed: 7 };
+    let lag = Lag {
+        delay: Duration::from_millis(env("LAG_MS", 150)),
+        jitter: Duration::from_millis(20),
+        loss: env("LOSS", 0.05),
+        spike: Duration::from_millis(300),
+        seed: 7,
+    };
     println!("lag {lag:?}");
-    let (mut a, pad) = support::connect_config(&server, &name, BotConfig { lag: Some(lag), ..BotConfig::default() }).await?;
+    let (mut a, pad) = support::connect_config(
+        &server,
+        &name,
+        BotConfig {
+            lag: Some(lag),
+            ..BotConfig::default()
+        },
+    )
+    .await?;
     let mut failed = 0;
     for course in ["dig", "bridge"] {
         if only.as_deref().is_some_and(|o| o != course) {
@@ -51,22 +70,44 @@ async fn main() -> Result<(), Error> {
     Ok(())
 }
 
-async fn run(a: &mut Bot, pad: &Pad, course: &str, server: &str, observer: &str) -> Result<String, Error> {
+async fn run(
+    a: &mut Bot,
+    pad: &Pad,
+    course: &str,
+    server: &str,
+    observer: &str,
+) -> Result<String, Error> {
     let mut opts = GotoOpts::default();
     let fills: Vec<Fill> = if course == "dig" {
         opts.search.allow_dig = true;
-        vec![([2, 0, support::PAD_MIN[2]], [9, 9, support::PAD_MAX[2]], "stone")]
+        vec![(
+            [2, 0, support::PAD_MIN[2]],
+            [9, 9, support::PAD_MAX[2]],
+            "stone",
+        )]
     } else {
         opts.search.allow_bridge = true;
-        vec![([4, support::PAD_MIN[1], support::PAD_MIN[2]], [10, -1, support::PAD_MAX[2]], "air")]
+        vec![(
+            [4, support::PAD_MIN[1], support::PAD_MIN[2]],
+            [10, -1, support::PAD_MAX[2]],
+            "air",
+        )]
     };
     pad.build(a, &fills, 5).await?;
-    for c in ["/clear @s", "/give @s diamond_pickaxe", "/give @s cobblestone 64"] {
+    for c in [
+        "/clear @s",
+        "/give @s diamond_pickaxe",
+        "/give @s cobblestone 64",
+    ] {
         pad.run(a, c);
         a.wait_ticks(4).await?;
     }
     pad.teleport(a, [0.5, 0.0, 0.5], -90.0).await?;
-    let (before, sent, retries) = (corrections(a), a.governor().actions_sent(), a.governor().retries());
+    let (before, sent, retries) = (
+        corrections(a),
+        a.governor().actions_sent(),
+        a.governor().retries(),
+    );
     let mut nav = Navigator::new(Goal::Block(pad.block([14, 0, 0])), opts);
     let (mut ticks, mut worked) = (0, 0);
     let arrived = loop {
@@ -85,11 +126,20 @@ async fn run(a: &mut Bot, pad: &Pad, course: &str, server: &str, observer: &str)
     let g = a.governor();
     let summary = format!(
         "{ticks} ticks, {worked} work moves, {} actions ({} retries), echo rtt {:?}, {} corrections, {} setbacks held, {} repeated work steps, {} ghosts",
-        g.actions_sent() - sent, g.retries() - retries, g.rtt(), corrections(a) - before, nav.pilot().settles(), nav.pilot().work_repeats(), ghosts.len()
+        g.actions_sent() - sent,
+        g.retries() - retries,
+        g.rtt(),
+        corrections(a) - before,
+        nav.pilot().settles(),
+        nav.pilot().work_repeats(),
+        ghosts.len()
     );
     arrived.map_err(|e| format!("goto: {e} ({summary})"))?;
     if worked == 0 {
-        return Err(format!("never worked: the course was crossed without digging or bridging ({summary})").into());
+        return Err(format!(
+            "never worked: the course was crossed without digging or bridging ({summary})"
+        )
+        .into());
     }
     if !ghosts.is_empty() || nav.pilot().work_repeats() > 0 {
         return Err(format!("{summary}; ghosts at {ghosts:?}").into());
@@ -98,10 +148,23 @@ async fn run(a: &mut Bot, pad: &Pad, course: &str, server: &str, observer: &str)
 }
 
 /// Cells of the course where the lagging bot's world differs from a fresh observer's.
-async fn ghosts(a: &mut Bot, pad: &Pad, server: &str, observer: &str) -> Result<Vec<String>, Error> {
+async fn ghosts(
+    a: &mut Bot,
+    pad: &Pad,
+    server: &str,
+    observer: &str,
+) -> Result<Vec<String>, Error> {
     let (mut o, _) = support::connect_config(server, observer, BotConfig::default()).await?;
     let spot = pad.block([6, 2, 6]);
-    pad.run(a, &format!("/tp {observer} {} {} {}", spot[0] as f32 + 0.5, spot[1], spot[2] as f32 + 0.5));
+    pad.run(
+        a,
+        &format!(
+            "/tp {observer} {} {} {}",
+            spot[0] as f32 + 0.5,
+            spot[1],
+            spot[2] as f32 + 0.5
+        ),
+    );
     o.wait_ticks(60).await?;
     let (lo, hi) = BOX;
     let mut out = Vec::new();

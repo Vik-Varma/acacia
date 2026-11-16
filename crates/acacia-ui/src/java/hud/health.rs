@@ -50,7 +50,13 @@ pub struct Health {
 }
 
 /// `Hud.HeartType`'s sprite: `kind` `None` is the container.
-fn heart(kind: Option<HeartKind>, absorbing: bool, hardcore: bool, half: bool, blink: bool) -> String {
+fn heart(
+    kind: Option<HeartKind>,
+    absorbing: bool,
+    hardcore: bool,
+    half: bool,
+    blink: bool,
+) -> String {
     let base = match (kind, absorbing) {
         (None, _) => {
             let hc = if hardcore { "_hardcore" } else { "" };
@@ -95,7 +101,11 @@ impl HealthHud {
         let rows = ceil((max_health + absorption as f32) / 2.0 / 10.0);
         let row_height = (10 - (rows - 2)).max(3);
         let mut y_air = y_base - 10;
-        let offset_index = if i.regeneration { i.tick % ceil(max_health + 5.0) } else { -1 };
+        let offset_index = if i.regeneration {
+            i.tick % ceil(max_health + 5.0)
+        } else {
+            -1
+        };
         if i.armor > 0 {
             let y = y_base - (rows - 1) * row_height - 10;
             for n in 0..10 {
@@ -125,14 +135,44 @@ impl HealthHud {
                 let ah = halves - containers * 2;
                 if ah < absorption {
                     let withered = i.kind == HeartKind::Withered;
-                    gui.sprite(heart(Some(i.kind), !withered, i.hardcore, ah + 1 == absorption, false), x, y, 9, 9);
+                    gui.sprite(
+                        heart(
+                            Some(i.kind),
+                            !withered,
+                            i.hardcore,
+                            ah + 1 == absorption,
+                            false,
+                        ),
+                        x,
+                        y,
+                        9,
+                        9,
+                    );
                 }
             }
             if blink && halves < old {
-                gui.sprite(heart(Some(i.kind), false, i.hardcore, halves + 1 == old, true), x, y, 9, 9);
+                gui.sprite(
+                    heart(Some(i.kind), false, i.hardcore, halves + 1 == old, true),
+                    x,
+                    y,
+                    9,
+                    9,
+                );
             }
             if halves < current {
-                gui.sprite(heart(Some(i.kind), false, i.hardcore, halves + 1 == current, false), x, y, 9, 9);
+                gui.sprite(
+                    heart(
+                        Some(i.kind),
+                        false,
+                        i.hardcore,
+                        halves + 1 == current,
+                        false,
+                    ),
+                    x,
+                    y,
+                    9,
+                    9,
+                );
             }
         }
         if i.vehicle_hearts == 0 {
@@ -176,7 +216,11 @@ fn air(gui: &mut Gui, i: &Health, x_right: i32, y_air: i32, random: &mut JavaRan
         } else if full != popping && b == popping && i.under_water {
             gui.sprite("hud/air_bursting", x, y, 9, 9);
         } else if b > 10 - empty {
-            let wobble = if empty == 10 && i.tick % 2 == 0 { random.next_int_bound(2) } else { 0 };
+            let wobble = if empty == 10 && i.tick % 2 == 0 {
+                random.next_int_bound(2)
+            } else {
+                0
+            };
             gui.sprite("hud/air_empty", x, y + wobble, 9, 9);
         }
     }
@@ -188,22 +232,55 @@ mod tests {
 
     #[test]
     fn heart_sprites_follow_heart_type() {
-        assert_eq!(heart(None, false, true, false, true), "hud/heart/container_hardcore_blinking");
-        assert_eq!(heart(Some(HeartKind::Normal), true, true, true, false), "hud/heart/absorbing_hardcore_half");
-        assert_eq!(heart(Some(HeartKind::Frozen), false, false, false, true), "hud/heart/frozen_full_blinking");
-        assert_eq!(heart(Some(HeartKind::Normal), false, false, true, false), "hud/heart/half");
+        assert_eq!(
+            heart(None, false, true, false, true),
+            "hud/heart/container_hardcore_blinking"
+        );
+        assert_eq!(
+            heart(Some(HeartKind::Normal), true, true, true, false),
+            "hud/heart/absorbing_hardcore_half"
+        );
+        assert_eq!(
+            heart(Some(HeartKind::Frozen), false, false, false, true),
+            "hud/heart/frozen_full_blinking"
+        );
+        assert_eq!(
+            heart(Some(HeartKind::Normal), false, false, true, false),
+            "hud/heart/half"
+        );
     }
 
     #[test]
     fn fifteen_health_is_seven_hearts_and_a_half() {
         let mut gui = Gui::new(320, 240);
-        let state = Health { health: 15.0, max_health: 20.0, food: 20, saturation: 5.0, air: 300, max_air: 300, millis: 5000, ..Health::default() };
+        let state = Health {
+            health: 15.0,
+            max_health: 20.0,
+            food: 20,
+            saturation: 5.0,
+            air: 300,
+            max_air: 300,
+            millis: 5000,
+            ..Health::default()
+        };
         HealthHud::default().extract(&mut gui, &state);
-        let names: Vec<_> = gui.draws.iter().filter_map(|d| match d {
-            crate::java::gui::GuiDraw::Sprite { sprite, x, y, .. } if sprite.starts_with("hud/heart/") && !sprite.contains("container") => Some((sprite.to_string(), *x, *y)),
-            _ => None,
-        }).collect();
+        let names: Vec<_> = gui
+            .draws
+            .iter()
+            .filter_map(|d| match d {
+                crate::java::gui::GuiDraw::Sprite { sprite, x, y, .. }
+                    if sprite.starts_with("hud/heart/") && !sprite.contains("container") =>
+                {
+                    Some((sprite.to_string(), *x, *y))
+                }
+                _ => None,
+            })
+            .collect();
         assert_eq!(names.len(), 8);
-        assert_eq!(names[0], ("hud/heart/half".to_owned(), 125, 201), "drawn from the last container down");
+        assert_eq!(
+            names[0],
+            ("hud/heart/half".to_owned(), 125, 201),
+            "drawn from the last container down"
+        );
     }
 }

@@ -12,7 +12,10 @@ use super::stack::ItemStack;
 use crate::java::text::Text;
 
 /// `EquipmentSlotGroup.values()`.
-pub const SLOT_GROUPS: [&str; 11] = ["any", "mainhand", "offhand", "hand", "feet", "legs", "chest", "head", "armor", "body", "saddle"];
+pub const SLOT_GROUPS: [&str; 11] = [
+    "any", "mainhand", "offhand", "hand", "feet", "legs", "chest", "head", "armor", "body",
+    "saddle",
+];
 
 /// A modifier: attribute id, modifier id, amount, operation (`add_value`, ...).
 pub struct Modifier<'a> {
@@ -40,7 +43,10 @@ impl Modifier<'_> {
 /// `Component.translatable(attribute.getDescriptionId())`.
 pub fn attribute_name(attribute: &str, d: &Details) -> Text {
     let path = attribute.strip_prefix("minecraft:").unwrap_or(attribute);
-    let key = d.game.text("attribute", attribute, "description").map_or_else(|| format!("attribute.name.{path}"), str::to_owned);
+    let key = d
+        .game
+        .text("attribute", attribute, "description")
+        .map_or_else(|| format!("attribute.name.{path}"), str::to_owned);
     d.tr(&key, &[])
 }
 
@@ -52,7 +58,16 @@ pub fn signed_line(m: &Modifier, shown: f64, d: &Details) -> Option<(Text, bool)
         _ => return None,
     };
     let key = format!("attribute.modifier.{kind}.{}", m.operation_id());
-    Some((d.tr(&key, &[Text::literal(decimal(value)), attribute_name(m.attribute, d)]), increase))
+    Some((
+        d.tr(
+            &key,
+            &[
+                Text::literal(decimal(value)),
+                attribute_name(m.attribute, d),
+            ],
+        ),
+        increase,
+    ))
 }
 
 /// `Display.Default.apply`.
@@ -70,13 +85,22 @@ fn default_line(m: &Modifier, d: &Details) -> Option<Text> {
     };
     if base.is_some() {
         let key = format!("attribute.modifier.equals.{}", m.operation_id());
-        let line = d.tr(&key, &[Text::literal(decimal(shown)), attribute_name(m.attribute, d)]);
+        let line = d.tr(
+            &key,
+            &[
+                Text::literal(decimal(shown)),
+                attribute_name(m.attribute, d),
+            ],
+        );
         return Some(Text::literal(" ").append(line).with_color(DARK_GREEN));
     }
     let m = Modifier { amount, ..*m };
     let (line, increase) = signed_line(&m, shown, d)?;
     let field = if increase { "positive" } else { "negative" };
-    let color = d.game.text("attribute", m.attribute, field).unwrap_or(if increase { "blue" } else { "red" });
+    let color = d
+        .game
+        .text("attribute", m.attribute, field)
+        .unwrap_or(if increase { "blue" } else { "red" });
     Some(line.with_style(&formatting(color)))
 }
 
@@ -101,32 +125,62 @@ pub fn lines(stack: &ItemStack, display: &Display, d: &Details, out: &mut Vec<Te
                 continue;
             }
             let Some(m) = modifier(v) else { continue };
-            match v.get("display").and_then(|x| x.get("type")).and_then(Value::as_str).unwrap_or("default") {
+            match v
+                .get("display")
+                .and_then(|x| x.get("type"))
+                .and_then(Value::as_str)
+                .unwrap_or("default")
+            {
                 "hidden" => {}
-                "override" => group_lines.push(Some(v["display"].get("value").map(|t| Text::from_json(t, d.lang)).unwrap_or_default())),
+                "override" => group_lines.push(Some(
+                    v["display"]
+                        .get("value")
+                        .map(|t| Text::from_json(t, d.lang))
+                        .unwrap_or_default(),
+                )),
                 _ => group_lines.push(default_line(&m, d)),
             }
         }
         for (enchantment, level) in enchantments::iteration(stack, "enchantments", d) {
-            let Some(e) = d.game.entry("enchantment", enchantment) else { continue };
-            let in_group = e.get("slots").and_then(Value::as_array).into_iter().flatten().any(|s| s.as_str() == Some(group));
+            let Some(e) = d.game.entry("enchantment", enchantment) else {
+                continue;
+            };
+            let in_group = e
+                .get("slots")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .any(|s| s.as_str() == Some(group));
             if !in_group {
                 continue;
             }
-            let effects = e.get("effects").and_then(|x| x.get("minecraft:attributes")).and_then(Value::as_array);
+            let effects = e
+                .get("effects")
+                .and_then(|x| x.get("minecraft:attributes"))
+                .and_then(Value::as_array);
             for effect in effects.into_iter().flatten() {
-                let (Some(attribute), Some(amount), Some(operation)) =
-                    (effect.get("attribute").and_then(Value::as_str), effect.get("amount"), effect.get("operation").and_then(Value::as_str))
-                else {
+                let (Some(attribute), Some(amount), Some(operation)) = (
+                    effect.get("attribute").and_then(Value::as_str),
+                    effect.get("amount"),
+                    effect.get("operation").and_then(Value::as_str),
+                ) else {
                     continue;
                 };
-                let m = Modifier { attribute, id: "", amount: f64::from(level_value(amount, level)), operation };
+                let m = Modifier {
+                    attribute,
+                    id: "",
+                    amount: f64::from(level_value(amount, level)),
+                    operation,
+                };
                 group_lines.push(default_line(&m, d));
             }
         }
         if !group_lines.is_empty() {
             out.push(Text::default());
-            out.push(d.tr(&format!("item.modifiers.{group}"), &[]).with_color(GRAY));
+            out.push(
+                d.tr(&format!("item.modifiers.{group}"), &[])
+                    .with_color(GRAY),
+            );
             out.extend(group_lines.into_iter().flatten());
         }
     }

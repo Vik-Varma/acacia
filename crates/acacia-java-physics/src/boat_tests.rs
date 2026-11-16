@@ -20,8 +20,24 @@ impl Blocks for Pool {
     }
 }
 
-const AHEAD: Keys = Keys { forward: true, backward: false, left: false, right: false, jump: false, shift: false, sprint: false };
-const LEFT: Keys = Keys { forward: false, backward: false, left: true, right: false, jump: false, shift: false, sprint: false };
+const AHEAD: Keys = Keys {
+    forward: true,
+    backward: false,
+    left: false,
+    right: false,
+    jump: false,
+    shift: false,
+    sprint: false,
+};
+const LEFT: Keys = Keys {
+    forward: false,
+    backward: false,
+    left: true,
+    right: false,
+    jump: false,
+    shift: false,
+    sprint: false,
+};
 
 fn floating() -> Boat {
     let mut boat = Boat::new(&Pool, [0.5, 0.5, 0.5], 0.0, false);
@@ -36,8 +52,16 @@ fn a_boat_settles_on_still_water() {
     let boat = floating();
     assert_eq!(boat.status, BoatStatus::InWater);
     assert_eq!([boat.pos[0], boat.pos[2]], [0.5, 0.5]);
-    assert!(boat.delta[1].abs() < 1.0E-4, "still bobbing: {:?}", boat.delta);
-    assert!(boat.pos[1] > 0.3 && boat.pos[1] < 8.0 / 9.0, "floats at {}", boat.pos[1]);
+    assert!(
+        boat.delta[1].abs() < 1.0E-4,
+        "still bobbing: {:?}",
+        boat.delta
+    );
+    assert!(
+        boat.pos[1] > 0.3 && boat.pos[1] < 8.0 / 9.0,
+        "floats at {}",
+        boat.pos[1]
+    );
 }
 
 #[test]
@@ -64,7 +88,11 @@ fn a_boat_on_stone_slides_with_its_friction() {
     boat.delta = [0.1, 0.0, 0.0];
     boat.tick(&Pool, Keys::default());
     assert_eq!(boat.status, BoatStatus::OnLand);
-    assert!((boat.delta[0] - 0.06).abs() < 1.0E-6, "slid {:?}", boat.delta);
+    assert!(
+        (boat.delta[0] - 0.06).abs() < 1.0E-6,
+        "slid {:?}",
+        boat.delta
+    );
 }
 
 /// `floor` at y -1; `ahead` at y 0 where x >= 2.
@@ -90,7 +118,10 @@ impl Blocks for Field {
 
 #[test]
 fn a_cobweb_holds_the_boat_on_its_next_move() {
-    let web = Field { floor: Block::Stone, ahead: Block::Cobweb };
+    let web = Field {
+        floor: Block::Stone,
+        ahead: Block::Cobweb,
+    };
     let mut boat = Boat::new(&web, [0.5, 0.0, 0.5], 0.0, false);
     boat.on_ground = true;
     boat.delta = [2.0, 0.0, 0.0];
@@ -99,19 +130,30 @@ fn a_cobweb_holds_the_boat_on_its_next_move() {
     let (x, dx) = (boat.pos[0], boat.delta[0]);
     boat.tick(&web, Keys::default());
     assert_eq!(boat.stuck, [0.25, 0.05_f32 as f64, 0.25]);
-    assert!((boat.pos[0] - x - dx * 0.6 * 0.25).abs() < 1.0E-6,"moved {} from {x}", boat.pos[0]);
+    assert!(
+        (boat.pos[0] - x - dx * 0.6 * 0.25).abs() < 1.0E-6,
+        "moved {} from {x}",
+        boat.pos[0]
+    );
     assert_eq!(boat.delta[0], 0.0);
 }
 
 #[test]
 fn slime_scales_a_grounded_boat_once_per_effects_pass() {
-    let slime = Field { floor: Block::SlimeBlock, ahead: Block::Air };
+    let slime = Field {
+        floor: Block::SlimeBlock,
+        ahead: Block::Air,
+    };
     let mut boat = Boat::new(&slime, [0.5, 0.0, 0.5], 0.0, false);
     boat.tick(&slime, Keys::default());
     boat.delta = [0.1, 0.0, 0.0];
     boat.tick(&slime, Keys::default());
     let friction = boat.land_friction as f64 * 2.0;
-    assert!((boat.delta[0] - 0.1 * friction * 0.4 * 0.4).abs() < 1.0E-9, "slid {:?} at friction {friction}", boat.delta);
+    assert!(
+        (boat.delta[0] - 0.1 * friction * 0.4 * 0.4).abs() < 1.0E-9,
+        "slid {:?} at friction {friction}",
+        boat.delta
+    );
 }
 
 #[test]

@@ -860,6 +860,8 @@ impl DimensionData {
                             let n = to_len(read_varint(r)?)?;
                             read_utf8(r, n)?
                         };
+                        let f1_cloud_height = read_varint(r)?;
+                        let f1_render_clouds = read_bool(r)?;
                         DimensionDataDefinitionsItem {
                             id: f1_id,
                             min_y: f1_min_y,
@@ -868,6 +870,8 @@ impl DimensionData {
                             dimension_type: f1_dimension_type,
                             pack_id: f1_pack_id,
                             default_biome: f1_default_biome,
+                            cloud_height: f1_cloud_height,
+                            render_clouds: f1_render_clouds,
                         }
                     });
                 }
@@ -899,6 +903,8 @@ impl DimensionData {
                     write_varint(w, b.len() as u32);
                     write_slice(w, b);
                 }
+                write_varint(w, x1.cloud_height);
+                write_bool(w, x1.render_clouds);
             }
         }
     }
@@ -923,6 +929,8 @@ pub struct DimensionDataDefinitionsItem {
     pub dimension_type: i32,
     pub pack_id: crate::manual::Uuid,
     pub default_biome: String,
+    pub cloud_height: u32,
+    pub render_clouds: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

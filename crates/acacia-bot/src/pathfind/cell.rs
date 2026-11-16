@@ -70,7 +70,10 @@ pub(crate) struct Rect {
 }
 
 impl Rect {
-    pub const FOOT: Rect = Rect { x: (0.2, 0.8), z: (0.2, 0.8) };
+    pub const FOOT: Rect = Rect {
+        x: (0.2, 0.8),
+        z: (0.2, 0.8),
+    };
 
     /// The footprint stretched to the cell edge on the side of `(dx, dz)`.
     pub fn toward(dx: i32, dz: i32) -> Rect {
@@ -79,23 +82,35 @@ impl Rect {
             -1 => (0.0, 0.8),
             _ => (0.2, 0.8),
         };
-        Rect { x: span(dx), z: span(dz) }
+        Rect {
+            x: span(dx),
+            z: span(dz),
+        }
     }
 
     /// The whole cell along a cardinal direction (a lane crossed at full length).
     pub fn lane(dx: i32, dz: i32) -> Rect {
         let span = |d: i32| if d != 0 { (0.0, 1.0) } else { (0.2, 0.8) };
-        Rect { x: span(dx), z: span(dz) }
+        Rect {
+            x: span(dx),
+            z: span(dz),
+        }
     }
 
     /// The quarter of a cell on sides `(sx, sz)`, which a diagonal move cuts through.
     pub fn corner(sx: i32, sz: i32) -> Rect {
         let half = |s: i32| if s > 0 { (0.5, 1.0) } else { (0.0, 0.5) };
-        Rect { x: half(sx), z: half(sz) }
+        Rect {
+            x: half(sx),
+            z: half(sz),
+        }
     }
 
     pub fn overlaps(&self, b: &Aabb) -> bool {
-        b.min[0] < self.x.1 - EPS && b.max[0] > self.x.0 + EPS && b.min[2] < self.z.1 - EPS && b.max[2] > self.z.0 + EPS
+        b.min[0] < self.x.1 - EPS
+            && b.max[0] > self.x.0 + EPS
+            && b.min[2] < self.z.1 - EPS
+            && b.max[2] > self.z.0 + EPS
     }
 }
 
@@ -116,20 +131,33 @@ pub(crate) fn state_flags(s: &BlockState) -> u16 {
     if s.is_full_cube() {
         f |= FULL;
     }
-    if s.flags.intersects(BlockFlags(BlockFlags::COBWEB.0 | BlockFlags::SWEET_BERRY.0 | BlockFlags::POWDER_SNOW.0)) {
+    if s.flags.intersects(BlockFlags(
+        BlockFlags::COBWEB.0 | BlockFlags::SWEET_BERRY.0 | BlockFlags::POWDER_SNOW.0,
+    )) {
         f |= AVOID;
     }
-    let Some(block) = s.neutral.map(|n| n.block()) else { return f };
+    let Some(block) = s.neutral.map(|n| n.block()) else {
+        return f;
+    };
     match block {
         Block::Fire | Block::SoulFire => f |= AVOID | DANGER_NEAR,
         Block::WitherRose => f |= AVOID,
         _ if block.is(BlockTag::Campfires) => f |= AVOID,
         Block::Cactus => f |= DANGER_NEAR,
         Block::MagmaBlock => f |= HURT_FLOOR,
-        Block::Sand | Block::RedSand | Block::Gravel | Block::SuspiciousSand | Block::SuspiciousGravel => f |= FALLS,
+        Block::Sand
+        | Block::RedSand
+        | Block::Gravel
+        | Block::SuspiciousSand
+        | Block::SuspiciousGravel => f |= FALLS,
         _ if block.is(BlockTag::ConcretePowders) || block.is(BlockTag::Anvil) => f |= FALLS,
         Block::IronDoor | Block::IronTrapdoor => {}
-        _ if block.is(BlockTag::Doors) || block.is(BlockTag::Trapdoors) || block.is(BlockTag::FenceGates) => f |= OPENABLE,
+        _ if block.is(BlockTag::Doors)
+            || block.is(BlockTag::Trapdoors)
+            || block.is(BlockTag::FenceGates) =>
+        {
+            f |= OPENABLE
+        }
         _ => {}
     }
     f

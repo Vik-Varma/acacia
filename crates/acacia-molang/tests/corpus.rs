@@ -23,13 +23,27 @@ fn vanilla_expressions_compile() {
         .filter_map(|source| match compiler.compile(source) {
             Ok(program) => {
                 // No expected value without the game behind it; this only has to come back.
-                program.eval(&mut Env { host: &NoHost, variables: &mut variables, scratch: &mut scratch, this: 0.0 });
+                program.eval(&mut Env {
+                    host: &NoHost,
+                    variables: &mut variables,
+                    scratch: &mut scratch,
+                    this: 0.0,
+                });
                 None
             }
             // Arrays belong to the render controller a source came from, which the corpus does not keep.
-            Err(acacia_molang::Error { kind: ErrorKind::UnknownArray(_), .. }) => None,
+            Err(acacia_molang::Error {
+                kind: ErrorKind::UnknownArray(_),
+                ..
+            }) => None,
             Err(error) => Some(format!("{error}\n    {source}")),
         })
         .collect();
-    assert!(rejected.is_empty(), "{} of {} expressions rejected:\n{}", rejected.len(), corpus.lines().count(), rejected.join("\n"));
+    assert!(
+        rejected.is_empty(),
+        "{} of {} expressions rejected:\n{}",
+        rejected.len(),
+        corpus.lines().count(),
+        rejected.join("\n")
+    );
 }

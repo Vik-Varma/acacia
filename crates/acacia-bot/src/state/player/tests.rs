@@ -28,11 +28,24 @@ fn started() -> PlayerState {
 }
 
 fn attr(name: &str, current: f32, max: f32) -> PlayerAttributesItem {
-    PlayerAttributesItem { min: 0.0, max, current, default_min: 0.0, default_max: max, default: max, name: name.into(), modifiers: vec![] }
+    PlayerAttributesItem {
+        min: 0.0,
+        max,
+        current,
+        default_min: 0.0,
+        default_max: max,
+        default: max,
+        name: name.into(),
+        modifiers: vec![],
+    }
 }
 
 fn attributes(runtime_entity_id: u64, attributes: PlayerAttributes) -> UpdateAttributes {
-    UpdateAttributes { runtime_entity_id, attributes, tick: 0 }
+    UpdateAttributes {
+        runtime_entity_id,
+        attributes,
+        tick: 0,
+    }
 }
 
 #[test]
@@ -44,7 +57,10 @@ fn start_game_sets_identity_and_feet_position() {
     assert_eq!((p.pitch, p.yaw), (10.0, 90.0));
     assert_eq!(p.game_mode, GameMode::Adventure);
     assert_eq!(p.dimension, 1);
-    assert_eq!(p.spawn_position, Some(BlockCoordinates { x: 1, y: 2, z: 3 }));
+    assert_eq!(
+        p.spawn_position,
+        Some(BlockCoordinates { x: 1, y: 2, z: 3 })
+    );
 }
 
 #[test]
@@ -102,17 +118,28 @@ fn attributes_health_and_death() {
         attr("minecraft:player.experience", 0.25, 1.0),
         attr("minecraft:movement", 0.1, 3.4e38),
     ];
-    p.apply(&raw(&attributes(8, vec![attr("minecraft:health", 1.0, 20.0)]))).unwrap();
+    p.apply(&raw(&attributes(
+        8,
+        vec![attr("minecraft:health", 1.0, 20.0)],
+    )))
+    .unwrap();
     assert_eq!(p.health, 20.0);
     p.apply(&raw(&attributes(7, own))).unwrap();
-    assert_eq!((p.health, p.max_health, p.hunger, p.saturation), (14.0, 24.0, 17.0, 2.5));
+    assert_eq!(
+        (p.health, p.max_health, p.hunger, p.saturation),
+        (14.0, 24.0, 17.0, 2.5)
+    );
     assert_eq!((p.xp_level, p.xp_progress), (30, 0.25));
     assert!(p.alive);
 
     p.apply(&raw(&SetHealth { health: 0 })).unwrap();
     assert!(!p.alive);
 
-    let respawn = |state| Respawn { position: v(0.5, 71.62, 0.5), state, runtime_entity_id: 0 };
+    let respawn = |state| Respawn {
+        position: v(0.5, 71.62, 0.5),
+        state,
+        runtime_entity_id: 0,
+    };
     p.apply(&raw(&respawn(0))).unwrap();
     assert!(!p.alive);
     p.apply(&raw(&respawn(1))).unwrap();
@@ -124,15 +151,27 @@ fn attributes_health_and_death() {
 #[test]
 fn game_mode_dimension_and_spawn() {
     let mut p = started();
-    p.apply(&raw(&SetPlayerGameType { gamemode: GameMode::Creative })).unwrap();
+    p.apply(&raw(&SetPlayerGameType {
+        gamemode: GameMode::Creative,
+    }))
+    .unwrap();
     assert_eq!(p.game_mode, GameMode::Creative);
-    let update = |id| UpdatePlayerGameType { gamemode: GameMode::Spectator, player_unique_id: id, tick: 0 };
+    let update = |id| UpdatePlayerGameType {
+        gamemode: GameMode::Spectator,
+        player_unique_id: id,
+        tick: 0,
+    };
     p.apply(&raw(&update(-1))).unwrap();
     assert_eq!(p.game_mode, GameMode::Creative);
     p.apply(&raw(&update(-42))).unwrap();
     assert_eq!(p.game_mode, GameMode::Spectator);
 
-    let change = ChangeDimension { dimension: 2, position: v(100.0, 50.0, 0.0), respawn: false, loading_screen_id: Some(3) };
+    let change = ChangeDimension {
+        dimension: 2,
+        position: v(100.0, 50.0, 0.0),
+        respawn: false,
+        loading_screen_id: Some(3),
+    };
     p.apply(&raw(&change)).unwrap();
     assert_eq!(p.dimension, 2);
     assert!(approx(&p.position, &v(100.0, 50.0, 0.0)));
@@ -143,8 +182,16 @@ fn game_mode_dimension_and_spawn() {
         dimension: 0,
         world_position: BlockCoordinates { x: 0, y: 0, z: 0 },
     };
-    p.apply(&raw(&spawn(SetSpawnPositionSpawnType::World, 9))).unwrap();
-    assert_eq!(p.spawn_position, Some(BlockCoordinates { x: 1, y: 2, z: 3 }));
-    p.apply(&raw(&spawn(SetSpawnPositionSpawnType::Player, 9))).unwrap();
-    assert_eq!(p.spawn_position, Some(BlockCoordinates { x: 9, y: 64, z: 0 }));
+    p.apply(&raw(&spawn(SetSpawnPositionSpawnType::World, 9)))
+        .unwrap();
+    assert_eq!(
+        p.spawn_position,
+        Some(BlockCoordinates { x: 1, y: 2, z: 3 })
+    );
+    p.apply(&raw(&spawn(SetSpawnPositionSpawnType::Player, 9)))
+        .unwrap();
+    assert_eq!(
+        p.spawn_position,
+        Some(BlockCoordinates { x: 9, y: 64, z: 0 })
+    );
 }

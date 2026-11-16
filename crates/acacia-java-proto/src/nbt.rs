@@ -33,7 +33,9 @@ pub fn skip_compound(input: &mut &[u8]) -> Result<(), Error> {
 
 /// A root `TAG_String`'s value, as a plain text component is sent; `None` for any other root.
 pub fn read_root_string(mut input: &[u8]) -> Option<String> {
-    let (&TAG_STRING, rest) = input.split_first()? else { return None };
+    let (&TAG_STRING, rest) = input.split_first()? else {
+        return None;
+    };
     input = rest;
     let len = u16::read(&mut input).ok()?;
     // Modified UTF-8 matches UTF-8 except for NUL and supplementary characters.
@@ -42,7 +44,9 @@ pub fn read_root_string(mut input: &[u8]) -> Option<String> {
 
 fn array_len(input: &mut &[u8], width: usize) -> Result<usize, Error> {
     let len = i32::read(input)?;
-    usize::try_from(len).map(|n| n * width).map_err(|_| Error::NegativeLength(len))
+    usize::try_from(len)
+        .map(|n| n * width)
+        .map_err(|_| Error::NegativeLength(len))
 }
 
 fn skip_payload(kind: u8, input: &mut &[u8], depth: u32) -> Result<(), Error> {
@@ -120,10 +124,22 @@ mod tests {
     fn end_root_is_absent_and_bad_input_fails() {
         assert_eq!(skip_root(&mut &[0][..]), Ok(None));
         assert_eq!(skip_tag(&mut &[0][..]), Err(Error::Invalid("NBT root tag")));
-        assert_eq!(skip_tag(&mut &[13][..]), Err(Error::Invalid("NBT tag type")));
-        assert_eq!(skip_tag(&mut &[9, 0, 0, 0, 0, 1][..]), Err(Error::Invalid("NBT list element type")));
-        assert_eq!(skip_tag(&mut &[11, 0xff, 0xff, 0xff, 0xff][..]), Err(Error::NegativeLength(-1)));
-        assert_eq!(skip_compound(&mut &[8, 0, 0][..]), Err(Error::Invalid("NBT compound root")));
+        assert_eq!(
+            skip_tag(&mut &[13][..]),
+            Err(Error::Invalid("NBT tag type"))
+        );
+        assert_eq!(
+            skip_tag(&mut &[9, 0, 0, 0, 0, 1][..]),
+            Err(Error::Invalid("NBT list element type"))
+        );
+        assert_eq!(
+            skip_tag(&mut &[11, 0xff, 0xff, 0xff, 0xff][..]),
+            Err(Error::NegativeLength(-1))
+        );
+        assert_eq!(
+            skip_compound(&mut &[8, 0, 0][..]),
+            Err(Error::Invalid("NBT compound root"))
+        );
     }
 
     #[test]

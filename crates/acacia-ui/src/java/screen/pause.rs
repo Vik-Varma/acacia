@@ -2,9 +2,11 @@
 //! hidden) over the in-world menu background.
 
 use super::{Env, Screen, arena_children, blurred, menu_texture, render_all};
-use crate::java::widget::input::Child;
 use crate::java::widget::button::{Button, SpriteIconButton, Sprites};
-use crate::java::widget::layout::{Arena, Elem, Layout, Linear, RowHelper, Settings, align_in_rect};
+use crate::java::widget::input::Child;
+use crate::java::widget::layout::{
+    Arena, Elem, Layout, Linear, RowHelper, Settings, align_in_rect,
+};
 use crate::java::widget::text::StringWidget;
 use crate::java::widget::{Ctx, Widget};
 
@@ -37,7 +39,14 @@ fn icon(ctx: &Ctx, key: &'static str, sprite: &'static str, active: bool) -> Box
 }
 
 /// `RowHelper.addChild(widget, span, settings)`.
-fn add(grid: &mut Layout, helper: &mut RowHelper, widgets: &mut Arena, w: Box<dyn Widget>, span: usize, s: Settings) {
+fn add(
+    grid: &mut Layout,
+    helper: &mut RowHelper,
+    widgets: &mut Arena,
+    w: Box<dyn Widget>,
+    span: usize,
+    s: Settings,
+) {
     widgets.push(w);
     helper.add(grid, Elem::Widget(widgets.len() - 1), span, s);
 }
@@ -49,10 +58,25 @@ impl PauseScreen {
         if pause.show_menu {
             Self::menu(ctx, &env, &pause, &mut widgets);
         }
-        let title = ctx.tr(if pause.show_menu { "menu.game" } else { "menu.paused" });
+        let title = ctx.tr(if pause.show_menu {
+            "menu.game"
+        } else {
+            "menu.paused"
+        });
         let tw = ctx.width(&title);
-        widgets.push(Box::new(StringWidget::new(ctx.font, env.width / 2 - tw / 2, if pause.show_menu { 40 } else { 10 }, tw, 9, title)));
-        PauseScreen { env, pause, widgets }
+        widgets.push(Box::new(StringWidget::new(
+            ctx.font,
+            env.width / 2 - tw / 2,
+            if pause.show_menu { 40 } else { 10 },
+            tw,
+            9,
+            title,
+        )));
+        PauseScreen {
+            env,
+            pause,
+            widgets,
+        }
     }
 
     /// `createPauseMenu`.
@@ -62,25 +86,86 @@ impl PauseScreen {
         let d = grid.defaults;
         let mut helper = RowHelper::new(2);
         let h = &mut helper;
-        add(&mut grid, h, widgets, Box::new(Button::named(ctx, 204, "menu.returnToGame")), 2, d.pad_top(50));
-        add(&mut grid, h, widgets, Box::new(Button::named(ctx, 98, "gui.advancements")), 1, d);
-        add(&mut grid, h, widgets, Box::new(Button::named(ctx, 98, "gui.stats")), 1, d);
+        add(
+            &mut grid,
+            h,
+            widgets,
+            Box::new(Button::named(ctx, 204, "menu.returnToGame")),
+            2,
+            d.pad_top(50),
+        );
+        add(
+            &mut grid,
+            h,
+            widgets,
+            Box::new(Button::named(ctx, 98, "gui.advancements")),
+            1,
+            d,
+        );
+        add(
+            &mut grid,
+            h,
+            widgets,
+            Box::new(Button::named(ctx, 98, "gui.stats")),
+            1,
+            d,
+        );
         let mut row = Linear::new(false, 4);
         let icons = [
             icon(ctx, "menu.reportBugs", "pause_menu/bug", true),
-            icon(ctx, "menu.sendFeedback", "pause_menu/social_interactions", true),
-            icon(ctx, "gui.friends.open", "friends/friends", pause.friends_available),
-            icon(ctx, "menu.playerReporting", "pause_menu/player_reporting", pause.reporting_active),
+            icon(
+                ctx,
+                "menu.sendFeedback",
+                "pause_menu/social_interactions",
+                true,
+            ),
+            icon(
+                ctx,
+                "gui.friends.open",
+                "friends/friends",
+                pause.friends_available,
+            ),
+            icon(
+                ctx,
+                "menu.playerReporting",
+                "pause_menu/player_reporting",
+                pause.reporting_active,
+            ),
         ];
         for w in icons {
             widgets.push(w);
             row.add_default(Elem::Widget(widgets.len() - 1));
         }
         h.add(&mut grid, row.into_elem(), 2, d.align_x(0.5));
-        add(&mut grid, h, widgets, Box::new(Button::named(ctx, 98, "menu.options")), 1, d);
-        add(&mut grid, h, widgets, Box::new(Button::named(ctx, 98, "options.worldOptions.button")), 1, d);
-        let disconnect = if pause.local_server { "menu.returnToMenu" } else { "menu.disconnect" };
-        add(&mut grid, h, widgets, Box::new(Button::named(ctx, 204, disconnect)), 2, d);
+        add(
+            &mut grid,
+            h,
+            widgets,
+            Box::new(Button::named(ctx, 98, "menu.options")),
+            1,
+            d,
+        );
+        add(
+            &mut grid,
+            h,
+            widgets,
+            Box::new(Button::named(ctx, 98, "options.worldOptions.button")),
+            1,
+            d,
+        );
+        let disconnect = if pause.local_server {
+            "menu.returnToMenu"
+        } else {
+            "menu.disconnect"
+        };
+        add(
+            &mut grid,
+            h,
+            widgets,
+            Box::new(Button::named(ctx, 204, disconnect)),
+            2,
+            d,
+        );
         let mut root = Elem::Layout(Box::new(grid));
         if let Elem::Layout(l) = &mut root {
             l.arrange(widgets);

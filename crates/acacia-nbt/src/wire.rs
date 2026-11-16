@@ -62,7 +62,11 @@ macro_rules! varint {
 /// Lengths and small ints are nearly all one byte, so only that case is inlined.
 #[inline]
 fn write_varint(w: &mut BytesMut, v: u64) {
-    if v < 0x80 { put(w, [v as u8]) } else { write_long_varint(w, v) }
+    if v < 0x80 {
+        put(w, [v as u8])
+    } else {
+        write_long_varint(w, v)
+    }
 }
 
 fn write_long_varint(w: &mut BytesMut, mut v: u64) {

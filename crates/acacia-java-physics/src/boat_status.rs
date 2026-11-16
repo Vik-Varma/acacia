@@ -11,7 +11,9 @@ use crate::mth::{ceil, floor};
 
 /// Water's surface in a cell as vanilla adds it: `y + getHeight` in floats.
 fn water_top(world: &impl Blocks, pos: [i32; 3]) -> Option<f32> {
-    fluid_at(world, pos).filter(|f| !f.lava).map(|f| pos[1] as f32 + height(world, pos, f))
+    fluid_at(world, pos)
+        .filter(|f| !f.lava)
+        .map(|f| pos[1] as f32 + height(world, pos, f))
 }
 
 impl Boat {
@@ -82,7 +84,9 @@ fn under_water(world: &impl Blocks, b: &Aabb) -> Option<BoatStatus> {
         for y in floor(b.max[1])..ceil(top) {
             for z in floor(b.min[2])..ceil(b.max[2]) {
                 let pos = [x, y, z];
-                let Some(f) = fluid_at(world, pos).filter(|f| !f.lava) else { continue };
+                let Some(f) = fluid_at(world, pos).filter(|f| !f.lava) else {
+                    continue;
+                };
                 if top < (y as f32 + height(world, pos, f)) as f64 {
                     if !f.source {
                         return Some(BoatStatus::UnderFlowingWater);
@@ -98,7 +102,10 @@ fn under_water(world: &impl Blocks, b: &Aabb) -> Option<BoatStatus> {
 /// `getGroundFriction`: mean friction of the blocks under the boat, x then z then y, skipping the corner columns
 /// and the edge columns' top and bottom layers; NaN when none.
 fn ground_friction(world: &impl Blocks, b: &Aabb) -> f32 {
-    let slab = Aabb { min: [b.min[0], b.min[1] - 0.001, b.min[2]], max: [b.max[0], b.min[1], b.max[2]] };
+    let slab = Aabb {
+        min: [b.min[0], b.min[1] - 0.001, b.min[2]],
+        max: [b.max[0], b.min[1], b.max[2]],
+    };
     let (x0, x1) = (floor(slab.min[0]) - 1, ceil(slab.max[0]) + 1);
     let (y0, y1) = (floor(slab.min[1]) - 1, ceil(slab.max[1]) + 1);
     let (z0, z1) = (floor(slab.min[2]) - 1, ceil(slab.max[2]) + 1);
@@ -118,7 +125,11 @@ fn ground_friction(world: &impl Blocks, b: &Aabb) -> f32 {
                 let touches = state.java_collision().is_some_and(|boxes| {
                     boxes.iter().any(|c| {
                         let at = [x as f64, y as f64, z as f64];
-                        Aabb { min: [c[0] + at[0], c[1] + at[1], c[2] + at[2]], max: [c[3] + at[0], c[4] + at[1], c[5] + at[2]] }.intersects(&slab)
+                        Aabb {
+                            min: [c[0] + at[0], c[1] + at[1], c[2] + at[2]],
+                            max: [c[3] + at[0], c[4] + at[1], c[5] + at[2]],
+                        }
+                        .intersects(&slab)
                     })
                 });
                 if state.block() != Block::LilyPad && touches {

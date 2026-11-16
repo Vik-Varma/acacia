@@ -21,7 +21,11 @@ pub struct Textures {
 
 impl Textures {
     pub fn new(assets: PathBuf) -> Textures {
-        Textures { assets, loaded: HashMap::new(), missing: BTreeSet::new() }
+        Textures {
+            assets,
+            loaded: HashMap::new(),
+            missing: BTreeSet::new(),
+        }
     }
 
     /// The layer of `id` (`block/oak_planks`) in `atlas`, added on first use, and how its alpha is used.
@@ -39,7 +43,9 @@ impl Textures {
 
     fn add(&self, id: &str, atlas: &mut Atlas) -> Option<(u16, Alpha)> {
         let file = self.assets.join(format!("textures/{id}.png"));
-        let layer = u16::try_from(atlas.layers.len()).ok().filter(|l| usize::from(*l) < MAX_LAYERS)?;
+        let layer = u16::try_from(atlas.layers.len())
+            .ok()
+            .filter(|l| usize::from(*l) < MAX_LAYERS)?;
         let meta = std::fs::read(self.assets.join(format!("textures/{id}.png.mcmeta"))).ok();
         // Flowing liquids are drawn from a quarter of their 32x32 frames.
         let quad = id.ends_with("_flow");
@@ -64,11 +70,26 @@ impl Textures {
 // TODO: per-frame times are ignored; every frame takes `frametime`.
 fn flipbook(meta: &Value) -> Option<Flipbook> {
     let animation = meta.get("animation")?;
-    let index = |frame: &Value| frame.as_u64().or_else(|| frame.get("index")?.as_u64()).map(|i| i as usize);
+    let index = |frame: &Value| {
+        frame
+            .as_u64()
+            .or_else(|| frame.get("index")?.as_u64())
+            .map(|i| i as usize)
+    };
     Some(Flipbook {
-        frames: animation.get("frames").and_then(Value::as_array).map(|frames| frames.iter().filter_map(index).collect()),
-        ticks_per_frame: animation.get("frametime").and_then(Value::as_u64).unwrap_or(1).max(1) as u32,
-        blend: animation.get("interpolate").and_then(Value::as_bool).unwrap_or(false),
+        frames: animation
+            .get("frames")
+            .and_then(Value::as_array)
+            .map(|frames| frames.iter().filter_map(index).collect()),
+        ticks_per_frame: animation
+            .get("frametime")
+            .and_then(Value::as_u64)
+            .unwrap_or(1)
+            .max(1) as u32,
+        blend: animation
+            .get("interpolate")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
     })
 }
 
@@ -81,8 +102,22 @@ mod tests {
     #[test]
     fn mcmeta_gives_frame_order_time_and_blending() {
         let book = flipbook(&json!({"animation": {"frametime": 3, "interpolate": true, "frames": [1, {"index": 0, "time": 9}]}})).unwrap();
-        assert_eq!(book, Flipbook { frames: Some(vec![1, 0]), ticks_per_frame: 3, blend: true });
-        assert_eq!(flipbook(&json!({"animation": {}})), Some(Flipbook { frames: None, ticks_per_frame: 1, blend: false }));
+        assert_eq!(
+            book,
+            Flipbook {
+                frames: Some(vec![1, 0]),
+                ticks_per_frame: 3,
+                blend: true
+            }
+        );
+        assert_eq!(
+            flipbook(&json!({"animation": {}})),
+            Some(Flipbook {
+                frames: None,
+                ticks_per_frame: 1,
+                blend: false
+            })
+        );
         assert_eq!(flipbook(&json!({"texture": {"blur": true}})), None);
     }
 }

@@ -22,7 +22,11 @@ pub(super) fn tadpole(p: &mut Poses, s: &RenderState) {
 }
 
 pub(super) fn salmon(p: &mut Poses, s: &RenderState) {
-    let (amplitude, angle) = if s.flag("isInWater") { (1.0, 1.0) } else { (1.3, 1.7) };
+    let (amplitude, angle) = if s.flag("isInWater") {
+        (1.0, 1.0)
+    } else {
+        (1.3, 1.7)
+    };
     p.y_rot("body_back", -amplitude * 0.25 * sin(angle * 0.6 * s.age()));
 }
 
@@ -37,9 +41,15 @@ pub(super) fn pufferfish(p: &mut Poses, s: &RenderState) {
     }
 }
 
-const SPIKE_X: [f32; 12] = [0.0, 0.0, 8.0, -8.0, -8.0, 8.0, 8.0, -8.0, 0.0, 0.0, 8.0, -8.0];
-const SPIKE_Y: [f32; 12] = [-8.0, -8.0, -8.0, -8.0, 0.0, 0.0, 0.0, 0.0, 8.0, 8.0, 8.0, 8.0];
-const SPIKE_Z: [f32; 12] = [8.0, -8.0, 0.0, 0.0, -8.0, -8.0, 8.0, 8.0, 8.0, -8.0, 0.0, 0.0];
+const SPIKE_X: [f32; 12] = [
+    0.0, 0.0, 8.0, -8.0, -8.0, 8.0, 8.0, -8.0, 0.0, 0.0, 8.0, -8.0,
+];
+const SPIKE_Y: [f32; 12] = [
+    -8.0, -8.0, -8.0, -8.0, 0.0, 0.0, 0.0, 0.0, 8.0, 8.0, 8.0, 8.0,
+];
+const SPIKE_Z: [f32; 12] = [
+    8.0, -8.0, 0.0, 0.0, -8.0, -8.0, 8.0, 8.0, 8.0, -8.0, 0.0, 0.0,
+];
 
 /// Spikes pulse and withdraw, the tail swims.
 // TODO: the eye following its target (`lookAtPosition`); the viewer has no target to give it.
@@ -50,7 +60,11 @@ pub(super) fn guardian(p: &mut Poses, s: &RenderState) {
     for i in 0..12 {
         let offset = 1.0 + cos(age * 1.5 + i as f32) * 0.01 - withdrawal;
         let spike = p.get(&format!("spike{i}"));
-        (spike.x, spike.y, spike.z) = (SPIKE_X[i] * offset, 16.0 + SPIKE_Y[i] * offset, SPIKE_Z[i] * offset);
+        (spike.x, spike.y, spike.z) = (
+            SPIKE_X[i] * offset,
+            16.0 + SPIKE_Y[i] * offset,
+            SPIKE_Z[i] * offset,
+        );
     }
     p.set_visible("eye", true);
     let swim = sin(s.num("tailAnimation"));
@@ -62,7 +76,12 @@ pub(super) fn guardian(p: &mut Poses, s: &RenderState) {
 pub(super) fn phantom(p: &mut Poses, s: &RenderState) {
     let anim = s.num("flapTime") * 7.448_451 * pi_div(180.0);
     let wing = cos(anim) * 16.0 * pi_div(180.0);
-    for (part, z) in [("left_wing_base", wing), ("left_wing_tip", wing), ("right_wing_base", -wing), ("right_wing_tip", -wing)] {
+    for (part, z) in [
+        ("left_wing_base", wing),
+        ("left_wing_tip", wing),
+        ("right_wing_base", -wing),
+        ("right_wing_tip", -wing),
+    ] {
         p.z_rot(part, z);
     }
     let tail = -(5.0 + cos(anim * 2.0) * 5.0) * pi_div(180.0);
@@ -100,7 +119,11 @@ pub(super) fn allay(p: &mut Poses, s: &RenderState) {
     p.get("root").y += f64::from(idle_speed).cos() as f32 * 0.25 * idle;
     p.x_rot("right_arm", arm_x);
     p.x_rot("left_arm", arm_x);
-    let bob = 0.436_332_32 - cos(idle_speed + (std::f64::consts::PI * 3.0 / 2.0) as f32) * PI * 0.075 * (idle * (1.0 - holding));
+    let bob = 0.436_332_32
+        - cos(idle_speed + (std::f64::consts::PI * 3.0 / 2.0) as f32)
+            * PI
+            * 0.075
+            * (idle * (1.0 - holding));
     p.z_rot("left_arm", -bob);
     p.z_rot("right_arm", bob);
     p.y_rot("right_arm", 0.279_252_68 * holding);

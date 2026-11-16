@@ -14,7 +14,9 @@ pub(super) const LANDING_TICKS: u32 = 110;
 /// Ticks simulated after touchdown for the slide to stop.
 const SLIDE_TICKS: u32 = 30;
 
-const COARSE: [f32; 11] = [-60.0, -40.0, -25.0, -12.0, -5.0, 0.0, 5.0, 12.0, 25.0, 40.0, 60.0];
+const COARSE: [f32; 11] = [
+    -60.0, -40.0, -25.0, -12.0, -5.0, 0.0, 5.0, 12.0, 25.0, 40.0, 60.0,
+];
 const FINE: [f32; 4] = [-4.0, -2.0, 2.0, 4.0];
 
 /// Cost weights, in blocks of progress: a block of height off the wanted line costs as much as 1.5 blocks not flown.
@@ -108,7 +110,14 @@ impl Line {
 }
 
 /// The best pitch to hold from `r` facing `yaw`, near `prev` for an equal score.
-pub(super) fn solve(r: &Rollout, yaw: f32, prev: f32, line: &Line, w: &(impl WorldView + ?Sized), s: &mut dyn Surface) -> f32 {
+pub(super) fn solve(
+    r: &Rollout,
+    yaw: f32,
+    prev: f32,
+    line: &Line,
+    w: &(impl WorldView + ?Sized),
+    s: &mut dyn Surface,
+) -> f32 {
     let mut cost = |pitch: f32| score(r, yaw, pitch, line, w, s) + (pitch - prev).abs() * 0.01;
     let (mut best, mut best_cost) = (prev, f32::INFINITY);
     let up = if line.landing { -LANDING_PITCH } else { -90.0 };
@@ -129,16 +138,43 @@ pub(super) fn solve(r: &Rollout, yaw: f32, prev: f32, line: &Line, w: &(impl Wor
 }
 
 /// Cost of holding `pitch` (degrees) facing `yaw` from `r`.
-pub(super) fn score(r: &Rollout, yaw: f32, pitch: f32, line: &Line, w: &(impl WorldView + ?Sized), s: &mut dyn Surface) -> f32 {
-    let c = Controls { forward: 1.0, glide: true, yaw, pitch, ..Controls::default() };
-    let level = Controls { pitch: pitch.min(0.0), ..c };
+pub(super) fn score(
+    r: &Rollout,
+    yaw: f32,
+    pitch: f32,
+    line: &Line,
+    w: &(impl WorldView + ?Sized),
+    s: &mut dyn Surface,
+) -> f32 {
+    let c = Controls {
+        forward: 1.0,
+        glide: true,
+        yaw,
+        pitch,
+        ..Controls::default()
+    };
+    let level = Controls {
+        pitch: pitch.min(0.0),
+        ..c
+    };
     let mut f = r.clone();
     let d0 = line.dist(f.st.pos);
-    let ticks = if line.landing { LANDING_TICKS } else { CRUISE_TICKS };
+    let ticks = if line.landing {
+        LANDING_TICKS
+    } else {
+        CRUISE_TICKS
+    };
     let mut cost = 0.0;
     for t in 0..ticks {
         let fall = f.st.fall_distance;
-        f.step(if line.landing && f.st.vel[1] < -MAX_SINK { &level } else { &c }, w);
+        f.step(
+            if line.landing && f.st.vel[1] < -MAX_SINK {
+                &level
+            } else {
+                &c
+            },
+            w,
+        );
         if line.landing && !f.st.on_ground && f.st.vel[0].hypot(f.st.vel[2]) < STALL_SPEED {
             cost += STALL_W;
         }
@@ -156,12 +192,18 @@ pub(super) fn score(r: &Rollout, yaw: f32, pitch: f32, line: &Line, w: &(impl Wo
             return cost + REST_W * line.dist(slide(f, w)) + damage * 100.0;
         }
         let Some(top) = s.top(p[0].floor() as i32, p[2].floor() as i32) else {
-            return cost + UNKNOWN * (ticks - t) as f32 + HEIGHT_W * (p[1] - line.height_at(line.dist(p))).abs();
+            return cost
+                + UNKNOWN * (ticks - t) as f32
+                + HEIGHT_W * (p[1] - line.height_at(line.dist(p))).abs();
         };
         // The clearance the wanted line itself has there (descending), and none at the spot, where the floor is the landing.
         let floor = (top + 1) as f32;
         let d = line.dist(p);
-        let need = if line.landing && d < 8.0 { 0.0 } else { line.margin.min((line.height_at(d) - floor).max(MIN_CLEAR)) };
+        let need = if line.landing && d < 8.0 {
+            0.0
+        } else {
+            line.margin.min((line.height_at(d) - floor).max(MIN_CLEAR))
+        };
         let clear = p[1] - floor;
         if clear < need {
             cost += (need - clear) * CLEAR_W;
@@ -169,12 +211,17 @@ pub(super) fn score(r: &Rollout, yaw: f32, pitch: f32, line: &Line, w: &(impl Wo
     }
     let end = f.st.pos;
     let d1 = line.dist(end);
-    cost - (d0 - d1) + HEIGHT_W * (end[1] - line.height_at(d1)).abs() + if line.landing { REST_W * d1 } else { 0.0 }
+    cost - (d0 - d1)
+        + HEIGHT_W * (end[1] - line.height_at(d1)).abs()
+        + if line.landing { REST_W * d1 } else { 0.0 }
 }
 
 /// Where the body stops after touching down with nothing held.
 fn slide(mut f: Rollout, w: &(impl WorldView + ?Sized)) -> Vec3 {
-    let idle = Controls { yaw: f.st.yaw, ..Controls::default() };
+    let idle = Controls {
+        yaw: f.st.yaw,
+        ..Controls::default()
+    };
     for _ in 0..SLIDE_TICKS {
         f.step(&idle, w);
     }
@@ -182,12 +229,23 @@ fn slide(mut f: Rollout, w: &(impl WorldView + ?Sized)) -> Vec3 {
 }
 
 /// Furthest horizontal distance an unpowered glide from `r` covers before its feet drop to `floor_y`.
-pub(super) fn glide_reach(r: &Rollout, yaw: f32, floor_y: f32, w: &(impl WorldView + ?Sized)) -> f32 {
+pub(super) fn glide_reach(
+    r: &Rollout,
+    yaw: f32,
+    floor_y: f32,
+    w: &(impl WorldView + ?Sized),
+) -> f32 {
     const MAX_TICKS: u32 = 20 * 120;
     [0.0f32, 5.0, 10.0, 15.0, 20.0, 30.0]
         .into_iter()
         .map(|pitch| {
-            let c = Controls { forward: 1.0, glide: true, yaw, pitch, ..Controls::default() };
+            let c = Controls {
+                forward: 1.0,
+                glide: true,
+                yaw,
+                pitch,
+                ..Controls::default()
+            };
             let mut f = r.clone();
             f.st.glide_boost_ticks = 0;
             let start = f.st.pos;

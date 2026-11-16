@@ -34,35 +34,71 @@ struct Options {
 fn duration(text: &str) -> Option<Duration> {
     let (number, scale) = match text.strip_suffix("ms") {
         Some(number) => (number, 1e-3),
-        None => text.strip_suffix('s').map_or((text, 1e-3), |number| (number, 1.0)),
+        None => text
+            .strip_suffix('s')
+            .map_or((text, 1e-3), |number| (number, 1.0)),
     };
-    number.parse::<f64>().ok().filter(|n| *n >= 0.0).map(|n| Duration::from_secs_f64(n * scale))
+    number
+        .parse::<f64>()
+        .ok()
+        .filter(|n| *n >= 0.0)
+        .map(|n| Duration::from_secs_f64(n * scale))
 }
 
 /// A number with an optional decimal suffix from `scales`, e.g. `1.5mbit`.
 fn scaled(text: &str, scales: &[(&str, f64)]) -> Option<u64> {
     let lower = text.to_ascii_lowercase();
-    let (number, scale) = scales.iter().find_map(|(suffix, scale)| lower.strip_suffix(suffix).map(|number| (number.to_owned(), *scale))).unwrap_or((lower, 1.0));
-    number.parse::<f64>().ok().filter(|n| *n >= 0.0).map(|n| (n * scale) as u64)
+    let (number, scale) = scales
+        .iter()
+        .find_map(|(suffix, scale)| {
+            lower
+                .strip_suffix(suffix)
+                .map(|number| (number.to_owned(), *scale))
+        })
+        .unwrap_or((lower, 1.0));
+    number
+        .parse::<f64>()
+        .ok()
+        .filter(|n| *n >= 0.0)
+        .map(|n| (n * scale) as u64)
 }
 
 fn set(impairment: &mut Impairment, option: &str, value: &str) -> Option<()> {
     match option {
         "delay" => impairment.delay = duration(value)?,
         "jitter" => impairment.jitter = duration(value)?,
-        "loss" => impairment.loss = value.parse::<f64>().ok().filter(|p| (0.0..=100.0).contains(p))? / 100.0,
-        "rate" => impairment.rate = Some(scaled(value, &[("gbit", 1e9), ("mbit", 1e6), ("kbit", 1e3), ("bit", 1.0)]).filter(|rate| *rate > 0)?),
-        "queue" => impairment.queue = scaled(value, &[("m", 1024.0 * 1024.0), ("k", 1024.0)])? as usize,
+        "loss" => {
+            impairment.loss = value
+                .parse::<f64>()
+                .ok()
+                .filter(|p| (0.0..=100.0).contains(p))?
+                / 100.0
+        }
+        "rate" => {
+            impairment.rate = Some(
+                scaled(
+                    value,
+                    &[("gbit", 1e9), ("mbit", 1e6), ("kbit", 1e3), ("bit", 1.0)],
+                )
+                .filter(|rate| *rate > 0)?,
+            )
+        }
+        "queue" => {
+            impairment.queue = scaled(value, &[("m", 1024.0 * 1024.0), ("k", 1024.0)])? as usize
+        }
         _ => return None,
     }
     Some(())
 }
 
 fn parse(args: &[String]) -> Result<Options, String> {
-    let (mut listen, mut to, mut up, mut down) = (None, None, Impairment::default(), Impairment::default());
+    let (mut listen, mut to, mut up, mut down) =
+        (None, None, Impairment::default(), Impairment::default());
     let (mut seed, mut stats, mut run_for, mut capture) = (1, 1.0, None, None);
     for pair in args.chunks(2) {
-        let [flag, value] = pair else { return Err(format!("{} wants a value", pair[0])) };
+        let [flag, value] = pair else {
+            return Err(format!("{} wants a value", pair[0]));
+        };
         let wrong = || format!("bad {flag}: {value}");
         let option = flag.strip_prefix("--").ok_or_else(wrong)?;
         match option {
@@ -73,7 +109,9 @@ fn parse(args: &[String]) -> Result<Options, String> {
             "for" => run_for = Some(value.parse().map_err(|_| wrong())?),
             "capture" => capture = Some(value.clone()),
             _ => {
-                let set_in = |impairment: &mut Impairment, option: &str| set(impairment, option, value).ok_or_else(wrong);
+                let set_in = |impairment: &mut Impairment, option: &str| {
+                    set(impairment, option, value).ok_or_else(wrong)
+                };
                 match (option.strip_prefix("up-"), option.strip_prefix("down-")) {
                     (Some(option), _) => set_in(&mut up, option)?,
                     (_, Some(option)) => set_in(&mut down, option)?,
@@ -85,8 +123,19 @@ fn parse(args: &[String]) -> Result<Options, String> {
             }
         }
     }
-    let (Some(listen), Some(to)) = (listen, to) else { return Err("--listen and --to are needed".into()) };
-    Ok(Options { listen, to, up, down, seed, stats, run_for, capture })
+    let (Some(listen), Some(to)) = (listen, to) else {
+        return Err("--listen and --to are needed".into());
+    };
+    Ok(Options {
+        listen,
+        to,
+        up,
+        down,
+        seed,
+        stats,
+        run_for,
+        capture,
+    })
 }
 
 fn side(name: &str, counters: &Counters) -> String {
@@ -103,7 +152,11 @@ fn side(name: &str, counters: &Counters) -> String {
 }
 
 fn line(proxy: &Proxy, label: &str) -> String {
-    format!("{label} | {} | {}", side("up", &proxy.up), side("down", &proxy.down))
+    format!(
+        "{label} | {} | {}",
+        side("up", &proxy.up),
+        side("down", &proxy.down)
+    )
 }
 
 fn main() -> ExitCode {
@@ -116,22 +169,41 @@ fn main() -> ExitCode {
         }
     };
     let started = Instant::now();
-    let capture = match options.capture.as_deref().map(|path| capture::Capture::create(path, started)).transpose() {
+    let capture = match options
+        .capture
+        .as_deref()
+        .map(|path| capture::Capture::create(path, started))
+        .transpose()
+    {
         Ok(capture) => capture,
         Err(error) => {
             eprintln!("netem: --capture: {error}");
             return ExitCode::FAILURE;
         }
     };
-    let proxy = match relay::start(options.listen, options.to, options.up, options.down, options.seed, capture) {
+    let proxy = match relay::start(
+        options.listen,
+        options.to,
+        options.up,
+        options.down,
+        options.seed,
+        capture,
+    ) {
         Ok(proxy) => proxy,
         Err(error) => {
             eprintln!("netem: {}: {error}", options.listen);
             return ExitCode::FAILURE;
         }
     };
-    println!("netem {} -> {} | up {:?} | down {:?}", options.listen, options.to, options.up, options.down);
-    let every = Duration::from_secs_f64(if options.stats > 0.0 { options.stats } else { 1.0 });
+    println!(
+        "netem {} -> {} | up {:?} | down {:?}",
+        options.listen, options.to, options.up, options.down
+    );
+    let every = Duration::from_secs_f64(if options.stats > 0.0 {
+        options.stats
+    } else {
+        1.0
+    });
     loop {
         thread::sleep(every);
         if let Some(capture) = &proxy.capture {
@@ -159,9 +231,18 @@ mod tests {
     #[test]
     fn options_set_both_directions_or_one() {
         let options = parse(&args("--listen 127.0.0.1:19140 --to 127.0.0.1:19132 --delay 75ms --down-rate 1.5mbit --loss 2 --up-jitter 1s")).unwrap();
-        assert_eq!((options.up.delay, options.down.delay), (Duration::from_millis(75), Duration::from_millis(75)));
-        assert_eq!((options.up.rate, options.down.rate), (None, Some(1_500_000)));
-        assert_eq!((options.up.loss, options.up.jitter, options.down.jitter), (0.02, Duration::from_secs(1), Duration::ZERO));
+        assert_eq!(
+            (options.up.delay, options.down.delay),
+            (Duration::from_millis(75), Duration::from_millis(75))
+        );
+        assert_eq!(
+            (options.up.rate, options.down.rate),
+            (None, Some(1_500_000))
+        );
+        assert_eq!(
+            (options.up.loss, options.up.jitter, options.down.jitter),
+            (0.02, Duration::from_secs(1), Duration::ZERO)
+        );
         assert!(parse(&args("--listen 127.0.0.1:1 --to 127.0.0.1:2 --loss 150")).is_err());
         assert!(parse(&args("--listen 127.0.0.1:1")).is_err());
     }

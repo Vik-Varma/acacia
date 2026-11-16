@@ -4,7 +4,8 @@
 use std::fmt;
 
 use acacia_proto::packets::{
-    Disconnect, JigsawStructureData, NetworkSettings, PlayStatus, PlayStatusStatus, ResourcePackStack, ServerToClientHandshake, StartGame,
+    Disconnect, JigsawStructureData, NetworkSettings, PlayStatus, PlayStatusStatus,
+    ResourcePackStack, ServerToClientHandshake, StartGame,
 };
 use acacia_proto::{DecodeError, Packet, RawPacket, packet_name};
 
@@ -55,11 +56,15 @@ impl JoinOrder {
         let seen = |flag: &mut bool| std::mem::replace(flag, true);
         match raw.id {
             NetworkSettings::ID if seen(&mut self.settings) => report("second NetworkSettings"),
-            ServerToClientHandshake::ID if seen(&mut self.handshake) => report("second ServerToClientHandshake"),
+            ServerToClientHandshake::ID if seen(&mut self.handshake) => {
+                report("second ServerToClientHandshake")
+            }
             NetworkSettings::ID | ServerToClientHandshake::ID | Disconnect::ID => {}
             PlayStatus::ID => match raw.decode::<PlayStatus>().map(|p| p.status) {
                 Ok(PlayStatusStatus::LoginSuccess) => self.logged_in = true,
-                Ok(PlayStatusStatus::PlayerSpawn) if !self.start_game => report("PlayerSpawn before StartGame"),
+                Ok(PlayStatusStatus::PlayerSpawn) if !self.start_game => {
+                    report("PlayerSpawn before StartGame")
+                }
                 _ => {}
             },
             _ if !self.logged_in => report("sent before PlayStatus(LoginSuccess)"),
@@ -84,10 +89,15 @@ impl JoinOrder {
 impl Session {
     /// Strict mode only: queues an [`Event::Violation`] for everything wrong with `raw`.
     pub(super) fn audit(&mut self, raw: &RawPacket) {
-        let Some(order) = &mut self.strict else { return };
+        let Some(order) = &mut self.strict else {
+            return;
+        };
         let events = &mut self.events;
         let mut report = |reason| {
-            let violation = Violation { packet: raw.id, reason };
+            let violation = Violation {
+                packet: raw.id,
+                reason,
+            };
             tracing::warn!(%violation, "strict mode");
             events.push_back(Event::Violation(violation));
         };
@@ -112,7 +122,12 @@ mod tests {
     }
 
     fn bare(id: u32) -> RawPacket {
-        RawPacket { id, sender_subclient: 0, target_subclient: 0, body: Default::default() }
+        RawPacket {
+            id,
+            sender_subclient: 0,
+            target_subclient: 0,
+            body: Default::default(),
+        }
     }
 
     fn rules(order: &mut JoinOrder, raw: &RawPacket) -> Vec<&'static str> {
@@ -124,32 +139,68 @@ mod tests {
     #[test]
     fn a_join_in_order_breaks_no_rule() {
         let mut order = JoinOrder::default();
-        let login = raw(&PlayStatus { status: PlayStatusStatus::LoginSuccess });
-        let spawn = raw(&PlayStatus { status: PlayStatusStatus::PlayerSpawn });
-        let join = [bare(NetworkSettings::ID), bare(ServerToClientHandshake::ID), login, bare(ResourcePackStack::ID), bare(JigsawStructureData::ID), bare(StartGame::ID), spawn];
+        let login = raw(&PlayStatus {
+            status: PlayStatusStatus::LoginSuccess,
+        });
+        let spawn = raw(&PlayStatus {
+            status: PlayStatusStatus::PlayerSpawn,
+        });
+        let join = [
+            bare(NetworkSettings::ID),
+            bare(ServerToClientHandshake::ID),
+            login,
+            bare(ResourcePackStack::ID),
+            bare(JigsawStructureData::ID),
+            bare(StartGame::ID),
+            spawn,
+        ];
         for packet in &join {
-            assert_eq!(rules(&mut order, packet), Vec::<&str>::new(), "packet {}", packet.id);
+            assert_eq!(
+                rules(&mut order, packet),
+                Vec::<&str>::new(),
+                "packet {}",
+                packet.id
+            );
         }
     }
 
     #[test]
     fn start_game_reports_each_missing_step() {
         let mut order = JoinOrder::default();
-        assert_eq!(rules(&mut order, &bare(StartGame::ID)), ["sent before PlayStatus(LoginSuccess)"]);
-        rules(&mut order, &raw(&PlayStatus { status: PlayStatusStatus::LoginSuccess }));
         assert_eq!(
             rules(&mut order, &bare(StartGame::ID)),
-            ["StartGame before ResourcePackStack", "StartGame without JigsawStructureData before it"]
+            ["sent before PlayStatus(LoginSuccess)"]
         );
-        assert_eq!(rules(&mut order, &bare(StartGame::ID)), ["second StartGame"]);
+        rules(
+            &mut order,
+            &raw(&PlayStatus {
+                status: PlayStatusStatus::LoginSuccess,
+            }),
+        );
+        assert_eq!(
+            rules(&mut order, &bare(StartGame::ID)),
+            [
+                "StartGame before ResourcePackStack",
+                "StartGame without JigsawStructureData before it"
+            ]
+        );
+        assert_eq!(
+            rules(&mut order, &bare(StartGame::ID)),
+            ["second StartGame"]
+        );
     }
 
     #[test]
     fn repeats_and_an_early_spawn_are_reported() {
         let mut order = JoinOrder::default();
         rules(&mut order, &bare(NetworkSettings::ID));
-        assert_eq!(rules(&mut order, &bare(NetworkSettings::ID)), ["second NetworkSettings"]);
-        let spawn = raw(&PlayStatus { status: PlayStatusStatus::PlayerSpawn });
+        assert_eq!(
+            rules(&mut order, &bare(NetworkSettings::ID)),
+            ["second NetworkSettings"]
+        );
+        let spawn = raw(&PlayStatus {
+            status: PlayStatusStatus::PlayerSpawn,
+        });
         assert_eq!(rules(&mut order, &spawn), ["PlayerSpawn before StartGame"]);
     }
 }

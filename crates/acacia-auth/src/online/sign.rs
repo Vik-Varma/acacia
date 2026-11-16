@@ -32,7 +32,12 @@ pub fn signing_input(
     m.push(0);
     m.extend_from_slice(&filetime.to_be_bytes());
     m.push(0);
-    for part in [method.as_bytes(), path_and_query.as_bytes(), authorization.as_bytes(), body] {
+    for part in [
+        method.as_bytes(),
+        path_and_query.as_bytes(),
+        authorization.as_bytes(),
+        body,
+    ] {
         m.extend_from_slice(part);
         m.push(0);
     }
@@ -48,7 +53,13 @@ pub fn signature_bytes(
     authorization: &str,
     body: &[u8],
 ) -> Vec<u8> {
-    let sig: Signature = key.sign(&signing_input(filetime, method, path_and_query, authorization, body));
+    let sig: Signature = key.sign(&signing_input(
+        filetime,
+        method,
+        path_and_query,
+        authorization,
+        body,
+    ));
     let mut out = Vec::with_capacity(76);
     out.extend_from_slice(&POLICY_VERSION.to_be_bytes());
     out.extend_from_slice(&filetime.to_be_bytes());
@@ -65,7 +76,14 @@ pub fn signature_header(
     authorization: &str,
     body: &[u8],
 ) -> String {
-    STANDARD.encode(signature_bytes(key, filetime, method, path_and_query, authorization, body))
+    STANDARD.encode(signature_bytes(
+        key,
+        filetime,
+        method,
+        path_and_query,
+        authorization,
+        body,
+    ))
 }
 
 /// `ProofKey` JWK as go-jose marshals `JSONWebKey{Algorithm: ES256, Use: sig}`.
@@ -84,8 +102,8 @@ pub fn proof_key_jwk(key: &SigningKey) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use p256::ecdsa::signature::Verifier;
     use p256::ecdsa::VerifyingKey;
+    use p256::ecdsa::signature::Verifier;
     use p256::pkcs8::DecodePublicKey;
 
     // Produced by the Go program in the scratchpad (gophertunnel v1.62 / go-xsapi v2.0.3

@@ -7,15 +7,27 @@ use ts_rs::TS;
 /// An entity's runtime id (the per-connection one actions take), as a decimal string.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(transparent)]
-pub struct EntityId(#[serde(with = "dec_str")] #[ts(type = "string")] #[schemars(with = "String")] pub u64);
+pub struct EntityId(
+    #[serde(with = "dec_str")]
+    #[ts(type = "string")]
+    #[schemars(with = "String")]
+    pub u64,
+);
 
 /// An entity's unique id (the one player lists and containers name), as a decimal string.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(transparent)]
-pub struct UniqueId(#[serde(with = "dec_str")] #[ts(type = "string")] #[schemars(with = "String")] pub i64);
+pub struct UniqueId(
+    #[serde(with = "dec_str")]
+    #[ts(type = "string")]
+    #[schemars(with = "String")]
+    pub i64,
+);
 
 /// A bot the host runs, named by the host when `createBot` is called.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS, JsonSchema)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS, JsonSchema,
+)]
 #[serde(transparent)]
 pub struct BotId(pub String);
 
@@ -41,7 +53,7 @@ mod dec_str {
     use std::fmt::Display;
     use std::str::FromStr;
 
-    use serde::{de, Deserialize, Deserializer, Serializer};
+    use serde::{Deserialize, Deserializer, Serializer, de};
 
     pub fn serialize<T: Display, S: Serializer>(value: &T, s: S) -> Result<S::Ok, S::Error> {
         s.collect_str(value)
@@ -67,6 +79,9 @@ mod tests {
         assert_eq!(json, "\"18446744073709551614\"");
         assert_eq!(serde_json::from_str::<EntityId>(&json).unwrap(), id);
         assert_eq!(serde_json::to_string(&UniqueId(-5)).unwrap(), "\"-5\"");
-        assert!(serde_json::from_str::<EntityId>("12").is_err(), "numbers are refused");
+        assert!(
+            serde_json::from_str::<EntityId>("12").is_err(),
+            "numbers are refused"
+        );
     }
 }

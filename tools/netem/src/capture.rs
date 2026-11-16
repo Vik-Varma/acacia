@@ -17,7 +17,10 @@ pub struct Capture {
 
 impl Capture {
     pub fn create(path: &str, epoch: Instant) -> io::Result<Self> {
-        Ok(Self { epoch, out: Mutex::new(BufWriter::new(File::create(path)?)) })
+        Ok(Self {
+            epoch,
+            out: Mutex::new(BufWriter::new(File::create(path)?)),
+        })
     }
 
     pub fn record(&self, up: bool, fate: Fate, data: &[u8]) {
@@ -26,7 +29,11 @@ impl Capture {
             Fate::Overflow => "full",
             Fate::Arrives(_) => "sent",
         };
-        let mut line = format!("{} {} {fate} ", self.epoch.elapsed().as_micros(), if up { "up" } else { "down" });
+        let mut line = format!(
+            "{} {} {fate} ",
+            self.epoch.elapsed().as_micros(),
+            if up { "up" } else { "down" }
+        );
         data.iter().for_each(|byte| {
             let _ = write!(line, "{byte:02x}");
         });

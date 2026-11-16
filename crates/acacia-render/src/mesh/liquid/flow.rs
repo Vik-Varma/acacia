@@ -5,11 +5,20 @@ use super::tesselate::fluid_at;
 use crate::blocks::{Fluid, RenderBlock};
 
 /// `Direction.Plane.HORIZONTAL` (north, east, south, west) with the face index of each.
-const HORIZONTAL: [([i32; 3], usize); 4] = [([0, 0, -1], 5), ([1, 0, 0], 0), ([0, 0, 1], 4), ([-1, 0, 0], 1)];
+const HORIZONTAL: [([i32; 3], usize); 4] = [
+    ([0, 0, -1], 5),
+    ([1, 0, 0], 0),
+    ([0, 0, 1], 4),
+    ([-1, 0, 0], 1),
+];
 
 fn normalize([x, y, z]: [f64; 3]) -> [f64; 3] {
     let length = (x * x + y * y + z * z).sqrt();
-    if length < 1.0e-5 { [0.0; 3] } else { [x / length, y / length, z / length] }
+    if length < 1.0e-5 {
+        [0.0; 3]
+    } else {
+        [x / length, y / length, z / length]
+    }
 }
 
 pub(super) fn at(ctx: &Ctx, [x, y, z]: [i32; 3], me: &RenderBlock) -> [f64; 3] {
@@ -48,9 +57,13 @@ pub(super) fn at(ctx: &Ctx, [x, y, z]: [i32; 3], me: &RenderBlock) -> [f64; 3] {
         // isSolidFace: the neighbour's far face, unless it holds the same fluid or is ice.
         let solid_face = |q: [i32; 3], face: usize| {
             let block = ctx.block(q);
-            fluid_at(ctx, q).fluid != fluid && !block.fluid_rules.ice && block.fluid_rules.sturdy[face]
+            fluid_at(ctx, q).fluid != fluid
+                && !block.fluid_rules.ice
+                && block.fluid_rules.sturdy[face]
         };
-        if HORIZONTAL.iter().any(|&([dx, _, dz], face)| solid_face([x + dx, y, z + dz], face) || solid_face([x + dx, y + 1, z + dz], face)) {
+        if HORIZONTAL.iter().any(|&([dx, _, dz], face)| {
+            solid_face([x + dx, y, z + dz], face) || solid_face([x + dx, y + 1, z + dz], face)
+        }) {
             let [nx, ny, nz] = normalize(flow);
             flow = [nx, ny - 6.0, nz];
         }

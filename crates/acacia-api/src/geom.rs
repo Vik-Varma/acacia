@@ -13,7 +13,9 @@ pub struct Vec3 {
 }
 
 /// A block cell.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, TS, JsonSchema)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, TS, JsonSchema,
+)]
 pub struct BlockPos {
     pub x: i32,
     pub y: i32,

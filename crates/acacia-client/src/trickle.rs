@@ -3,13 +3,17 @@
 
 use std::time::{Duration, Instant};
 
-use acacia_nethernet::turn::{IceServers, Scheme, Transport as IceTransport, TurnClient, TurnEvent};
-use acacia_nethernet::{Connection, Event as NetEvent, Identity, LocalCandidate, Signal, SignalKind};
+use acacia_nethernet::turn::{
+    IceServers, Scheme, Transport as IceTransport, TurnClient, TurnEvent,
+};
+use acacia_nethernet::{
+    Connection, Event as NetEvent, Identity, LocalCandidate, Signal, SignalKind,
+};
 use rand_core::{OsRng, RngCore};
 
-use crate::net_wire::NetherNetWire;
-use crate::transport::{resolve, Transport};
 use crate::ConnectError;
+use crate::net_wire::NetherNetWire;
+use crate::transport::{Transport, resolve};
 
 /// Vanilla joined a realm with host candidates only (ICE up 1.4 s after the join); relay candidates
 /// go out only if ICE is still down this long after the offer.
@@ -49,8 +53,14 @@ pub(crate) async fn connect<P: SignalPath>(
     }
     let mut wire = NetherNetWire::new(conn, None);
     let connection_id = OsRng.next_u64();
-    path.send(Signal::new(SignalKind::ConnectRequest, connection_id, offer));
-    let line = wire.conn.add_local_candidate(LocalCandidate::Host(host), now)?;
+    path.send(Signal::new(
+        SignalKind::ConnectRequest,
+        connection_id,
+        offer,
+    ));
+    let line = wire
+        .conn
+        .add_local_candidate(LocalCandidate::Host(host), now)?;
     path.send(Signal::new(SignalKind::CandidateAdd, connection_id, line));
     tracing::debug!(connection_id, "signaled NetherNet offer");
 
@@ -63,19 +73,29 @@ pub(crate) async fn connect<P: SignalPath>(
         if now >= fallback_at
             && wire.turn().is_none()
             && !wire.conn.is_open()
-            && let Some((addr, username, password)) = ice_servers.take().as_ref().and_then(turn_server)
+            && let Some((addr, username, password)) =
+                ice_servers.take().as_ref().and_then(turn_server)
         {
             tracing::debug!(%addr, "ICE still down; falling back to TURN");
-            wire.set_turn(TurnClient::new(resolve(&addr).await?, username, password, now), now);
+            wire.set_turn(
+                TurnClient::new(resolve(&addr).await?, username, password, now),
+                now,
+            );
         }
         while let Some(event) = wire.turn_mut().and_then(TurnClient::poll_event) {
             match event {
                 TurnEvent::Allocated { relayed, mapped } => {
                     if let Some(addr) = mapped {
-                        let line = wire.conn.add_local_candidate(LocalCandidate::ServerReflexive { addr, base: host }, now)?;
+                        let line = wire.conn.add_local_candidate(
+                            LocalCandidate::ServerReflexive { addr, base: host },
+                            now,
+                        )?;
                         path.send(Signal::new(SignalKind::CandidateAdd, connection_id, line));
                     }
-                    let relay = LocalCandidate::Relayed { addr: relayed, mapped: mapped.unwrap_or(host) };
+                    let relay = LocalCandidate::Relayed {
+                        addr: relayed,
+                        mapped: mapped.unwrap_or(host),
+                    };
                     let line = wire.conn.add_local_candidate(relay, now)?;
                     path.send(Signal::new(SignalKind::CandidateAdd, connection_id, line));
                 }
@@ -88,7 +108,9 @@ pub(crate) async fn connect<P: SignalPath>(
                     path.flush().await?;
                     Ok(wire)
                 }
-                NetEvent::Closed(reason) => Err(ConnectError::Signaling(format!("connection closed: {reason}"))),
+                NetEvent::Closed(reason) => Err(ConnectError::Signaling(format!(
+                    "connection closed: {reason}"
+                ))),
             };
         }
         while let Some((dest, datagram)) = wire.poll_datagram(now) {
@@ -99,7 +121,16 @@ pub(crate) async fn connect<P: SignalPath>(
         path.flush().await?;
 
         let fallback = wire.turn().is_none().then_some(fallback_at);
-        let next = [wire.poll_timeout(), fallback, path.poll_timeout(), Some(deadline)].into_iter().flatten().min().expect("deadline");
+        let next = [
+            wire.poll_timeout(),
+            fallback,
+            path.poll_timeout(),
+            Some(deadline),
+        ]
+        .into_iter()
+        .flatten()
+        .min()
+        .expect("deadline");
         tokio::select! {
             signals = path.recv() => {
                 for s in signals? {
@@ -146,9 +177,17 @@ fn on_signal(wire: &mut NetherNetWire, signal: &Signal, now: Instant) -> Result<
 
 /// The first UDP TURN server as `host:port` with its credentials.
 fn turn_server(servers: &IceServers) -> Option<(String, String, String)> {
-    let found = servers.urls().find(|(u, _)| u.scheme == Scheme::Turn && u.transport == IceTransport::Udp);
+    let found = servers
+        .urls()
+        .find(|(u, _)| u.scheme == Scheme::Turn && u.transport == IceTransport::Udp);
     if found.is_none() {
         tracing::debug!("no UDP TURN server in the credentials");
     }
-    found.map(|(url, s)| (format!("{}:{}", url.host, url.port), s.username.clone(), s.password.clone()))
+    found.map(|(url, s)| {
+        (
+            format!("{}:{}", url.host, url.port),
+            s.username.clone(),
+            s.password.clone(),
+        )
+    })
 }

@@ -85,9 +85,7 @@ impl Ctx<'_> {
             ),
             IrTy::Rest => "read_rest(r)".to_owned(),
             IrTy::Uuid => "read_uuid(r)?".to_owned(),
-            IrTy::Nbt { le: true } => {
-                "crate::nbt::read::<crate::nbt::LittleEndian>(r)?".to_owned()
-            }
+            IrTy::Nbt { le: true } => "crate::nbt::read::<crate::nbt::LittleEndian>(r)?".to_owned(),
             IrTy::Nbt { le: false } => "crate::nbt::read_raw::<crate::nbt::Network>(r)?".to_owned(),
             IrTy::NbtLoop => "crate::nbt::read_loop(r)?".to_owned(),
             IrTy::Item(id) => format!("{}::read(r)?", self.path(*id)),

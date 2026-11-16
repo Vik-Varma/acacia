@@ -72,9 +72,16 @@ impl Player {
 
     pub(crate) fn read_keys(&mut self, keys: Keys) {
         self.keys = keys;
-        let v = [impulse(keys.left, keys.right), impulse(keys.forward, keys.backward)];
+        let v = [
+            impulse(keys.left, keys.right),
+            impulse(keys.forward, keys.backward),
+        ];
         let length = sqrt(v[0] * v[0] + v[1] * v[1]);
-        self.move_vector = if length < 1.0E-4 { [0.0, 0.0] } else { [v[0] / length, v[1] / length] };
+        self.move_vector = if length < 1.0E-4 {
+            [0.0, 0.0]
+        } else {
+            [v[0] / length, v[1] / length]
+        };
     }
 
     pub(crate) fn moving_slowly(&self) -> bool {
@@ -105,7 +112,14 @@ impl Player {
         self.apply_input();
         self.using_item = using;
         let (xxa, zza, yaw, pitch) = (self.xxa, self.zza, self.yaw, self.pitch);
-        crate::Rider { xxa, zza, jumping: keys.jump, sprinting: self.sprinting, yaw, pitch }
+        crate::Rider {
+            xxa,
+            zza,
+            jumping: keys.jump,
+            sprinting: self.sprinting,
+            yaw,
+            pitch,
+        }
     }
 
     fn slow_from_item(&self) -> bool {
@@ -131,7 +145,9 @@ impl Player {
 
     fn should_stop_sprinting(&self) -> bool {
         if self.swimming {
-            !self.sprint_possible(true) || !self.in_water || (!self.has_forward_impulse() && !self.on_ground && !self.keys.shift)
+            !self.sprint_possible(true)
+                || !self.in_water
+                || (!self.has_forward_impulse() && !self.on_ground && !self.keys.shift)
         } else {
             !self.sprint_possible(self.flying)
                 || !self.has_forward_impulse()
@@ -183,7 +199,11 @@ impl Player {
     fn suffocates_at(&self, world: &impl Blocks, x: i32, z: i32) -> bool {
         let b = self.bounding_box();
         let (x, z) = (x as f64, z as f64);
-        let area = crate::Aabb { min: [x, b.min[1], z], max: [x + 1.0, b.max[1], z + 1.0] }.deflated(SUFFOCATION_MARGIN);
+        let area = crate::Aabb {
+            min: [x, b.min[1], z],
+            max: [x + 1.0, b.max[1], z + 1.0],
+        }
+        .deflated(SUFFOCATION_MARGIN);
         crate::inside::collides_with_suffocating(world, &area)
     }
 
@@ -195,8 +215,17 @@ impl Player {
         let (xd, zd) = (x - bx as f64, z - bz as f64);
         let mut best: Option<(usize, f64)> = None;
         let mut closest = f64::MAX;
-        for (axis, step, distance) in [(0, -1.0, xd), (0, 1.0, 1.0 - xd), (2, -1.0, zd), (2, 1.0, 1.0 - zd)] {
-            let (nx, nz) = if axis == 0 { (bx + step as i32, bz) } else { (bx, bz + step as i32) };
+        for (axis, step, distance) in [
+            (0, -1.0, xd),
+            (0, 1.0, 1.0 - xd),
+            (2, -1.0, zd),
+            (2, 1.0, 1.0 - zd),
+        ] {
+            let (nx, nz) = if axis == 0 {
+                (bx + step as i32, bz)
+            } else {
+                (bx, bz + step as i32)
+            };
             if distance < closest && !self.suffocates_at(world, nx, nz) {
                 closest = distance;
                 best = Some((axis, step));
@@ -210,7 +239,11 @@ impl Player {
     pub(crate) fn push_out_of_blocks(&mut self, world: &impl Blocks) {
         let half = (crate::player::WIDTH * 0.35) as f64;
         for (sx, sz) in [(-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0), (1.0, 1.0)] {
-            self.move_towards_closest_space(world, self.pos[0] + sx * half, self.pos[2] + sz * half);
+            self.move_towards_closest_space(
+                world,
+                self.pos[0] + sx * half,
+                self.pos[2] + sz * half,
+            );
         }
     }
 }

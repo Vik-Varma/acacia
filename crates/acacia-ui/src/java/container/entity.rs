@@ -38,7 +38,14 @@ fn mul(a: Quat, b: Quat) -> Quat {
 
 /// The figure in `(x0, y0)-(x1, y1)` at `size`, its feet `offset_y` up, facing `mouse`.
 #[allow(clippy::too_many_arguments)]
-pub fn follows_mouse(gui: &mut Gui, rect: [i32; 4], size: i32, offset_y: f32, mouse: [f32; 2], figure: &Figure) {
+pub fn follows_mouse(
+    gui: &mut Gui,
+    rect: [i32; 4],
+    size: i32,
+    offset_y: f32,
+    mouse: [f32; 2],
+    figure: &Figure,
+) {
     let [x0, y0, x1, y1] = rect;
     let cx = (x0 + x1) as f32 / 2.0;
     let cy = (y0 + y1) as f32 / 2.0;
@@ -51,7 +58,11 @@ pub fn follows_mouse(gui: &mut Gui, rect: [i32; 4], size: i32, offset_y: f32, mo
     let mut height = figure.bb_height;
     let angles = figure.scale.map(|scale| {
         height /= scale;
-        let x_rot = if figure.fall_flying { 0.0 } else { -y_angle * 20.0 };
+        let x_rot = if figure.fall_flying {
+            0.0
+        } else {
+            -y_angle * 20.0
+        };
         [180.0 + x_angle * 20.0, x_angle * 20.0, x_rot]
     });
     gui.draws.push(GuiDraw::Picture(Picture::Entity {

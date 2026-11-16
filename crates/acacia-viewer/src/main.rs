@@ -22,22 +22,22 @@ mod audio;
 mod block_data;
 mod bob;
 mod control;
+mod creative_items;
 mod debug_lines;
+mod enchant_names;
 mod entities;
+mod facts;
 mod forms;
+mod frames;
 #[cfg(feature = "profile")]
 mod heap;
-mod creative_items;
-mod music;
-mod enchant_names;
-mod facts;
-mod frames;
 mod held_map;
 mod input;
 mod item_look;
 mod keyscript;
 mod looks;
 mod me;
+mod music;
 mod net;
 mod overlay;
 mod particles;
@@ -59,11 +59,16 @@ static ALLOC: heap::Tracking = heap::Tracking;
 use winit::event_loop::EventLoop;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let mut settings = settings::Settings::load();
     if let Some(i) = args.iter().position(|a| a == "--look") {
-        settings.look = args.get(i + 1).ok_or("--look needs bedrock or java")?.parse()?;
+        settings.look = args
+            .get(i + 1)
+            .ok_or("--look needs bedrock or java")?
+            .parse()?;
         args.drain(i..=i + 1);
     }
     if std::env::var_os("ACACIA_NO_CULL").is_some() {
@@ -78,7 +83,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Entities, biome colours and the sky follow the look chosen at start; L changes blocks only.
     let files = looks.get(settings.look).files().to_owned();
     let sky = acacia_render::sky::SkyTextures::load(&files);
-    let net = net::spawn(net::Options { server, name, radius }, files);
+    let net = net::spawn(
+        net::Options {
+            server,
+            name,
+            radius,
+        },
+        files,
+    );
     let event_loop = EventLoop::new()?;
     let mut app = app::App::new(net, radius, sky, settings, looks);
     event_loop.run_app(&mut app)?;

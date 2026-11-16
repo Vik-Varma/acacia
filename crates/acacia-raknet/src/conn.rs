@@ -4,8 +4,8 @@ use bytes::Bytes;
 
 use crate::reliability::{RecvLimits, RecvState, SendQueue};
 use crate::types::DisconnectReason;
-use crate::wire::datagram::{decode_acks, Frame, Reliability, FLAG_ACK, FLAG_NACK};
-use crate::wire::{connected as c, offline as o, Reader};
+use crate::wire::datagram::{FLAG_ACK, FLAG_NACK, Frame, Reliability, decode_acks};
+use crate::wire::{Reader, connected as c, offline as o};
 
 /// ACKs and NACKs leave on this tick, like RakNet's update loop, not per datagram: vanilla covers
 /// ~4.6 datagrams per ACK after a 5 ms median wait (2026-10-03 capture; acacia-capdiff `pacing`).
@@ -101,7 +101,9 @@ impl Conn {
         }
         while r.remaining() > 0 {
             let frame = Frame::decode(&mut r, data).map_err(|e| protocol(&e))?;
-            self.recv.on_frame(frame, data.len()).map_err(|e| protocol(&e))?;
+            self.recv
+                .on_frame(frame, data.len())
+                .map_err(|e| protocol(&e))?;
         }
         Ok(())
     }
@@ -112,7 +114,8 @@ impl Conn {
             match msg.first() {
                 Some(&c::ID_CONNECTED_PING) => {
                     if let Ok(time) = c::parse_timestamp(&msg) {
-                        self.send.push_control(c::connected_pong(time, self.time(now)));
+                        self.send
+                            .push_control(c::connected_pong(time, self.time(now)));
                     }
                 }
                 Some(&c::ID_CONNECTED_PONG) | None => {}
@@ -137,7 +140,9 @@ impl Conn {
         let idle = self.last_recv + self.idle_timeout;
         let ping = self.last_ping + self.ping_interval;
         let ack = self.ack_at.unwrap_or(idle);
-        idle.min(ping).min(ack).min(self.send.next_resend().unwrap_or(idle))
+        idle.min(ping)
+            .min(ack)
+            .min(self.send.next_resend().unwrap_or(idle))
     }
 
     pub fn handle_timeout(&mut self, now: Instant) -> Result<(), DisconnectReason> {
@@ -154,7 +159,10 @@ impl Conn {
 
     /// Queues a disconnection notification and packs everything still queued into datagrams.
     pub fn close(&mut self, now: Instant) -> Vec<Bytes> {
-        self.queue(c::disconnection_notification(), Reliability::ReliableOrdered);
+        self.queue(
+            c::disconnection_notification(),
+            Reliability::ReliableOrdered,
+        );
         self.send.flush(now, self.max_payload())
     }
 }
@@ -164,11 +172,17 @@ mod tests {
     use bytes::BytesMut;
 
     use super::*;
-    use crate::wire::datagram::{put_datagram_header, Split};
+    use crate::wire::datagram::{Split, put_datagram_header};
 
     fn conn_with_mtu(now: Instant, mtu: u16) -> Conn {
         let (idle_timeout, ping_interval) = (Duration::from_secs(10), Duration::from_secs(5));
-        let cfg = ConnConfig { mtu, idle_timeout, ping_interval, recv_limits: RecvLimits::SERVER, congestion_window: true };
+        let cfg = ConnConfig {
+            mtu,
+            idle_timeout,
+            ping_interval,
+            recv_limits: RecvLimits::SERVER,
+            congestion_window: true,
+        };
         Conn::new(now, cfg, now)
     }
 
@@ -200,19 +214,38 @@ mod tests {
         c.queue(Bytes::from(vec![1u8; 5000]), Reliability::ReliableOrdered);
         let sent: Vec<Bytes> = std::iter::from_fn(|| c.poll_transmit(now)).collect();
         let max = usize::from(o::MIN_MTU - o::UDP_OVERHEAD);
-        assert!(sent.len() > 5000 / max && sent.iter().all(|d| d.len() <= max), "{} datagrams", sent.len());
+        assert!(
+            sent.len() > 5000 / max && sent.iter().all(|d| d.len() <= max),
+            "{} datagrams",
+            sent.len()
+        );
     }
 
     #[test]
     fn split_abuse_ends_the_connection() {
         let t0 = Instant::now();
         let mut c = conn(t0);
-        let split = Some(Split { count: 100_000, id: 0, index: 0 });
-        let frame = Frame { reliability: Reliability::Reliable, reliable_index: 0, sequence_index: 0, order_index: 0, order_channel: 0, split, body: Bytes::from_static(b"x") };
+        let split = Some(Split {
+            count: 100_000,
+            id: 0,
+            index: 0,
+        });
+        let frame = Frame {
+            reliability: Reliability::Reliable,
+            reliable_index: 0,
+            sequence_index: 0,
+            order_index: 0,
+            order_channel: 0,
+            split,
+            body: Bytes::from_static(b"x"),
+        };
         let mut d = BytesMut::new();
         put_datagram_header(&mut d, 0);
         frame.encode(&mut d);
-        assert_eq!(c.handle_datagram(t0, &d.freeze()), Err(DisconnectReason::Protocol("BadSplit".into())));
+        assert_eq!(
+            c.handle_datagram(t0, &d.freeze()),
+            Err(DisconnectReason::Protocol("BadSplit".into()))
+        );
     }
 
     #[test]
@@ -223,7 +256,12 @@ mod tests {
             c.handle_datagram(t0, &d).unwrap();
         }
         let early = c.poll_transmit(t0);
-        assert_eq!(early, None, "no ACK before the tick; got {:02x?}", early.as_deref().map(|d| &d[..d.len().min(12)]));
+        assert_eq!(
+            early,
+            None,
+            "no ACK before the tick; got {:02x?}",
+            early.as_deref().map(|d| &d[..d.len().min(12)])
+        );
         let tick = c.poll_timeout();
         assert!(tick > t0 && tick <= t0 + ACK_TICK, "{:?}", tick - t0);
         let ack = c.poll_transmit(tick).expect("one ACK at the tick");
@@ -242,7 +280,13 @@ mod tests {
         }
         let tick = c.poll_timeout();
         let sent: Vec<Bytes> = std::iter::from_fn(|| c.poll_transmit(tick)).collect();
-        assert!(sent.iter().all(|d| d[0] & FLAG_NACK == 0), "datagram 1 arrived before the tick");
-        assert_eq!(sent.iter().flat_map(ack_ranges).collect::<Vec<_>>(), [(0, 2)]);
+        assert!(
+            sent.iter().all(|d| d[0] & FLAG_NACK == 0),
+            "datagram 1 arrived before the tick"
+        );
+        assert_eq!(
+            sent.iter().flat_map(ack_ranges).collect::<Vec<_>>(),
+            [(0, 2)]
+        );
     }
 }

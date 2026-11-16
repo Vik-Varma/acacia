@@ -23,7 +23,13 @@ const ON_LADDER_TOP: f32 = 0.01;
 impl Follower {
     /// On the final node: releasing every key now comes to rest within the tolerance, by `coast` (where it comes to
     /// rest, simulated) or else by `S`'s ground drag at `speed`.
-    pub(super) fn stops<S: Sim>(&self, coast: Option<Vec3>, target: Vec3, dist: f32, speed: f32) -> bool {
+    pub(super) fn stops<S: Sim>(
+        &self,
+        coast: Option<Vec3>,
+        target: Vec3,
+        dist: f32,
+        speed: f32,
+    ) -> bool {
         let drag = S::envelope().ground_drag;
         match coast {
             Some(end) => hdist(end, target) < self.tolerance - SETTLE_MARGIN,
@@ -33,7 +39,16 @@ impl Follower {
 
     #[allow(clippy::too_many_arguments)]
     /// `stops`: on the final node, releasing the keys now comes to rest within the tolerance ([`Follower::stops`]).
-    pub(super) fn steer(&mut self, s: &Sense, c: &mut Controls, node: &PathNode, target: Vec3, dist: f32, last: bool, stops: bool) {
+    pub(super) fn steer(
+        &mut self,
+        s: &Sense,
+        c: &mut Controls,
+        node: &PathNode,
+        target: Vec3,
+        dist: f32,
+        last: bool,
+        stops: bool,
+    ) {
         let (dx, dz) = (target[0] - s.pos[0], target[2] - s.pos[2]);
         let want = (-dx).atan2(dz).to_degrees();
         if dist > 0.05 {
@@ -51,7 +66,11 @@ impl Follower {
         } else if node.kind == MoveKind::ClimbDown && s.on_ground {
             // On a ladder's top: its 3/16 strip holds the body until the feet are within 1/80 of the centre.
             if dist < ON_LADDER_TOP { 0.0 } else { 1.0 }
-        } else if matches!(node.kind, MoveKind::ClimbUp | MoveKind::ClimbDown | MoveKind::Pillar | MoveKind::Down) && dist < 0.15 {
+        } else if matches!(
+            node.kind,
+            MoveKind::ClimbUp | MoveKind::ClimbDown | MoveKind::Pillar | MoveKind::Down
+        ) && dist < 0.15
+        {
             0.0
         } else {
             1.0
@@ -75,7 +94,12 @@ impl Follower {
     }
 
     /// Where `live` comes to rest with every key released, if the budget allows simulating it.
-    pub(super) fn coast_end<S: StepIn<W>, W: ?Sized>(live: &S, c: &Controls, w: &W, spend: &mut Spend) -> Option<Vec3> {
+    pub(super) fn coast_end<S: StepIn<W>, W: ?Sized>(
+        live: &S,
+        c: &Controls,
+        w: &W,
+        spend: &mut Spend,
+    ) -> Option<Vec3> {
         if !spend.affords(u64::from(COAST_TICKS)) {
             return None;
         }
@@ -118,7 +142,9 @@ impl Follower {
 
     /// The next node is a macro move heading on the way the bot walks now: arriving at speed is a run-up.
     fn runs_into_macro(&self) -> bool {
-        let Some(next) = self.path.get(self.index + 1).filter(|n| n.mac.is_some()) else { return false };
+        let Some(next) = self.path.get(self.index + 1).filter(|n| n.mac.is_some()) else {
+            return false;
+        };
         let here = center(&self.path[self.index]);
         let unit = |(x, z): (i32, i32)| (x.signum(), z.signum());
         unit(dir(self.origin, here)) == unit(dir(here, center(next)))

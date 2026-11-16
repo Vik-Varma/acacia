@@ -51,7 +51,12 @@ fn evaluation_does_not_allocate() {
     let mut run = |times: usize| {
         for _ in 0..times {
             for program in &programs {
-                program.eval(&mut Env { host: &host, variables: &mut variables, scratch: &mut scratch, this: 1.0 });
+                program.eval(&mut Env {
+                    host: &host,
+                    variables: &mut variables,
+                    scratch: &mut scratch,
+                    this: 1.0,
+                });
             }
         }
     };

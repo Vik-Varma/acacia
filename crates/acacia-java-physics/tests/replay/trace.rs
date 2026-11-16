@@ -9,8 +9,15 @@ use acacia_registry::{Block, BlockState};
 
 fn parse_state(text: &str) -> BlockState {
     let (name, props) = text.split_once('[').unwrap_or((text, ""));
-    let block: Block = name.trim_start_matches("minecraft:").parse().expect("block name");
-    let pairs: Vec<(&str, &str)> = props.trim_end_matches(']').split(',').filter_map(|p| p.split_once('=')).collect();
+    let block: Block = name
+        .trim_start_matches("minecraft:")
+        .parse()
+        .expect("block name");
+    let pairs: Vec<(&str, &str)> = props
+        .trim_end_matches(']')
+        .split(',')
+        .filter_map(|p| p.split_once('='))
+        .collect();
     BlockState::with_named(block, &pairs).expect("block properties")
 }
 
@@ -97,7 +104,10 @@ fn vec_at(cols: &[&str], i: usize) -> [f64; 3] {
 fn parse_effects(text: &str) -> Effects {
     let mut effects = Effects::default();
     for entry in text.split(',').filter(|e| *e != "-") {
-        let (name, amp) = entry.split_once(':').map(|(n, a)| (n, a)).unwrap_or((entry, "0"));
+        let (name, amp) = entry
+            .split_once(':')
+            .map(|(n, a)| (n, a))
+            .unwrap_or((entry, "0"));
         let (name, amp) = match name.strip_prefix("minecraft") {
             Some(_) => amp.split_once(':').unwrap_or((amp, "0")),
             None => (name, amp),
@@ -126,7 +136,10 @@ fn parse_nearby(text: &str) -> Vec<Nearby> {
             let at = |i: usize| cols[i].parse::<f64>().expect("entity value");
             Nearby {
                 pos: [at(0), at(1), at(2)],
-                bounds: Aabb { min: [at(3), at(4), at(5)], max: [at(6), at(7), at(8)] },
+                bounds: Aabb {
+                    min: [at(3), at(4), at(5)],
+                    max: [at(6), at(7), at(8)],
+                },
                 pushes: cols[9] == "true",
                 solid: cols[10] == "true",
             }
@@ -160,11 +173,18 @@ fn parse(line: &str) -> Line {
         flying_speed: f32_at(&cols, 20),
         effects: parse_effects(cols[21]),
         nearby: parse_nearby(cols[22]),
-        speed_add: if cols.len() > 23 { f64_at(&cols, 23) } else { 0.0 },
-        item_use: cols.get(24).and_then(|c| c.split_once(':')).map(|(speed, sprint)| ItemUse {
-            speed: f32::from_bits(u32::from_str_radix(speed, 16).expect("float bits")),
-            can_sprint: sprint == "true",
-        }),
+        speed_add: if cols.len() > 23 {
+            f64_at(&cols, 23)
+        } else {
+            0.0
+        },
+        item_use: cols
+            .get(24)
+            .and_then(|c| c.split_once(':'))
+            .map(|(speed, sprint)| ItemUse {
+                speed: f32::from_bits(u32::from_str_radix(speed, 16).expect("float bits")),
+                can_sprint: sprint == "true",
+            }),
     }
 }
 
@@ -175,7 +195,10 @@ fn reaches(other: &Nearby, area: &Aabb) -> bool {
     }
     let (grow, shrink) = (0.2_f32 as f64, -0.01_f32 as f64);
     let b = other.bounds;
-    let grown = Aabb { min: [b.min[0] - grow, b.min[1] - shrink, b.min[2] - grow], max: [b.max[0] + grow, b.max[1] + shrink, b.max[2] + grow] };
+    let grown = Aabb {
+        min: [b.min[0] - grow, b.min[1] - shrink, b.min[2] - grow],
+        max: [b.max[0] + grow, b.max[1] + shrink, b.max[2] + grow],
+    };
     grown.intersects(area)
 }
 
@@ -202,7 +225,12 @@ fn apply_server_state(player: &mut Player, previous: &Line, line: &Line) {
     player.effects = line.effects.clone();
     player.speed_add = line.speed_add;
     player.using_item = line.item_use;
-    player.solid_entities = line.nearby.iter().filter(|n| n.solid).map(|n| n.bounds).collect();
+    player.solid_entities = line
+        .nearby
+        .iter()
+        .filter(|n| n.solid)
+        .map(|n| n.bounds)
+        .collect();
     if !line.mobility.contains('F') {
         player.fall_flying = false;
     } else if previous.mobility.contains('F') {
@@ -233,7 +261,11 @@ fn apply_between_ticks(player: &mut Player, line: &Line, tally: &mut Tally) {
     }
     let mut pushed = player.clone();
     let area = player.bounding_box();
-    for other in line.nearby.iter().filter(|n| n.pushes && n.bounds.intersects(&area)) {
+    for other in line
+        .nearby
+        .iter()
+        .filter(|n| n.pushes && n.bounds.intersects(&area))
+    {
         pushed.pushed_by(other.pos);
     }
     if same(pushed.delta, line.start_delta) {
@@ -245,10 +277,19 @@ fn apply_between_ticks(player: &mut Player, line: &Line, tally: &mut Tally) {
 }
 
 fn report(player: &Player, line: &Line) {
-    println!("tick {} keys {:?} mobility {}", line.tick, line.keys, line.mobility);
+    println!(
+        "tick {} keys {:?} mobility {}",
+        line.tick, line.keys, line.mobility
+    );
     println!("  pos   got {:?}\n        want {:?}", player.pos, line.pos);
-    println!("  delta got {:?}\n        want {:?}", player.delta, line.delta);
-    println!("  ground got {} want {} sprint got {} want {}", player.on_ground, line.on_ground, player.sprinting, line.sprinting);
+    println!(
+        "  delta got {:?}\n        want {:?}",
+        player.delta, line.delta
+    );
+    println!(
+        "  ground got {} want {} sprint got {} want {}",
+        player.on_ground, line.on_ground, player.sprinting, line.sprinting
+    );
 }
 
 /// Returns how many ticks differ from the trace.
@@ -256,7 +297,10 @@ pub fn replay(text: &str, course: &str) -> u32 {
     let lines: Vec<Line> = text.lines().map(parse).collect();
     let world = Course::load(course);
     // The course is dumped at the first keypress; before it the world may still be changing.
-    let first = lines.iter().position(|l| l.keys != Keys::default()).unwrap_or(0);
+    let first = lines
+        .iter()
+        .position(|l| l.keys != Keys::default())
+        .unwrap_or(0);
     let mut player = Player::at(lines[first].pos);
     seed(&mut player, &lines[first]);
     if lines[first].keys.jump && lines[first].mobility.contains('m') {
@@ -274,9 +318,16 @@ pub fn replay(text: &str, course: &str) -> u32 {
             player.pushed_by(other.pos);
         }
         tally.compared += 1;
-        tally.moved += (0..3).map(|a| (line.pos[a] - line.start_pos[a]).powi(2)).sum::<f64>().sqrt();
+        tally.moved += (0..3)
+            .map(|a| (line.pos[a] - line.start_pos[a]).powi(2))
+            .sum::<f64>()
+            .sqrt();
         let flying_ok = player.flying == line.mobility.contains('c');
-        if !same(player.pos, line.pos) || !same(player.delta, line.delta) || player.on_ground != line.on_ground || !flying_ok {
+        if !same(player.pos, line.pos)
+            || !same(player.delta, line.delta)
+            || player.on_ground != line.on_ground
+            || !flying_ok
+        {
             tally.wrong += 1;
             if tally.wrong <= 5 {
                 report(&player, line);

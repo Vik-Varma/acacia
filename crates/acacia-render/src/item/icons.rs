@@ -91,7 +91,10 @@ fn candidates(name: &str) -> Vec<String> {
     if let Some(crop) = name.strip_suffix("_seeds") {
         add(format!("seeds_{crop}"));
     }
-    if let Some((colour, kind)) = name.rsplit_once('_').filter(|(_, k)| matches!(*k, "harness" | "bundle")) {
+    if let Some((colour, kind)) = name
+        .rsplit_once('_')
+        .filter(|(_, k)| matches!(*k, "harness" | "bundle"))
+    {
         add(format!("{kind}_{colour}"));
     }
     if let Some(w) = name.strip_suffix("_hanging_sign") {
@@ -104,7 +107,11 @@ fn candidates(name: &str) -> Vec<String> {
         add(format!("minecart_{kind}"));
     }
     if let Some(colour) = name.strip_suffix("_dye") {
-        let colour = if colour == "light_gray" { "silver" } else { colour };
+        let colour = if colour == "light_gray" {
+            "silver"
+        } else {
+            colour
+        };
         add(format!("dye_powder_{colour}_new"));
         add(format!("dye_powder_{colour}"));
     }
@@ -133,18 +140,36 @@ impl ItemIcons {
     pub fn load(root: &Path) -> ItemIcons {
         let mut keys: HashMap<String, Vec<String>> = HashMap::new();
         let data = json::read(&root.join("textures/item_texture.json")).ok();
-        for (key, entry) in data.as_ref().and_then(|d| d["texture_data"].as_object()).into_iter().flatten() {
+        for (key, entry) in data
+            .as_ref()
+            .and_then(|d| d["texture_data"].as_object())
+            .into_iter()
+            .flatten()
+        {
             let paths = match &entry["textures"] {
                 Value::Array(list) => list.iter().filter_map(path).collect(),
                 single => path(single).into_iter().collect(),
             };
             keys.insert(key.clone(), paths);
         }
-        let mut stems: HashMap<String, String> = keys.values().flatten().map(|p: &String| (stem(p).to_owned(), p.clone())).collect();
-        for entry in std::fs::read_dir(root.join("textures/items")).into_iter().flatten().flatten() {
+        let mut stems: HashMap<String, String> = keys
+            .values()
+            .flatten()
+            .map(|p: &String| (stem(p).to_owned(), p.clone()))
+            .collect();
+        for entry in std::fs::read_dir(root.join("textures/items"))
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
             let file = entry.file_name().to_string_lossy().into_owned();
-            if let Some(s) = file.strip_suffix(".png").or_else(|| file.strip_suffix(".tga")) {
-                stems.entry(s.to_owned()).or_insert_with(|| format!("textures/items/{s}"));
+            if let Some(s) = file
+                .strip_suffix(".png")
+                .or_else(|| file.strip_suffix(".tga"))
+            {
+                stems
+                    .entry(s.to_owned())
+                    .or_insert_with(|| format!("textures/items/{s}"));
             }
         }
         ItemIcons { keys, stems }
@@ -153,8 +178,14 @@ impl ItemIcons {
     /// The image path (pack-relative, no extension) for `name` (`minecraft:apple`) with `aux`.
     pub fn path(&self, name: &str, aux: u32) -> Option<&str> {
         let bare = name.strip_prefix("minecraft:").unwrap_or(name);
-        let explicit = EXPLICIT.iter().find(|(n, _)| *n == bare).map(|(_, icon)| icon.to_string());
-        explicit.into_iter().chain(candidates(bare)).find_map(|c| self.lookup(&c, aux))
+        let explicit = EXPLICIT
+            .iter()
+            .find(|(n, _)| *n == bare)
+            .map(|(_, icon)| icon.to_string());
+        explicit
+            .into_iter()
+            .chain(candidates(bare))
+            .find_map(|c| self.lookup(&c, aux))
     }
 
     fn lookup(&self, candidate: &str, aux: u32) -> Option<&str> {
@@ -166,7 +197,10 @@ impl ItemIcons {
 }
 
 fn path(texture: &Value) -> Option<String> {
-    texture.as_str().or_else(|| texture["path"].as_str()).map(str::to_owned)
+    texture
+        .as_str()
+        .or_else(|| texture["path"].as_str())
+        .map(str::to_owned)
 }
 
 fn stem(path: &str) -> &str {
@@ -179,7 +213,12 @@ mod tests {
 
     #[test]
     fn rules_cover_renamed_families() {
-        let has = |name: &str, want: &str| assert!(candidates(name).iter().any(|c| c == want), "{name} -> {want}");
+        let has = |name: &str, want: &str| {
+            assert!(
+                candidates(name).iter().any(|c| c == want),
+                "{name} -> {want}"
+            )
+        };
         has("cooked_beef", "beef_cooked");
         has("beef", "beef_raw");
         has("golden_sword", "gold_sword");
@@ -195,11 +234,23 @@ mod tests {
     #[test]
     fn arrays_pick_by_aux_and_clamp() {
         let icons = ItemIcons {
-            keys: HashMap::from([("bucket".into(), vec!["textures/items/bucket_empty".into(), "textures/items/bucket_milk".into()])]),
+            keys: HashMap::from([(
+                "bucket".into(),
+                vec![
+                    "textures/items/bucket_empty".into(),
+                    "textures/items/bucket_milk".into(),
+                ],
+            )]),
             stems: HashMap::new(),
         };
-        assert_eq!(icons.path("minecraft:bucket", 1), Some("textures/items/bucket_milk"));
-        assert_eq!(icons.path("minecraft:bucket", 9), Some("textures/items/bucket_milk"));
+        assert_eq!(
+            icons.path("minecraft:bucket", 1),
+            Some("textures/items/bucket_milk")
+        );
+        assert_eq!(
+            icons.path("minecraft:bucket", 9),
+            Some("textures/items/bucket_milk")
+        );
         assert_eq!(icons.path("minecraft:nothing", 0), None);
     }
 }

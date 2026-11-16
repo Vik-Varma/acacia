@@ -17,8 +17,17 @@ pub trait Surface {
 
 /// Floors a landing must not end on.
 pub(crate) const HURTS: [Block; 11] = [
-    Block::Lava, Block::LavaCauldron, Block::MagmaBlock, Block::Fire, Block::SoulFire, Block::Campfire, Block::SoulCampfire,
-    Block::Cactus, Block::SweetBerryBush, Block::PowderSnow, Block::PointedDripstone,
+    Block::Lava,
+    Block::LavaCauldron,
+    Block::MagmaBlock,
+    Block::Fire,
+    Block::SoulFire,
+    Block::Campfire,
+    Block::SoulCampfire,
+    Block::Cactus,
+    Block::SweetBerryBush,
+    Block::PowderSnow,
+    Block::PointedDripstone,
 ];
 
 /// Column heights by chunk, kept for a flight; a chunk is redone when its slot is replaced (re-sent).
@@ -50,17 +59,31 @@ impl Surface for ChunkSurface<'_> {
     }
 
     fn landable(&mut self, x: i32, z: i32) -> bool {
-        let Some(y) = self.top(x, z).filter(|&y| y != i32::MIN) else { return false };
+        let Some(y) = self.top(x, z).filter(|&y| y != i32::MIN) else {
+            return false;
+        };
         let ids = (self.view.block(x, y, z), self.view.liquid(x, y, z));
-        let (Some(s), Some(l)) = (self.registry.get(ids.0), self.registry.get(ids.1)) else { return false };
-        s.is_solid() && !s.is_liquid() && l.is_air() && !s.kind().is_some_and(|k| HURTS.contains(&k))
+        let (Some(s), Some(l)) = (self.registry.get(ids.0), self.registry.get(ids.1)) else {
+            return false;
+        };
+        s.is_solid()
+            && !s.is_liquid()
+            && l.is_air()
+            && !s.kind().is_some_and(|k| HURTS.contains(&k))
     }
 }
 
 /// `None` while a section is unknown: unknown sections read as air.
 fn heights(chunk: &Chunk) -> Option<(i32, Box<ColumnHeights>)> {
     let dim = chunk.dimension();
-    (0..chunk.section_count()).all(|i| chunk.section_known(i)).then(|| (dim.min_y, Box::new(chunk.column_heights(&|id| id != dim.air))))
+    (0..chunk.section_count())
+        .all(|i| chunk.section_known(i))
+        .then(|| {
+            (
+                dim.min_y,
+                Box::new(chunk.column_heights(&|id| id != dim.air)),
+            )
+        })
 }
 
 /// Blocks between corridor samples: narrower than any spire worth flying around is wide, at cruise height.
@@ -68,18 +91,34 @@ const CORRIDOR_STEP: f32 = 4.0;
 
 /// Highest known top along the segment from `a` to `b` (xz), `width` blocks either side, and whether every
 /// sampled column was known.
-pub(super) fn corridor_top(s: &mut dyn Surface, a: [f32; 2], b: [f32; 2], width: f32) -> (i32, bool) {
-    corridor(s, a, b, width).into_iter().fold((i32::MIN, true), |(top, known), (_, y)| match y {
-        Some(y) => (top.max(y), known),
-        None => (top, false),
-    })
+pub(super) fn corridor_top(
+    s: &mut dyn Surface,
+    a: [f32; 2],
+    b: [f32; 2],
+    width: f32,
+) -> (i32, bool) {
+    corridor(s, a, b, width)
+        .into_iter()
+        .fold((i32::MIN, true), |(top, known), (_, y)| match y {
+            Some(y) => (top.max(y), known),
+            None => (top, false),
+        })
 }
 
 /// Every corridor sample from `a` to `b`: blocks from `a`, and the column's top (`None` while unknown).
-pub(super) fn corridor(s: &mut dyn Surface, a: [f32; 2], b: [f32; 2], width: f32) -> Vec<(f32, Option<i32>)> {
+pub(super) fn corridor(
+    s: &mut dyn Surface,
+    a: [f32; 2],
+    b: [f32; 2],
+    width: f32,
+) -> Vec<(f32, Option<i32>)> {
     let (dx, dz) = (b[0] - a[0], b[1] - a[1]);
     let len = dx.hypot(dz);
-    let (ux, uz) = if len > 0.0 { (dx / len, dz / len) } else { (0.0, 0.0) };
+    let (ux, uz) = if len > 0.0 {
+        (dx / len, dz / len)
+    } else {
+        (0.0, 0.0)
+    };
     let mut out = Vec::with_capacity(3 * (len / CORRIDOR_STEP) as usize + 3);
     let mut t = 0.0;
     while t <= len {
@@ -96,7 +135,12 @@ pub(super) fn corridor(s: &mut dyn Surface, a: [f32; 2], b: [f32; 2], width: f32
 pub(super) fn known_ahead(s: &mut dyn Surface, from: [f32; 2], dir: [f32; 2], max: f32) -> f32 {
     let mut t = 0.0;
     while t < max {
-        if s.top((from[0] + dir[0] * t).floor() as i32, (from[1] + dir[1] * t).floor() as i32).is_none() {
+        if s.top(
+            (from[0] + dir[0] * t).floor() as i32,
+            (from[1] + dir[1] * t).floor() as i32,
+        )
+        .is_none()
+        {
             return t;
         }
         t += 8.0;

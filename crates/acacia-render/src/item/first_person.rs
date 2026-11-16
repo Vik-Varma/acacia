@@ -11,13 +11,23 @@ use crate::entity::java::mth;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Using {
     /// Food or drink taking `duration` ticks.
-    Eat { held: f32, duration: f32 },
+    Eat {
+        held: f32,
+        duration: f32,
+    },
     /// A sword or other non-shield item raised to block (a shield's block is its display's).
     Block,
-    Bow { held: f32 },
-    Trident { held: f32 },
+    Bow {
+        held: f32,
+    },
+    Trident {
+        held: f32,
+    },
     /// A crossbow being loaded, `charge` ticks to full.
-    Crossbow { held: f32, charge: f32 },
+    Crossbow {
+        held: f32,
+        charge: f32,
+    },
 }
 
 /// One hand's state.
@@ -50,7 +60,10 @@ fn arm(side: f32, lowered: f32) -> Mat4 {
 fn attack_turn(side: f32, attack: f32) -> Mat4 {
     let y_swing = mth::sin(attack * attack * std::f32::consts::PI);
     let xz_swing = mth::sin(attack.sqrt() * std::f32::consts::PI);
-    rot(Vec3::Y, side * (45.0 + y_swing * -20.0)) * rot(Vec3::Z, side * xz_swing * -20.0) * rot(Vec3::X, xz_swing * -80.0) * rot(Vec3::Y, side * -45.0)
+    rot(Vec3::Y, side * (45.0 + y_swing * -20.0))
+        * rot(Vec3::Z, side * xz_swing * -20.0)
+        * rot(Vec3::X, xz_swing * -80.0)
+        * rot(Vec3::Y, side * -45.0)
 }
 
 /// `swingArm`.
@@ -64,7 +77,11 @@ fn swing(side: f32, attack: f32) -> Mat4 {
 
 /// The pull of a drawn bow, trident or crossbow: its shake, push and stretch, then the turn back.
 fn drawn(side: f32, held: f32, power: f32, push: f32) -> Mat4 {
-    let shake = if power > 0.1 { mth::sin((held - 0.1) * 1.3) * (power - 0.1) } else { 0.0 };
+    let shake = if power > 0.1 {
+        mth::sin((held - 0.1) * 1.3) * (power - 0.1)
+    } else {
+        0.0
+    };
     Mat4::from_translation(Vec3::new(0.0, shake * 0.004, 0.0))
         * Mat4::from_translation(Vec3::new(0.0, 0.0, power * push))
         * Mat4::from_scale(Vec3::new(1.0, 1.0, 1.0 + power * 0.2))
@@ -75,7 +92,11 @@ fn drawn(side: f32, held: f32, power: f32, push: f32) -> Mat4 {
 fn eat(side: f32, held: f32, duration: f32) -> Mat4 {
     let current = duration - held;
     let scaled = current / duration;
-    let bob = if scaled < 0.8 { (mth::cos(current / 4.0 * std::f32::consts::PI) * 0.1).abs() } else { 0.0 };
+    let bob = if scaled < 0.8 {
+        (mth::cos(current / 4.0 * std::f32::consts::PI) * 0.1).abs()
+    } else {
+        0.0
+    };
     // Java's Math.pow, in doubles: f32 powi drifts by 1e-5 here.
     let jiggle = 1.0 - (f64::from(scaled).powf(27.0) as f32);
     Mat4::from_translation(Vec3::new(0.0, bob, 0.0))
@@ -91,27 +112,52 @@ pub fn frame(h: &Hold) -> Mat4 {
     let arm = arm(side, h.lowered);
     if let Some(charged) = h.crossbow {
         if let (Some(Using::Crossbow { held, charge }), false) = (h.using, charged) {
-            let turn = Mat4::from_translation(Vec3::new(side * -0.478_568_2, -0.094_387, 0.057_315_31)) * rot(Vec3::X, -11.935) * rot(Vec3::Y, side * 65.3) * rot(Vec3::Z, side * -9.785);
+            let turn =
+                Mat4::from_translation(Vec3::new(side * -0.478_568_2, -0.094_387, 0.057_315_31))
+                    * rot(Vec3::X, -11.935)
+                    * rot(Vec3::Y, side * 65.3)
+                    * rot(Vec3::Z, side * -9.785);
             return arm * turn * drawn(side, held, (held / charge).min(1.0), 0.04);
         }
-        let rest = if charged && h.attack < 0.001 && h.main_hand { Mat4::from_translation(Vec3::new(side * -0.641_864, 0.0, 0.0)) * rot(Vec3::Y, side * 10.0) } else { Mat4::IDENTITY };
+        let rest = if charged && h.attack < 0.001 && h.main_hand {
+            Mat4::from_translation(Vec3::new(side * -0.641_864, 0.0, 0.0))
+                * rot(Vec3::Y, side * 10.0)
+        } else {
+            Mat4::IDENTITY
+        };
         return arm * swing(side, h.attack) * rest;
     }
     match h.using {
         Some(Using::Eat { held, duration }) => eat(side, held, duration) * arm,
-        Some(Using::Block) => arm * Mat4::from_translation(Vec3::new(side * -0.141_421_36, 0.08, 0.141_421_36)) * rot(Vec3::X, -102.25) * rot(Vec3::Y, side * 13.365) * rot(Vec3::Z, side * 78.05),
+        Some(Using::Block) => {
+            arm * Mat4::from_translation(Vec3::new(side * -0.141_421_36, 0.08, 0.141_421_36))
+                * rot(Vec3::X, -102.25)
+                * rot(Vec3::Y, side * 13.365)
+                * rot(Vec3::Z, side * 78.05)
+        }
         Some(Using::Bow { held }) => {
-            let turn = Mat4::from_translation(Vec3::new(side * -0.278_568_2, 0.183_443_87, 0.157_315_31)) * rot(Vec3::X, -13.935) * rot(Vec3::Y, side * 35.3) * rot(Vec3::Z, side * -9.785);
+            let turn =
+                Mat4::from_translation(Vec3::new(side * -0.278_568_2, 0.183_443_87, 0.157_315_31))
+                    * rot(Vec3::X, -13.935)
+                    * rot(Vec3::Y, side * 35.3)
+                    * rot(Vec3::Z, side * -9.785);
             let m = held / 20.0;
             arm * turn * drawn(side, held, ((m * m + m * 2.0) / 3.0).min(1.0), 0.04)
         }
         Some(Using::Trident { held }) => {
-            let turn = Mat4::from_translation(Vec3::new(side * -0.5, 0.7, 0.1)) * rot(Vec3::X, -55.0) * rot(Vec3::Y, side * 35.3) * rot(Vec3::Z, side * -9.785);
+            let turn = Mat4::from_translation(Vec3::new(side * -0.5, 0.7, 0.1))
+                * rot(Vec3::X, -55.0)
+                * rot(Vec3::Y, side * 35.3)
+                * rot(Vec3::Z, side * -9.785);
             arm * turn * drawn(side, held, (held / 10.0).min(1.0), 0.2)
         }
         // Loading a crossbow is the crossbow branch's; another item in that use stays at rest.
         Some(Using::Crossbow { .. }) => arm,
-        None if h.spinning => arm * Mat4::from_translation(Vec3::new(side * -0.4, 0.8, 0.3)) * rot(Vec3::Y, side * 65.0) * rot(Vec3::Z, side * -85.0),
+        None if h.spinning => {
+            arm * Mat4::from_translation(Vec3::new(side * -0.4, 0.8, 0.3))
+                * rot(Vec3::Y, side * 65.0)
+                * rot(Vec3::Z, side * -85.0)
+        }
         None if h.swinging => arm * swing(side, h.attack),
         None => arm,
     }

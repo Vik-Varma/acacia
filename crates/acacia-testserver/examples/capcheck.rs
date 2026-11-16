@@ -57,17 +57,29 @@ fn main() {
                     format!("unknown id {}", p.id)
                 }
             };
-            tally.first.get_or_insert_with(|| format!("{failure} ({path}, {:.0} ms {})", p.t, if p.from_client { "C>S" } else { "S>C" }));
+            tally.first.get_or_insert_with(|| {
+                format!(
+                    "{failure} ({path}, {:.0} ms {})",
+                    p.t,
+                    if p.from_client { "C>S" } else { "S>C" }
+                )
+            });
         }
     }
     let (mut seen, mut undecoded, mut differs) = (0, 0, 0);
     for (name, t) in &tallies {
         (seen, undecoded, differs) = (seen + t.seen, undecoded + t.undecoded, differs + t.differs);
         if let Some(first) = &t.first {
-            println!("{name}: {} of {} undecoded, {} differ; first: {first}", t.undecoded, t.seen, t.differs);
+            println!(
+                "{name}: {} of {} undecoded, {} differ; first: {first}",
+                t.undecoded, t.seen, t.differs
+            );
         }
     }
-    println!("{seen} packets of {} kinds: {undecoded} undecoded, {differs} encoded back differently", tallies.len());
+    println!(
+        "{seen} packets of {} kinds: {undecoded} undecoded, {differs} encoded back differently",
+        tallies.len()
+    );
     if undecoded + differs > 0 {
         std::process::exit(1);
     }

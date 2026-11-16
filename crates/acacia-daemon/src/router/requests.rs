@@ -1,8 +1,11 @@
 //! Requests from a connection: `hello`, the daemon's own methods and acacia-api's (contract: the crate docs).
 
-use acacia_api::{ApiError, BotId, BotParams, CancelCallParams, CancelParams, ErrorCode, Method, METHODS, PROTOCOL_VERSION};
+use acacia_api::{
+    ApiError, BotId, BotParams, CancelCallParams, CancelParams, ErrorCode, METHODS, Method,
+    PROTOCOL_VERSION,
+};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use subtle::ConstantTimeEq;
 
 use super::{Call, ConnId, Kind, Router};
@@ -62,11 +65,21 @@ impl Router {
 
     fn hello(&mut self, conn: ConnId, params: &Value) -> Outcome {
         let hello: Hello = serde_json::from_value(params.clone()).map_err(bad)?;
-        if self.token.as_ref().is_some_and(|t| !hello.token.as_ref().is_some_and(|h| token_matches(h, t))) {
-            return Err(ApiError::new(ErrorCode::Unauthorized, "wrong or missing token"));
+        if self
+            .token
+            .as_ref()
+            .is_some_and(|t| !hello.token.as_ref().is_some_and(|h| token_matches(h, t)))
+        {
+            return Err(ApiError::new(
+                ErrorCode::Unauthorized,
+                "wrong or missing token",
+            ));
         }
         if hello.protocol_version != PROTOCOL_VERSION {
-            let message = format!("the daemon speaks protocol {PROTOCOL_VERSION}, the client {}", hello.protocol_version);
+            let message = format!(
+                "the daemon speaks protocol {PROTOCOL_VERSION}, the client {}",
+                hello.protocol_version
+            );
             return Err(ApiError::new(ErrorCode::VersionMismatch, message));
         }
         if let Some(c) = self.conns.get_mut(&conn) {
@@ -92,36 +105,68 @@ impl Router {
             return Err(bad("attach names a bot or a username"));
         }
         let found = self.bots.iter().find(|(id, e)| {
-            (e.persist || e.subs.contains(&conn)) && (p.bot.as_ref() == Some(*id) || p.username.as_deref() == Some(e.username.as_str()))
+            (e.persist || e.subs.contains(&conn))
+                && (p.bot.as_ref() == Some(*id)
+                    || p.username.as_deref() == Some(e.username.as_str()))
         });
         let (bot, username, persist) = found
             .map(|(id, e)| (id.clone(), e.username.clone(), e.persist))
-            .ok_or_else(|| ApiError::new(ErrorCode::UnknownBot, "no persisted bot by that id or username"))?;
+            .ok_or_else(|| {
+                ApiError::new(
+                    ErrorCode::UnknownBot,
+                    "no persisted bot by that id or username",
+                )
+            })?;
         self.subscribe(conn, &bot);
-        let kind = Kind::Attach { bot: bot.clone(), username, persist };
-        self.submit(conn, request.id.clone(), kind, Method::Snapshot(BotParams { bot }))?;
+        let kind = Kind::Attach {
+            bot: bot.clone(),
+            username,
+            persist,
+        };
+        self.submit(
+            conn,
+            request.id.clone(),
+            kind,
+            Method::Snapshot(BotParams { bot }),
+        )?;
         Ok(None)
     }
 
     fn host_call(&mut self, conn: ConnId, request: &Request) -> Outcome {
         let mut params = request.params.clone();
         if params.get("profilesFolder").is_some() {
-            return Err(bad("profilesFolder is the daemon's (--profiles-folder): a client may not pick where tokens are written"));
+            return Err(bad(
+                "profilesFolder is the daemon's (--profiles-folder): a client may not pick where tokens are written",
+            ));
         }
         let persist = match params.as_object_mut() {
-            Some(p) if request.method == "createBot" => p.remove("persist").and_then(|v| v.as_bool()).unwrap_or(false),
+            Some(p) if request.method == "createBot" => p
+                .remove("persist")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
             _ => false,
         };
         let mut method = Method::parse(&request.method, params)?;
         if let Some(bot) = method.bot().filter(|b| !self.subscribed(conn, b)) {
-            return Err(ApiError::new(ErrorCode::UnknownBot, format!("no bot {bot} on this connection")));
+            return Err(ApiError::new(
+                ErrorCode::UnknownBot,
+                format!("no bot {bot} on this connection"),
+            ));
         }
-        if let Method::Cancel(CancelParams { call, .. }) | Method::CancelCall(CancelCallParams { call }) = &mut method {
-            let known = self.conns.get(&conn).and_then(|c| c.calls.get(&call.0).copied());
+        if let Method::Cancel(CancelParams { call, .. })
+        | Method::CancelCall(CancelCallParams { call }) = &mut method
+        {
+            let known = self
+                .conns
+                .get(&conn)
+                .and_then(|c| c.calls.get(&call.0).copied());
             *call = known.unwrap_or_else(|| self.fresh_call());
         }
         let kind = match &method {
-            Method::CreateBot(p) => Kind::CreateBot { username: p.username.clone(), persist },
+            Method::CreateBot(p) => Kind::CreateBot {
+                username: p.username.clone(),
+                persist,
+            },
             _ => Kind::Plain,
         };
         self.submit(conn, request.id.clone(), kind, method)?;
@@ -129,14 +174,31 @@ impl Router {
     }
 
     /// Hands a call to the host under a call id of the daemon's, remembered until its `done`.
-    fn submit(&mut self, conn: ConnId, id: Option<Value>, kind: Kind, method: Method) -> Result<(), ApiError> {
+    fn submit(
+        &mut self,
+        conn: ConnId,
+        id: Option<Value>,
+        kind: Kind,
+        method: Method,
+    ) -> Result<(), ApiError> {
         let call = self.fresh_call();
         let bot = method.bot().cloned();
         self.host.submit(acacia_api::Command { call, method })?;
-        if let (Some(n), Some(c)) = (id.as_ref().and_then(Value::as_u64), self.conns.get_mut(&conn)) {
+        if let (Some(n), Some(c)) = (
+            id.as_ref().and_then(Value::as_u64),
+            self.conns.get_mut(&conn),
+        ) {
             c.calls.insert(n, call);
         }
-        self.calls.insert(call, Call { conn, id, bot, kind });
+        self.calls.insert(
+            call,
+            Call {
+                conn,
+                id,
+                bot,
+                kind,
+            },
+        );
         Ok(())
     }
 }

@@ -41,14 +41,26 @@ impl Suggestion {
         if range.end > self.end {
             text.extend_from_slice(&command[self.end..range.end]);
         }
-        Suggestion { start: range.start, end: range.end, text: String::from_utf16_lossy(&text) }
+        Suggestion {
+            start: range.start,
+            end: range.end,
+            text: String::from_utf16_lossy(&text),
+        }
     }
 
     /// `hashCode`: `Objects.hash(range, text, null)`.
     fn hash(&self) -> i32 {
-        let range = 31i32.wrapping_add(self.start as i32).wrapping_mul(31).wrapping_add(self.end as i32);
-        let text = units(&self.text).iter().fold(0i32, |h, &u| h.wrapping_mul(31).wrapping_add(i32::from(u)));
-        (31i32.wrapping_add(range)).wrapping_mul(31).wrapping_add(text).wrapping_mul(31)
+        let range = 31i32
+            .wrapping_add(self.start as i32)
+            .wrapping_mul(31)
+            .wrapping_add(self.end as i32);
+        let text = units(&self.text)
+            .iter()
+            .fold(0i32, |h, &u| h.wrapping_mul(31).wrapping_add(i32::from(u)));
+        (31i32.wrapping_add(range))
+            .wrapping_mul(31)
+            .wrapping_add(text)
+            .wrapping_mul(31)
     }
 }
 
@@ -56,8 +68,16 @@ impl Suggestion {
 fn compare_ignore_case(a: &str, b: &str) -> Ordering {
     let fold = |u: u16| -> u32 {
         let c = char::from_u32(u32::from(u)).unwrap_or('\u{FFFD}');
-        let upper = c.to_uppercase().next().filter(|_| c.to_uppercase().count() == 1).unwrap_or(c);
-        let lower = upper.to_lowercase().next().filter(|_| upper.to_lowercase().count() == 1).unwrap_or(upper);
+        let upper = c
+            .to_uppercase()
+            .next()
+            .filter(|_| c.to_uppercase().count() == 1)
+            .unwrap_or(c);
+        let lower = upper
+            .to_lowercase()
+            .next()
+            .filter(|_| upper.to_lowercase().count() == 1)
+            .unwrap_or(upper);
         u32::from(lower)
     };
     let (a, b) = (units(a), units(b));
@@ -118,7 +138,10 @@ impl Suggestions {
         }
         let mut list = set.into_list();
         list.sort_by(|a, b| compare_ignore_case(&a.text, &b.text));
-        Suggestions { range: Some(range), list }
+        Suggestions {
+            range: Some(range),
+            list,
+        }
     }
 
     /// `Suggestions.merge`.
@@ -146,15 +169,28 @@ pub struct Builder<'a> {
 impl<'a> Builder<'a> {
     pub fn new(input: &'a [u16], start: usize) -> Builder<'a> {
         let remaining = String::from_utf16_lossy(&input[start..]);
-        let lower: Vec<u16> = String::from_utf16_lossy(input).to_lowercase().encode_utf16().collect();
+        let lower: Vec<u16> = String::from_utf16_lossy(input)
+            .to_lowercase()
+            .encode_utf16()
+            .collect();
         let remaining_lower = String::from_utf16_lossy(lower.get(start..).unwrap_or_default());
-        Builder { input, start, remaining, remaining_lower, result: Vec::new() }
+        Builder {
+            input,
+            start,
+            remaining,
+            remaining_lower,
+            result: Vec::new(),
+        }
     }
 
     /// `suggest(text)`: nothing when it is what is already there.
     pub fn suggest(&mut self, text: &str) {
         if text != self.remaining {
-            self.result.push(Suggestion { start: self.start, end: self.input.len(), text: text.to_owned() });
+            self.result.push(Suggestion {
+                start: self.start,
+                end: self.input.len(),
+                text: text.to_owned(),
+            });
         }
     }
 
@@ -177,7 +213,10 @@ pub fn matches_sub_str(pattern: &str, input: &str) -> bool {
 }
 
 /// `SharedSuggestionProvider.suggest(values, builder)`.
-pub fn suggest_values<'a>(values: impl IntoIterator<Item = &'a str>, mut builder: Builder) -> Suggestions {
+pub fn suggest_values<'a>(
+    values: impl IntoIterator<Item = &'a str>,
+    mut builder: Builder,
+) -> Suggestions {
     let prefix = builder.remaining.to_lowercase();
     for v in values {
         if matches_sub_str(&prefix, &v.to_lowercase()) {
@@ -198,8 +237,13 @@ impl Tree {
                 }
                 builder.build()
             }
-            NodeKind::Argument { suggestions: Some(values), .. } => suggest_values(values.iter().map(String::as_str), builder),
-            NodeKind::Argument { ty: ArgType::Bool, .. } => {
+            NodeKind::Argument {
+                suggestions: Some(values),
+                ..
+            } => suggest_values(values.iter().map(String::as_str), builder),
+            NodeKind::Argument {
+                ty: ArgType::Bool, ..
+            } => {
                 let mut builder = builder;
                 for v in ["true", "false"] {
                     if v.starts_with(&builder.remaining_lower) {
@@ -217,7 +261,11 @@ impl Tree {
         let (parent, start_pos) = parse.context.suggestion_context(cursor);
         let start = start_pos.min(cursor);
         let truncated = &parse.input[..cursor];
-        let all = self.nodes[parent].children.iter().map(|&c| self.node_suggestions(c, Builder::new(truncated, start))).collect();
+        let all = self.nodes[parent]
+            .children
+            .iter()
+            .map(|&c| self.node_suggestions(c, Builder::new(truncated, start)))
+            .collect();
         Suggestions::merge(&parse.input, all)
     }
 }

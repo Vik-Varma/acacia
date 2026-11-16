@@ -39,7 +39,15 @@ pub(crate) enum At {
 
 impl Inventory {
     pub(crate) fn open(&mut self, screen: &OpenScreen) {
-        self.window = Some(Window { id: screen.container, menu: screen.menu, title: screen.title_text(), slots: Vec::new(), state_id: 0, data: Vec::new(), merchant: None });
+        self.window = Some(Window {
+            id: screen.container,
+            menu: screen.menu,
+            title: screen.title_text(),
+            slots: Vec::new(),
+            state_id: 0,
+            data: Vec::new(),
+            merchant: None,
+        });
     }
 
     pub(crate) fn set_offers(&mut self, offers: MerchantOffers) {
@@ -55,7 +63,9 @@ impl Inventory {
     }
 
     pub(crate) fn set_window_data(&mut self, packet: ContainerSetData) {
-        let Some(window) = self.window.as_mut().filter(|w| w.id == packet.container.0) else { return };
+        let Some(window) = self.window.as_mut().filter(|w| w.id == packet.container.0) else {
+            return;
+        };
         match window.data.iter_mut().find(|(id, _)| *id == packet.id) {
             Some(entry) => entry.1 = packet.value,
             None => window.data.push((packet.id, packet.value)),
@@ -63,7 +73,9 @@ impl Inventory {
     }
 
     pub(crate) fn fill_window(&mut self, packet: ContainerSetContent) {
-        let Some(window) = self.window.as_mut().filter(|w| w.id == packet.container.0) else { return };
+        let Some(window) = self.window.as_mut().filter(|w| w.id == packet.container.0) else {
+            return;
+        };
         let mut items = packet.items;
         let player = items.split_off(items.len().saturating_sub(PLAYER_SLOTS));
         window.slots = items;
@@ -78,16 +90,23 @@ impl Inventory {
     }
 
     pub(crate) fn set_window_slot(&mut self, packet: ContainerSetSlot) {
-        let Some(window) = self.window.as_mut().filter(|w| w.id == packet.container.0) else { return };
+        let Some(window) = self.window.as_mut().filter(|w| w.id == packet.container.0) else {
+            return;
+        };
         window.state_id = packet.state_id.0;
-        if let Some(at) = usize::try_from(packet.slot).ok().and_then(|i| self.locate(i)) {
+        if let Some(at) = usize::try_from(packet.slot)
+            .ok()
+            .and_then(|i| self.locate(i))
+        {
             self.put(at, packet.item);
         }
     }
 
     /// The open menu's slot count: window 0's, or the container's plus the player's.
     pub fn menu_len(&self) -> usize {
-        self.window.as_ref().map_or(SLOTS, |w| w.slots.len() + PLAYER_SLOTS)
+        self.window
+            .as_ref()
+            .map_or(SLOTS, |w| w.slots.len() + PLAYER_SLOTS)
     }
 
     /// Slot `i` of the open menu, in its own numbering.
@@ -100,11 +119,15 @@ impl Inventory {
 
     /// The open menu's id and the state id its clicks echo.
     pub(crate) fn menu_ids(&self) -> (i32, i32) {
-        self.window.as_ref().map_or((0, self.state_id()), |w| (w.id, w.state_id))
+        self.window
+            .as_ref()
+            .map_or((0, self.state_id()), |w| (w.id, w.state_id))
     }
 
     pub(crate) fn locate(&self, i: usize) -> Option<At> {
-        let Some(window) = &self.window else { return (i < SLOTS).then_some(At::Player(i)) };
+        let Some(window) = &self.window else {
+            return (i < SLOTS).then_some(At::Player(i));
+        };
         let own = window.slots.len();
         match i.checked_sub(own) {
             None => Some(At::Container(i)),

@@ -1,21 +1,21 @@
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
-use acacia_session::{DisconnectReason, Event as SessionEvent, PackFetch, Session};
 use acacia_nethernet::{Connection, Event as NetEvent};
+use acacia_session::{DisconnectReason, Event as SessionEvent, PackFetch, Session};
 
 use crate::net_wire::NetherNetWire;
 use crate::signaling::Keepalive;
 use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
 
+use crate::Event;
 use crate::event_queue::EventSender;
 use crate::filter::PacketFilter;
 use crate::pack_fetch;
 use crate::packet_trace::PacketTrace;
 use crate::socks5::Socks5Proxy;
 use crate::transport::Transport;
-use crate::Event;
 
 /// Largest datagram we accept; above the biggest RakNet MTU and the WebRTC (1200-byte) packets.
 const RECV_BUFFER: usize = 2048;
@@ -76,7 +76,9 @@ impl Driver {
         tokio::pin!(sleep);
         loop {
             if let Err(e) = self.flush().await {
-                return self.finish(pending, DisconnectReason::Io(e.to_string())).await;
+                return self
+                    .finish(pending, DisconnectReason::Io(e.to_string()))
+                    .await;
             }
             if let Some(reason) = self.wire_closed() {
                 return self.finish(pending, reason).await;
@@ -119,9 +121,13 @@ impl Driver {
             }
             let can_read = self.spawned.is_some() || pending.len() < self.capacity;
             match self.poll_timeout() {
-                Some(deadline) if sleep.deadline() != deadline.into() => sleep.as_mut().reset(deadline.into()),
+                Some(deadline) if sleep.deadline() != deadline.into() => {
+                    sleep.as_mut().reset(deadline.into())
+                }
                 // Nothing due: an earlier deadline still armed only wakes handle_timeout early, which is harmless.
-                None if sleep.is_elapsed() => sleep.as_mut().reset((Instant::now() + IDLE_TIMEOUT).into()),
+                None if sleep.is_elapsed() => {
+                    sleep.as_mut().reset((Instant::now() + IDLE_TIMEOUT).into())
+                }
                 _ => {}
             }
             let failed = tokio::select! {
@@ -175,7 +181,9 @@ impl Driver {
 
     /// The disconnect reason once the NetherNet connection has failed or closed.
     fn wire_closed(&mut self) -> Option<DisconnectReason> {
-        let Wire::NetherNet(conn) = &mut self.wire else { return None };
+        let Wire::NetherNet(conn) = &mut self.wire else {
+            return None;
+        };
         while let Some(event) = conn.conn.poll_event() {
             if let NetEvent::Closed(reason) = event {
                 return Some(DisconnectReason::NetherNet(reason));
@@ -200,7 +208,11 @@ impl Driver {
             }
             Wire::NetherNet(conn) => {
                 while let Some(msg) = self.session.poll_transmit(now) {
-                    tracing::trace!(len = msg.len(), open = conn.conn.is_open(), "game message out");
+                    tracing::trace!(
+                        len = msg.len(),
+                        open = conn.conn.is_open(),
+                        "game message out"
+                    );
                     conn.conn.send(msg, now);
                 }
                 while let Some((target, datagram)) = conn.poll_datagram(now) {
@@ -220,23 +232,44 @@ impl Driver {
             let _ = tx.send(Err(reason));
             return;
         }
-        let _ = self.events.send_final(pending.into_iter().chain([Event::Disconnected(reason)]).collect());
+        let _ = self.events.send_final(
+            pending
+                .into_iter()
+                .chain([Event::Disconnected(reason)])
+                .collect(),
+        );
     }
 }
 
-async fn fetch_pack(pack: PackFetch, proxy: Option<Socks5Proxy>, done: mpsc::UnboundedSender<(String, bool)>) {
-    let result = tokio::time::timeout(pack_fetch::FETCH_TIMEOUT, pack_fetch::fetch(&pack.url, proxy.as_ref())).await;
+async fn fetch_pack(
+    pack: PackFetch,
+    proxy: Option<Socks5Proxy>,
+    done: mpsc::UnboundedSender<(String, bool)>,
+) {
+    let result = tokio::time::timeout(
+        pack_fetch::FETCH_TIMEOUT,
+        pack_fetch::fetch(&pack.url, proxy.as_ref()),
+    )
+    .await;
     let ok = match result {
         Ok(Ok(size)) => {
             tracing::debug!(pack = pack.id, size, "resource pack downloaded");
             true
         }
         Ok(Err(e)) => {
-            tracing::warn!(pack = pack.id, url = pack.url, "resource pack download: {e}");
+            tracing::warn!(
+                pack = pack.id,
+                url = pack.url,
+                "resource pack download: {e}"
+            );
             false
         }
         Err(_) => {
-            tracing::warn!(pack = pack.id, url = pack.url, "resource pack download timed out");
+            tracing::warn!(
+                pack = pack.id,
+                url = pack.url,
+                "resource pack download timed out"
+            );
             false
         }
     };

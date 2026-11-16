@@ -37,7 +37,11 @@ pub struct BoatOpts {
 
 impl Default for BoatOpts {
     fn default() -> Self {
-        Self { profile: MovementProfile::Optimal, keep_boat: false, max_ticks: 20 * 60 * 5 }
+        Self {
+            profile: MovementProfile::Optimal,
+            keep_boat: false,
+            max_ticks: 20 * 60 * 5,
+        }
     }
 }
 
@@ -58,7 +62,13 @@ const STOP_TRIES: usize = 8;
 /// A leg for a boat floating at `boat` to get its rider off near `target` (feet block), with the rider's seat
 /// `seat` (`RiderSeatPosition`). Human keeps a wider berth from banks where the water allows. With no stop known
 /// near the target yet (its chunks not loaded), a partial leg towards it.
-pub fn plan_leg<W: WorldView>(world: &W, boat: Vec3, target: BlockPos, seat: Vec3, profile: MovementProfile) -> Option<Leg> {
+pub fn plan_leg<W: WorldView>(
+    world: &W,
+    boat: Vec3,
+    target: BlockPos,
+    seat: Vec3,
+    profile: MovementProfile,
+) -> Option<Leg> {
     let grid = WaterGrid::new(world, water_level(boat[1]));
     let pads: &[f32] = match profile {
         MovementProfile::Optimal => &[0.0],
@@ -69,10 +79,24 @@ pub fn plan_leg<W: WorldView>(world: &W, boat: Vec3, target: BlockPos, seat: Vec
     for &pad in pads {
         for (at, exit) in stops.iter().take(STOP_TRIES) {
             if let Some(route) = route::plan(&grid, from, *at, pad).filter(|r| r.complete) {
-                return Some(Leg { route, pad, exit: Some(*exit), target });
+                return Some(Leg {
+                    route,
+                    pad,
+                    exit: Some(*exit),
+                    target,
+                });
             }
         }
     }
     let toward = [target[0] as f32 + 0.5, target[2] as f32 + 0.5];
-    pads.iter().find_map(|&pad| route::plan(&grid, from, toward, pad).filter(|r| !r.complete).map(|route| Leg { route, pad, exit: None, target }))
+    pads.iter().find_map(|&pad| {
+        route::plan(&grid, from, toward, pad)
+            .filter(|r| !r.complete)
+            .map(|route| Leg {
+                route,
+                pad,
+                exit: None,
+                target,
+            })
+    })
 }

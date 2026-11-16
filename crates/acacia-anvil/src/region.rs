@@ -256,7 +256,8 @@ mod tests {
         let big: Vec<u8> = (0..20_000u32)
             .map(|i| (i.wrapping_mul(2_654_435_761) >> 24) as u8)
             .collect();
-        r.set_chunk(0, 0, b"hello", 7, Compression::default()).unwrap();
+        r.set_chunk(0, 0, b"hello", 7, Compression::default())
+            .unwrap();
         r.set_chunk(31, 31, &big, 9, Compression::Lz4).unwrap();
         r.save(&path).unwrap();
         let bytes = fs::read(&path).unwrap();

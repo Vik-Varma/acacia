@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use acacia_api::{ApiError, BotId, BotParams, CallId, Method};
 use serde::Deserialize;
 use serde_json::value::RawValue;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use super::{BotEntry, ConnId, Kind, Router};
 use crate::rpc;
@@ -43,7 +43,8 @@ enum Done {
 impl Router {
     pub(super) fn route(&mut self, batch: &str) {
         self.pass += 1;
-        let records: Vec<&RawValue> = serde_json::from_str(batch).expect("the host sends JSON arrays");
+        let records: Vec<&RawValue> =
+            serde_json::from_str(batch).expect("the host sends JSON arrays");
         let mut touched = HashSet::new();
         for raw in records {
             let peek: Peek = serde_json::from_str(raw.get()).expect("the host sends records");
@@ -79,7 +80,11 @@ impl Router {
     }
 
     fn event(&mut self, bot: &BotId, raw: &str, touched: &mut HashSet<ConnId>, end: bool) {
-        let subs: Vec<ConnId> = self.bots.get(bot).map(|e| e.subs.iter().copied().collect()).unwrap_or_default();
+        let subs: Vec<ConnId> = self
+            .bots
+            .get(bot)
+            .map(|e| e.subs.iter().copied().collect())
+            .unwrap_or_default();
         for conn in subs {
             self.look(conn, bot);
             if let Some(c) = self.conns.get_mut(&conn) {
@@ -98,8 +103,12 @@ impl Router {
 
     /// A sign-in prompt of an open call: to that call's connection, under the client's request id.
     fn msa_code(&mut self, call: CallId, raw: &str, touched: &mut HashSet<ConnId>) {
-        let Some((conn, Some(id))) = self.calls.get(&call).map(|c| (c.conn, c.id.clone())) else { return };
-        let Ok(mut record) = serde_json::from_str::<Value>(raw) else { return };
+        let Some((conn, Some(id))) = self.calls.get(&call).map(|c| (c.conn, c.id.clone())) else {
+            return;
+        };
+        let Ok(mut record) = serde_json::from_str::<Value>(raw) else {
+            return;
+        };
         record["call"] = id;
         if let Some(c) = self.conns.get_mut(&conn) {
             c.pending.push(record.to_string());
@@ -108,26 +117,44 @@ impl Router {
     }
 
     fn done(&mut self, call: CallId, bot: Option<BotId>, result: Done) {
-        let Some(open) = self.calls.remove(&call) else { return };
+        let Some(open) = self.calls.remove(&call) else {
+            return;
+        };
         let conn = open.conn;
         let alive = self.conns.contains_key(&conn);
-        if let (Some(n), Some(c)) = (open.id.as_ref().and_then(Value::as_u64), self.conns.get_mut(&conn)) {
+        if let (Some(n), Some(c)) = (
+            open.id.as_ref().and_then(Value::as_u64),
+            self.conns.get_mut(&conn),
+        ) {
             c.calls.remove(&n);
         }
         let answer = match (open.kind, result) {
             (_, Done::Err(e)) => Err(e),
             (Kind::Plain, Done::Ok(raw)) => Ok(raw.get().to_owned()),
             (Kind::CreateBot { username, persist }, Done::Ok(raw)) => {
-                if let Ok(created) = serde_json::from_str::<acacia_api::CreateBotResult>(raw.get()) {
+                if let Ok(created) = serde_json::from_str::<acacia_api::CreateBotResult>(raw.get())
+                {
                     self.created(conn, alive, created.bot, username, persist);
                 }
                 Ok(raw.get().to_owned())
             }
-            (Kind::Attach { bot, username, persist }, Done::Ok(raw)) => {
-                Ok(format!(r#"{{"bot":{},"username":{},"persist":{persist},"snapshot":{}}}"#, json!(bot), json!(username), raw.get()))
-            }
+            (
+                Kind::Attach {
+                    bot,
+                    username,
+                    persist,
+                },
+                Done::Ok(raw),
+            ) => Ok(format!(
+                r#"{{"bot":{},"username":{},"persist":{persist},"snapshot":{}}}"#,
+                json!(bot),
+                json!(username),
+                raw.get()
+            )),
         };
-        let (Some(id), true) = (open.id, alive) else { return };
+        let (Some(id), true) = (open.id, alive) else {
+            return;
+        };
         if let Some(bot) = bot.or(open.bot) {
             self.look(conn, &bot);
         }
@@ -144,7 +171,14 @@ impl Router {
         if !alive && !persist {
             return self.internal(Method::Close(BotParams { bot }));
         }
-        self.bots.insert(bot.clone(), BotEntry { username, persist, subs: HashSet::new() });
+        self.bots.insert(
+            bot.clone(),
+            BotEntry {
+                username,
+                persist,
+                subs: HashSet::new(),
+            },
+        );
         if alive {
             self.subscribe(conn, &bot);
         }

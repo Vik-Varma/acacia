@@ -9,9 +9,9 @@ use acacia_physics::BlockPos;
 use super::job::BuildJob;
 use super::status::{BuildStatus, Phase, StatusHandle};
 use super::structure::{Block, Structure, StructureError};
-use super::survey::{need_with_text, Need};
-use crate::pathfind::process::Look;
+use super::survey::{Need, need_with_text};
 use crate::ActionError;
+use crate::pathfind::process::Look;
 
 /// Failed acts on one cell before it is given up.
 const MAX_FAILS: u32 = 4;
@@ -62,7 +62,10 @@ impl Tries {
 
     /// Given up only for want of a stand, with a retry left (`Builder::revive`).
     fn revivable(&self) -> bool {
-        self.rests > MAX_RESTS && self.fails < MAX_FAILS && self.places <= MAX_PLACES && self.revives < MAX_REVIVES
+        self.rests > MAX_RESTS
+            && self.fails < MAX_FAILS
+            && self.places <= MAX_PLACES
+            && self.revives < MAX_REVIVES
     }
 }
 
@@ -130,7 +133,8 @@ pub enum BuildError {
 impl Builder {
     /// Loads the job's structure file.
     pub fn new(job: BuildJob) -> Result<Self, BuildError> {
-        let bytes = std::fs::read(&job.structure).map_err(|e| BuildError::Io(job.structure.display().to_string(), e))?;
+        let bytes = std::fs::read(&job.structure)
+            .map_err(|e| BuildError::Io(job.structure.display().to_string(), e))?;
         Ok(Self::with_structure(job, &Structure::load(&bytes)?))
     }
 
@@ -139,12 +143,32 @@ impl Builder {
         let cells: Vec<Cell> = structure
             .cells()
             .filter(|(_, b)| b.name != "minecraft:structure_void")
-            .map(|(local, b)| Cell { pos: job.at.apply(structure.size, local), target: job.at.block(b), text: structure.text(local).cloned() })
+            .map(|(local, b)| Cell {
+                pos: job.at.apply(structure.size, local),
+                target: job.at.block(b),
+                text: structure.text(local).cloned(),
+            })
             .collect();
         let index = cells.iter().enumerate().map(|(i, c)| (c.pos, i)).collect();
-        let thin = Arc::new(cells.iter().filter(|c| super::rules::thin(&c.target.name)).map(|c| c.pos).collect());
-        let stations = job.stations.iter().map(|&pos| Station { pos, lacks: HashSet::new() }).collect();
-        let status = Arc::new(Mutex::new(BuildStatus { cells: cells.len(), ..BuildStatus::default() }));
+        let thin = Arc::new(
+            cells
+                .iter()
+                .filter(|c| super::rules::thin(&c.target.name))
+                .map(|c| c.pos)
+                .collect(),
+        );
+        let stations = job
+            .stations
+            .iter()
+            .map(|&pos| Station {
+                pos,
+                lacks: HashSet::new(),
+            })
+            .collect();
+        let status = Arc::new(Mutex::new(BuildStatus {
+            cells: cells.len(),
+            ..BuildStatus::default()
+        }));
         Self {
             batch: Vec::new(),
             en_route: None,
@@ -191,7 +215,9 @@ impl Builder {
     /// Diagnostics: each open placement in `bot`'s world, with the click it has from where the bot stands and the
     /// stands it could use (a builder for the same job, outside the processes).
     pub fn explain_for(&self, bot: &crate::Bot) -> Vec<String> {
-        let Some(feet) = bot.backend.movement().and_then(|m| m.position()) else { return Vec::new() };
+        let Some(feet) = bot.backend.movement().and_then(|m| m.position()) else {
+            return Vec::new();
+        };
         super::explain::explain(self, &crate::pathfind::process::run::BotLook(bot), feet)
     }
 
@@ -201,7 +227,9 @@ impl Builder {
 
     /// A cell to leave alone for now: given up on, or waiting out a retry.
     pub(super) fn resting(&self, pos: BlockPos) -> bool {
-        self.tries.get(&pos).is_some_and(|t| t.given_up() || t.next_at > self.tick)
+        self.tries
+            .get(&pos)
+            .is_some_and(|t| t.given_up() || t.next_at > self.tick)
     }
 
     /// Nowhere to do the cell from yet: let others go first for a while (not a failure).
@@ -266,7 +294,9 @@ impl Builder {
 
     /// Given up for good: a cell that may still be revived is not (nothing may cover it meanwhile).
     pub(super) fn lost(&self, pos: BlockPos) -> bool {
-        self.tries.get(&pos).is_some_and(|t| t.given_up() && !t.revivable())
+        self.tries
+            .get(&pos)
+            .is_some_and(|t| t.given_up() && !t.revivable())
     }
 
     pub(super) fn fail(&mut self, pos: BlockPos, e: &ActionError) {
@@ -279,19 +309,62 @@ impl Builder {
     }
 
     pub(super) fn survey(&self, look: &dyn Look) -> Vec<Need> {
-        let mut needs: Vec<Need> = self.cells.iter().map(|c| need_with_text(&c.target, c.text.as_ref(), c.pos, look, self.job.fill_only)).collect();
-        super::pairs::settle(&self.cells, &self.index, look, self.job.fill_only, &mut needs);
-        super::rules::redstone_order::settle(&self.cells, look, &|p| self.target(p).cloned(), &mut needs);
+        let mut needs: Vec<Need> = self
+            .cells
+            .iter()
+            .map(|c| need_with_text(&c.target, c.text.as_ref(), c.pos, look, self.job.fill_only))
+            .collect();
+        super::pairs::settle(
+            &self.cells,
+            &self.index,
+            look,
+            self.job.fill_only,
+            &mut needs,
+        );
+        super::rules::redstone_order::settle(
+            &self.cells,
+            look,
+            &|p| self.target(p).cloned(),
+            &mut needs,
+        );
         needs
     }
 
-    pub(super) fn publish(&self, needs: &[Need], look: &dyn Look, phase: Phase, missing: Vec<String>) {
-        let Ok(mut s) = self.status.lock() else { return };
+    pub(super) fn publish(
+        &self,
+        needs: &[Need],
+        look: &dyn Look,
+        phase: Phase,
+        missing: Vec<String>,
+    ) {
+        let Ok(mut s) = self.status.lock() else {
+            return;
+        };
         let count = |n: Need| needs.iter().filter(|x| **x == n).count();
-        (s.done, s.to_place, s.to_break, s.unknown, s.kept) = (count(Need::Done), count(Need::Place) + count(Need::Adjust), count(Need::Break) + count(Need::Drain), count(Need::Unknown), count(Need::Kept));
-        s.unsupported = self.cells.iter().zip(needs).filter(|(_, n)| **n == Need::Unsupported).map(|(c, _)| (c.pos, c.target.name.clone())).collect();
-        s.failed = self.tries.iter().filter_map(|(p, t)| t.why().map(|w| (*p, w))).collect();
-        s.scaffold = self.scaffold.iter().filter(|p| look.solid(**p) == Some(true)).count();
+        (s.done, s.to_place, s.to_break, s.unknown, s.kept) = (
+            count(Need::Done),
+            count(Need::Place) + count(Need::Adjust),
+            count(Need::Break) + count(Need::Drain),
+            count(Need::Unknown),
+            count(Need::Kept),
+        );
+        s.unsupported = self
+            .cells
+            .iter()
+            .zip(needs)
+            .filter(|(_, n)| **n == Need::Unsupported)
+            .map(|(c, _)| (c.pos, c.target.name.clone()))
+            .collect();
+        s.failed = self
+            .tries
+            .iter()
+            .filter_map(|(p, t)| t.why().map(|w| (*p, w)))
+            .collect();
+        s.scaffold = self
+            .scaffold
+            .iter()
+            .filter(|p| look.solid(**p) == Some(true))
+            .count();
         s.seals = self.seals.iter().copied().collect();
         (s.phase, s.missing) = (phase, missing);
     }

@@ -16,11 +16,19 @@ pub fn title(fps: f32, s: &FrameStats, status: &str) -> String {
 
 /// Working set (what Windows keeps resident; it trims this freely) and committed private memory.
 fn memory() -> String {
-    let (ws, commit) = memory_stats::memory_stats().map_or((0, 0), |m| (m.physical_mem >> 20, m.virtual_mem >> 20));
+    let (ws, commit) = memory_stats::memory_stats()
+        .map_or((0, 0), |m| (m.physical_mem >> 20, m.virtual_mem >> 20));
     #[cfg(feature = "profile")]
     {
-        let heap: Vec<String> = crate::heap::live().iter().zip(crate::heap::ROLES).map(|(b, r)| format!("{r} {:.1}", *b as f64 / 1048576.0)).collect();
-        format!("{ws} MB resident, {commit} MB committed, heap MB: {}", heap.join(" "))
+        let heap: Vec<String> = crate::heap::live()
+            .iter()
+            .zip(crate::heap::ROLES)
+            .map(|(b, r)| format!("{r} {:.1}", *b as f64 / 1048576.0))
+            .collect();
+        format!(
+            "{ws} MB resident, {commit} MB committed, heap MB: {}",
+            heap.join(" ")
+        )
     }
     #[cfg(not(feature = "profile"))]
     format!("{ws} MB resident, {commit} MB committed")

@@ -9,12 +9,18 @@ pub struct Socks5Proxy {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("invalid proxy {0:?}: expected host:port, host:port:user:pass or socks5://[user:pass@]host:port")]
+#[error(
+    "invalid proxy {0:?}: expected host:port, host:port:user:pass or socks5://[user:pass@]host:port"
+)]
 pub struct ProxyParseError(String);
 
 impl Socks5Proxy {
     pub fn new(host: impl Into<String>, port: u16) -> Self {
-        Self { host: host.into(), port, credentials: None }
+        Self {
+            host: host.into(),
+            port,
+            credentials: None,
+        }
     }
 
     pub fn login(mut self, user: impl Into<String>, pass: impl Into<String>) -> Self {
@@ -27,13 +33,22 @@ impl Socks5Proxy {
     pub fn parse(s: &str) -> Result<Self, ProxyParseError> {
         let err = || ProxyParseError(redact(s));
         let s = s.trim();
-        if let Some(rest) = s.strip_prefix("socks5://").or_else(|| s.strip_prefix("socks5h://")) {
+        if let Some(rest) = s
+            .strip_prefix("socks5://")
+            .or_else(|| s.strip_prefix("socks5h://"))
+        {
             let (userinfo, hostport) = match rest.rsplit_once('@') {
                 Some((u, h)) => (Some(u), h),
                 None => (None, rest),
             };
-            let (host, port) = hostport.trim_end_matches('/').rsplit_once(':').ok_or_else(err)?;
-            let mut proxy = Self::new(host.trim_start_matches('[').trim_end_matches(']'), port.parse().map_err(|_| err())?);
+            let (host, port) = hostport
+                .trim_end_matches('/')
+                .rsplit_once(':')
+                .ok_or_else(err)?;
+            let mut proxy = Self::new(
+                host.trim_start_matches('[').trim_end_matches(']'),
+                port.parse().map_err(|_| err())?,
+            );
             if let Some(u) = userinfo {
                 let (user, pass) = u.split_once(':').ok_or_else(err)?;
                 proxy = proxy.login(percent_decode(user), percent_decode(pass));
@@ -54,7 +69,13 @@ impl Socks5Proxy {
     /// sign-in traffic leaves from the same IP as the game connection.
     pub fn to_url(&self) -> String {
         match &self.credentials {
-            Some((u, p)) => format!("socks5h://{}:{}@{}:{}", percent_encode(u), percent_encode(p), self.host, self.port),
+            Some((u, p)) => format!(
+                "socks5h://{}:{}@{}:{}",
+                percent_encode(u),
+                percent_encode(p),
+                self.host,
+                self.port
+            ),
             None => format!("socks5h://{}:{}", self.host, self.port),
         }
     }
@@ -63,7 +84,11 @@ impl Socks5Proxy {
 impl fmt::Debug for Socks5Proxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let user = self.credentials.as_ref().map(|(u, _)| u.as_str());
-        f.debug_struct("Socks5Proxy").field("host", &self.host).field("port", &self.port).field("user", &user).finish_non_exhaustive()
+        f.debug_struct("Socks5Proxy")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("user", &user)
+            .finish_non_exhaustive()
     }
 }
 
@@ -79,7 +104,9 @@ fn redact(s: &str) -> String {
 fn percent_encode(s: &str) -> String {
     s.bytes()
         .map(|b| match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => (b as char).to_string(),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                (b as char).to_string()
+            }
             _ => format!("%{b:02X}"),
         })
         .collect()
@@ -90,7 +117,10 @@ fn percent_decode(s: &str) -> String {
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;
     while i < b.len() {
-        let hex = (b[i] == b'%').then(|| b.get(i + 1..i + 3)).flatten().and_then(|h| u8::from_str_radix(std::str::from_utf8(h).ok()?, 16).ok());
+        let hex = (b[i] == b'%')
+            .then(|| b.get(i + 1..i + 3))
+            .flatten()
+            .and_then(|h| u8::from_str_radix(std::str::from_utf8(h).ok()?, 16).ok());
         match hex {
             Some(v) => {
                 out.push(v);
@@ -114,7 +144,10 @@ mod tests {
         let p = Socks5Proxy::parse("isp.example.com:10001:user1:pa:ss~w0rd").unwrap();
         assert_eq!((p.host.as_str(), p.port), ("isp.example.com", 10001));
         assert_eq!(p.credentials, Some(("user1".into(), "pa:ss~w0rd".into())));
-        assert_eq!(Socks5Proxy::parse("1.2.3.4:1080").unwrap().credentials, None);
+        assert_eq!(
+            Socks5Proxy::parse("1.2.3.4:1080").unwrap().credentials,
+            None
+        );
         let u = Socks5Proxy::parse("socks5://us%40er:p%3Ass@host.net:9050").unwrap();
         assert_eq!(u.credentials, Some(("us@er".into(), "p:ss".into())));
         assert_eq!(Socks5Proxy::parse(&u.to_url()).unwrap(), u);

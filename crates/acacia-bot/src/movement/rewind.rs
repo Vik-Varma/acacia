@@ -4,7 +4,9 @@
 
 use std::collections::VecDeque;
 
-use acacia_physics::{self as physics, Aabb, Effects, Input, PlayerState, Vec3, WithEntities, WorldView};
+use acacia_physics::{
+    self as physics, Aabb, Effects, Input, PlayerState, Vec3, WithEntities, WorldView,
+};
 
 /// Ticks kept for replay (5 s): older events apply as of now.
 const HISTORY: usize = 100;
@@ -62,26 +64,48 @@ impl<T: Copy> Timeline<T> {
 
     /// The newest value in effect on input tick `tick`.
     fn at(&self, tick: u64) -> Option<T> {
-        self.0.iter().rev().find(|&&(t, _)| t <= tick).map(|&(_, v)| v)
+        self.0
+            .iter()
+            .rev()
+            .find(|&&(t, _)| t <= tick)
+            .map(|&(_, v)| v)
     }
 
     /// [`Self::at`] once a value for `tick` or later is known: the server has reached `tick`.
     fn known(&self, tick: u64) -> Option<T> {
-        self.0.iter().any(|&(t, _)| t >= tick).then(|| self.at(tick)).flatten()
+        self.0
+            .iter()
+            .any(|&(t, _)| t >= tick)
+            .then(|| self.at(tick))
+            .flatten()
     }
 
     /// [`Self::at`] when a value starts on exactly `tick`.
     fn starting(&self, tick: u64) -> Option<T> {
-        self.at(tick).filter(|_| self.0.iter().any(|&(t, _)| t == tick))
+        self.at(tick)
+            .filter(|_| self.0.iter().any(|&(t, _)| t == tick))
     }
 }
 
 impl History {
-    pub(super) fn record(&mut self, tick: u64, input: Input, knockback: Option<Vec3>, after: &PlayerState, solids: Vec<Aabb>) {
+    pub(super) fn record(
+        &mut self,
+        tick: u64,
+        input: Input,
+        knockback: Option<Vec3>,
+        after: &PlayerState,
+        solids: Vec<Aabb>,
+    ) {
         if self.entries.len() == HISTORY {
             self.entries.pop_front();
         }
-        self.entries.push_back(Entry { tick, input, knockback, solids, after: after.clone() });
+        self.entries.push_back(Entry {
+            tick,
+            input,
+            knockback,
+            solids,
+            after: after.clone(),
+        });
     }
 
     /// Resets the state as of the end of `tick` before the next simulated tick. The newest tick wins:
@@ -96,7 +120,10 @@ impl History {
 
     /// Feet position simulated at the end of `tick`, while kept.
     pub(super) fn position_at(&self, tick: u64) -> Option<Vec3> {
-        self.entries.iter().find(|e| e.tick == tick).map(|e| e.after.pos)
+        self.entries
+            .iter()
+            .find(|e| e.tick == tick)
+            .map(|e| e.after.pos)
     }
 
     /// Applies a knockback on already simulated input `tick`; false when that tick (or the one before,
@@ -105,14 +132,17 @@ impl History {
         if !self.entries.iter().any(|e| e.tick + 1 == tick) {
             return false;
         }
-        let Some(e) = self.entries.iter_mut().find(|e| e.tick == tick) else { return false };
+        let Some(e) = self.entries.iter_mut().find(|e| e.tick == tick) else {
+            return false;
+        };
         e.knockback = Some(velocity);
         self.knocked = Some(self.knocked.map_or(tick, |k| k.min(tick)));
         true
     }
 
     pub(super) fn movement_attribute(&mut self, tick: u64, value: f32) {
-        self.speeds.push(tick, value, self.entries.front().map_or(0, |e| e.tick));
+        self.speeds
+            .push(tick, value, self.entries.front().map_or(0, |e| e.tick));
     }
 
     /// Records the server's freeze stamped with `tick` and moves the kept states onto it (see README,
@@ -123,9 +153,14 @@ impl History {
             return 0.0;
         }
         let repeat = last.is_some_and(|(t, _)| t == tick + 1);
-        self.freezes.push(tick, freeze, self.entries.front().map_or(0, |e| e.tick));
+        self.freezes
+            .push(tick, freeze, self.entries.front().map_or(0, |e| e.tick));
         let before = self.entries.back().map_or(0.0, |e| e.after.freeze);
-        let shift = self.entries.iter().find(|e| e.tick == tick + 1).map_or(0.0, |e| freeze - e.after.freeze);
+        let shift = self
+            .entries
+            .iter()
+            .find(|e| e.tick == tick + 1)
+            .map_or(0.0, |e| freeze - e.after.freeze);
         for e in &mut self.entries {
             let value = match self.freezes.known(e.tick) {
                 Some(v) => v,
@@ -142,7 +177,8 @@ impl History {
     }
 
     pub(super) fn effects(&mut self, tick: u64, effects: Effects) {
-        self.effects.push(tick, effects, self.entries.front().map_or(0, |e| e.tick));
+        self.effects
+            .push(tick, effects, self.entries.front().map_or(0, |e| e.tick));
     }
 
     /// Rewinds to a scheduled correction, or to before the earliest new knockback, and replays the
@@ -161,7 +197,12 @@ impl History {
             if c.teleport {
                 st.apply_correction(c.feet, c.delta, c.on_ground);
             } else {
-                let earlier: Vec<&PlayerState> = self.entries.iter().filter(|e| e.tick < tick).map(|e| &e.after).collect();
+                let earlier: Vec<&PlayerState> = self
+                    .entries
+                    .iter()
+                    .filter(|e| e.tick < tick)
+                    .map(|e| &e.after)
+                    .collect();
                 st.apply_small_correction(c.feet, c.delta, c.on_ground, &earlier);
             }
             if c.teleport {
@@ -199,7 +240,14 @@ impl History {
             }
             st.server_freeze = Some(self.freezes.known(e.tick).unwrap_or(e.after.freeze));
             st.knockback = e.knockback;
-            physics::tick(st, &e.input, &WithEntities { world, boxes: &e.solids });
+            physics::tick(
+                st,
+                &e.input,
+                &WithEntities {
+                    world,
+                    boxes: &e.solids,
+                },
+            );
             e.after = st.clone();
             replayed += 1;
         }

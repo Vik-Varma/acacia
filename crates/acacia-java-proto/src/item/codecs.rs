@@ -34,12 +34,24 @@ pub(super) fn text(input: &mut &[u8]) -> Skipped {
 
 /// `ByteBufCodecs.optional`: a presence flag.
 pub(super) fn optional(input: &mut &[u8], value: impl FnOnce(&mut &[u8]) -> Skipped) -> Skipped {
-    if boolean(input)? { value(input) } else { Ok(()) }
+    if boolean(input)? {
+        value(input)
+    } else {
+        Ok(())
+    }
 }
 
 /// `ByteBufCodecs.either`: true for the left codec.
-pub(super) fn either(input: &mut &[u8], left: impl FnOnce(&mut &[u8]) -> Skipped, right: impl FnOnce(&mut &[u8]) -> Skipped) -> Skipped {
-    if boolean(input)? { left(input) } else { right(input) }
+pub(super) fn either(
+    input: &mut &[u8],
+    left: impl FnOnce(&mut &[u8]) -> Skipped,
+    right: impl FnOnce(&mut &[u8]) -> Skipped,
+) -> Skipped {
+    if boolean(input)? {
+        left(input)
+    } else {
+        right(input)
+    }
 }
 
 /// `ByteBufCodecs.list`/`collection`/`map`: a varint count, then each element.
@@ -52,7 +64,11 @@ pub(super) fn list(input: &mut &[u8], mut element: impl FnMut(&mut &[u8]) -> Ski
 
 /// `ByteBufCodecs.holder`: a registry id plus one, or 0 and the value inline.
 pub(super) fn holder(input: &mut &[u8], direct: impl FnOnce(&mut &[u8]) -> Skipped) -> Skipped {
-    if read_varint(input)? == 0 { direct(input) } else { Ok(()) }
+    if read_varint(input)? == 0 {
+        direct(input)
+    } else {
+        Ok(())
+    }
 }
 
 /// `ByteBufCodecs.holderSet`: 0 and a tag name, or the id count plus one and the ids.

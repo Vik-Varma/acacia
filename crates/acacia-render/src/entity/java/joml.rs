@@ -46,7 +46,12 @@ pub fn rotation_zyx_quat(z: f32, y: f32, x: f32) -> glam::Quat {
     let (sy, cy) = joml_sin_cos(y * 0.5);
     let (sz, cz) = joml_sin_cos(z * 0.5);
     let (cycz, sysz, sycz, cysz) = (cy * cz, sy * sz, sy * cz, cy * sz);
-    glam::Quat::from_xyzw(sx * cycz - cx * sysz, cx * sycz + sx * cysz, cx * cysz - sx * sycz, cx * cycz + sx * sysz)
+    glam::Quat::from_xyzw(
+        sx * cycz - cx * sysz,
+        cx * sycz + sx * cysz,
+        cx * cysz - sx * sycz,
+        cx * cycz + sx * sysz,
+    )
 }
 
 /// Row-major as JOML names them: `m[col][row]` is JOML's `m<col><row>`.
@@ -69,20 +74,30 @@ fn rotate(m: M3, q: Quat) -> M3 {
     let [x, y, z, w] = q.0;
     let (w2, x2, y2, z2) = (w * w, x * x, y * y, z * z);
     let twice = |a: f32| a + a;
-    let (dzw, dxy, dxz, dyw, dyz, dxw) = (twice(z * w), twice(x * y), twice(x * z), twice(y * w), twice(y * z), twice(x * w));
+    let (dzw, dxy, dxz, dyw, dyz, dxw) = (
+        twice(z * w),
+        twice(x * y),
+        twice(x * z),
+        twice(y * w),
+        twice(y * z),
+        twice(x * w),
+    );
     let r = [
         [w2 + x2 - z2 - y2, dxy + dzw, dxz - dyw],
         [dxy - dzw, y2 - z2 + w2 - x2, dyz + dxw],
         [dyw + dxz, dyz - dxw, z2 - y2 - x2 + w2],
     ];
-    std::array::from_fn(|c| std::array::from_fn(|row| m[0][row] * r[c][0] + m[1][row] * r[c][1] + m[2][row] * r[c][2]))
+    std::array::from_fn(|c| {
+        std::array::from_fn(|row| m[0][row] * r[c][0] + m[1][row] * r[c][1] + m[2][row] * r[c][2])
+    })
 }
 
 /// `ModelPart.rotateBy`.
 pub fn rotate_by(pose: &mut PartPose, q: Quat) {
     let m = rotate(rotation_zyx(pose.z_rot, pose.y_rot, pose.x_rot), q);
     pose.x_rot = f64::from(m[1][2]).atan2(f64::from(m[2][2])) as f32;
-    pose.y_rot = f64::from(-m[0][2]).atan2(f64::from(1.0 - m[0][2] * m[0][2]).sqrt() as f32 as f64) as f32;
+    pose.y_rot =
+        f64::from(-m[0][2]).atan2(f64::from(1.0 - m[0][2] * m[0][2]).sqrt() as f32 as f64) as f32;
     pose.z_rot = f64::from(m[0][1]).atan2(f64::from(m[0][0])) as f32;
 }
 
@@ -92,8 +107,14 @@ mod tests {
 
     #[test]
     fn a_turn_about_x_adds_to_x_rot() {
-        let mut pose = PartPose { x_rot: 0.3, ..PartPose::default() };
+        let mut pose = PartPose {
+            x_rot: 0.3,
+            ..PartPose::default()
+        };
         rotate_by(&mut pose, Quat::default().rotate_x(0.5));
-        assert!((pose.x_rot - 0.8).abs() < 1e-6 && pose.y_rot.abs() < 1e-6 && pose.z_rot.abs() < 1e-6, "{pose:?}");
+        assert!(
+            (pose.x_rot - 0.8).abs() < 1e-6 && pose.y_rot.abs() < 1e-6 && pose.z_rot.abs() < 1e-6,
+            "{pose:?}"
+        );
     }
 }

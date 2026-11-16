@@ -74,7 +74,9 @@ pub struct Layer {
 enum Entry {
     Contexts(HashMap<String, Vec<Layer>>),
     #[allow(dead_code)]
-    Failed { error: String },
+    Failed {
+        error: String,
+    },
 }
 
 #[derive(Deserialize)]
@@ -98,7 +100,11 @@ impl JavaItems {
         static LOADED: Mutex<Vec<(PathBuf, Weak<JavaItems>)>> = Mutex::new(Vec::new());
         let mut loaded = LOADED.lock().unwrap_or_else(|e| e.into_inner());
         loaded.retain(|(_, items)| items.strong_count() > 0);
-        if let Some(items) = loaded.iter().find(|(path, _)| path == root).and_then(|(_, items)| items.upgrade()) {
+        if let Some(items) = loaded
+            .iter()
+            .find(|(path, _)| path == root)
+            .and_then(|(_, items)| items.upgrade())
+        {
             return Some(items);
         }
         let items = Arc::new(JavaItems::load(root)?);
@@ -110,25 +116,40 @@ impl JavaItems {
         let file: File = serde_json::from_slice(&std::fs::read(root.join(MODELS)).ok()?)
             .map_err(|error| tracing::warn!(%error, "unreadable {MODELS}"))
             .ok()?;
-        let items = file.items.into_iter().filter_map(|(id, entry)| match entry {
-            Entry::Contexts(contexts) => Some((id, contexts)),
-            Entry::Failed { .. } => None,
-        });
-        let names = std::fs::read(root.join(NAMES)).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
-        Some(JavaItems { root: root.to_owned(), meshes: file.meshes, items: items.collect(), names })
+        let items = file
+            .items
+            .into_iter()
+            .filter_map(|(id, entry)| match entry {
+                Entry::Contexts(contexts) => Some((id, contexts)),
+                Entry::Failed { .. } => None,
+            });
+        let names = std::fs::read(root.join(NAMES))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default();
+        Some(JavaItems {
+            root: root.to_owned(),
+            meshes: file.meshes,
+            items: items.collect(),
+            names,
+        })
     }
 
     /// The Java item a Bedrock one is: from the table, else the same name.
     pub fn java_name<'a>(&'a self, bedrock: &'a str, aux: u32) -> &'a str {
         let by_aux = self.names.get(bedrock);
-        by_aux.and_then(|by| by.get(&aux.to_string()).or_else(|| by.get(""))).map_or(bedrock, String::as_str)
+        by_aux
+            .and_then(|by| by.get(&aux.to_string()).or_else(|| by.get("")))
+            .map_or(bedrock, String::as_str)
     }
 
     /// The model a Bedrock stack draws with: [`Self::java_name`]'s, or its trimmed one
     /// (`<id>#trim=<material>`, lookbake's) when the stack has a trim the item's model selects on.
     pub fn stack_name(&self, bedrock: &str, aux: u32, trim: Option<&str>) -> String {
         let name = self.java_name(bedrock, aux);
-        trim.map(|material| format!("{name}#trim={material}")).filter(|t| self.items.contains_key(t)).unwrap_or_else(|| name.to_owned())
+        trim.map(|material| format!("{name}#trim={material}"))
+            .filter(|t| self.items.contains_key(t))
+            .unwrap_or_else(|| name.to_owned())
     }
 
     pub fn ids(&self) -> impl Iterator<Item = &str> {
@@ -143,17 +164,29 @@ impl JavaItems {
     /// when the geometry is the same (displays aside), else `context`'s own.
     pub fn drawn_context(&self, item: &str, context: &'static str) -> &'static str {
         let hand = context::hand(false, false);
-        let meshes = |context| self.layers(item, context).map(|layers| layers.iter().map(|l| l.mesh).collect::<Vec<_>>());
-        if meshes(hand) == meshes(context) { hand } else { context }
+        let meshes = |context| {
+            self.layers(item, context)
+                .map(|layers| layers.iter().map(|l| l.mesh).collect::<Vec<_>>())
+        };
+        if meshes(hand) == meshes(context) {
+            hand
+        } else {
+            context
+        }
     }
 
     pub fn quads(&self, layer: &Layer) -> &[Quad] {
-        self.meshes.get(layer.mesh).map_or(&[], |m| m.quads.as_slice())
+        self.meshes
+            .get(layer.mesh)
+            .map_or(&[], |m| m.quads.as_slice())
     }
 
     /// `context`'s display, from its first layer; a left hand's mirrored as `ItemTransform.apply` does.
     pub fn display(&self, item: &str, context: &str) -> Option<Display> {
-        Some(Display::java(self.layers(item, context)?.first()?.transform, context::left_hand(context)))
+        Some(Display::java(
+            self.layers(item, context)?.first()?.transform,
+            context::left_hand(context),
+        ))
     }
 
     pub fn block_light(&self, item: &str, context: &str) -> Option<bool> {
@@ -163,8 +196,18 @@ impl JavaItems {
     /// The display per context the hands, the ground and frames use, and the ground's bounds.
     pub fn displays(&self, item: &str) -> Displays {
         let contexts = self.items.get(item).into_iter().flatten();
-        let displays = contexts.filter_map(|(context, layers)| Some((context.clone(), Display::java(layers.first()?.transform, context::left_hand(context))))).collect();
-        Displays { displays, ground: self.bounds(item, context::GROUND) }
+        let displays = contexts
+            .filter_map(|(context, layers)| {
+                Some((
+                    context.clone(),
+                    Display::java(layers.first()?.transform, context::left_hand(context)),
+                ))
+            })
+            .collect();
+        Displays {
+            displays,
+            ground: self.bounds(item, context::GROUND),
+        }
     }
 
     /// `ItemStackRenderState.getModelBoundingBox` in `context`: the corners of the layers' quads
@@ -173,7 +216,9 @@ impl JavaItems {
         let mut corners = self.layers(item, context)?.iter().flat_map(|layer| {
             let display = Display::java(layer.transform, context::left_hand(context)).frame();
             self.quads(layer).iter().flat_map(move |quad| {
-                quad.pos.as_chunks::<3>().0.iter().map(move |p| display.transform_point3(glam::Vec3::from_slice(p) - glam::Vec3::splat(0.5)))
+                quad.pos.as_chunks::<3>().0.iter().map(move |p| {
+                    display.transform_point3(glam::Vec3::from_slice(p) - glam::Vec3::splat(0.5))
+                })
             })
         });
         let first = corners.next()?;
@@ -186,7 +231,9 @@ impl JavaItems {
     }
 
     pub(super) fn image_path(&self, image: &str) -> PathBuf {
-        self.root.join("java").join(image.strip_prefix("minecraft:").unwrap_or(image))
+        self.root
+            .join("java")
+            .join(image.strip_prefix("minecraft:").unwrap_or(image))
     }
 }
 
@@ -229,12 +276,20 @@ pub struct Region {
 impl Region {
     /// The skin's texture coordinates back to the image's.
     pub fn sprite_uv(&self, skin: &Skin, [u, v]: [f32; 2]) -> [f32; 2] {
-        [u * skin.width as f32 / self.width as f32, (v * skin.height as f32 - self.y as f32) / self.height as f32]
+        [
+            u * skin.width as f32 / self.width as f32,
+            (v * skin.height as f32 - self.y as f32) / self.height as f32,
+        ]
     }
 }
 
 pub(super) fn vertex(quad: &Quad, corner: usize, uv: [f32; 2]) -> Vertex {
     let p = &quad.pos[corner * 3..corner * 3 + 3];
     // Centred on the item box, z mirrored (meshes face -z); see hand::MESH.
-    Vertex { position: [p[0] - 0.5, p[1] - 0.5, 0.5 - p[2]], bone: 0, normal: [quad.normal[0], quad.normal[1], -quad.normal[2]], uv }
+    Vertex {
+        position: [p[0] - 0.5, p[1] - 0.5, 0.5 - p[2]],
+        bone: 0,
+        normal: [quad.normal[0], quad.normal[1], -quad.normal[2]],
+        uv,
+    }
 }

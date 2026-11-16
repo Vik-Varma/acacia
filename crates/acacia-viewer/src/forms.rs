@@ -40,19 +40,39 @@ pub struct FormScreen {
 impl FormScreen {
     pub fn new(form: &Form) -> FormScreen {
         let (spec, sources) = spec(form);
-        FormScreen { id: form.id, title: form.title.clone(), spec, imaged: vec![false; sources.len()], sources, view: None }
+        FormScreen {
+            id: form.id,
+            title: form.title.clone(),
+            spec,
+            imaged: vec![false; sources.len()],
+            sources,
+            view: None,
+        }
     }
 
     /// Lays the form out for `look` and the GUI `size`, and adds button images that have loaded.
-    pub fn update(&mut self, look: LookChoice, theme: &mut Theme, size: [f32; 2], images: &mut Images) {
+    pub fn update(
+        &mut self,
+        look: LookChoice,
+        theme: &mut Theme,
+        size: [f32; 2],
+        images: &mut Images,
+    ) {
         if self.view.as_ref().is_none_or(|(shown, _)| *shown != look) {
-            self.view = Some((look, FormView::new(&self.title, self.spec.clone(), theme, size)));
+            self.view = Some((
+                look,
+                FormView::new(&self.title, self.spec.clone(), theme, size),
+            ));
             self.imaged.fill(false);
         }
-        let Some((_, view)) = &mut self.view else { return };
+        let Some((_, view)) = &mut self.view else {
+            return;
+        };
         view.resize(theme, size);
         for (i, source) in self.sources.iter().enumerate() {
-            let Some(source) = source.as_deref().filter(|_| !self.imaged[i]) else { continue };
+            let Some(source) = source.as_deref().filter(|_| !self.imaged[i]) else {
+                continue;
+            };
             if let Some(image) = images.get(source) {
                 view.set_image(i, theme.atlas.add(&format!("form/{source}"), image));
                 self.imaged[i] = true;
@@ -74,24 +94,61 @@ impl FormScreen {
 /// The form as widgets, and each action-form button's image source in button order.
 pub fn spec(form: &Form) -> (Spec, Vec<Option<String>>) {
     match &form.kind {
-        FormKind::Simple { content, buttons, elements, positions } => {
+        FormKind::Simple {
+            content,
+            buttons,
+            elements,
+            positions,
+        } => {
             let mut items = Vec::with_capacity(buttons.len() + elements.len());
             let mut placed = elements.iter().zip(positions).peekable();
             for (i, b) in buttons.iter().enumerate() {
                 while let Some((e, _)) = placed.next_if(|&(_, &at)| at <= i) {
                     items.push(widget(e));
                 }
-                items.push(Widget::Button { text: b.text.clone(), image: None });
+                items.push(Widget::Button {
+                    text: b.text.clone(),
+                    image: None,
+                });
             }
             items.extend(placed.map(|(e, _)| widget(e)));
-            (Spec::Action { content: content.clone(), items }, buttons.iter().map(|b| b.image.clone()).collect())
+            (
+                Spec::Action {
+                    content: content.clone(),
+                    items,
+                },
+                buttons.iter().map(|b| b.image.clone()).collect(),
+            )
         }
-        FormKind::Modal { content, yes, no } => (Spec::Modal { content: content.clone(), yes: yes.clone(), no: no.clone() }, Vec::new()),
-        FormKind::Custom { elements } => (Spec::Custom { elements: elements.iter().map(widget).collect(), submit: acacia_ui::form::SUBMIT.into() }, Vec::new()),
+        FormKind::Modal { content, yes, no } => (
+            Spec::Modal {
+                content: content.clone(),
+                yes: yes.clone(),
+                no: no.clone(),
+            },
+            Vec::new(),
+        ),
+        FormKind::Custom { elements } => (
+            Spec::Custom {
+                elements: elements.iter().map(widget).collect(),
+                submit: acacia_ui::form::SUBMIT.into(),
+            },
+            Vec::new(),
+        ),
         // A Java dialog submits with its first button, which `FormReply::Custom` presses.
-        FormKind::Dialog { elements, buttons, .. } => {
-            let submit = buttons.first().map_or_else(|| acacia_ui::form::SUBMIT.into(), |b| b.text.clone());
-            (Spec::Custom { elements: elements.iter().map(widget).collect(), submit }, Vec::new())
+        FormKind::Dialog {
+            elements, buttons, ..
+        } => {
+            let submit = buttons
+                .first()
+                .map_or_else(|| acacia_ui::form::SUBMIT.into(), |b| b.text.clone());
+            (
+                Spec::Custom {
+                    elements: elements.iter().map(widget).collect(),
+                    submit,
+                },
+                Vec::new(),
+            )
         }
     }
 }
@@ -101,11 +158,50 @@ fn widget(element: &Element) -> Widget {
         Element::Label { text } => Widget::Text { text },
         Element::Header { text } => Widget::Header { text },
         Element::Divider => Widget::Divider,
-        Element::Input { text, placeholder, default } => Widget::Input { label: text, placeholder, edit: TextEdit::new(&default, INPUT_MAX) },
-        Element::Toggle { text, default } => Widget::Toggle { label: text, on: default },
-        Element::Slider { text, min, max, step, default } => Widget::Slider { label: text, min, max, step, value: default },
-        Element::StepSlider { text, steps, default } => Widget::Steps { label: text, options: steps, index: default },
-        Element::Dropdown { text, options, default } => Widget::Dropdown { label: text, options, index: default },
+        Element::Input {
+            text,
+            placeholder,
+            default,
+        } => Widget::Input {
+            label: text,
+            placeholder,
+            edit: TextEdit::new(&default, INPUT_MAX),
+        },
+        Element::Toggle { text, default } => Widget::Toggle {
+            label: text,
+            on: default,
+        },
+        Element::Slider {
+            text,
+            min,
+            max,
+            step,
+            default,
+        } => Widget::Slider {
+            label: text,
+            min,
+            max,
+            step,
+            value: default,
+        },
+        Element::StepSlider {
+            text,
+            steps,
+            default,
+        } => Widget::Steps {
+            label: text,
+            options: steps,
+            index: default,
+        },
+        Element::Dropdown {
+            text,
+            options,
+            default,
+        } => Widget::Dropdown {
+            label: text,
+            options,
+            index: default,
+        },
     }
 }
 
@@ -140,7 +236,12 @@ impl Images {
     /// `pack` is the Bedrock resource pack that texture paths name.
     pub fn new(pack: &Path) -> Images {
         let (fetch, fetched) = channel();
-        Images { pack: pack.to_owned(), loaded: HashMap::new(), fetched, fetch }
+        Images {
+            pack: pack.to_owned(),
+            loaded: HashMap::new(),
+            fetched,
+            fetch,
+        }
     }
 
     /// The image for `source`, `None` while a URL is loading or when it failed.
@@ -153,7 +254,9 @@ impl Images {
                 self.start_fetch(source);
                 None
             } else {
-                image_file(&self.pack, source.trim_start_matches('/')).and_then(|f| image::open(f).ok()).map(|i| icon(i.to_rgba8()))
+                image_file(&self.pack, source.trim_start_matches('/'))
+                    .and_then(|f| image::open(f).ok())
+                    .map(|i| icon(i.to_rgba8()))
             };
             self.loaded.insert(source.to_owned(), image);
         }
@@ -162,13 +265,15 @@ impl Images {
 
     fn start_fetch(&self, url: &str) {
         let (url, done) = (url.to_owned(), self.fetch.clone());
-        let spawned = std::thread::Builder::new().name("form-image".into()).spawn(move || {
-            let image = fetch(&url).map(icon);
-            if image.is_none() {
-                tracing::debug!(%url, "form button image not loaded");
-            }
-            let _ = done.send((url, image));
-        });
+        let spawned = std::thread::Builder::new()
+            .name("form-image".into())
+            .spawn(move || {
+                let image = fetch(&url).map(icon);
+                if image.is_none() {
+                    tracing::debug!(%url, "form button image not loaded");
+                }
+                let _ = done.send((url, image));
+            });
         if let Err(e) = spawned {
             tracing::warn!(%e, "form image thread");
         }
@@ -181,11 +286,20 @@ fn is_url(source: &str) -> bool {
 
 /// PNG at `url`, at most [`FETCH_MAX_BYTES`] and [`FETCH_TIMEOUT`].
 fn fetch(url: &str) -> Option<RgbaImage> {
-    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().ok()?;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .ok()?;
     let bytes = runtime.block_on(async {
-        let client = reqwest::Client::builder().timeout(FETCH_TIMEOUT).build().ok()?;
+        let client = reqwest::Client::builder()
+            .timeout(FETCH_TIMEOUT)
+            .build()
+            .ok()?;
         let response = client.get(url).send().await.ok()?.error_for_status().ok()?;
-        if response.content_length().is_some_and(|n| n > FETCH_MAX_BYTES as u64) {
+        if response
+            .content_length()
+            .is_some_and(|n| n > FETCH_MAX_BYTES as u64)
+        {
             return None;
         }
         let bytes = response.bytes().await.ok()?;
@@ -198,7 +312,12 @@ fn fetch(url: &str) -> Option<RgbaImage> {
 fn icon(image: RgbaImage) -> RgbaImage {
     let side = image.width().min(image.height());
     let frame = image::imageops::crop_imm(&image, 0, 0, image.width(), side).to_image();
-    image::imageops::resize(&frame, IMAGE_SIDE, IMAGE_SIDE, image::imageops::FilterType::Nearest)
+    image::imageops::resize(
+        &frame,
+        IMAGE_SIDE,
+        IMAGE_SIDE,
+        image::imageops::FilterType::Nearest,
+    )
 }
 
 #[cfg(test)]
@@ -207,27 +326,55 @@ mod tests {
 
     #[test]
     fn custom_answers_map_onto_the_bots_values() {
-        let out = Outcome::Submit(vec![Value::Text("a".into()), Value::Toggle(true), Value::Number(2.5), Value::Choice(1)]);
-        let want = FormReply::Custom(vec![FormValue::Text("a".into()), FormValue::Toggle(true), FormValue::Slider(2.5), FormValue::Choice(1)]);
+        let out = Outcome::Submit(vec![
+            Value::Text("a".into()),
+            Value::Toggle(true),
+            Value::Number(2.5),
+            Value::Choice(1),
+        ]);
+        let want = FormReply::Custom(vec![
+            FormValue::Text("a".into()),
+            FormValue::Toggle(true),
+            FormValue::Slider(2.5),
+            FormValue::Choice(1),
+        ]);
         assert_eq!(reply(out), want);
     }
 
     #[test]
     fn action_items_interleave_and_buttons_keep_their_images() {
-        let button = |text: &str, image: Option<&str>| acacia_bot::forms::Button { text: text.into(), image: image.map(str::to_owned) };
+        let button = |text: &str, image: Option<&str>| acacia_bot::forms::Button {
+            text: text.into(),
+            image: image.map(str::to_owned),
+        };
         let form = Form {
             id: 1,
             title: "t".into(),
             kind: FormKind::Simple {
                 content: "c".into(),
                 buttons: vec![button("x", Some("textures/items/apple")), button("y", None)],
-                elements: vec![Element::Header { text: "h".into() }, Element::Divider, Element::Label { text: "end".into() }],
+                elements: vec![
+                    Element::Header { text: "h".into() },
+                    Element::Divider,
+                    Element::Label { text: "end".into() },
+                ],
                 positions: vec![0, 1, 2],
             },
         };
         let (spec, images) = spec(&form);
         assert_eq!(images, [Some("textures/items/apple".to_owned()), None]);
-        let Spec::Action { items, .. } = spec else { panic!() };
-        assert!(matches!(items[..], [Widget::Header { .. }, Widget::Button { .. }, Widget::Divider, Widget::Button { .. }, Widget::Text { .. }]));
+        let Spec::Action { items, .. } = spec else {
+            panic!()
+        };
+        assert!(matches!(
+            items[..],
+            [
+                Widget::Header { .. },
+                Widget::Button { .. },
+                Widget::Divider,
+                Widget::Button { .. },
+                Widget::Text { .. }
+            ]
+        ));
     }
 }

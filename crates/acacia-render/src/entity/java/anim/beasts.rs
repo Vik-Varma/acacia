@@ -8,7 +8,12 @@ use super::super::poses::Poses;
 use super::super::state::RenderState;
 use super::quadruped::quadruped;
 
-const LEGS: [&str; 4] = ["right_hind_leg", "left_hind_leg", "right_front_leg", "left_front_leg"];
+const LEGS: [&str; 4] = [
+    "right_hind_leg",
+    "left_hind_leg",
+    "right_front_leg",
+    "left_front_leg",
+];
 
 /// `PolarBearModel`: rears up on its hind legs.
 pub(super) fn polar_bear(p: &mut Poses, s: &RenderState) {
@@ -50,7 +55,11 @@ pub(super) fn turtle(p: &mut Poses, s: &RenderState) {
     quadruped(p, s);
     let (pos, speed) = (s.walk_pos(), s.walk_speed());
     if s.flag("isOnLand") {
-        let (lay, amplitude) = if s.flag("isLayingEgg") { (4.0, 2.0) } else { (1.0, 1.0) };
+        let (lay, amplitude) = if s.flag("isLayingEgg") {
+            (4.0, 2.0)
+        } else {
+            (1.0, 1.0)
+        };
         let swing = pos * 5.0;
         let (front, hind) = (cos(lay * swing), cos(swing));
         p.y_rot("right_front_leg", -front * 8.0 * speed * amplitude);
@@ -137,13 +146,22 @@ pub(super) fn panda(p: &mut Poses, s: &RenderState) {
 /// `animateSitting`; the baby's also slides its parts into a sitting shape.
 fn panda_sitting(p: &mut Poses, sit: f32, baby: bool) {
     let body = p.get("body");
-    body.x_rot = rot_lerp_rad(sit, body.x_rot, if baby { pi_div(18.0) } else { 1.740_796_3 });
+    body.x_rot = rot_lerp_rad(
+        sit,
+        body.x_rot,
+        if baby { pi_div(18.0) } else { 1.740_796_3 },
+    );
     if baby {
         body.z = lerp(sit, body.z, -1.5);
         let head = p.get("head");
         head.z = lerp(sit, head.z, -11.5);
         head.y = lerp(sit, head.y, 17.5);
-        for (leg, z) in [("right_front_leg", -5.0), ("left_front_leg", -5.0), ("right_hind_leg", 3.0), ("left_hind_leg", 3.0)] {
+        for (leg, z) in [
+            ("right_front_leg", -5.0),
+            ("left_front_leg", -5.0),
+            ("right_hind_leg", 3.0),
+            ("left_hind_leg", 3.0),
+        ] {
             let part = p.get(leg);
             part.z = lerp(sit, part.z, z);
         }
@@ -151,7 +169,12 @@ fn panda_sitting(p: &mut Poses, sit: f32, baby: bool) {
         let head = p.get("head");
         head.x_rot = rot_lerp_rad(sit, head.x_rot, PI / 2.0);
     }
-    for (leg, z) in [("right_front_leg", -0.270_796_42), ("left_front_leg", 0.270_796_42), ("right_hind_leg", 0.570_796_4), ("left_hind_leg", -0.570_796_4)] {
+    for (leg, z) in [
+        ("right_front_leg", -0.270_796_42),
+        ("left_front_leg", 0.270_796_42),
+        ("right_hind_leg", 0.570_796_4),
+        ("left_hind_leg", -0.570_796_4),
+    ] {
         p.z_rot(leg, z);
     }
 }
@@ -160,8 +183,14 @@ fn panda_sitting(p: &mut Poses, sit: f32, baby: bool) {
 /// baby's head also rises.
 pub(super) fn hoglin(p: &mut Poses, s: &RenderState) {
     let (speed, pos) = (s.walk_speed(), s.walk_pos());
-    p.z_rot("right_ear", (-std::f64::consts::PI * 2.0 / 9.0) as f32 - speed * sin(pos));
-    p.z_rot("left_ear", (std::f64::consts::PI * 2.0 / 9.0) as f32 + speed * sin(pos));
+    p.z_rot(
+        "right_ear",
+        (-std::f64::consts::PI * 2.0 / 9.0) as f32 - speed * sin(pos),
+    );
+    p.z_rot(
+        "left_ear",
+        (std::f64::consts::PI * 2.0 / 9.0) as f32 + speed * sin(pos),
+    );
     p.y_rot("head", s.y_rot() * pi_div(180.0));
     let butt = 1.0 - (10 - 2 * s.num("attackAnimationRemainingTicks") as i32).abs() as f32 / 10.0;
     p.x_rot("head", lerp(butt, 0.872_664_63, pi_div(-9.0)));
@@ -170,7 +199,10 @@ pub(super) fn hoglin(p: &mut Poses, s: &RenderState) {
     }
     p.x_rot("right_front_leg", cos(pos) * 1.2 * speed);
     p.x_rot("left_front_leg", cos(pos + PI) * 1.2 * speed);
-    let (right, left) = (p.read("right_front_leg").x_rot, p.read("left_front_leg").x_rot);
+    let (right, left) = (
+        p.read("right_front_leg").x_rot,
+        p.read("left_front_leg").x_rot,
+    );
     p.x_rot("right_hind_leg", left);
     p.x_rot("left_hind_leg", right);
 }

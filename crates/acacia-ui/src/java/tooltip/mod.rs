@@ -37,7 +37,12 @@ pub enum Line {
     Text(Text),
     /// An image component by its Java class name and size; a bundle's draws itself, any other is
     /// a `Picture::TooltipImage`.
-    Image { kind: Cow<'static, str>, w: i32, h: i32, bundle: Option<Box<bundle::Bundle>> },
+    Image {
+        kind: Cow<'static, str>,
+        w: i32,
+        h: i32,
+        bundle: Option<Box<bundle::Bundle>>,
+    },
 }
 
 impl Line {
@@ -55,7 +60,6 @@ impl Line {
         }
     }
 }
-
 
 /// A tooltip to draw: what `setTooltipForNextFrame` defers.
 #[derive(Clone, Debug, PartialEq)]
@@ -98,7 +102,10 @@ pub fn background(gui: &mut Gui, x: i32, y: i32, w: i32, h: i32, style: Option<&
     let (pw, ph) = (w + 3 + 3 + 18, h + 3 + 3 + 18);
     let path = |part: &str| match style {
         None => format!("tooltip/{part}"),
-        Some(id) => format!("tooltip/{}_{part}", id.split_once(':').map_or(id, |(_, p)| p)),
+        Some(id) => format!(
+            "tooltip/{}_{part}",
+            id.split_once(':').map_or(id, |(_, p)| p)
+        ),
     };
     gui.sprite(path("background"), x0, y0, pw, ph);
     gui.sprite(path("frame"), x0, y0, pw, ph);
@@ -107,7 +114,11 @@ pub fn background(gui: &mut Gui, x: i32, y: i32, w: i32, h: i32, style: Option<&
 /// `GuiGraphicsExtractor.tooltip`.
 pub fn extract(gui: &mut Gui, font: &dyn Metrics, t: &Tooltip) {
     let mut w = 0;
-    let mut h = if t.extra_space && t.lines.len() != 1 { 0 } else { -2 };
+    let mut h = if t.extra_space && t.lines.len() != 1 {
+        0
+    } else {
+        -2
+    };
     for line in &t.lines {
         w = w.max(line.width(font));
         h += line.height();
@@ -126,9 +137,23 @@ pub fn extract(gui: &mut Gui, font: &dyn Metrics, t: &Tooltip) {
     ly = y;
     for (i, line) in t.lines.iter().enumerate() {
         match line {
-            Line::Image { bundle: Some(b), .. } => b.extract(gui, font, x, ly, w),
-            Line::Image { kind, w: iw, h: ih, bundle: None } => {
-                gui.draws.push(super::gui::GuiDraw::Picture(Picture::TooltipImage { kind: kind.to_string(), x, y: ly, w: *iw, h: *ih }));
+            Line::Image {
+                bundle: Some(b), ..
+            } => b.extract(gui, font, x, ly, w),
+            Line::Image {
+                kind,
+                w: iw,
+                h: ih,
+                bundle: None,
+            } => {
+                gui.draws
+                    .push(super::gui::GuiDraw::Picture(Picture::TooltipImage {
+                        kind: kind.to_string(),
+                        x,
+                        y: ly,
+                        w: *iw,
+                        h: *ih,
+                    }));
             }
             Line::Text(_) => {}
         }

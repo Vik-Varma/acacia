@@ -55,13 +55,25 @@ pub fn java_galactic(root: &Path, atlas: &mut Atlas) -> Option<Font> {
     let image = png(&root.join("textures/font/ascii_sga.png"))?;
     let page = atlas.add("font/ascii_sga", &image);
     let rows = Font::code_page_rows();
-    Some(Font::from_grid(&image, page, &rows.iter().map(String::as_str).collect::<Vec<_>>()))
+    Some(Font::from_grid(
+        &image,
+        page,
+        &rows.iter().map(String::as_str).collect::<Vec<_>>(),
+    ))
 }
 
 /// The `chars` of the bitmap provider drawing `ascii.png` in `font/include/default.json`.
 fn ascii_rows(root: &Path) -> Option<Vec<String>> {
     let text = std::fs::read_to_string(root.join("font/include/default.json")).ok()?;
     let json: serde_json::Value = serde_json::from_str(&text).ok()?;
-    let provider = json["providers"].as_array()?.iter().find(|p| p["file"].as_str().is_some_and(|f| f.ends_with("font/ascii.png")))?;
-    provider["chars"].as_array()?.iter().map(|row| row.as_str().map(str::to_owned)).collect()
+    let provider = json["providers"].as_array()?.iter().find(|p| {
+        p["file"]
+            .as_str()
+            .is_some_and(|f| f.ends_with("font/ascii.png"))
+    })?;
+    provider["chars"]
+        .as_array()?
+        .iter()
+        .map(|row| row.as_str().map(str::to_owned))
+        .collect()
 }

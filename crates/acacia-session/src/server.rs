@@ -10,10 +10,10 @@ use p384::ecdsa::SigningKey;
 
 pub mod login;
 
+use crate::Error;
 use crate::batch::{BatchCodec, SharedBatch};
 use crate::compression::Algorithm;
 use crate::crypto::derive_key;
-use crate::Error;
 
 pub struct ServerConnection {
     codec: BatchCodec,
@@ -30,12 +30,22 @@ enum Switch {
 impl ServerConnection {
     /// `key` signs the handshake; a fresh random one per connection is what BDS does.
     pub fn new(key: SigningKey) -> Self {
-        Self { codec: BatchCodec::default(), key, pending: Vec::new(), nethernet: false }
+        Self {
+            codec: BatchCodec::default(),
+            key,
+            pending: Vec::new(),
+            nethernet: false,
+        }
     }
 
     /// Over NetherNet: header-less batches, and see [`plaintext_handshake`](Self::plaintext_handshake).
     pub fn nethernet(key: SigningKey) -> Self {
-        Self { codec: BatchCodec::without_header(), key, pending: Vec::new(), nethernet: true }
+        Self {
+            codec: BatchCodec::without_header(),
+            key,
+            pending: Vec::new(),
+            nethernet: true,
+        }
     }
 
     pub fn is_nethernet(&self) -> bool {
@@ -71,7 +81,9 @@ impl ServerConnection {
     fn apply_switches(&mut self) {
         for switch in self.pending.drain(..) {
             match switch {
-                Switch::Compression(alg, threshold) => self.codec.enable_compression(alg, threshold),
+                Switch::Compression(alg, threshold) => {
+                    self.codec.enable_compression(alg, threshold)
+                }
                 Switch::Encryption(key) => self.codec.enable_encryption(key),
             }
         }
@@ -80,14 +92,18 @@ impl ServerConnection {
     /// Compresses as `settings` says from the batch after the next [`encode`](Self::encode).
     pub fn start_compression(&mut self, settings: &NetworkSettings) -> Result<(), Error> {
         let alg = Algorithm::from_settings(settings.compression_algorithm)?;
-        self.pending.push(Switch::Compression(alg, settings.compression_threshold.into()));
+        self.pending.push(Switch::Compression(
+            alg,
+            settings.compression_threshold.into(),
+        ));
         Ok(())
     }
 
     /// The ServerToClientHandshake for a client key; encryption starts after the batch carrying it.
     pub fn start_encryption(&mut self, client_key: &p384::PublicKey) -> Bytes {
         let (token, salt) = build_server_handshake(&self.key);
-        self.pending.push(Switch::Encryption(derive_key(&self.key, client_key, &salt)));
+        self.pending
+            .push(Switch::Encryption(derive_key(&self.key, client_key, &salt)));
         handshake_packet(token)
     }
 
@@ -109,7 +125,9 @@ pub fn read_login(body: &[u8]) -> Result<(i32, &[u8], p384::PublicKey), Error> {
     let mut r = body;
     let protocol = codec::read_i32(&mut r)?;
     let len = codec::read_varint(&mut r)? as usize;
-    let request = r.get(..len).ok_or_else(|| Error::Login("connection request truncated".into()))?;
+    let request = r
+        .get(..len)
+        .ok_or_else(|| Error::Login("connection request truncated".into()))?;
     let key = client_public_key(request).map_err(|e| Error::Login(e.to_string()))?;
     Ok((protocol, request, key))
 }

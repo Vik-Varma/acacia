@@ -69,7 +69,18 @@ mod tests {
             assert!(apply(&mut s, id, &v), "{id}");
             assert_eq!(value(&s, id), Some(v), "{id}");
         }
-        assert_eq!((s.gui_scale, s.fov, s.vsync, s.view_bobbing, s.clouds, s.fancy_clouds, s.volume), (3, 95, false, false, true, false, 42));
+        assert_eq!(
+            (
+                s.gui_scale,
+                s.fov,
+                s.vsync,
+                s.view_bobbing,
+                s.clouds,
+                s.fancy_clouds,
+                s.volume
+            ),
+            (3, 95, false, false, true, false, 42)
+        );
     }
 
     #[test]

@@ -16,7 +16,11 @@ use crate::Assets;
 const MILLIS: i64 = 1_000_000_000;
 
 fn strings(v: &Value) -> Vec<String> {
-    v.as_array().into_iter().flatten().map(|s| s.as_str().unwrap_or_default().to_owned()).collect()
+    v.as_array()
+        .into_iter()
+        .flatten()
+        .map(|s| s.as_str().unwrap_or_default().to_owned())
+        .collect()
 }
 
 /// The case's editing ops, as the oracle runs them on the page box's `MultilineTextField`.
@@ -53,7 +57,12 @@ fn book_ops(m: &dyn Metrics, book: &mut BookEdit, ops: &Value) {
 pub fn replay(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<GuiDraw> {
     let lang = lang(assets);
     let tr = |k: &str| lang.get(k).cloned();
-    let env = Env { width: int(c, "width", 427), height: int(c, "height", 240), in_world: true, blur: int(c, "blur", 5) >= 1 };
+    let env = Env {
+        width: int(c, "width", 427),
+        height: int(c, "height", 240),
+        in_world: true,
+        blur: int(c, "blur", 5) >= 1,
+    };
     let mut gui = Gui::new(env.width, env.height);
     let mouse = ints(&c["mouse"]);
     let mut ctx = Ctx::new(&mut gui, assets.font.as_ref(), &tr, (mouse[0], mouse[1]));
@@ -70,14 +79,22 @@ pub fn replay(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<Gui
                 glowing: flag(c, "glowing", false),
             };
             let lines = strings(&c["lines"]);
-            let mut edit = SignEdit::new(std::array::from_fn(|i| lines.get(i).cloned().unwrap_or_default()), blink);
+            let mut edit = SignEdit::new(
+                std::array::from_fn(|i| lines.get(i).cloned().unwrap_or_default()),
+                blink,
+            );
             edit.line = int(c, "line", 0) as usize;
             edit.cursor = int(c, "cursor", 0) as usize;
             edit.selection = int(c, "selection", 0) as usize;
             Box::new(SignEditScreen::new(&ctx, env, sign, edit))
         }
         "book_view" => {
-            let pages = c["pages"].as_array().into_iter().flatten().map(|p| text(p, lang)).collect();
+            let pages = c["pages"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|p| text(p, lang))
+                .collect();
             let mut book = BookView { pages, page: 0 };
             book.set_page(int(c, "page", 0) as usize);
             Box::new(BookViewScreen::new(&ctx, env, &book))
@@ -95,8 +112,12 @@ pub fn replay(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<Gui
             Box::new(BookEditScreen::new(&ctx, env, &book))
         }
         "telemetry" => {
-            let t = Telemetry { extra_available: flag(c, "extra", false), opt_in: flag(c, "optIn", false) };
-            let mut s = TelemetryInfoScreen::new(&ctx, env, t, c["scroll"].as_f64().unwrap_or_default());
+            let t = Telemetry {
+                extra_available: flag(c, "extra", false),
+                opt_in: flag(c, "optIn", false),
+            };
+            let mut s =
+                TelemetryInfoScreen::new(&ctx, env, t, c["scroll"].as_f64().unwrap_or_default());
             s.events.area.base.focused = flag(c, "focused", true);
             Box::new(s)
         }

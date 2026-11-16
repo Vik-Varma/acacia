@@ -15,7 +15,13 @@ struct ClipResult {
 
 /// Clips (or, unless `one_way`, depenetrates) `vel` of `moving` against `stationary`,
 /// recording the deepest penetration per axis into `penetration`.
-pub fn clip_collide(stationary: &Aabb, moving: &Aabb, vel: Vec3, one_way: bool, penetration: Option<&mut Vec3>) -> Vec3 {
+pub fn clip_collide(
+    stationary: &Aabb,
+    moving: &Aabb,
+    vel: Vec3,
+    one_way: bool,
+    penetration: Option<&mut Vec3>,
+) -> Vec3 {
     let r = do_clip(stationary, moving, vel);
     if let Some(p) = penetration
         && p[r.depenetrating_axis] < r.penetration
@@ -26,7 +32,12 @@ pub fn clip_collide(stationary: &Aabb, moving: &Aabb, vel: Vec3, one_way: bool, 
 }
 
 fn do_clip(stationary: &Aabb, moving: &Aabb, velocity: Vec3) -> ClipResult {
-    let mut r = ClipResult { depenetrating_axis: 0, penetration: 0.0, clipped: velocity, depenetrating: velocity };
+    let mut r = ClipResult {
+        depenetrating_axis: 0,
+        penetration: 0.0,
+        clipped: velocity,
+        depenetrating: velocity,
+    };
     if stationary.is_empty() {
         return r;
     }
@@ -82,11 +93,18 @@ fn do_clip(stationary: &Aabb, moving: &Aabb, velocity: Vec3) -> ClipResult {
             }
         }
         let desired = pens[best] * normals[best];
-        r.depenetrating[best] =
-            if desired > 0.0 { desired.max(velocity[best]) } else { desired.min(velocity[best]) };
+        r.depenetrating[best] = if desired > 0.0 {
+            desired.max(velocity[best])
+        } else {
+            desired.min(velocity[best])
+        };
         r.depenetrating_axis = best;
         // BDS with no depenetration allowed (a player): out along the shallowest axis is free, further in is not.
-        r.clipped[best] = if normals[best] > 0.0 { velocity[best].max(0.0) } else { velocity[best].min(0.0) };
+        r.clipped[best] = if normals[best] > 0.0 {
+            velocity[best].max(0.0)
+        } else {
+            velocity[best].min(0.0)
+        };
         // A pose change's overlap is moved out (see README).
         if result_pen <= crate::pose::HEADROOM_MARGIN {
             r.clipped[best] = r.depenetrating[best];
@@ -105,7 +123,13 @@ fn do_clip(stationary: &Aabb, moving: &Aabb, velocity: Vec3) -> ClipResult {
 }
 
 /// Clips `vel` against every box, iterating in reverse like the client.
-pub(crate) fn clip_all(boxes: &[Aabb], bb: &Aabb, mut vel: Vec3, one_way: bool, mut pen: Option<&mut Vec3>) -> Vec3 {
+pub(crate) fn clip_all(
+    boxes: &[Aabb],
+    bb: &Aabb,
+    mut vel: Vec3,
+    one_way: bool,
+    mut pen: Option<&mut Vec3>,
+) -> Vec3 {
     for b in boxes.iter().rev() {
         vel = clip_collide(b, bb, vel, one_way, pen.as_deref_mut());
     }
@@ -118,8 +142,18 @@ pub(crate) struct AutoStep {
 }
 
 /// The client auto-step sequence: up by `height`, X, Z, then back down.
-pub(crate) fn auto_step(original: &Aabb, velocity: Vec3, boxes: &[Aabb], one_way: bool, height: f32) -> AutoStep {
-    let relevant: Vec<Aabb> = boxes.iter().copied().filter(|b| b.min[1] < original.max[1]).collect();
+pub(crate) fn auto_step(
+    original: &Aabb,
+    velocity: Vec3,
+    boxes: &[Aabb],
+    one_way: bool,
+    height: f32,
+) -> AutoStep {
+    let relevant: Vec<Aabb> = boxes
+        .iter()
+        .copied()
+        .filter(|b| b.min[1] < original.max[1])
+        .collect();
     let mut bb = *original;
     let up = clip_all(&relevant, &bb, [0.0, height, 0.0], one_way, None);
     bb = bb.translate(up);
@@ -129,5 +163,8 @@ pub(crate) fn auto_step(original: &Aabb, velocity: Vec3, boxes: &[Aabb], one_way
     bb = bb.translate(z);
     let down = clip_all(&relevant, &bb, [-up[0], -up[1], -up[2]], one_way, None);
     bb = bb.translate(down);
-    AutoStep { bb, velocity: add(add(add(up, x), z), down) }
+    AutoStep {
+        bb,
+        velocity: add(add(add(up, x), z), down),
+    }
 }

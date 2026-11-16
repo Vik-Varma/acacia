@@ -38,7 +38,11 @@ fn a_region_is_written_once_quiet_or_held_too_long() {
     s.update(&terrain(1, 0, false), []);
     assert!(s.flush(false).unwrap().columns > 0, "held its limit (zero)");
     s.update(&terrain(2, 0, false), []);
-    assert_eq!(s.flush(false).unwrap().columns, 0, "written within the interval");
+    assert_eq!(
+        s.flush(false).unwrap().columns,
+        0,
+        "written within the interval"
+    );
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -83,7 +87,10 @@ fn read_area(dir: &Path) -> Chunks {
     (0..25)
         .map(|i| {
             let (x, z) = (i % 5, i / 5);
-            (region.chunk_nbt(x, z).unwrap(), region.timestamp(x, z).unwrap())
+            (
+                region.chunk_nbt(x, z).unwrap(),
+                region.timestamp(x, z).unwrap(),
+            )
         })
         .collect()
 }
@@ -115,16 +122,28 @@ fn nether_columns_are_java_height() {
     let mut c = Chunk::empty(0, 0, dim);
     assert!(!s.update(&c, []), "sections not received yet: skipped");
     c.set_air_from(0);
-    c.set(1, 127, 1, 0, reg.states_of("minecraft:bedrock").next().unwrap().0);
+    c.set(
+        1,
+        127,
+        1,
+        0,
+        reg.states_of("minecraft:bedrock").next().unwrap().0,
+    );
     s.update(&c, []);
     s.flush(true).unwrap();
-    let path = dir.join("dimensions/minecraft/the_nether/region").join(region_file_name(0, 0));
-    let col = crate::decode::decode_chunk(&Region::load(&path).unwrap().chunk_nbt(0, 0).unwrap()).unwrap();
+    let path = dir
+        .join("dimensions/minecraft/the_nether/region")
+        .join(region_file_name(0, 0));
+    let col = crate::decode::decode_chunk(&Region::load(&path).unwrap().chunk_nbt(0, 0).unwrap())
+        .unwrap();
     assert_eq!((col.min_section, col.sections.len()), (0, 16));
     assert_ne!(col.block(1, 127, 1), crate::mapping::AIR);
     let mut unloaded = Chunk::empty(0, 0, dim);
     unloaded.set_air_from(0);
-    assert!(!s.update(&unloaded, []), "an empty chunk does not replace a seen one");
+    assert!(
+        !s.update(&unloaded, []),
+        "an empty chunk does not replace a seen one"
+    );
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -145,7 +164,11 @@ fn relighting_next_to_evicted_columns_matches_all_in_memory() {
     }
     // (1, 1) is read back and relit too, but its light does not change.
     for (x, z) in [(1, 1), (0, 0)] {
-        assert_eq!(before[at(x, z)].1, evicted[at(x, z)].1, "{x} {z} keeps its timestamp");
+        assert_eq!(
+            before[at(x, z)].1,
+            evicted[at(x, z)].1,
+            "{x} {z} keeps its timestamp"
+        );
     }
     std::fs::remove_dir_all(&a).unwrap();
     std::fs::remove_dir_all(&b).unwrap();
@@ -198,7 +221,10 @@ fn a_compression_change_rewrites_only_changed_chunks() {
     let path = dir.join(region_file_name(0, -1));
     let stored = || {
         let r = Region::load(&path).unwrap();
-        (r.compression_type(3, 30).unwrap(), r.timestamp(3, 30).unwrap())
+        (
+            r.compression_type(3, 30).unwrap(),
+            r.timestamp(3, 30).unwrap(),
+        )
     };
     let mut s = store(&dir);
     s.update(&chunk(5), []);
@@ -210,12 +236,17 @@ fn a_compression_change_rewrites_only_changed_chunks() {
     s.cfg.compression = Compression::Lz4;
     s.update(&chunk(5), []);
     s.flush(true).unwrap();
-    assert_eq!(stored(), (2, first), "same NBT as on disk: slot kept as zlib");
+    assert_eq!(
+        stored(),
+        (2, first),
+        "same NBT as on disk: slot kept as zlib"
+    );
     s.update(&chunk(6), []);
     s.flush(true).unwrap();
     let (kind, ts) = stored();
     assert!(kind == 4 && ts > first, "changed: rewritten as LZ4");
-    let col = crate::decode::decode_chunk(&Region::load(&path).unwrap().chunk_nbt(3, 30).unwrap()).unwrap();
+    let col = crate::decode::decode_chunk(&Region::load(&path).unwrap().chunk_nbt(3, 30).unwrap())
+        .unwrap();
     assert_eq!((col.x, col.z), (3, -2));
     std::fs::remove_dir_all(&dir).unwrap();
 }

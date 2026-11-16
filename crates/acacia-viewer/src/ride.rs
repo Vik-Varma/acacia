@@ -29,16 +29,30 @@ pub struct RideLog {
 impl RideLog {
     /// Call once per tick.
     pub fn tick(&mut self, bot: &Bot) {
-        let moved_back = bot.bedrock().and_then(|b| b.movement()).map_or((0, 0), |m| (m.corrections, m.teleports));
+        let moved_back = bot
+            .bedrock()
+            .and_then(|b| b.movement())
+            .map_or((0, 0), |m| (m.corrections, m.teleports));
         if std::mem::replace(&mut self.moved_back, moved_back) != moved_back {
-            let feet = bot.bedrock().and_then(|b| b.movement()).and_then(|m| m.position());
+            let feet = bot
+                .bedrock()
+                .and_then(|b| b.movement())
+                .and_then(|m| m.position());
             // The blocks from two below the feet to one above: a correction on the spot is often a block the client's collision gets wrong.
-            let column = feet.map(|[x, y, z]| [-2, -1, 0, 1].map(|dy| bot.block_name([x.floor() as i32, y.floor() as i32 + dy, z.floor() as i32]).unwrap_or("?")));
+            let column = feet.map(|[x, y, z]| {
+                [-2, -1, 0, 1].map(|dy| {
+                    bot.block_name([x.floor() as i32, y.floor() as i32 + dy, z.floor() as i32])
+                        .unwrap_or("?")
+                })
+            });
             tracing::info!(target: "moves", corrections = moved_back.0, teleports = moved_back.1, ?feet, ?column, "the server moved the player");
         }
         self.ticks += 1;
         let now = std::time::Instant::now();
-        let gap = self.last.replace(now).map_or(0, |last| (now - last).as_millis());
+        let gap = self
+            .last
+            .replace(now)
+            .map_or(0, |last| (now - last).as_millis());
         self.longest = self.longest.max(gap);
         if self.ticks.is_multiple_of(20) {
             tracing::debug!(target: "moves", feet = ?bot.bedrock().and_then(|b| b.movement()).and_then(|m| m.position()), longest_gap_ms = std::mem::take(&mut self.longest), "twenty ticks");
@@ -52,10 +66,17 @@ impl RideLog {
         };
         self.riding = true;
         if self.seated_ticks.is_multiple_of(EVERY_TICKS) {
-            let entity = vehicle.runtime_id.and_then(|id| bot.state().entities.get(id));
+            let entity = vehicle
+                .runtime_id
+                .and_then(|id| bot.state().entities.get(id));
             let at = entity.map(|e| ([e.position.x, e.position.y, e.position.z], e.yaw));
-            let paddles = entity.map(|e| [Key::PaddleTimeLeft, Key::PaddleTimeRight].map(|key| e.metadata.float(key)));
-            let (vehicle_corrections, corrections) = bot.bedrock().and_then(|b| b.movement()).map_or((0, 0), |m| (m.vehicle_corrections, m.corrections));
+            let paddles = entity.map(|e| {
+                [Key::PaddleTimeLeft, Key::PaddleTimeRight].map(|key| e.metadata.float(key))
+            });
+            let (vehicle_corrections, corrections) = bot
+                .bedrock()
+                .and_then(|b| b.movement())
+                .map_or((0, 0), |m| (m.vehicle_corrections, m.corrections));
             tracing::info!(kind = vehicle.kind.as_deref(), driver = vehicle.driver, ?at, ?paddles, eye = ?bot.eye_position(), seat = ?bot.state().riding.seat_offset, seat_turn = ?bot.state().riding.seat_turn(), vehicle_corrections, corrections, "riding");
         }
         self.seated_ticks += 1;

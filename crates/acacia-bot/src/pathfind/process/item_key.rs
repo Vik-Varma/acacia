@@ -3,7 +3,9 @@
 
 /// The identifier and the aux value, if the key names one.
 pub fn split(key: &str) -> (&str, Option<u32>) {
-    key.rsplit_once('@').and_then(|(name, aux)| Some((name, Some(aux.parse().ok()?)))).unwrap_or((key, None))
+    key.rsplit_once('@')
+        .and_then(|(name, aux)| Some((name, Some(aux.parse().ok()?))))
+        .unwrap_or((key, None))
 }
 
 pub fn join(name: &str, aux: Option<u32>) -> String {

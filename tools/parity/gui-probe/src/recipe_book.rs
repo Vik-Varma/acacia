@@ -5,7 +5,9 @@ use serde_json::{Map, Value};
 
 use acacia_ui::java::container::entity::Figure;
 use acacia_ui::java::container::recipe_book::screens::{RecipeScreen, Window};
-use acacia_ui::java::container::recipe_book::{Book, Cell, Collection, Entry, Ghost, Kind, Search, Tab};
+use acacia_ui::java::container::recipe_book::{
+    Book, Cell, Collection, Entry, Ghost, Kind, Search, Tab,
+};
 use acacia_ui::java::container::{Env, frame};
 use acacia_ui::java::gui::{Gui, GuiDraw};
 use acacia_ui::java::text::Text;
@@ -16,17 +18,36 @@ use crate::Assets;
 use crate::kit;
 
 fn ints(v: &Value) -> Vec<i32> {
-    v.as_array().into_iter().flatten().filter_map(Value::as_i64).map(|i| i as i32).collect()
+    v.as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_i64)
+        .map(|i| i as i32)
+        .collect()
 }
 
 fn floats(v: &Value) -> Vec<f32> {
-    v.as_array().into_iter().flatten().filter_map(Value::as_f64).map(|f| f as f32).collect()
+    v.as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_f64)
+        .map(|f| f as f32)
+        .collect()
 }
 
 fn entry(e: &Value) -> Entry {
     let cells = e["cells"].as_array().into_iter().flatten();
-    let cells = cells.map(|c| Cell { x: c[0].as_i64().unwrap_or(0) as i32, y: c[1].as_i64().unwrap_or(0) as i32, items: ints(&c[2]) });
-    Entry { selected: kit::bool(e, "selected"), craftable: kit::bool(e, "craftable"), display: ints(&e["display"]), cells: cells.collect() }
+    let cells = cells.map(|c| Cell {
+        x: c[0].as_i64().unwrap_or(0) as i32,
+        y: c[1].as_i64().unwrap_or(0) as i32,
+        items: ints(&c[2]),
+    });
+    Entry {
+        selected: kit::bool(e, "selected"),
+        craftable: kit::bool(e, "craftable"),
+        display: ints(&e["display"]),
+        cells: cells.collect(),
+    }
 }
 
 fn book(c: &Value, kind: Kind) -> Book {
@@ -34,11 +55,30 @@ fn book(c: &Value, kind: Kind) -> Book {
     let open = kit::bool(c, "open");
     let anims = floats(&c["tabAnims"]);
     let tabs = g["tabs"].as_array().into_iter().flatten().enumerate();
-    let tabs = tabs.map(|(i, t)| Tab { search: kit::bool(t, "search"), icons: ints(&t["icons"]), collections: ints(&t["collections"]).into_iter().map(|c| c as usize).collect(), anim: anims.get(i).copied().unwrap_or(0.0) });
+    let tabs = tabs.map(|(i, t)| Tab {
+        search: kit::bool(t, "search"),
+        icons: ints(&t["icons"]),
+        collections: ints(&t["collections"])
+            .into_iter()
+            .map(|c| c as usize)
+            .collect(),
+        anim: anims.get(i).copied().unwrap_or(0.0),
+    });
     let collections = g["collections"].as_array().into_iter().flatten();
-    let collections = collections.map(|c| Collection { entries: c["entries"].as_array().into_iter().flatten().map(entry).collect() });
+    let collections = collections.map(|c| Collection {
+        entries: c["entries"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(entry)
+            .collect(),
+    });
     let ghost = g["ghost"].as_array().into_iter().flatten();
-    let ghost = ghost.map(|g| Ghost { slot: g["slot"].as_u64().unwrap_or(0) as usize, result: kit::bool(g, "result"), items: ints(&g["items"]) });
+    let ghost = ghost.map(|g| Ghost {
+        slot: g["slot"].as_u64().unwrap_or(0) as usize,
+        result: kit::bool(g, "result"),
+        items: ints(&g["items"]),
+    });
     let s = &c["search"];
     let search = Search {
         value: s["value"].as_str().unwrap_or_default().to_owned(),
@@ -58,7 +98,11 @@ fn book(c: &Value, kind: Kind) -> Book {
         width,
         height: kit::int(c, "height", 0),
         filtering: kit::bool(c, "filtering"),
-        time: if open { kit::float(c, "time", 0.0) } else { 0.0 },
+        time: if open {
+            kit::float(c, "time", 0.0)
+        } else {
+            0.0
+        },
         tabs: tabs.collect(),
         selected_tab: g["selectedTab"].as_u64().unwrap_or(0) as usize,
         collections: collections.collect(),
@@ -75,9 +119,17 @@ fn book(c: &Value, kind: Kind) -> Book {
 pub fn replay(c: &Value, assets: &Assets, _state: &mut Map<String, Value>) -> Vec<GuiDraw> {
     let lang = kit::lang(assets);
     let game = kit::game(c);
-    let env = Env { font: assets.font.as_ref(), lang: &lang, advanced: kit::bool(c, "advanced"), game: &game, op: kit::bool(c, "op") };
+    let env = Env {
+        font: assets.font.as_ref(),
+        lang: &lang,
+        advanced: kit::bool(c, "advanced"),
+        game: &game,
+        op: kit::bool(c, "op"),
+    };
     let kind = c["kind"].as_str().unwrap_or_default();
-    let (bare, screen) = kind.strip_prefix("book_").map_or((false, kind), |s| (true, s));
+    let (bare, screen) = kind
+        .strip_prefix("book_")
+        .map_or((false, kind), |s| (true, s));
     let (book_kind, title) = match screen {
         "furnace" => (Kind::Furnace, "container.furnace"),
         "blast_furnace" => (Kind::BlastFurnace, "container.blast_furnace"),
@@ -98,9 +150,21 @@ pub fn replay(c: &Value, assets: &Assets, _state: &mut Map<String, Value>) -> Ve
         "crafting" => Window::Crafting,
         "inventory" => {
             let f = &c["figure"];
-            let figure = Figure { entity: "minecraft:player".into(), bb_height: kit::float(f, "bbHeight", 1.8), scale: Some(kit::float(f, "scale", 1.0)), fall_flying: kit::bool(f, "fallFlying") };
+            let figure = Figure {
+                entity: "minecraft:player".into(),
+                bb_height: kit::float(f, "bbHeight", 1.8),
+                scale: Some(kit::float(f, "scale", 1.0)),
+                fall_flying: kit::bool(f, "fallFlying"),
+            };
             let last = floats(&c["last"]);
-            Window::Inventory { figure, last_mouse: [last.first().copied().unwrap_or(0.0), last.get(1).copied().unwrap_or(0.0)], effects: kit::effects(c) }
+            Window::Inventory {
+                figure,
+                last_mouse: [
+                    last.first().copied().unwrap_or(0.0),
+                    last.get(1).copied().unwrap_or(0.0),
+                ],
+                effects: kit::effects(c),
+            }
         }
         _ => {
             let mut data = [0; 4];
@@ -111,7 +175,13 @@ pub fn replay(c: &Value, assets: &Assets, _state: &mut Map<String, Value>) -> Ve
         }
     };
     let inventory = Text::translate("container.inventory", &[], &lang);
-    let mut s = RecipeScreen::new(book, window, Text::translate(title, &[], &lang), inventory, &env);
+    let mut s = RecipeScreen::new(
+        book,
+        window,
+        Text::translate(title, &[], &lang),
+        inventory,
+        &env,
+    );
     kit::fill(c, &mut s.base);
     frame(&mut s, &mut gui, &env, mouse, partial);
     gui.draws

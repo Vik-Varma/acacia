@@ -4,11 +4,16 @@ use super::stun::*;
 
 fn hex(s: &str) -> Vec<u8> {
     let digits: Vec<u8> = s.bytes().filter(u8::is_ascii_hexdigit).collect();
-    digits.chunks(2).map(|p| u8::from_str_radix(std::str::from_utf8(p).unwrap(), 16).unwrap()).collect()
+    digits
+        .chunks(2)
+        .map(|p| u8::from_str_radix(std::str::from_utf8(p).unwrap(), 16).unwrap())
+        .collect()
 }
 
 const SHORT_TERM: &[u8] = b"VOkJxbRl1RmTxUk/WvJxBt";
-const TID: TransactionId = [0xb7, 0xe7, 0xa7, 0x01, 0xbc, 0x34, 0xd6, 0x86, 0xfa, 0x87, 0xdf, 0xae];
+const TID: TransactionId = [
+    0xb7, 0xe7, 0xa7, 0x01, 0xbc, 0x34, 0xd6, 0x86, 0xfa, 0x87, 0xdf, 0xae,
+];
 
 /// RFC 5769 §2.1.
 const REQUEST: &str = "00010058 2112a442 b7e7a701 bc34d686 fa87dfae
@@ -34,8 +39,17 @@ const LONG_TERM_REQUEST: &str = "00010060 2112a442 78ad3433 c6ad72c0 29da412e
 fn rfc5769_short_term_request() {
     let raw = hex(REQUEST);
     let msg = Message::decode(&raw).unwrap();
-    assert_eq!((msg.class, msg.method, msg.transaction_id), (Class::Request, Method::Binding, TID));
-    assert_eq!(msg.attrs, [Attr::Software("STUN test client".into()), Attr::Username("evtj:h6vY".into())]);
+    assert_eq!(
+        (msg.class, msg.method, msg.transaction_id),
+        (Class::Request, Method::Binding, TID)
+    );
+    assert_eq!(
+        msg.attrs,
+        [
+            Attr::Software("STUN test client".into()),
+            Attr::Username("evtj:h6vY".into())
+        ]
+    );
     assert!(verify_integrity(&raw, SHORT_TERM));
     assert!(!verify_integrity(&raw, b"wrong"));
 }
@@ -63,7 +77,11 @@ fn rfc5769_xor_mapped_responses() {
 #[test]
 fn rfc5769_long_term_request_encodes_byte_exact() {
     let raw = hex(LONG_TERM_REQUEST);
-    let key = long_term_key("\u{30DE}\u{30C8}\u{30EA}\u{30C3}\u{30AF}\u{30B9}", "example.org", "TheMatrIX");
+    let key = long_term_key(
+        "\u{30DE}\u{30C8}\u{30EA}\u{30C3}\u{30AF}\u{30B9}",
+        "example.org",
+        "TheMatrIX",
+    );
     assert!(verify_integrity(&raw, &key));
     let msg = Message::decode(&raw).unwrap();
     assert_eq!(msg.nonce().as_deref(), Some("f//499k954d6OL34oL9FSTvy64sA"));
@@ -77,8 +95,13 @@ fn turn_attributes_roundtrip() {
     let msg = Message::new(Class::Error, Method::ChannelBind, tid)
         .with(Attr::MappedAddress("10.0.0.1:1".parse().unwrap()))
         .with(Attr::XorPeerAddress("[::1]:9".parse().unwrap()))
-        .with(Attr::XorRelayedAddress("198.51.100.2:49152".parse().unwrap()))
-        .with(Attr::ErrorCode { code: 438, reason: "Stale Nonce".into() })
+        .with(Attr::XorRelayedAddress(
+            "198.51.100.2:49152".parse().unwrap(),
+        ))
+        .with(Attr::ErrorCode {
+            code: 438,
+            reason: "Stale Nonce".into(),
+        })
         .with(Attr::Lifetime(600))
         .with(Attr::RequestedTransport(17))
         .with(Attr::ChannelNumber(0x4001))
@@ -88,7 +111,10 @@ fn turn_attributes_roundtrip() {
     for (key, fingerprint) in [(None, false), (Some(&b"k"[..]), true)] {
         let raw = msg.encode(key, fingerprint);
         assert_eq!(Message::decode(&raw).unwrap(), msg);
-        assert_eq!(key.is_some_and(|k| verify_integrity(&raw, k)), key.is_some());
+        assert_eq!(
+            key.is_some_and(|k| verify_integrity(&raw, k)),
+            key.is_some()
+        );
     }
     assert_eq!(msg.error_code(), Some((438, "Stale Nonce")));
 }
@@ -96,7 +122,10 @@ fn turn_attributes_roundtrip() {
 #[test]
 fn skips_unknown_and_post_integrity_attributes() {
     let msg = Message::new(Class::Indication, Method::Data, transaction_id())
-        .with(Attr::Other { kind: 0x7FFF, value: vec![9; 5] })
+        .with(Attr::Other {
+            kind: 0x7FFF,
+            value: vec![9; 5],
+        })
         .with(Attr::Lifetime(1));
     let mut raw = msg.encode(Some(b"k"), false);
     assert_eq!(Message::decode(&raw).unwrap().attrs, [Attr::Lifetime(1)]);

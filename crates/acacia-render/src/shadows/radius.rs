@@ -20,12 +20,18 @@ const JAVA_NAMES: [(&str, &str); 17] = [
     ("minecraft:wither_skull_dangerous", "minecraft:wither_skull"),
     ("minecraft:evocation_fang", "minecraft:evoker_fangs"),
     ("minecraft:wind_charge_projectile", "minecraft:wind_charge"),
-    ("minecraft:breeze_wind_charge_projectile", "minecraft:breeze_wind_charge"),
+    (
+        "minecraft:breeze_wind_charge_projectile",
+        "minecraft:breeze_wind_charge",
+    ),
 ];
 
 /// A Bedrock kind's Java identifier.
 pub fn java_name(kind: &str) -> &str {
-    JAVA_NAMES.iter().find(|(bedrock, _)| *bedrock == kind).map_or(kind, |(_, java)| java)
+    JAVA_NAMES
+        .iter()
+        .find(|(bedrock, _)| *bedrock == kind)
+        .map_or(kind, |(_, java)| java)
 }
 
 /// (kind, adult radius, baby radius); boats, rafts, minecarts and the size-driven kinds are in
@@ -129,7 +135,11 @@ const TABLE: &[(&str, f32, f32)] = &[
 /// mob's, `puff` a pufferfish's. `None` for kinds without one.
 pub fn radius(kind: &str, baby: bool, size: f32, puff: f32) -> Option<(f32, f32)> {
     let kind = java_name(kind);
-    let strength = if matches!(kind, "minecraft:item" | "minecraft:experience_orb") { 0.75 } else { 1.0 };
+    let strength = if matches!(kind, "minecraft:item" | "minecraft:experience_orb") {
+        0.75
+    } else {
+        1.0
+    };
     let radius = match kind {
         "minecraft:slime" | "minecraft:magma_cube" | "minecraft:sulfur_cube" => size * 0.25,
         "minecraft:pufferfish" => 0.1 + 0.1 * puff,

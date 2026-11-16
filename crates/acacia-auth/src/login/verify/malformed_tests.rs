@@ -19,24 +19,56 @@ fn framing_errors() {
     assert_eq!(framing(&(-1i32).to_le_bytes()), "envelope length");
     assert_eq!(framing(&i32::MAX.to_le_bytes()), "envelope length");
     assert_eq!(framing(&[2, 0, 0, 0, b'{', b'}']), "client data length");
-    assert_eq!(framing(&[2, 0, 0, 0, b'{', b'}', 0xff, 0xff, 0xff, 0xff]), "client data length");
-    assert_eq!(framing(&[2, 0, 0, 0, b'{', b'}', 9, 0, 0, 0, b'x']), "client data length");
+    assert_eq!(
+        framing(&[2, 0, 0, 0, b'{', b'}', 0xff, 0xff, 0xff, 0xff]),
+        "client data length"
+    );
+    assert_eq!(
+        framing(&[2, 0, 0, 0, b'{', b'}', 9, 0, 0, 0, b'x']),
+        "client data length"
+    );
 
     let mut trailing = raw_request(b"{}", b"a.b.c");
     trailing.push(0);
     assert_eq!(framing(&trailing), "trailing bytes");
-    assert_eq!(framing(&raw_request(b"{}", &[0xff, 0xfe])), "client data is not UTF-8");
+    assert_eq!(
+        framing(&raw_request(b"{}", &[0xff, 0xfe])),
+        "client data is not UTF-8"
+    );
 }
 
 #[test]
 fn envelope_errors() {
     let v = verifier();
-    let verify = |envelope: &str| v.verify(&raw_request(envelope.as_bytes(), b"a.b.c"), NOW).unwrap_err();
-    for envelope in ["", "nope", "[]", "42", r#"{"Token":5}"#, r#"{"AuthenticationType":"0"}"#, r#"{"Certificate":"{"}"#, r#"{"chain":"x"}"#] {
-        assert!(matches!(verify(envelope), VerifyError::Envelope(_)), "{envelope}");
+    let verify = |envelope: &str| {
+        v.verify(&raw_request(envelope.as_bytes(), b"a.b.c"), NOW)
+            .unwrap_err()
+    };
+    for envelope in [
+        "",
+        "nope",
+        "[]",
+        "42",
+        r#"{"Token":5}"#,
+        r#"{"AuthenticationType":"0"}"#,
+        r#"{"Certificate":"{"}"#,
+        r#"{"chain":"x"}"#,
+    ] {
+        assert!(
+            matches!(verify(envelope), VerifyError::Envelope(_)),
+            "{envelope}"
+        );
     }
-    assert_eq!(verify(r#"{"AuthenticationType":1,"Token":"a.b.c"}"#), VerifyError::GuestLogin);
-    for envelope in ["{}", r#"{"Token":""}"#, r#"{"Certificate":"","Token":""}"#, r#"{"Certificate":"{\"chain\":[\"\"]}"}"#] {
+    assert_eq!(
+        verify(r#"{"AuthenticationType":1,"Token":"a.b.c"}"#),
+        VerifyError::GuestLogin
+    );
+    for envelope in [
+        "{}",
+        r#"{"Token":""}"#,
+        r#"{"Certificate":"","Token":""}"#,
+        r#"{"Certificate":"{\"chain\":[\"\"]}"}"#,
+    ] {
         assert_eq!(verify(envelope), VerifyError::NoCredentials, "{envelope}");
     }
 }
@@ -45,23 +77,69 @@ fn envelope_errors() {
 fn garbage_tokens_and_client_data() {
     let v = verifier();
     let client = ec_key();
-    for token in ["x", "a.b.c", "..", "....", "e30.e30.e30", "W10.W10.", "bnVsbA.bnVsbA.AA", "\u{0}.\u{0}.\u{0}"] {
+    for token in [
+        "x",
+        "a.b.c",
+        "..",
+        "....",
+        "e30.e30.e30",
+        "W10.W10.",
+        "bnVsbA.bnVsbA.AA",
+        "\u{0}.\u{0}.\u{0}",
+    ] {
         let envelope = json!({ "Token": token }).to_string();
-        let err = v.verify(&raw_request(envelope.as_bytes(), b"a.b.c"), NOW).unwrap_err();
-        let expected = matches!(err, VerifyError::Malformed { part: Part::Token, .. } | VerifyError::Algorithm { part: Part::Token, .. });
+        let err = v
+            .verify(&raw_request(envelope.as_bytes(), b"a.b.c"), NOW)
+            .unwrap_err();
+        let expected = matches!(
+            err,
+            VerifyError::Malformed {
+                part: Part::Token,
+                ..
+            } | VerifyError::Algorithm {
+                part: Part::Token,
+                ..
+            }
+        );
         assert!(expected, "{token}: {err:?}");
     }
 
     let envelope = json!({ "Token": rs256(&token_claims(&client)) }).to_string();
     for client_data in ["", "x", "a.b.c", "e30.e30.e30", "W10.W10.AA"] {
-        let err = v.verify(&raw_request(envelope.as_bytes(), client_data.as_bytes()), NOW).unwrap_err();
-        let expected = matches!(err, VerifyError::Malformed { part: Part::ClientData, .. } | VerifyError::Algorithm { part: Part::ClientData, .. });
+        let err = v
+            .verify(
+                &raw_request(envelope.as_bytes(), client_data.as_bytes()),
+                NOW,
+            )
+            .unwrap_err();
+        let expected = matches!(
+            err,
+            VerifyError::Malformed {
+                part: Part::ClientData,
+                ..
+            } | VerifyError::Algorithm {
+                part: Part::ClientData,
+                ..
+            }
+        );
         assert!(expected, "{client_data}: {err:?}");
     }
     // ES384 header, but a signature that is not 96 bytes.
-    let short = client_jwt(&client, &client_data()).rsplit_once('.').unwrap().0.to_owned() + ".AAAA";
-    let err = v.verify(&raw_request(envelope.as_bytes(), short.as_bytes()), NOW).unwrap_err();
-    assert_eq!(err, VerifyError::Signature { part: Part::ClientData });
+    let short = client_jwt(&client, &client_data())
+        .rsplit_once('.')
+        .unwrap()
+        .0
+        .to_owned()
+        + ".AAAA";
+    let err = v
+        .verify(&raw_request(envelope.as_bytes(), short.as_bytes()), NOW)
+        .unwrap_err();
+    assert_eq!(
+        err,
+        VerifyError::Signature {
+            part: Part::ClientData
+        }
+    );
 }
 
 #[test]
@@ -71,13 +149,23 @@ fn truncated_and_corrupted_requests_never_verify() {
     let request = token_request(rs256(&token_claims(&client)), &client);
     assert!(v.verify(&request, NOW).is_ok());
     for len in (0..request.len()).step_by(211) {
-        assert!(v.verify(&request[..len], NOW).is_err(), "prefix of {len} bytes");
+        assert!(
+            v.verify(&request[..len], NOW).is_err(),
+            "prefix of {len} bytes"
+        );
     }
     // Flip one bit at a time across the token and the start of the client-data JWT.
     let envelope_len = i32::from_le_bytes(request[..4].try_into().unwrap()) as usize;
-    let token_start = request.windows(9).position(|w| w == br#""Token":""#).unwrap() + 9;
+    let token_start = request
+        .windows(9)
+        .position(|w| w == br#""Token":""#)
+        .unwrap()
+        + 9;
     let client_start = 4 + envelope_len + 4;
-    for at in (token_start..4 + envelope_len - 2).chain(client_start..client_start + 400).step_by(7) {
+    for at in (token_start..4 + envelope_len - 2)
+        .chain(client_start..client_start + 400)
+        .step_by(7)
+    {
         let mut corrupted = request.clone();
         corrupted[at] ^= 0x01;
         assert!(v.verify(&corrupted, NOW).is_err(), "byte {at} flipped");
@@ -116,8 +204,16 @@ fn jwks_parsing() {
     jwks_error(r#"{"keys":[{"kty":"RSA","n":"!!","e":"AQAB"}]}"#);
     jwks_error(r#"{"keys":[{"kty":"RSA","n":"","e":""}]}"#);
     assert_eq!(jwks_error(r#"{"keys":[]}"#), "no RSA signing keys");
-    assert_eq!(jwks_error(r#"{"keys":[{"kty":"EC"}]}"#), "no RSA signing keys");
-    assert_eq!(jwks_error(r#"{"keys":[{"kty":"RSA","e":"AQAB"}]}"#), "RSA key without n");
-    let weak = json!({"keys": [{"kty": "RSA", "n": URL_SAFE_NO_PAD.encode([0xff; 128]), "e": "AQAB"}]}).to_string();
+    assert_eq!(
+        jwks_error(r#"{"keys":[{"kty":"EC"}]}"#),
+        "no RSA signing keys"
+    );
+    assert_eq!(
+        jwks_error(r#"{"keys":[{"kty":"RSA","e":"AQAB"}]}"#),
+        "RSA key without n"
+    );
+    let weak =
+        json!({"keys": [{"kty": "RSA", "n": URL_SAFE_NO_PAD.encode([0xff; 128]), "e": "AQAB"}]})
+            .to_string();
     assert_eq!(jwks_error(&weak), "1024-bit RSA key is too short");
 }

@@ -8,15 +8,15 @@ use acacia_world::BlockAccess;
 
 mod server;
 
-use server::act;
 use super::alter::blocks;
 use super::grid::Grid;
 use super::sim::perform;
-use crate::build::{BuildJob, Builder, Structure, StatusHandle, Transform};
+use crate::ActionError;
+use crate::build::{BuildJob, Builder, StatusHandle, Structure, Transform};
 use crate::movement::{Movement, Rollout};
 use crate::pathfind::process::{Act, Arbiter, BlockView, Decision, Look, ProcId, Target};
 use crate::pathfind::{NavStatus, SearchJob, Step};
-use crate::ActionError;
+use server::act;
 
 /// Ticks an act holds the bot, as live (house16 act timing, 2026-10-21): a placement aims for a tick, clicks
 /// and waits out the tick after (~47 + 51 ms); a break adds ~100 ms of mining with the right tool; a restock
@@ -57,7 +57,11 @@ pub struct World<'a> {
     /// `now`, shared with journals (`Journal::clocked`).
     pub clock: std::sync::Arc<std::sync::atomic::AtomicU64>,
     /// Background search answers held back until their tick.
-    searches: Vec<(u32, tokio::sync::oneshot::Sender<crate::pathfind::Path>, crate::pathfind::Path)>,
+    searches: Vec<(
+        u32,
+        tokio::sync::oneshot::Sender<crate::pathfind::Path>,
+        crate::pathfind::Path,
+    )>,
     /// Sign text by cell and side (front `true`).
     pub signs: HashMap<(BlockPos, bool), String>,
     /// Cells a structure fills: `swarm_sim::run_many` times bots standing in them while still open.
@@ -67,7 +71,22 @@ pub struct World<'a> {
 impl<'a> World<'a> {
     pub fn new(g: &'a Grid, inv: &[(&str, u32)]) -> Self {
         let signs = HashMap::new();
-        Self { g, inv: items(inv), stations: HashMap::new(), log: Vec::new(), end: [0.0; 3], others: Vec::new(), me: 0, now: 0, delay: 0, changes: Vec::new(), clock: Default::default(), searches: Vec::new(), signs, targets: Default::default() }
+        Self {
+            g,
+            inv: items(inv),
+            stations: HashMap::new(),
+            log: Vec::new(),
+            end: [0.0; 3],
+            others: Vec::new(),
+            me: 0,
+            now: 0,
+            delay: 0,
+            changes: Vec::new(),
+            clock: Default::default(),
+            searches: Vec::new(),
+            signs,
+            targets: Default::default(),
+        }
     }
 
     /// Sets a block as the server, remembering what it was for the bots that don't see it yet.
@@ -79,14 +98,21 @@ impl<'a> World<'a> {
             let old = self.g.view.block(pos[0], pos[1], pos[2]);
             let horizon = self.now.saturating_sub(self.delay);
             self.changes.retain(|c| c.tick > horizon);
-            self.changes.push(Change { tick: self.now, pos, old, by: self.me });
+            self.changes.push(Change {
+                tick: self.now,
+                pos,
+                old,
+                by: self.me,
+            });
         }
         self.g.set_state(pos, name, props);
     }
 }
 
 pub fn items(inv: &[(&str, u32)]) -> HashMap<String, u32> {
-    inv.iter().map(|(k, v)| (format!("minecraft:{k}"), *v)).collect()
+    inv.iter()
+        .map(|(k, v)| (format!("minecraft:{k}"), *v))
+        .collect()
 }
 
 struct SimLook<'a>(&'a World<'a>);
@@ -104,8 +130,14 @@ impl Look for SimLook<'_> {
         let w = self.0;
         // The oldest change another bot made here that this bot can't see yet: what was there before it.
         let horizon = w.now.saturating_sub(w.delay);
-        let hidden = w.changes.iter().find(|c| c.pos == p && c.by != w.me && c.tick > horizon).map(|c| c.old);
-        let s = w.g.registry.get(hidden.unwrap_or_else(|| w.g.view.block(p[0], p[1], p[2])))?;
+        let hidden = w
+            .changes
+            .iter()
+            .find(|c| c.pos == p && c.by != w.me && c.tick > horizon)
+            .map(|c| c.old);
+        let s =
+            w.g.registry
+                .get(hidden.unwrap_or_else(|| w.g.view.block(p[0], p[1], p[2])))?;
         Some(BlockView::of(s))
     }
 
@@ -123,12 +155,19 @@ impl Look for SimLook<'_> {
 }
 
 pub fn view(g: &Grid, p: BlockPos) -> (String, String) {
-    let s = g.registry.get(g.view.block(p[0], p[1], p[2])).expect("known");
+    let s = g
+        .registry
+        .get(g.view.block(p[0], p[1], p[2]))
+        .expect("known");
     (s.name.to_string(), s.properties.to_string())
 }
 
 pub(super) fn take(w: &mut World, item: &str) -> Result<(), ActionError> {
-    let n = w.inv.get_mut(item).filter(|n| **n > 0).ok_or_else(|| ActionError::NotPossible(format!("no {item}")))?;
+    let n = w
+        .inv
+        .get_mut(item)
+        .filter(|n| **n > 0)
+        .ok_or_else(|| ActionError::NotPossible(format!("no {item}")))?;
     *n -= 1;
     Ok(())
 }
@@ -137,7 +176,11 @@ pub(super) fn take(w: &mut World, item: &str) -> Result<(), ActionError> {
 fn watched(p: BlockPos) -> bool {
     static W: std::sync::OnceLock<Option<BlockPos>> = std::sync::OnceLock::new();
     let w = W.get_or_init(|| {
-        let v: Vec<i32> = std::env::var("BUILD_WATCH").ok()?.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+        let v: Vec<i32> = std::env::var("BUILD_WATCH")
+            .ok()?
+            .split(',')
+            .filter_map(|s| s.trim().parse().ok())
+            .collect();
         (v.len() == 3).then(|| [v[0], v[1], v[2]])
     });
     *w == Some(p)
@@ -145,7 +188,13 @@ fn watched(p: BlockPos) -> bool {
 
 /// A builder for `s` with its minimum corner at `origin`, run alone.
 pub fn builder(s: &Structure, origin: BlockPos, stations: &[BlockPos]) -> (Builder, StatusHandle) {
-    let mut job = BuildJob::new("sim.mcstructure", Transform { origin, ..Transform::default() });
+    let mut job = BuildJob::new(
+        "sim.mcstructure",
+        Transform {
+            origin,
+            ..Transform::default()
+        },
+    );
     (job.stations, job.scaffold) = (stations.to_vec(), vec![acacia_world::neutral::Item::Dirt]);
     let b = Builder::with_structure(job, s);
     let status = b.status();
@@ -160,7 +209,8 @@ pub fn run(w: &mut World, start: Vec3, arb: &mut Arbiter, id: ProcId, max_ticks:
     let mut busy = 0;
     for tick in 0..max_ticks {
         w.now = tick;
-        w.clock.store(u64::from(tick), std::sync::atomic::Ordering::Relaxed);
+        w.clock
+            .store(u64::from(tick), std::sync::atomic::Ordering::Relaxed);
         if tick >= busy {
             busy = tick + step(w, &mut m, arb, tick);
         }
@@ -195,16 +245,35 @@ pub fn step(w: &mut World, m: &mut Movement, arb: &mut Arbiter, tick: u32) -> u3
             let mut placed = Vec::new();
             if result == Ok(NavStatus::Working) {
                 let node = pilot.pending_work().expect("work due");
-                placed = node.work.steps().filter_map(|s| if let Step::Place { against, face } = s { Some(face.adjacent(against)) } else { None }).collect();
-                if node.work.steps().any(|s| matches!(s, Step::Place { against, face } if watched(face.adjacent(against))) || matches!(s, Step::Break(p) if watched(p))) {
-                    eprintln!("WATCH tick {tick} path work {:?} from {pos:?}", node.work.steps().collect::<Vec<_>>());
+                placed = node
+                    .work
+                    .steps()
+                    .filter_map(|s| {
+                        if let Step::Place { against, face } = s {
+                            Some(face.adjacent(against))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                if node.work.steps().any(|s| {
+                    matches!(s, Step::Place { against, face } if watched(face.adjacent(against)))
+                        || matches!(s, Step::Break(p) if watched(p))
+                }) {
+                    eprintln!(
+                        "WATCH tick {tick} path work {:?} from {pos:?}",
+                        node.work.steps().collect::<Vec<_>>()
+                    );
                 }
                 perform(w.g, &world, m, &node);
                 // Not held like acts: skipping decisions mid-pillar left the controls on and walks failed (sim
                 // one bot 103 s -> 163 s with 3 failed walks). Live path work is ~11 s the sim leaves out.
                 pilot.work_done();
             }
-            if !matches!(result, Ok(NavStatus::Searching | NavStatus::Moving | NavStatus::Working)) {
+            if !matches!(
+                result,
+                Ok(NavStatus::Searching | NavStatus::Moving | NavStatus::Working)
+            ) {
                 m.controls.stop();
             }
             if let Err(e) = &result {
@@ -216,7 +285,11 @@ pub fn step(w: &mut World, m: &mut Movement, arb: &mut Arbiter, tick: u32) -> u3
         Decision::Act(pid, a) => {
             m.controls.stop();
             ticks = match &a {
-                Act::Place { .. } | Act::Fill { .. } | Act::Use { .. } | Act::Sign { .. } | Act::UseOn { .. } => PLACE_TICKS,
+                Act::Place { .. }
+                | Act::Fill { .. }
+                | Act::Use { .. }
+                | Act::Sign { .. }
+                | Act::UseOn { .. } => PLACE_TICKS,
                 Act::Break { .. } => BREAK_TICKS,
                 Act::Restock { .. } => RESTOCK_TICKS,
             };

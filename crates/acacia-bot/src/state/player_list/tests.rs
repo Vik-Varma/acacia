@@ -13,7 +13,9 @@ fn template() -> PlayerRecord {
 
 fn add(uuid_byte: u8, name: &str) -> PlayerRecord {
     let mut r = template();
-    let PlayerRecordContent::Add(a) = &mut r.content else { unreachable!() };
+    let PlayerRecordContent::Add(a) = &mut r.content else {
+        unreachable!()
+    };
     a.uuid = Uuid([uuid_byte; 16]);
     a.username = name.into();
     a.xbox_user_id = format!("xuid-{name}");
@@ -26,7 +28,9 @@ fn remove(uuid_byte: u8) -> PlayerRecord {
     PlayerRecord {
         r#type: PlayerRecordType::Remove,
         legacy_type: 1,
-        content: PlayerRecordContent::Remove(PlayerRecordContentRemove { uuid: Uuid([uuid_byte; 16]) }),
+        content: PlayerRecordContent::Remove(PlayerRecordContentRemove {
+            uuid: Uuid([uuid_byte; 16]),
+        }),
     }
 }
 
@@ -37,7 +41,8 @@ fn list(records: Vec<PlayerRecord>) -> RawPacket {
 #[test]
 fn add_then_remove() {
     let mut pl = PlayerList::default();
-    pl.apply(&list(vec![add(1, "Alice"), add(2, "Bob")])).unwrap();
+    pl.apply(&list(vec![add(1, "Alice"), add(2, "Bob")]))
+        .unwrap();
     assert_eq!(pl.len(), 2);
 
     let alice = pl.get(&Uuid([1; 16])).unwrap();
@@ -65,7 +70,13 @@ fn re_add_replaces_entry() {
 #[test]
 fn records_joins_and_leaves_but_not_updates() {
     let mut pl = PlayerList::default();
-    pl.apply(&list(vec![add(1, "Alice"), add(1, "Alice"), remove(2), remove(1)])).unwrap();
+    pl.apply(&list(vec![
+        add(1, "Alice"),
+        add(1, "Alice"),
+        remove(2),
+        remove(1),
+    ]))
+    .unwrap();
     let names: Vec<_> = pl
         .changes
         .iter()

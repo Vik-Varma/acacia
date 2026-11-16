@@ -14,7 +14,8 @@ const PILLAR_CLEARANCE: f32 = 0.05;
 /// Bridging from `from` (the feet cell) towards `(dx, dz)`: sneaks forward until overhanging the
 /// edge. True once in place.
 pub(crate) fn to_edge(s: &Sense, from: BlockPos, (dx, dz): (i32, i32), c: &mut Controls) -> bool {
-    let along = (s.pos[0] - from[0] as f32 - 0.5) * dx as f32 + (s.pos[2] - from[2] as f32 - 0.5) * dz as f32;
+    let along = (s.pos[0] - from[0] as f32 - 0.5) * dx as f32
+        + (s.pos[2] - from[2] as f32 - 0.5) * dz as f32;
     c.stop();
     c.sneak = true;
     c.yaw = (-(dx as f32)).atan2(dz as f32).to_degrees();

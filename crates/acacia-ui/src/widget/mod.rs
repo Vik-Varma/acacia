@@ -19,16 +19,44 @@ use crate::font::Font;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Widget {
     /// Wrapped text; `\n` breaks lines.
-    Text { text: String },
-    Header { text: String },
+    Text {
+        text: String,
+    },
+    Header {
+        text: String,
+    },
     Divider,
-    Button { text: String, image: Option<Sprite> },
-    Toggle { label: String, on: bool },
-    Slider { label: String, min: f64, max: f64, step: f64, value: f64 },
+    Button {
+        text: String,
+        image: Option<Sprite>,
+    },
+    Toggle {
+        label: String,
+        on: bool,
+    },
+    Slider {
+        label: String,
+        min: f64,
+        max: f64,
+        step: f64,
+        value: f64,
+    },
     /// A slider over named steps.
-    Steps { label: String, options: Vec<String>, index: usize },
-    Dropdown { label: String, options: Vec<String>, index: usize },
-    Input { label: String, placeholder: String, edit: TextEdit },
+    Steps {
+        label: String,
+        options: Vec<String>,
+        index: usize,
+    },
+    Dropdown {
+        label: String,
+        options: Vec<String>,
+        index: usize,
+    },
+    Input {
+        label: String,
+        placeholder: String,
+        edit: TextEdit,
+    },
 }
 
 /// What an input widget holds.
@@ -44,7 +72,10 @@ pub enum Value {
 impl Widget {
     /// Takes focus and input.
     pub fn is_interactive(&self) -> bool {
-        !matches!(self, Widget::Text { .. } | Widget::Header { .. } | Widget::Divider)
+        !matches!(
+            self,
+            Widget::Text { .. } | Widget::Header { .. } | Widget::Divider
+        )
     }
 
     /// The value an input widget holds; `None` for text and buttons.
@@ -62,9 +93,19 @@ impl Widget {
     pub fn label_with_value(&self) -> Option<String> {
         match self {
             Widget::Slider { label, value, .. } => Some(format!("{label}: {}", number(*value))),
-            Widget::Steps { label, options, index } | Widget::Dropdown { label, options, index } => {
-                Some(format!("{label}: {}", options.get(*index).map_or("", String::as_str)))
+            Widget::Steps {
+                label,
+                options,
+                index,
             }
+            | Widget::Dropdown {
+                label,
+                options,
+                index,
+            } => Some(format!(
+                "{label}: {}",
+                options.get(*index).map_or("", String::as_str)
+            )),
             _ => None,
         }
     }
@@ -72,7 +113,11 @@ impl Widget {
 
 /// Integral values without a fraction, others as the shortest float (Java's `Float.toString`).
 pub fn number(v: f64) -> String {
-    if v.fract() == 0.0 && v.abs() < 1e15 { format!("{}", v as i64) } else { format!("{}", v as f32) }
+    if v.fract() == 0.0 && v.abs() < 1e15 {
+        format!("{}", v as i64)
+    } else {
+        format!("{}", v as f32)
+    }
 }
 
 /// How a widget is drawn this frame.
@@ -100,7 +145,14 @@ pub struct ListGeometry {
 
 /// A look's drawing of the widgets; geometry the panel needs to take input.
 pub trait Skin {
-    fn draw(&self, list: &mut DrawList, font: Option<&Font>, widget: &Widget, rect: [f32; 4], state: State);
+    fn draw(
+        &self,
+        list: &mut DrawList,
+        font: Option<&Font>,
+        widget: &Widget,
+        rect: [f32; 4],
+        state: State,
+    );
     /// The part of `rect` that takes clicks.
     fn hit(&self, font: Option<&Font>, widget: &Widget, rect: [f32; 4]) -> [f32; 4];
     /// The x span the slider's value maps onto, 0 at the left.
@@ -110,7 +162,16 @@ pub trait Skin {
     fn choices_cycle(&self) -> bool;
     fn dropdown_list(&self, font: Option<&Font>, rect: [f32; 4], options: usize) -> ListGeometry;
     #[allow(clippy::too_many_arguments)]
-    fn draw_dropdown_list(&self, list: &mut DrawList, font: Option<&Font>, geometry: ListGeometry, options: &[String], selected: usize, hover: Option<usize>, scroll: f32);
+    fn draw_dropdown_list(
+        &self,
+        list: &mut DrawList,
+        font: Option<&Font>,
+        geometry: ListGeometry,
+        options: &[String],
+        selected: usize,
+        hover: Option<usize>,
+        scroll: f32,
+    );
     /// The scrollbar's track beside `viewport`.
     fn scroll_track(&self, viewport: [f32; 4]) -> [f32; 4];
     fn thumb(&self, track: [f32; 4], visible: f32, content: f32, scroll: f32) -> [f32; 4];
@@ -141,7 +202,10 @@ pub fn contains(rect: [f32; 4], p: [f32; 2]) -> bool {
 /// `text` wrapped to `width`, `\n` starting a new line.
 pub fn lines(font: Option<&Font>, text: &str, width: f32) -> Vec<String> {
     match font {
-        Some(f) => text.split('\n').flat_map(|part| f.wrap(part, width)).collect(),
+        Some(f) => text
+            .split('\n')
+            .flat_map(|part| f.wrap(part, width))
+            .collect(),
         None => text.split('\n').map(str::to_owned).collect(),
     }
 }
@@ -150,7 +214,12 @@ pub fn lines(font: Option<&Font>, text: &str, width: f32) -> Vec<String> {
 pub(crate) fn clipped(list: &mut DrawList, rect: [f32; 4], draw: impl FnOnce(&mut DrawList)) {
     let old = list.clip;
     list.clip = Some(match old {
-        Some(c) => [c[0].max(rect[0]), c[1].max(rect[1]), c[2].min(rect[2]), c[3].min(rect[3])],
+        Some(c) => [
+            c[0].max(rect[0]),
+            c[1].max(rect[1]),
+            c[2].min(rect[2]),
+            c[3].min(rect[3]),
+        ],
         None => rect,
     });
     draw(list);
@@ -159,10 +228,24 @@ pub(crate) fn clipped(list: &mut DrawList, rect: [f32; 4], draw: impl FnOnce(&mu
 
 /// Draws `lines` from `y` down, `pitch` apart, left-aligned at `x` or centred on it.
 #[allow(clippy::too_many_arguments)]
-pub fn draw_lines(list: &mut DrawList, font: Option<&Font>, lines: &[String], x: f32, y: f32, pitch: f32, centre: bool, colour: u32, shadow: bool) {
+pub fn draw_lines(
+    list: &mut DrawList,
+    font: Option<&Font>,
+    lines: &[String],
+    x: f32,
+    y: f32,
+    pitch: f32,
+    centre: bool,
+    colour: u32,
+    shadow: bool,
+) {
     let Some(font) = font else { return };
     for (i, line) in lines.iter().enumerate() {
-        let lx = if centre { (x - font.width(line) / 2.0).floor() } else { x };
+        let lx = if centre {
+            (x - font.width(line) / 2.0).floor()
+        } else {
+            x
+        };
         font.draw(list, line, lx, y + i as f32 * pitch, colour, 1.0, shadow);
     }
 }
@@ -176,7 +259,13 @@ mod tests {
         assert_eq!(number(5.0), "5");
         assert_eq!(number(0.5), "0.5");
         assert_eq!(number(-2.25), "-2.25");
-        let w = Widget::Slider { label: "Volume".into(), min: 0.0, max: 10.0, step: 1.0, value: 3.0 };
+        let w = Widget::Slider {
+            label: "Volume".into(),
+            min: 0.0,
+            max: 10.0,
+            step: 1.0,
+            value: 3.0,
+        };
         assert_eq!(w.label_with_value().as_deref(), Some("Volume: 3"));
     }
 }

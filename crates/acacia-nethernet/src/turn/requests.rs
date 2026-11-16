@@ -3,9 +3,9 @@
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
-use super::client::{Bind, State, TurnClient, TurnEvent, PEER_REFRESH};
-use super::stun::{self, Attr, Class, Message, Method};
 use super::Retransmit;
+use super::client::{Bind, PEER_REFRESH, State, TurnClient, TurnEvent};
+use super::stun::{self, Attr, Class, Message, Method};
 
 const UDP: u8 = 17;
 const DEFAULT_LIFETIME: u32 = 600;
@@ -33,25 +33,53 @@ impl TurnClient {
         let tid = stun::transaction_id();
         let (method, mut attrs) = match request {
             Request::Allocate => (Method::Allocate, vec![Attr::RequestedTransport(UDP)]),
-            Request::Refresh { lifetime } => (Method::Refresh, lifetime.map(Attr::Lifetime).into_iter().collect()),
-            Request::Permission(peer) => (Method::CreatePermission, vec![Attr::XorPeerAddress(peer)]),
+            Request::Refresh { lifetime } => (
+                Method::Refresh,
+                lifetime.map(Attr::Lifetime).into_iter().collect(),
+            ),
+            Request::Permission(peer) => {
+                (Method::CreatePermission, vec![Attr::XorPeerAddress(peer)])
+            }
             Request::ChannelBind(peer) => {
                 let channel = self.entries.get(&peer).map_or(0, |e| e.channel);
-                (Method::ChannelBind, vec![Attr::ChannelNumber(channel), Attr::XorPeerAddress(peer)])
+                (
+                    Method::ChannelBind,
+                    vec![Attr::ChannelNumber(channel), Attr::XorPeerAddress(peer)],
+                )
             }
         };
         if let (Some(realm), Some(nonce)) = (&self.realm, &self.nonce) {
-            attrs.extend([Attr::Username(self.username.clone()), Attr::Realm(realm.clone()), Attr::Nonce(nonce.clone())]);
+            attrs.extend([
+                Attr::Username(self.username.clone()),
+                Attr::Realm(realm.clone()),
+                Attr::Nonce(nonce.clone()),
+            ]);
         }
-        let msg = Message { class: Class::Request, method, transaction_id: tid, attrs };
+        let msg = Message {
+            class: Class::Request,
+            method,
+            transaction_id: tid,
+            attrs,
+        };
         let bytes = msg.encode(self.key.as_ref().map(|k| &k[..]), false);
         self.transmits.push_back(bytes.clone());
-        self.pending.insert(tid, Pending { request, bytes, timer: Retransmit::start(now), auth_retries });
+        self.pending.insert(
+            tid,
+            Pending {
+                request,
+                bytes,
+                timer: Retransmit::start(now),
+                auth_retries,
+            },
+        );
     }
 
     pub(super) fn handle_response(&mut self, now: Instant, msg: Message, raw: &[u8]) {
-        let Some(p) = self.pending.remove(&msg.transaction_id) else { return };
-        if msg.class == Class::Success && self.key.is_some_and(|k| !stun::verify_integrity(raw, &k)) {
+        let Some(p) = self.pending.remove(&msg.transaction_id) else {
+            return;
+        };
+        if msg.class == Class::Success && self.key.is_some_and(|k| !stun::verify_integrity(raw, &k))
+        {
             tracing::debug!("TURN: response failed MESSAGE-INTEGRITY; ignored");
             self.pending.insert(msg.transaction_id, p);
             return;
@@ -81,7 +109,10 @@ impl TurnClient {
         if retry && let Some(nonce) = msg.nonce() {
             self.realm = msg.realm().or(self.realm.take());
             self.nonce = Some(nonce);
-            self.key = self.realm.as_ref().map(|r| stun::long_term_key(&self.username, r, &self.password));
+            self.key = self
+                .realm
+                .as_ref()
+                .map(|r| stun::long_term_key(&self.username, r, &self.password));
             return self.start(p.request, now, p.auth_retries + 1);
         }
         self.on_failure(p.request, &format!("error {code} {reason}"));
@@ -94,8 +125,14 @@ impl TurnClient {
                 let Some(relayed) = msg.xor_relayed() else {
                     return self.fail("Allocate success without XOR-RELAYED-ADDRESS".into());
                 };
-                self.state = State::Allocated { relayed, refresh_at: Some(now + refresh_delay(lifetime)) };
-                self.events.push_back(TurnEvent::Allocated { relayed, mapped: msg.xor_mapped() });
+                self.state = State::Allocated {
+                    relayed,
+                    refresh_at: Some(now + refresh_delay(lifetime)),
+                };
+                self.events.push_back(TurnEvent::Allocated {
+                    relayed,
+                    mapped: msg.xor_mapped(),
+                });
                 let peers: Vec<_> = self.entries.keys().copied().collect();
                 for peer in peers {
                     self.start(Request::Permission(peer), now, 0);
@@ -104,7 +141,10 @@ impl TurnClient {
             Request::Refresh { lifetime: Some(0) } => self.state = State::Done,
             Request::Refresh { .. } => {
                 if let State::Allocated { relayed, .. } = self.state {
-                    self.state = State::Allocated { relayed, refresh_at: Some(now + refresh_delay(lifetime)) };
+                    self.state = State::Allocated {
+                        relayed,
+                        refresh_at: Some(now + refresh_delay(lifetime)),
+                    };
                 }
             }
             Request::Permission(peer) => {

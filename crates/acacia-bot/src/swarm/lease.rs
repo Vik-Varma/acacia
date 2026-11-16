@@ -10,7 +10,12 @@ use tokio::time::Instant;
 pub trait AccountLease: Send + Sync {
     /// `Ok(None)` while another holder's lease on `account` is live. A holder that already has
     /// the lease gets it back, extended.
-    async fn acquire(&self, account: &str, holder: &str, ttl: Duration) -> Result<Option<Lease>, LeaseError>;
+    async fn acquire(
+        &self,
+        account: &str,
+        holder: &str,
+        ttl: Duration,
+    ) -> Result<Option<Lease>, LeaseError>;
     /// Extends the lease; `Ok(false)` once it expired or passed to another holder.
     async fn renew(&self, lease: &Lease, ttl: Duration) -> Result<bool, LeaseError>;
     async fn release(&self, lease: &Lease) -> Result<(), LeaseError>;
@@ -63,10 +68,19 @@ impl LocalLeases {
 
 #[async_trait::async_trait]
 impl AccountLease for LocalLeases {
-    async fn acquire(&self, account: &str, holder: &str, ttl: Duration) -> Result<Option<Lease>, LeaseError> {
+    async fn acquire(
+        &self,
+        account: &str,
+        holder: &str,
+        ttl: Duration,
+    ) -> Result<Option<Lease>, LeaseError> {
         let now = Instant::now();
         let mut local = self.state.lock().expect("leases lock poisoned");
-        if let Some((held, until)) = local.held.get_mut(account).filter(|(_, until)| *until > now) {
+        if let Some((held, until)) = local
+            .held
+            .get_mut(account)
+            .filter(|(_, until)| *until > now)
+        {
             if held.holder != holder {
                 return Ok(None);
             }
@@ -74,19 +88,31 @@ impl AccountLease for LocalLeases {
             return Ok(Some(held.clone()));
         }
         local.fence += 1;
-        let lease = Lease { account: account.to_owned(), holder: holder.to_owned(), fence: local.fence };
-        local.held.insert(account.to_owned(), (lease.clone(), now + ttl));
+        let lease = Lease {
+            account: account.to_owned(),
+            holder: holder.to_owned(),
+            fence: local.fence,
+        };
+        local
+            .held
+            .insert(account.to_owned(), (lease.clone(), now + ttl));
         Ok(Some(lease))
     }
 
     async fn renew(&self, lease: &Lease, ttl: Duration) -> Result<bool, LeaseError> {
         let mut local = self.state.lock().expect("leases lock poisoned");
-        Ok(Self::live(&mut local, lease).map(|until| *until = Instant::now() + ttl).is_some())
+        Ok(Self::live(&mut local, lease)
+            .map(|until| *until = Instant::now() + ttl)
+            .is_some())
     }
 
     async fn release(&self, lease: &Lease) -> Result<(), LeaseError> {
         let mut local = self.state.lock().expect("leases lock poisoned");
-        if local.held.get(&lease.account).is_some_and(|(held, _)| held == lease) {
+        if local
+            .held
+            .get(&lease.account)
+            .is_some_and(|(held, _)| held == lease)
+        {
             local.held.remove(&lease.account);
         }
         Ok(())

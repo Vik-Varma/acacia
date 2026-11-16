@@ -20,25 +20,33 @@ pub fn layout(book: &Book) -> (Vec<usize>, usize, usize) {
 /// The collection under page button `b`.
 pub(super) fn collection(book: &Book, b: usize) -> Option<&Collection> {
     let (listed, page, _) = layout(book);
-    listed.get(page * PER_PAGE + b).map(|&c| &book.collections[c])
+    listed
+        .get(page * PER_PAGE + b)
+        .map(|&c| &book.collections[c])
 }
 
 /// `RecipeButton.getDisplayStack` of page button `b` (its key, `None` when empty) and whether it
 /// holds several recipes.
 pub fn display(book: &Book, b: usize) -> (Option<i32>, bool) {
-    let Some(c) = collection(book, b) else { return (None, false) };
+    let Some(c) = collection(book, b) else {
+        return (None, false);
+    };
     let fitting = c.fitting(book.filtering);
     let n = fitting.len().max(1);
     let index = book.index();
     let (offset, entry) = (index / n, index % n);
-    let key = fitting.get(entry).and_then(|e| (!e.display.is_empty()).then(|| e.display[offset % e.display.len()]));
+    let key = fitting
+        .get(entry)
+        .and_then(|e| (!e.display.is_empty()).then(|| e.display[offset % e.display.len()]));
     (key, fitting.len() > 1)
 }
 
 /// `allRecipesHaveSameResultDisplay`.
 fn same_display(book: &Book, fitting: &[&Entry]) -> bool {
     let mut keys = fitting.iter().flat_map(|e| e.display.iter());
-    let Some(first) = keys.next().and_then(|k| book.items.get(k)) else { return true };
+    let Some(first) = keys.next().and_then(|k| book.items.get(k)) else {
+        return true;
+    };
     keys.all(|k| book.items.get(k).is_some_and(|s| same_item(first, s)))
 }
 
@@ -48,11 +56,21 @@ pub fn squeeze(time: f32) -> f32 {
 }
 
 /// `RecipeBookPage.extractRenderState`; the hovered button goes to `book.hovered`.
-pub fn render(book: &mut Book, gui: &mut Gui, env: &Env, mouse: [i32; 2], partial: f32, tooltip: &mut Deferred) {
+pub fn render(
+    book: &mut Book,
+    gui: &mut Gui,
+    env: &Env,
+    mouse: [i32; 2],
+    partial: f32,
+    tooltip: &mut Deferred,
+) {
     let [xo, yo] = book.origin();
     let (listed, page, total) = layout(book);
     if total > 1 {
-        let args = [Text::literal((page + 1).to_string()), Text::literal(total.to_string())];
+        let args = [
+            Text::literal((page + 1).to_string()),
+            Text::literal(total.to_string()),
+        ];
         let text = Text::translate("gui.recipebook.page", &args, env.lang);
         let w = env.font.width(&text);
         gui.text(text, xo - w / 2 + 73, yo + 141, WHITE, true);
@@ -67,14 +85,34 @@ pub fn render(book: &mut Book, gui: &mut Gui, env: &Env, mouse: [i32; 2], partia
         }
     }
     let arrows = [
-        (total > 1 && page + 1 < total, xo + 93, "recipe_book/page_forward", "gui.recipebook.next_page"),
-        (total > 1 && page > 0, xo + 38, "recipe_book/page_backward", "gui.recipebook.previous_page"),
+        (
+            total > 1 && page + 1 < total,
+            xo + 93,
+            "recipe_book/page_forward",
+            "gui.recipebook.next_page",
+        ),
+        (
+            total > 1 && page > 0,
+            xo + 38,
+            "recipe_book/page_backward",
+            "gui.recipebook.previous_page",
+        ),
     ];
     for (visible, x, sprite, key) in arrows {
         if visible {
             let rect = [x, yo + 137, 12, 17];
             let hovered = widgets::hovered(rect, mouse);
-            gui.sprite(if hovered { format!("{sprite}_highlighted") } else { sprite.to_owned() }, rect[0], rect[1], rect[2], rect[3]);
+            gui.sprite(
+                if hovered {
+                    format!("{sprite}_highlighted")
+                } else {
+                    sprite.to_owned()
+                },
+                rect[0],
+                rect[1],
+                rect[2],
+                rect[3],
+            );
             if hovered {
                 widgets::tooltip(tooltip, env, key, rect, mouse);
             }
@@ -103,7 +141,11 @@ fn button(book: &mut Book, gui: &mut Gui, i: usize, x: i32, y: i32, partial: f32
     if anim > 0.0 {
         let s = squeeze(anim);
         let (cx, cy) = ((x + 8) as f32, (y + 12) as f32);
-        gui.push(vec![PoseOp::Translate(cx, cy), PoseOp::Scale(s, s), PoseOp::Translate(-cx, -cy)]);
+        gui.push(vec![
+            PoseOp::Translate(cx, cy),
+            PoseOp::Scale(s, s),
+            PoseOp::Translate(-cx, -cy),
+        ]);
         book.button_anims[i] = anim - partial;
     }
     gui.sprite(sprite, x, y, 25, 25);
@@ -160,30 +202,71 @@ pub struct OverlayButton {
 pub fn overlay_buttons(book: &Book, b: usize) -> Option<([i32; 2], i32, Vec<OverlayButton>)> {
     let [xo, yo] = book.origin();
     let c = collection(book, b)?;
-    let mut recipes: Vec<(usize, bool)> = c.entries.iter().enumerate().filter(|(_, e)| e.craftable).map(|(i, _)| (i, true)).collect();
+    let mut recipes: Vec<(usize, bool)> = c
+        .entries
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.craftable)
+        .map(|(i, _)| (i, true))
+        .collect();
     if !book.filtering {
-        recipes.extend(c.entries.iter().enumerate().filter(|(_, e)| e.selected && !e.craftable).map(|(i, _)| (i, false)));
+        recipes.extend(
+            c.entries
+                .iter()
+                .enumerate()
+                .filter(|(_, e)| e.selected && !e.craftable)
+                .map(|(i, _)| (i, false)),
+        );
     }
     let total = recipes.len() as i32;
     let max_row = if total <= 16 { 4 } else { 5 };
-    let [x, y] = overlay_origin(book, xo + 11 + 25 * (b as i32 % 5), yo + 31 + 25 * (b as i32 / 5), total);
-    let buttons = recipes.into_iter().enumerate().map(|(i, (entry, craftable))| {
-        let i = i as i32;
-        OverlayButton { entry, craftable, at: [x + 4 + 25 * (i % max_row), y + 5 + 25 * (i / max_row)] }
-    });
+    let [x, y] = overlay_origin(
+        book,
+        xo + 11 + 25 * (b as i32 % 5),
+        yo + 31 + 25 * (b as i32 / 5),
+        total,
+    );
+    let buttons = recipes
+        .into_iter()
+        .enumerate()
+        .map(|(i, (entry, craftable))| {
+            let i = i as i32;
+            OverlayButton {
+                entry,
+                craftable,
+                at: [x + 4 + 25 * (i % max_row), y + 5 + 25 * (i / max_row)],
+            }
+        });
     Some(([x, y], max_row, buttons.collect()))
 }
 
 /// `OverlayRecipeComponent.extractRenderState` of page button `b`.
 fn overlay(book: &Book, gui: &mut Gui, mouse: [i32; 2], b: usize) {
-    let Some(([x, y], max_row, buttons)) = overlay_buttons(book, b) else { return };
+    let Some(([x, y], max_row, buttons)) = overlay_buttons(book, b) else {
+        return;
+    };
     let Some(c) = collection(book, b) else { return };
     let total = buttons.len() as i32;
     let rows = ceil(total as f32 / max_row as f32);
-    gui.sprite("recipe_book/overlay_recipe", x, y, total.min(max_row) * 25 + 8, rows * 25 + 8);
-    let family = if book.kind.furnace() { "furnace" } else { "crafting" };
+    gui.sprite(
+        "recipe_book/overlay_recipe",
+        x,
+        y,
+        total.min(max_row) * 25 + 8,
+        rows * 25 + 8,
+    );
+    let family = if book.kind.furnace() {
+        "furnace"
+    } else {
+        "crafting"
+    };
     let index = book.index();
-    for OverlayButton { entry, craftable, at: [bx, by] } in buttons {
+    for OverlayButton {
+        entry,
+        craftable,
+        at: [bx, by],
+    } in buttons
+    {
         let entry = &c.entries[entry];
         let hovered = widgets::hovered([bx, by, 24, 24], mouse);
         let sprite = format!(
@@ -194,7 +277,11 @@ fn overlay(book: &Book, gui: &mut Gui, mouse: [i32; 2], b: usize) {
         gui.sprite(sprite, bx, by, 24, 24);
         let (gx, gy) = ((bx + 2) as f32, (by + 2) as f32);
         for cell in entry.cells.iter().filter(|c| !c.items.is_empty()) {
-            gui.push(vec![PoseOp::Translate(gx + cell.x as f32, gy + cell.y as f32), PoseOp::Scale(0.375, 0.375), PoseOp::Translate(-8.0, -8.0)]);
+            gui.push(vec![
+                PoseOp::Translate(gx + cell.x as f32, gy + cell.y as f32),
+                PoseOp::Scale(0.375, 0.375),
+                PoseOp::Translate(-8.0, -8.0),
+            ]);
             gui.item(cell.items[index % cell.items.len()], 0, 0, 0);
             gui.pop();
         }

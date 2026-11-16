@@ -27,7 +27,13 @@ fn closer_than(a: Vec3, b: Vec3, range: f32) -> bool {
 
 /// `Vec3.equals`: `Double.compare` per axis, so -0.0 differs from 0.0 and NaN equals NaN.
 fn same_location(a: Vec3, b: Vec3) -> bool {
-    let bits = |v: f64| if v.is_nan() { f64::NAN.to_bits() } else { v.to_bits() };
+    let bits = |v: f64| {
+        if v.is_nan() {
+            f64::NAN.to_bits()
+        } else {
+            v.to_bits()
+        }
+    };
     (0..3).all(|i| bits(a[i]) == bits(b[i]))
 }
 
@@ -47,14 +53,27 @@ impl Subtitle {
         if let [only] = self.played.as_slice() {
             return Some(*only);
         }
-        self.played.iter().filter(|p| closer_than(p.location, position, self.range)).fold(None, |best: Option<PlayedAt>, p| match best {
-            Some(b) if b.time > p.time || b.time == p.time && distance_sqr(b.location, position).sqrt() >= distance_sqr(p.location, position).sqrt() => Some(b),
-            _ => Some(*p),
-        })
+        self.played
+            .iter()
+            .filter(|p| closer_than(p.location, position, self.range))
+            .fold(None, |best: Option<PlayedAt>, p| match best {
+                Some(b)
+                    if b.time > p.time
+                        || b.time == p.time
+                            && distance_sqr(b.location, position).sqrt()
+                                >= distance_sqr(p.location, position).sqrt() =>
+                {
+                    Some(b)
+                }
+                _ => Some(*p),
+            })
     }
 
     fn audible_from(&self, camera: Vec3) -> bool {
-        self.range.is_infinite() || self.best_candidate(camera).is_some_and(|p| closer_than(camera, p.location, self.range))
+        self.range.is_infinite()
+            || self
+                .best_candidate(camera)
+                .is_some_and(|p| closer_than(camera, p.location, self.range))
     }
 
     /// `getBrightness`: 255 down to 75 over the display time; looping sounds hold 255 for 500 ms.
@@ -101,14 +120,33 @@ impl SubtitleOverlay {
 
     /// `onPlaySound` at `now`: `subtitle` is the event's caption, if it has one, as its translation
     /// key (what the components' `equals` compares) and text; one already listed is refreshed.
-    pub fn on_play(&mut self, subtitle: Option<(String, Text)>, location: Vec3, range: f32, looping: bool, now: i64) {
+    pub fn on_play(
+        &mut self,
+        subtitle: Option<(String, Text)>,
+        location: Vec3,
+        range: f32,
+        looping: bool,
+        now: i64,
+    ) {
         let Some((key, text)) = subtitle else { return };
         if let Some(s) = self.subtitles.iter_mut().find(|s| s.key == key) {
             s.played.retain(|p| !same_location(location, p.location));
-            s.played.push(PlayedAt { location, time: now });
+            s.played.push(PlayedAt {
+                location,
+                time: now,
+            });
             return;
         }
-        self.subtitles.push(Subtitle { key, text, range, played: vec![PlayedAt { location, time: now }], looping });
+        self.subtitles.push(Subtitle {
+            key,
+            text,
+            range,
+            played: vec![PlayedAt {
+                location,
+                time: now,
+            }],
+            looping,
+        });
     }
 
     /// `extractRenderState` at `now`: starts or stops listening as the option says, forgets old
@@ -119,7 +157,11 @@ impl SubtitleOverlay {
             return;
         }
         let (p, fw, u) = (f.position, f.forward, f.up);
-        let right = [fw[1] * u[2] - fw[2] * u[1], fw[2] * u[0] - fw[0] * u[2], fw[0] * u[1] - fw[1] * u[0]];
+        let right = [
+            fw[1] * u[2] - fw[2] * u[1],
+            fw[2] * u[0] - fw[0] * u[2],
+            fw[0] * u[1] - fw[1] * u[0],
+        ];
         let mut audible = Vec::new();
         let mut width = 0;
         for (i, s) in self.subtitles.iter_mut().enumerate() {
@@ -139,21 +181,40 @@ impl SubtitleOverlay {
         let mut row = 0;
         for i in audible {
             let s = &self.subtitles[i];
-            let Some(closest) = s.best_candidate(p) else { continue };
-            let d = [closest.location[0] - p[0], closest.location[1] - p[1], closest.location[2] - p[2]];
+            let Some(closest) = s.best_candidate(p) else {
+                continue;
+            };
+            let d = [
+                closest.location[0] - p[0],
+                closest.location[1] - p[1],
+                closest.location[2] - p[2],
+            ];
             let length = distance_sqr(d, [0.0; 3]).sqrt();
             // Vec3.normalize.
-            let d = if length < f64::from(1.0e-5_f32) { [0.0; 3] } else { d.map(|v| v / length) };
+            let d = if length < f64::from(1.0e-5_f32) {
+                [0.0; 3]
+            } else {
+                d.map(|v| v / length)
+            };
             let dot = |a: Vec3| a[0] * d[0] + a[1] * d[1] + a[2] * d[2];
             let (rightness, in_view) = (dot(right), dot(fw) > 0.5);
             let (half_width, half_height) = (width / 2, 9 / 2);
             let text_width = font.width(&s.text);
             let b = s.brightness(closest, f.multiplier, now) as u32;
             gui.push(vec![
-                PoseOp::Translate(gui.width as f32 - half_width as f32 * 1.0 - 2.0, (gui.height - 35) as f32 - (row * 10) as f32 * 1.0),
+                PoseOp::Translate(
+                    gui.width as f32 - half_width as f32 * 1.0 - 2.0,
+                    (gui.height - 35) as f32 - (row * 10) as f32 * 1.0,
+                ),
                 PoseOp::Scale(1.0, 1.0),
             ]);
-            gui.fill(-half_width - 1, -half_height - 1, half_width + 1, half_height + 1, f.background);
+            gui.fill(
+                -half_width - 1,
+                -half_height - 1,
+                half_width + 1,
+                half_height + 1,
+                f.background,
+            );
             let color = argb(255, b, b, b);
             if !in_view {
                 if rightness > 0.0 {
@@ -192,13 +253,23 @@ mod tests {
         o.on_play(None, [0.0; 3], 16.0, false, 1000);
         assert_eq!(o.subtitles.len(), 1);
         // Equally recent plays: the farthest in range wins.
-        assert_eq!(o.subtitles[0].best_candidate([0.0; 3]).unwrap().location, [0.0, 0.0, 5.0]);
+        assert_eq!(
+            o.subtitles[0].best_candidate([0.0; 3]).unwrap().location,
+            [0.0, 0.0, 5.0]
+        );
     }
 
     #[test]
     fn draws_only_while_listening() {
         let mut o = SubtitleOverlay::default();
-        let mut frame = SubtitleFrame { show: true, position: [0.0; 3], forward: [0.0, 0.0, 1.0], up: [0.0, 1.0, 0.0], multiplier: 1.0, background: 0xCC00_0000 };
+        let mut frame = SubtitleFrame {
+            show: true,
+            position: [0.0; 3],
+            forward: [0.0, 0.0, 1.0],
+            up: [0.0, 1.0, 0.0],
+            multiplier: 1.0,
+            background: 0xCC00_0000,
+        };
         let mut gui = Gui::new(320, 240);
         o.extract(&mut gui, &Fixed(6.0), &frame, 0);
         o.on_play(sub("Door"), [5.0, 0.0, 0.0], 16.0, false, 0);

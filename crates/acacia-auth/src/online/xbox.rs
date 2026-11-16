@@ -30,7 +30,11 @@ impl XboxToken {
 
     /// `XBL3.0 x=<uhs>;<token>` for the `Authorization` header.
     pub fn authorization(&self) -> String {
-        format!("XBL3.0 x={};{}", self.user_hash.as_deref().unwrap_or(""), self.token)
+        format!(
+            "XBL3.0 x={};{}",
+            self.user_hash.as_deref().unwrap_or(""),
+            self.token
+        )
     }
 }
 
@@ -147,8 +151,14 @@ pub(crate) async fn sisu_authorize(
         "SiteName": "user.auth.xboxlive.com",
         "UseModernGamertag": true,
     });
-    let req =
-        http.xbox_post(ep::SISU_AUTHORIZE, title.user_agent(), None, None, serde_json::to_vec(&body)?, key);
+    let req = http.xbox_post(
+        ep::SISU_AUTHORIZE,
+        title.user_agent(),
+        None,
+        None,
+        serde_json::to_vec(&body)?,
+        key,
+    );
     let r: SisuResponse = http.json(req, ep::SISU_AUTHORIZE).await?;
     Ok(SisuTokens {
         title: r.title_token.into_token(ep::SISU_AUTHORIZE)?,
@@ -158,7 +168,13 @@ pub(crate) async fn sisu_authorize(
 }
 
 /// Title and user tokens the `live` way (prismarine-auth's flow for Java), without SISU.
-pub(crate) async fn live_tokens(http: &Http, title: Title, key: &SigningKey, msa_access_token: &str, device: &XboxToken) -> Result<(XboxToken, XboxToken)> {
+pub(crate) async fn live_tokens(
+    http: &Http,
+    title: Title,
+    key: &SigningKey,
+    msa_access_token: &str,
+    device: &XboxToken,
+) -> Result<(XboxToken, XboxToken)> {
     let ticket = format!("t={msa_access_token}");
     let user_body = json!({
         "RelyingParty": "http://auth.xboxlive.com",
@@ -171,10 +187,20 @@ pub(crate) async fn live_tokens(http: &Http, title: Title, key: &SigningKey, msa
         "Properties": { "AuthMethod": "RPS", "DeviceToken": device.token, "RpsTicket": ticket, "SiteName": "user.auth.xboxlive.com", "ProofKey": proof_key_jwk(key) },
     });
     let post = async |url: &str, body: serde_json::Value| -> Result<XboxToken> {
-        let req = http.xbox_post(url, title.user_agent(), Some("1"), None, serde_json::to_vec(&body)?, key);
+        let req = http.xbox_post(
+            url,
+            title.user_agent(),
+            Some("1"),
+            None,
+            serde_json::to_vec(&body)?,
+            key,
+        );
         http.json::<WireToken>(req, url).await?.into_token(url)
     };
-    Ok((post(ep::TITLE_AUTH, title_body).await?, post(ep::USER_AUTH, user_body).await?))
+    Ok((
+        post(ep::TITLE_AUTH, title_body).await?,
+        post(ep::USER_AUTH, user_body).await?,
+    ))
 }
 
 /// `POST xsts.auth.xboxlive.com/xsts/authorize` for one relying party.

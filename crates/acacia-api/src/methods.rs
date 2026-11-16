@@ -1,9 +1,9 @@
 //! The method table: the one list of what a transport can call. Add a method here (its params in
 //! [`crate::params`]) and the generated `methods.json` / `methods.ts` follow (`tests/generated.rs`).
 
+use crate::Snapshot;
 use crate::params::*;
 use crate::table::api;
-use crate::Snapshot;
 
 api! {
     /// Connects a bot and resolves once it has spawned. The `done` record names the new bot.

@@ -21,44 +21,128 @@ macro_rules! packet {
 }
 pub(crate) use packet;
 
-packet!(Intention { protocol: VarInt, host: String, port: u16, intent: VarInt });
-packet!(LoginHello { name: String, uuid: u128 });
+packet!(Intention {
+    protocol: VarInt,
+    host: String,
+    port: u16,
+    intent: VarInt
+});
+packet!(LoginHello {
+    name: String,
+    uuid: u128
+});
 packet!(LoginCompression { threshold: VarInt });
 packet!(EncryptionHello { server_id: String, public_key: Vec<u8>, challenge: Vec<u8>, should_authenticate: bool });
 packet!(EncryptionKey { secret: Vec<u8>, challenge: Vec<u8> });
 // The profile's properties follow; nothing reads them yet.
-packet!(LoginFinished { uuid: u128, name: String });
+packet!(LoginFinished {
+    uuid: u128,
+    name: String
+});
 packet!(Empty {});
 packet!(KeepAlive { id: i64 });
 packet!(RenameItem { name: String });
-packet!(ContainerButtonClick { container: VarInt, button: VarInt });
+packet!(ContainerButtonClick {
+    container: VarInt,
+    button: VarInt
+});
 packet!(SelectTrade { offer: VarInt });
 // `mob_effect` registry ids.
 packet!(SetBeacon { primary: Option<VarInt>, secondary: Option<VarInt> });
-packet!(PlaceRecipe { container: VarInt, recipe: VarInt, use_max_items: bool });
+packet!(PlaceRecipe {
+    container: VarInt,
+    recipe: VarInt,
+    use_max_items: bool
+});
 packet!(Ping { id: i32 });
-packet!(KnownPack { namespace: String, id: String, version: String });
+packet!(KnownPack {
+    namespace: String,
+    id: String,
+    version: String
+});
 packet!(SelectKnownPacks { packs: Vec<KnownPack> });
-packet!(PositionMoveRotation { x: f64, y: f64, z: f64, delta_x: f64, delta_y: f64, delta_z: f64, y_rot: f32, x_rot: f32 });
-packet!(PlayerPosition { id: VarInt, change: PositionMoveRotation, relatives: i32 });
-packet!(AcceptTeleportation { id: VarInt, x: f64, y: f64, z: f64, y_rot: f32, x_rot: f32 });
-packet!(ChunkBatchReceived { chunks_per_tick: f32 });
-packet!(SetHealth { health: f32, food: VarInt, saturation: f32 });
+packet!(PositionMoveRotation {
+    x: f64,
+    y: f64,
+    z: f64,
+    delta_x: f64,
+    delta_y: f64,
+    delta_z: f64,
+    y_rot: f32,
+    x_rot: f32
+});
+packet!(PlayerPosition {
+    id: VarInt,
+    change: PositionMoveRotation,
+    relatives: i32
+});
+packet!(AcceptTeleportation {
+    id: VarInt,
+    x: f64,
+    y: f64,
+    z: f64,
+    y_rot: f32,
+    x_rot: f32
+});
+packet!(ChunkBatchReceived {
+    chunks_per_tick: f32
+});
+packet!(SetHealth {
+    health: f32,
+    food: VarInt,
+    saturation: f32
+});
 // `flags` on the move packets: 1 on ground, 2 horizontal collision.
-packet!(MovePlayerPos { x: f64, y: f64, z: f64, flags: u8 });
-packet!(MovePlayerPosRot { x: f64, y: f64, z: f64, y_rot: f32, x_rot: f32, flags: u8 });
-packet!(MovePlayerRot { y_rot: f32, x_rot: f32, flags: u8 });
+packet!(MovePlayerPos {
+    x: f64,
+    y: f64,
+    z: f64,
+    flags: u8
+});
+packet!(MovePlayerPosRot {
+    x: f64,
+    y: f64,
+    z: f64,
+    y_rot: f32,
+    x_rot: f32,
+    flags: u8
+});
+packet!(MovePlayerRot {
+    y_rot: f32,
+    x_rot: f32,
+    flags: u8
+});
 packet!(MovePlayerStatusOnly { flags: u8 });
 // Bits in `Input` order: forward, backward, left, right, jump, shift, sprint.
 packet!(PlayerInput { flags: u8 });
-packet!(PlayerCommand { entity: VarInt, action: VarInt, data: VarInt });
+packet!(PlayerCommand {
+    entity: VarInt,
+    action: VarInt,
+    data: VarInt
+});
 // Clientbound `MoveVehicle`: where the server puts the driven vehicle.
-packet!(VehiclePose { x: f64, y: f64, z: f64, y_rot: f32, x_rot: f32 });
-packet!(MoveVehicle { pose: VehiclePose, on_ground: bool });
-packet!(PaddleBoat { left: bool, right: bool });
+packet!(VehiclePose {
+    x: f64,
+    y: f64,
+    z: f64,
+    y_rot: f32,
+    x_rot: f32
+});
+packet!(MoveVehicle {
+    pose: VehiclePose,
+    on_ground: bool
+});
+packet!(PaddleBoat {
+    left: bool,
+    right: bool
+});
 packet!(SetPassengers { vehicle: VarInt, passengers: Vec<VarInt> });
 packet!(ServerboundAbilities { flags: u8 });
-packet!(ClientboundAbilities { flags: u8, flying_speed: f32, walking_speed: f32 });
+packet!(ClientboundAbilities {
+    flags: u8,
+    flying_speed: f32,
+    walking_speed: f32
+});
 
 packet!(ChatCommand { command: String });
 
@@ -76,13 +160,22 @@ const SIGNATURE_BYTES: usize = 256;
 
 impl Wire for UnsignedChat {
     fn read(input: &mut &[u8]) -> Result<Self, Error> {
-        let (message, timestamp_millis, salt) = (String::read(input)?, i64::read(input)?, i64::read(input)?);
-        let skip = if bool::read(input)? { SIGNATURE_BYTES } else { 0 };
+        let (message, timestamp_millis, salt) =
+            (String::read(input)?, i64::read(input)?, i64::read(input)?);
+        let skip = if bool::read(input)? {
+            SIGNATURE_BYTES
+        } else {
+            0
+        };
         VarInt::read(input)?;
         for _ in 0..skip + ACKNOWLEDGED_BYTES + 1 {
             u8::read(input)?;
         }
-        Ok(Self { message, timestamp_millis, salt })
+        Ok(Self {
+            message,
+            timestamp_millis,
+            salt,
+        })
     }
 
     fn write(&self, out: &mut Vec<u8>) {

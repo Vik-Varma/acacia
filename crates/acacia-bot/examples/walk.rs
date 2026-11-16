@@ -26,7 +26,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let server = args.next().unwrap_or_else(|| "127.0.0.1:19140".into());
     let name = args.next().unwrap_or_else(|| "Walker".into());
-    let proxy = std::env::var("BEDROCK_PROXY").ok().map(|p| Socks5Proxy::parse(&p)).transpose()?;
+    let proxy = std::env::var("BEDROCK_PROXY")
+        .ok()
+        .map(|p| Socks5Proxy::parse(&p))
+        .transpose()?;
 
     let mut builder = Client::builder(&server);
     if let Some(p) = &proxy {
@@ -34,14 +37,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     builder = match name.strip_prefix('@') {
         Some(account) => {
-            let config = AuthConfig { proxy: proxy.as_ref().map(Socks5Proxy::to_url), ..AuthConfig::default() };
-            let account = Account::new(Arc::new(AuthClient::new(config)?), Arc::new(FileTokenCache::new(".tokens")?), account);
+            let config = AuthConfig {
+                proxy: proxy.as_ref().map(Socks5Proxy::to_url),
+                ..AuthConfig::default()
+            };
+            let account = Account::new(
+                Arc::new(AuthClient::new(config)?),
+                Arc::new(FileTokenCache::new(".tokens")?),
+                account,
+            );
             let (key, credentials) = account.login_credentials().await?;
             builder.online(credentials, key)
         }
         None => builder.offline(&name),
     };
-    let mut bot = Bot::connect(builder, BotConfig { physics: true, ..BotConfig::default() }).await?;
+    let mut bot = Bot::connect(
+        builder,
+        BotConfig {
+            physics: true,
+            ..BotConfig::default()
+        },
+    )
+    .await?;
     println!("spawned as {}", bot.name());
 
     let mut report = tokio::time::interval(Duration::from_secs(1));
@@ -77,15 +94,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Name of the block under the simulated feet, for diagnosing terrain decoding.
 fn below_feet(bot: &Bot) -> String {
     use acacia_world::BlockAccess;
-    let (Some(p), Some(w)) = (bot.bedrock().and_then(|b| b.movement()).and_then(|m| m.position()), bot.bedrock().and_then(|b| b.world())) else { return "-".into() };
-    let (Some(view), Some(reg)) = (w.view(), w.registry()) else { return "-".into() };
-    let (x, y, z) = (p[0].floor() as i32, (p[1] - 0.01).floor() as i32, p[2].floor() as i32);
+    let (Some(p), Some(w)) = (
+        bot.bedrock()
+            .and_then(|b| b.movement())
+            .and_then(|m| m.position()),
+        bot.bedrock().and_then(|b| b.world()),
+    ) else {
+        return "-".into();
+    };
+    let (Some(view), Some(reg)) = (w.view(), w.registry()) else {
+        return "-".into();
+    };
+    let (x, y, z) = (
+        p[0].floor() as i32,
+        (p[1] - 0.01).floor() as i32,
+        p[2].floor() as i32,
+    );
     let id = view.block(x, y, z);
-    let top = (-64..320).rev().map(|y| (y, view.block(x, y, z))).find(|&(_, b)| b != reg.air_id());
-    let top = top.map_or("none".into(), |(ty, b)| format!("{}@{ty}", reg.get(b).map_or("?", |s| s.name)));
-    format!("{} @y{y} (column top: {top}, air id {})", reg.get(id).map_or("?", |s| s.name), reg.air_id())
+    let top = (-64..320)
+        .rev()
+        .map(|y| (y, view.block(x, y, z)))
+        .find(|&(_, b)| b != reg.air_id());
+    let top = top.map_or("none".into(), |(ty, b)| {
+        format!("{}@{ty}", reg.get(b).map_or("?", |s| s.name))
+    });
+    format!(
+        "{} @y{y} (column top: {top}, air id {})",
+        reg.get(id).map_or("?", |s| s.name),
+        reg.air_id()
+    )
 }
 
 fn tracing_subscriber_init() {
-    let _ = tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
 }

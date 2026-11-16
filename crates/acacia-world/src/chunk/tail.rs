@@ -10,7 +10,11 @@ use crate::Error;
 /// Offset of the block entities in a `LevelChunk` payload: after `sections` sub-chunks, one biome
 /// storage per section of `biomes` (`None` in cache mode, where biomes are a blob) and the border
 /// blocks. Sub-chunk request mode has no sections; a payload that ends after the biomes has none.
-pub fn level_chunk_block_entities(payload: &[u8], sections: u32, biomes: Option<Dimension>) -> Result<usize, Error> {
+pub fn level_chunk_block_entities(
+    payload: &[u8],
+    sections: u32,
+    biomes: Option<Dimension>,
+) -> Result<usize, Error> {
     let mut r = Reader::new(payload);
     for _ in 0..sections {
         skip_section(&mut r)?;

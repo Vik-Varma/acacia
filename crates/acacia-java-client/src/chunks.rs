@@ -13,7 +13,10 @@ pub struct Chunks {
 
 impl Chunks {
     pub(crate) fn new(min_y: i32) -> Self {
-        Self { columns: HashMap::new(), min_y }
+        Self {
+            columns: HashMap::new(),
+            min_y,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -31,18 +34,30 @@ impl Chunks {
     /// The state id at a position, `None` outside the loaded sections.
     pub fn block(&self, [x, y, z]: [i32; 3]) -> Option<u32> {
         let (section, index) = self.locate([x, y, z])?;
-        self.columns.get(&(x >> 4, z >> 4))?.get(section).map(|s| s.blocks.get(index))
+        self.columns
+            .get(&(x >> 4, z >> 4))?
+            .get(section)
+            .map(|s| s.blocks.get(index))
     }
 
     fn locate(&self, [x, y, z]: [i32; 3]) -> Option<(usize, usize)> {
         let section = usize::try_from((y - self.min_y) >> 4).ok()?;
-        Some((section, Section::index((x & 15) as usize, (y & 15) as usize, (z & 15) as usize)))
+        Some((
+            section,
+            Section::index((x & 15) as usize, (y & 15) as usize, (z & 15) as usize),
+        ))
     }
 
     /// Copies the column first when a snapshot still holds it.
     pub(crate) fn set_block(&mut self, pos: [i32; 3], state: u32) {
-        let Some((section, index)) = self.locate(pos) else { return };
-        if let Some(s) = self.columns.get_mut(&(pos[0] >> 4, pos[2] >> 4)).and_then(|c| Arc::make_mut(c).get_mut(section)) {
+        let Some((section, index)) = self.locate(pos) else {
+            return;
+        };
+        if let Some(s) = self
+            .columns
+            .get_mut(&(pos[0] >> 4, pos[2] >> 4))
+            .and_then(|c| Arc::make_mut(c).get_mut(section))
+        {
             s.set_block(index, state);
         }
     }
@@ -65,7 +80,19 @@ mod tests {
     #[test]
     fn snapshots_keep_their_blocks() {
         let mut chunks = Chunks::new(-64);
-        chunks.insert(0, 0, vec![Section { non_empty: 4096, fluids: 0, blocks: Values::Single(1), biomes: Values::Single(0) }; 24]);
+        chunks.insert(
+            0,
+            0,
+            vec![
+                Section {
+                    non_empty: 4096,
+                    fluids: 0,
+                    blocks: Values::Single(1),
+                    biomes: Values::Single(0)
+                };
+                24
+            ],
+        );
         let snapshot = chunks.clone();
         chunks.set_block([1, -64, 1], 9);
         assert_eq!(chunks.block([1, -64, 1]), Some(9));

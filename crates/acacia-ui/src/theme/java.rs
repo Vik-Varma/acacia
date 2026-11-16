@@ -22,10 +22,19 @@ pub fn load(root: &Path) -> Theme {
     }
     // `book.png` holds the open book in its top-left 192 pixels.
     if let Some(sheet) = png(&root.join("textures/gui/book.png")) {
-        atlas.add(crate::book::ART, &image::imageops::crop_imm(&sheet, 0, 0, 192, 192).to_image());
+        atlas.add(
+            crate::book::ART,
+            &image::imageops::crop_imm(&sheet, 0, 0, 192, 192).to_image(),
+        );
     }
     let font = java_font(root, &mut atlas);
     let galactic = super::java_galactic(root, &mut atlas);
     let widgets = Widgets::Java(Box::new(Kit::load(root, &mut atlas)));
-    Theme { atlas, font, galactic, style: STYLE, widgets }
+    Theme {
+        atlas,
+        font,
+        galactic,
+        style: STYLE,
+        widgets,
+    }
 }

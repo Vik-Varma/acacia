@@ -11,7 +11,8 @@ use crate::{Error, Result};
 
 const BASE: &str = "https://sessiondirectory.xboxlive.com";
 const CONTRACT: &str = "107";
-pub(crate) const QUERY_URL: &str = "https://sessiondirectory.xboxlive.com/handles/query?include=relatedInfo,customProperties";
+pub(crate) const QUERY_URL: &str =
+    "https://sessiondirectory.xboxlive.com/handles/query?include=relatedInfo,customProperties";
 /// The RTA resource whose subscription yields the `ConnectionId` MPSD members carry.
 pub const RTA_CONNECTIONS_URI: &str = "https://sessiondirectory.xboxlive.com/connections/";
 
@@ -45,7 +46,10 @@ pub(crate) fn activity_body(session: &SessionRef) -> Value {
 }
 
 fn xuid(auth: &XboxLiveAuth) -> Result<&str> {
-    auth.xuid().ok_or_else(|| Error::Protocol { endpoint: QUERY_URL.into(), reason: "XSTS token has no xuid".into() })
+    auth.xuid().ok_or_else(|| Error::Protocol {
+        endpoint: QUERY_URL.into(),
+        reason: "XSTS token has no xuid".into(),
+    })
 }
 
 fn body(v: &Value) -> Vec<u8> {
@@ -54,31 +58,81 @@ fn body(v: &Value) -> Vec<u8> {
 
 /// Worlds hosted by people the account follows.
 pub(crate) async fn friend_worlds(http: &Http, auth: &XboxLiveAuth) -> Result<Vec<FriendWorld>> {
-    let req = auth.request(http, Method::POST, QUERY_URL, CONTRACT, body(&activity_query_body(xuid(auth)?)));
+    let req = auth.request(
+        http,
+        Method::POST,
+        QUERY_URL,
+        CONTRACT,
+        body(&activity_query_body(xuid(auth)?)),
+    );
     Ok(parse_activities(&http.json::<Value>(req, QUERY_URL).await?))
 }
 
 /// Joins the session behind an activity handle; returns the session document.
-pub(crate) async fn join(http: &Http, auth: &XboxLiveAuth, handle_id: &str, connection_id: &str) -> Result<Value> {
+pub(crate) async fn join(
+    http: &Http,
+    auth: &XboxLiveAuth,
+    handle_id: &str,
+    connection_id: &str,
+) -> Result<Value> {
     let url = format!("{BASE}/handles/{handle_id}/session");
     let subscription = uuid::Uuid::new_v4().to_string().to_uppercase();
-    let req = auth.request(http, Method::PUT, &url, CONTRACT, body(&join_body(xuid(auth)?, connection_id, &subscription)));
+    let req = auth.request(
+        http,
+        Method::PUT,
+        &url,
+        CONTRACT,
+        body(&join_body(xuid(auth)?, connection_id, &subscription)),
+    );
     http.json(req, &url).await
 }
 
-pub(crate) async fn session(http: &Http, auth: &XboxLiveAuth, session: &SessionRef) -> Result<Value> {
+pub(crate) async fn session(
+    http: &Http,
+    auth: &XboxLiveAuth,
+    session: &SessionRef,
+) -> Result<Value> {
     let url = session.url();
-    http.json(auth.request(http, Method::GET, &url, CONTRACT, Vec::new()), &url).await
+    http.json(
+        auth.request(http, Method::GET, &url, CONTRACT, Vec::new()),
+        &url,
+    )
+    .await
 }
 
 /// PUTs `change` into the session (a member update or leave); the reply document is not needed.
-pub(crate) async fn write(http: &Http, auth: &XboxLiveAuth, session: &SessionRef, change: &Value) -> Result<()> {
+pub(crate) async fn write(
+    http: &Http,
+    auth: &XboxLiveAuth,
+    session: &SessionRef,
+    change: &Value,
+) -> Result<()> {
     let url = session.url();
-    http.send(auth.request(http, Method::PUT, &url, CONTRACT, body(change)), &url).await.map(drop)
+    http.send(
+        auth.request(http, Method::PUT, &url, CONTRACT, body(change)),
+        &url,
+    )
+    .await
+    .map(drop)
 }
 
 /// Publishes the caller's activity in `session`, so their friends see where they are.
-pub(crate) async fn set_activity(http: &Http, auth: &XboxLiveAuth, session: &SessionRef) -> Result<()> {
+pub(crate) async fn set_activity(
+    http: &Http,
+    auth: &XboxLiveAuth,
+    session: &SessionRef,
+) -> Result<()> {
     let url = format!("{BASE}/handles");
-    http.send(auth.request(http, Method::POST, &url, CONTRACT, body(&activity_body(session))), &url).await.map(drop)
+    http.send(
+        auth.request(
+            http,
+            Method::POST,
+            &url,
+            CONTRACT,
+            body(&activity_body(session)),
+        ),
+        &url,
+    )
+    .await
+    .map(drop)
 }

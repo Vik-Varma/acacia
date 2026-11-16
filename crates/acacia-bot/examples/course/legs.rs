@@ -19,12 +19,23 @@ impl Leg {
 
 /// Pits keep the bottom floor layer (y -4): below it is the void.
 pub const LEGS: &[Leg] = &[
-    Leg { name: "flat", goal: [3, 0, 0], build: &[] },
-    Leg { name: "step", goal: [8, 0, 0], build: &[([5, 0, -1], [5, 0, 1], "stone")] },
+    Leg {
+        name: "flat",
+        goal: [3, 0, 0],
+        build: &[],
+    },
+    Leg {
+        name: "step",
+        goal: [8, 0, 0],
+        build: &[([5, 0, -1], [5, 0, 1], "stone")],
+    },
     Leg {
         name: "stair2",
         goal: [14, 0, 0],
-        build: &[([10, 0, -1], [10, 0, 1], "stone"), ([11, 0, -1], [12, 1, 1], "stone")],
+        build: &[
+            ([10, 0, -1], [10, 0, 1], "stone"),
+            ([11, 0, -1], [12, 1, 1], "stone"),
+        ],
     },
     Leg {
         name: "slabs",
@@ -45,7 +56,11 @@ pub const LEGS: &[Leg] = &[
             ([23, 1, -1], [23, 1, 1], "stone"),
         ],
     },
-    Leg { name: "gap", goal: [32, 0, 0], build: &[([28, -3, -1], [29, -1, 1], "air")] },
+    Leg {
+        name: "gap",
+        goal: [32, 0, 0],
+        build: &[([28, -3, -1], [29, -1, 1], "air")],
+    },
     Leg {
         name: "ladder",
         goal: [38, 0, 0],
@@ -60,20 +75,42 @@ pub const LEGS: &[Leg] = &[
         goal: [47, 0, 0],
         build: &[([40, -2, -1], [44, -1, 1], "water")],
     },
-    Leg { name: "float", goal: [42, -1, 0], build: &[] },
-    Leg { name: "exit", goal: [47, 0, 0], build: &[] },
-    Leg { name: "gap3", goal: [55, 0, 0], build: &[([50, -3, -5], [52, -1, 3], "air")] },
+    Leg {
+        name: "float",
+        goal: [42, -1, 0],
+        build: &[],
+    },
+    Leg {
+        name: "exit",
+        goal: [47, 0, 0],
+        build: &[],
+    },
+    Leg {
+        name: "gap3",
+        goal: [55, 0, 0],
+        build: &[([50, -3, -5], [52, -1, 3], "air")],
+    },
     // A 4-gap needs a 2-block run-up from rest (docs/pathfind-plan.md step 4); `Human` refuses it.
-    Leg { name: "gap4", goal: [64, 0, 0], build: &[([58, -3, -5], [61, -1, 3], "air")] },
+    Leg {
+        name: "gap4",
+        goal: [64, 0, 0],
+        build: &[([58, -3, -5], [61, -1, 3], "air")],
+    },
     Leg {
         name: "up1",
         goal: [70, 1, 0],
-        build: &[([67, -3, -5], [68, -1, 3], "air"), ([69, 0, -5], [71, 0, 3], "stone")],
+        build: &[
+            ([67, -3, -5], [68, -1, 3], "air"),
+            ([69, 0, -5], [71, 0, 3], "stone"),
+        ],
     },
     Leg {
         name: "down2",
         goal: [75, -1, 0],
-        build: &[([72, -3, -5], [73, -1, 3], "air"), ([74, -1, -5], [77, -1, 3], "air")],
+        build: &[
+            ([72, -3, -5], [73, -1, 3], "air"),
+            ([74, -1, -5], [77, -1, 3], "air"),
+        ],
     },
     // A one-block pillar at (78, 0) and an island at (81, -2): only a diagonal leap joins them.
     Leg {
@@ -95,7 +132,11 @@ pub const LEGS: &[Leg] = &[
             ([93, -3, 0], [93, -1, 0], "stone"),
         ],
     },
-    Leg { name: "sprint40", goal: [55, 0, 4], build: &[] },
+    Leg {
+        name: "sprint40",
+        goal: [55, 0, 4],
+        build: &[],
+    },
 ];
 
 /// The leg whose leap `--lift` disturbs in mid-air, the x span (offsets) to do it in, and the command: a

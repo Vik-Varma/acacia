@@ -3,9 +3,9 @@
 
 use glam::DVec3;
 
+use super::JavaRandom;
 use super::behaviour::Behaviour;
 use super::level;
-use super::JavaRandom;
 use super::types::Type;
 use crate::particles::collide::Blocks;
 
@@ -167,7 +167,11 @@ impl Particle {
             let x = (self.bb_min.x + self.bb_max.x - f64::from(w)) / 2.0;
             let z = (self.bb_min.z + self.bb_max.z - f64::from(w)) / 2.0;
             self.bb_min = DVec3::new(x, self.bb_min.y, z);
-            self.bb_max = DVec3::new(x + f64::from(w), self.bb_min.y + f64::from(h), z + f64::from(w));
+            self.bb_max = DVec3::new(
+                x + f64::from(w),
+                self.bb_min.y + f64::from(h),
+                z + f64::from(w),
+            );
         }
     }
 
@@ -179,7 +183,11 @@ impl Particle {
     }
 
     fn set_location_from_bb(&mut self) {
-        self.position = DVec3::new((self.bb_min.x + self.bb_max.x) / 2.0, self.bb_min.y, (self.bb_min.z + self.bb_max.z) / 2.0);
+        self.position = DVec3::new(
+            (self.bb_min.x + self.bb_max.x) / 2.0,
+            self.bb_min.y,
+            (self.bb_min.z + self.bb_max.z) / 2.0,
+        );
     }
 
     pub fn set_color(&mut self, r: f32, g: f32, b: f32) {
@@ -258,7 +266,8 @@ impl Particle {
     pub fn light(&self, a: f32, [block, sky]: [f32; 2]) -> [f32; 2] {
         let t = ((self.age as f32 + a) / self.lifetime as f32).clamp(0.0, 1.0);
         // Emission adds in 1/16 levels, truncated like the packed coordinates.
-        let add = |share: f32| ((block * 16.0) as u32 + (share * 240.0) as u32).min(240) as f32 / 16.0;
+        let add =
+            |share: f32| ((block * 16.0) as u32 + (share * 240.0) as u32).min(240) as f32 / 16.0;
         match self.glow {
             Glow::World => [block, sky],
             Glow::FullBright => [15.0, 15.0],

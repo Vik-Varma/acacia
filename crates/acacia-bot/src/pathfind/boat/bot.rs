@@ -26,11 +26,21 @@ impl Bot {
     /// in reach or places one from the hotbar, paddles, gets off by the target, and breaks and collects the boat
     /// unless `opts.keep_boat`.
     pub async fn boat_to(&mut self, target: BlockPos, opts: BoatOpts) -> Result<(), ActionError> {
-        if self.backend.require("boats")?.movement.as_ref().is_none_or(|m| !m.is_started()) {
-            return Err(ActionError::NotPossible("boating needs a physics bot (BotConfig.physics)".into()));
+        if self
+            .backend
+            .require("boats")?
+            .movement
+            .as_ref()
+            .is_none_or(|m| !m.is_started())
+        {
+            return Err(ActionError::NotPossible(
+                "boating needs a physics bot (BotConfig.physics)".into(),
+            ));
         }
         if !self.state.tracks_entities() {
-            return Err(ActionError::NotPossible("boating needs the entity tracker (BotConfig.trackers.entities)".into()));
+            return Err(ActionError::NotPossible(
+                "boating needs the entity tracker (BotConfig.trackers.entities)".into(),
+            ));
         }
         let boat = self.board_boat(target).await?;
         for _ in 0..SEATED_TICKS {
@@ -59,40 +69,74 @@ impl Bot {
         if !opts.keep_boat {
             self.collect_boat(boat).await?;
         }
-        let Some(feet) = self.backend.movement().and_then(|m| m.position()) else { return Ok(()) };
+        let Some(feet) = self.backend.movement().and_then(|m| m.position()) else {
+            return Ok(());
+        };
         let centre = [target[0] as f32 + 0.5, target[2] as f32 + 0.5];
-        if (feet[0] - centre[0]).hypot(feet[2] - centre[1]) > WALK_REST || feet[1].floor() as i32 != target[1] {
-            self.goto_with(Goal::Block(target), GotoOpts::default()).await?;
+        if (feet[0] - centre[0]).hypot(feet[2] - centre[1]) > WALK_REST
+            || feet[1].floor() as i32 != target[1]
+        {
+            self.goto_with(Goal::Block(target), GotoOpts::default())
+                .await?;
         }
         Ok(())
     }
 
     /// Paddles the boat the bot sits in until it rests at a stop by `target`.
     async fn paddle(&mut self, target: BlockPos, opts: &BoatOpts) -> Result<(), ActionError> {
-        let seat = self.state.riding.seat_offset.as_ref().map_or([0.0; 3], |o| [o.x, o.y, o.z]);
+        let seat = self
+            .state
+            .riding
+            .seat_offset
+            .as_ref()
+            .map_or([0.0; 3], |o| [o.x, o.y, o.z]);
         let mut pilot: Option<BoatPilot> = None;
         let mut planned_at = 0;
         for tick in 0.. {
-            let st = self.boat_state().ok_or_else(|| ActionError::NotPossible("not driving a boat".into()))?;
+            let st = self
+                .boat_state()
+                .ok_or_else(|| ActionError::NotPossible("not driving a boat".into()))?;
             let order = {
-                let Some((world, movement)) = self.backend.physics_mut() else { return Err(ActionError::Disconnected) };
-                let (Some(view), Some(registry)) = (world.view(), world.registry()) else { return Err(ActionError::Disconnected) };
+                let Some((world, movement)) = self.backend.physics_mut() else {
+                    return Err(ActionError::Disconnected);
+                };
+                let (Some(view), Some(registry)) = (world.view(), world.registry()) else {
+                    return Err(ActionError::Disconnected);
+                };
                 let terrain = Terrain::new(view, registry.as_ref());
-                let replan = pilot.as_ref().is_none_or(|p| !p.complete() && tick - planned_at >= REPLAN_TICKS);
+                let replan = pilot
+                    .as_ref()
+                    .is_none_or(|p| !p.complete() && tick - planned_at >= REPLAN_TICKS);
                 if replan {
                     planned_at = tick;
-                    match (plan_leg(&terrain, st.pos, target, seat, opts.profile), pilot.as_mut()) {
+                    match (
+                        plan_leg(&terrain, st.pos, target, seat, opts.profile),
+                        pilot.as_mut(),
+                    ) {
                         (Some(leg), Some(p)) => p.reroute(&leg),
                         (Some(leg), None) => {
                             let Leg { route, exit, .. } = &leg;
                             tracing::debug!(from = ?st.pos, points = route.points.len(), length = route.length(), complete = route.complete, ?exit, "boat leg");
-                            pilot = Some(BoatPilot::new(&leg, seat, opts.profile, opts.max_ticks, crate::cadence::seed()));
+                            pilot = Some(BoatPilot::new(
+                                &leg,
+                                seat,
+                                opts.profile,
+                                opts.max_ticks,
+                                crate::cadence::seed(),
+                            ));
                         }
-                        (None, None) => return Err(ActionError::NotPossible(format!("no water route from {:?} towards {target:?}", st.pos))),
+                        (None, None) => {
+                            return Err(ActionError::NotPossible(format!(
+                                "no water route from {:?} towards {target:?}",
+                                st.pos
+                            )));
+                        }
                         (None, Some(_)) => {}
                     }
                 }
-                let Some(p) = pilot.as_mut() else { return Err(ActionError::Disconnected) };
+                let Some(p) = pilot.as_mut() else {
+                    return Err(ActionError::Disconnected);
+                };
                 p.tick(&st, &terrain, &mut movement.controls)
             };
             match order {

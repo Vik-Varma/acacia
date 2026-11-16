@@ -3,13 +3,14 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use acacia_session::server::{read_login, ServerConnection};
 use acacia_proto::packets::{
-    ClientCacheBlobStatus, ClientCacheMissResponse, Login, NetworkSettings, NetworkSettingsCompressionAlgorithm, PlayStatus,
-    PlayStatusStatus, RequestNetworkSettings, Subchunk, SubchunkRequest,
+    ClientCacheBlobStatus, ClientCacheMissResponse, Login, NetworkSettings,
+    NetworkSettingsCompressionAlgorithm, PlayStatus, PlayStatusStatus, RequestNetworkSettings,
+    Subchunk, SubchunkRequest,
 };
 use acacia_proto::types::{Blob, HeightMapDataType, SubChunkEntryItem, SubChunkEntryItemResult};
-use acacia_proto::{encode_packet, Packet, RawPacket};
+use acacia_proto::{Packet, RawPacket, encode_packet};
+use acacia_session::server::{ServerConnection, read_login};
 use bytes::{Bytes, BytesMut};
 use p384::ecdsa::SigningKey;
 
@@ -84,7 +85,9 @@ impl Peer {
                     client_throttle_threshold: 0,
                     client_throttle_scalar: 0.0,
                 };
-                self.conn.start_compression(&settings).map_err(|e| e.to_string())?;
+                self.conn
+                    .start_compression(&settings)
+                    .map_err(|e| e.to_string())?;
                 self.send(&[encode(&settings)]);
             }
             Login::ID => {
@@ -98,12 +101,30 @@ impl Peer {
             }
             SubchunkRequest::ID => {
                 let request: SubchunkRequest = packet.decode().map_err(|e| e.to_string())?;
-                let entries = request.requests.iter().map(|o| all_air(o.x, o.y, o.z)).collect();
-                self.send(&[encode(&Subchunk { cache_enabled: false, dimension: request.dimension, origin: request.origin, entries })]);
+                let entries = request
+                    .requests
+                    .iter()
+                    .map(|o| all_air(o.x, o.y, o.z))
+                    .collect();
+                self.send(&[encode(&Subchunk {
+                    cache_enabled: false,
+                    dimension: request.dimension,
+                    origin: request.origin,
+                    entries,
+                })]);
             }
             ClientCacheBlobStatus::ID => {
                 let status: ClientCacheBlobStatus = packet.decode().map_err(|e| e.to_string())?;
-                let blobs = status.missing.iter().filter_map(|h| self.script.blobs.get(h).map(|b| Blob { hash: *h, payload: b.clone() })).collect();
+                let blobs = status
+                    .missing
+                    .iter()
+                    .filter_map(|h| {
+                        self.script.blobs.get(h).map(|b| Blob {
+                            hash: *h,
+                            payload: b.clone(),
+                        })
+                    })
+                    .collect();
                 self.send(&[encode(&ClientCacheMissResponse { blobs })]);
             }
             _ => {}
@@ -156,8 +177,15 @@ impl Peer {
         if packets.is_empty() {
             return;
         }
-        let t = self.login_at.map_or(Duration::ZERO, |at| Instant::now() - at);
-        self.sent.extend(packets.iter().filter_map(|p| RawPacket::parse(p.clone()).ok()).map(|packet| Received { t, packet }));
+        let t = self
+            .login_at
+            .map_or(Duration::ZERO, |at| Instant::now() - at);
+        self.sent.extend(
+            packets
+                .iter()
+                .filter_map(|p| RawPacket::parse(p.clone()).ok())
+                .map(|packet| Received { t, packet }),
+        );
         self.outbox.push(self.conn.encode(packets));
     }
 }
@@ -169,7 +197,10 @@ pub(crate) fn encode<T: Packet>(packet: &T) -> Bytes {
 }
 
 fn is_spawn(packet: &Bytes) -> bool {
-    RawPacket::parse(packet.clone()).ok().and_then(|p| p.decode::<PlayStatus>().ok()).is_some_and(|s| s.status == PlayStatusStatus::PlayerSpawn)
+    RawPacket::parse(packet.clone())
+        .ok()
+        .and_then(|p| p.decode::<PlayStatus>().ok())
+        .is_some_and(|s| s.status == PlayStatusStatus::PlayerSpawn)
 }
 
 fn all_air(dx: i8, dy: i8, dz: i8) -> SubChunkEntryItem {

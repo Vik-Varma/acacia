@@ -14,7 +14,11 @@ pub enum Event {
     /// In the world; comes right before `createBot` resolves.
     Spawn,
     /// Group `health`.
-    Health { health: f32, food: f32, saturation: f32 },
+    Health {
+        health: f32,
+        food: f32,
+        saturation: f32,
+    },
     /// Group `health`.
     Death,
     /// Group `health`.
@@ -22,7 +26,11 @@ pub enum Event {
     /// Group `chat`.
     Chat(ChatLine),
     /// A chat pattern matched (patterns run without the `chat` group).
-    ChatMatch { pattern: String, groups: Vec<String>, line: ChatLine },
+    ChatMatch {
+        pattern: String,
+        groups: Vec<String>,
+        line: ChatLine,
+    },
     /// Group `forms`.
     Form(Form),
     /// Group `players` (the list sent at spawn counts as joins).
@@ -66,7 +74,13 @@ pub enum Event {
 impl Event {
     /// A newer event or the state supersedes it, so a backed-up stream may drop it (and say so with `lagged`).
     pub fn is_lossy(&self) -> bool {
-        matches!(self, Self::PhysicsTick | Self::Violation { .. } | Self::Title { .. } | Self::EntityMoves { .. })
+        matches!(
+            self,
+            Self::PhysicsTick
+                | Self::Violation { .. }
+                | Self::Title { .. }
+                | Self::EntityMoves { .. }
+        )
     }
 }
 

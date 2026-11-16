@@ -6,7 +6,10 @@ use super::perf::{Case, cases, run};
 use crate::pathfind::{MovementProfile, Path, RolloutCache, SearchOpts};
 
 fn case(name: &str) -> Case {
-    cases().into_iter().find(|c| c.name == name).expect("perf case")
+    cases()
+        .into_iter()
+        .find(|c| c.name == name)
+        .expect("perf case")
 }
 
 fn same_plan(a: &Path, b: &Path) {
@@ -21,15 +24,22 @@ fn cached_plans_equal_uncached_and_replans_simulate_nothing() {
         let c = case(name);
         let g = (c.grid)();
         let (fresh, _) = run(&c, &g, &RolloutCache::disabled());
-        let cache =RolloutCache::default();
+        let cache = RolloutCache::default();
         let (cold, _) = run(&c, &g, &cache);
         let (replan, _) = run(&c, &(c.grid)(), &cache);
         let (f, s, r) = (fresh.macro_stats, cold.macro_stats, replan.macro_stats);
         eprintln!("{name}: uncached {f:?}\n  cold {s:?}\n  replan {r:?}");
         same_plan(&fresh, &cold);
         same_plan(&fresh, &replan);
-        assert!(s.rollouts <= f.rollouts && s.hits > 0, "{name}: the cache saved nothing");
-        assert_eq!((r.rollouts, r.misses), (0, 0), "{name}: a re-plan on unchanged terrain simulated");
+        assert!(
+            s.rollouts <= f.rollouts && s.hits > 0,
+            "{name}: the cache saved nothing"
+        );
+        assert_eq!(
+            (r.rollouts, r.misses),
+            (0, 0),
+            "{name}: a re-plan on unchanged terrain simulated"
+        );
     }
 }
 
@@ -37,13 +47,21 @@ fn cached_plans_equal_uncached_and_replans_simulate_nothing() {
 /// half hits; Human's flat run 58 rollouts; the 5-gap refusal 214).
 #[test]
 fn rollouts_per_plan_stay_bounded() {
-    let cases = [("flat 80 Optimal", 600, 0.4), ("flat 80 Human", 100, 0.9), ("diagonal 30x11 Human", 60, 0.9), ("5-gap refusal Human", 300, 0.7)];
+    let cases = [
+        ("flat 80 Optimal", 600, 0.4),
+        ("flat 80 Human", 100, 0.9),
+        ("diagonal 30x11 Human", 60, 0.9),
+        ("5-gap refusal Human", 300, 0.7),
+    ];
     for (name, max_rollouts, min_hit_rate) in cases {
         let c = case(name);
         let (p, _) = run(&c, &(c.grid)(), &RolloutCache::default());
         let s = p.macro_stats;
         let rate = s.hits as f32 / (s.hits + s.misses).max(1) as f32;
-        assert!(s.rollouts <= max_rollouts && rate >= min_hit_rate, "{name}: {s:?}");
+        assert!(
+            s.rollouts <= max_rollouts && rate >= min_hit_rate,
+            "{name}: {s:?}"
+        );
         assert_eq!(p.complete, !name.contains("refusal"), "{name}");
     }
 }
@@ -53,8 +71,18 @@ fn a_spent_budget_leaves_classic_moves() {
     let c = case("flat 80 Optimal");
     let g = (c.grid)();
     for profile in PROFILES {
-        let opts = SearchOpts { max_rollout_ticks: 300, ..macro_opts(profile) };
-        let (p, _) = run(&Case { opts, ..case("flat 80 Optimal") }, &g, &RolloutCache::default());
+        let opts = SearchOpts {
+            max_rollout_ticks: 300,
+            ..macro_opts(profile)
+        };
+        let (p, _) = run(
+            &Case {
+                opts,
+                ..case("flat 80 Optimal")
+            },
+            &g,
+            &RolloutCache::default(),
+        );
         let s = p.macro_stats;
         assert!(p.complete && s.exhausted, "{profile:?}: {s:?}");
         // The budget is checked between moves: one move's solve may overrun it.
@@ -67,9 +95,12 @@ fn a_spent_budget_leaves_classic_moves() {
 fn cache_is_dropped_for_another_profile() {
     let c = case("gap course Optimal");
     let g = (c.grid)();
-    let cache =RolloutCache::default();
+    let cache = RolloutCache::default();
     run(&c, &g, &cache);
-    let human = Case { opts: macro_opts(MovementProfile::Human), ..case("gap course Optimal") };
+    let human = Case {
+        opts: macro_opts(MovementProfile::Human),
+        ..case("gap course Optimal")
+    };
     let (fresh, _) = run(&human, &g, &RolloutCache::default());
     let (p, _) = run(&human, &g, &cache);
     assert_eq!(p.macro_stats, fresh.macro_stats);

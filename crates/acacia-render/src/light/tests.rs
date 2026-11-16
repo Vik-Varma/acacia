@@ -12,7 +12,9 @@ struct Fixture {
 }
 
 fn id(name: &str, props: &str) -> u32 {
-    BlockRegistry::vanilla().find(name, props).unwrap_or_else(|| panic!("{name}"))
+    BlockRegistry::vanilla()
+        .find(name, props)
+        .unwrap_or_else(|| panic!("{name}"))
 }
 
 /// Version-9 section of one block, `id` zigzag-varint encoded.
@@ -31,7 +33,11 @@ impl Fixture {
     fn new() -> Self {
         let world = World::new(BlockRegistry::vanilla_arc(), 0, BlockIds::Runtime);
         let table = PropsTable::new(world.registry());
-        Fixture { view: ChunkView::new(world), table, data: LightData::default() }
+        Fixture {
+            view: ChunkView::new(world),
+            table,
+            data: LightData::default(),
+        }
     }
 
     fn load(&mut self, cx: i32, cz: i32) {
@@ -68,7 +74,10 @@ impl Fixture {
 fn open_sky_reaches_the_floor_and_not_into_stone() {
     let mut f = Fixture::new();
     f.load(0, 0);
-    assert_eq!((f.sky(5, 300, 5), f.sky(5, 16, 5), f.sky(5, 15, 5)), (15, 15, 0));
+    assert_eq!(
+        (f.sky(5, 300, 5), f.sky(5, 16, 5), f.sky(5, 15, 5)),
+        (15, 15, 0)
+    );
     assert_eq!(f.block(5, 16, 5), 0);
     assert!(f.data.columns.contains(&(0, 0)));
 }
@@ -79,18 +88,38 @@ fn torch_light_falls_off_by_one_per_block_and_goes_away() {
     f.load(0, 0);
     let torch = id("minecraft:torch", "torch_facing_direction=top");
     f.place(8, 16, 8, torch);
-    assert_eq!([f.block(8, 16, 8), f.block(9, 16, 8), f.block(8, 17, 10), f.block(8, 16, 1)], [14, 13, 11, 7]);
+    assert_eq!(
+        [
+            f.block(8, 16, 8),
+            f.block(9, 16, 8),
+            f.block(8, 17, 10),
+            f.block(8, 16, 1)
+        ],
+        [14, 13, 11, 7]
+    );
     assert_eq!(f.block(8, 15, 8), 0, "stone");
     f.place(8, 16, 8, BlockRegistry::vanilla().air_id());
-    assert_eq!([f.block(8, 16, 8), f.block(9, 16, 8), f.block(8, 16, 1)], [0, 0, 0]);
+    assert_eq!(
+        [f.block(8, 16, 8), f.block(9, 16, 8), f.block(8, 16, 1)],
+        [0, 0, 0]
+    );
 }
 
 #[test]
 fn leaves_dim_sky_light_below_them() {
     let mut f = Fixture::new();
     f.load(0, 0);
-    f.place(3, 30, 3, id("minecraft:oak_leaves", "persistent_bit=1,update_bit=0"));
-    assert_eq!((f.sky(3, 30, 3), f.sky(3, 29, 3)), (13, 14), "below leaves, side light beats the filtered 12");
+    f.place(
+        3,
+        30,
+        3,
+        id("minecraft:oak_leaves", "persistent_bit=1,update_bit=0"),
+    );
+    assert_eq!(
+        (f.sky(3, 30, 3), f.sky(3, 29, 3)),
+        (13, 14),
+        "below leaves, side light beats the filtered 12"
+    );
 }
 
 #[test]
@@ -98,7 +127,15 @@ fn a_block_over_open_sky_casts_a_shadow_filled_from_the_sides() {
     let mut f = Fixture::new();
     f.load(0, 0);
     f.place(5, 40, 5, id("minecraft:stone", ""));
-    assert_eq!((f.sky(5, 41, 5), f.sky(5, 40, 5), f.sky(5, 39, 5), f.sky(5, 16, 5)), (15, 0, 14, 14));
+    assert_eq!(
+        (
+            f.sky(5, 41, 5),
+            f.sky(5, 40, 5),
+            f.sky(5, 39, 5),
+            f.sky(5, 16, 5)
+        ),
+        (15, 0, 14, 14)
+    );
     f.place(5, 40, 5, BlockRegistry::vanilla().air_id());
     assert_eq!(f.sky(5, 16, 5), 15);
 }
@@ -116,6 +153,9 @@ fn a_neighbour_column_lights_under_a_roof_through_the_shared_face() {
     f.relight(0, 0);
     assert_eq!(f.sky(8, 17, 8), 0, "roofed with no loaded neighbours");
     f.load(1, 0);
-    assert_eq!((f.sky(16, 17, 8), f.sky(15, 17, 8), f.sky(12, 17, 8)), (15, 14, 11));
+    assert_eq!(
+        (f.sky(16, 17, 8), f.sky(15, 17, 8), f.sky(12, 17, 8)),
+        (15, 14, 11)
+    );
     assert_eq!(f.sky(0, 17, 8), 0, "the far side stays dark");
 }

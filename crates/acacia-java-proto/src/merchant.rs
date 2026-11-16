@@ -32,7 +32,9 @@ impl MerchantOffer {
     /// `cost_a`'s count after demand and reputation (`MerchantOffer.getModifiedCostCount`).
     pub fn price_a(&self) -> i32 {
         let base = self.cost_a.count;
-        let demand = ((base * self.demand) as f32 * self.price_multiplier).floor().max(0.0) as i32;
+        let demand = ((base * self.demand) as f32 * self.price_multiplier)
+            .floor()
+            .max(0.0) as i32;
         (base + demand + self.special_price).clamp(1, COST_STACK)
     }
 
@@ -53,7 +55,11 @@ pub struct MerchantOffers {
 
 impl Wire for ItemCost {
     fn read(input: &mut &[u8]) -> Result<Self, Error> {
-        Ok(Self { item: read_varint(input)?, count: read_varint(input)?, components: Components::read_exact(input)? })
+        Ok(Self {
+            item: read_varint(input)?,
+            count: read_varint(input)?,
+            components: Components::read_exact(input)?,
+        })
     }
 
     fn write(&self, out: &mut Vec<u8>) {
@@ -68,7 +74,11 @@ impl Wire for MerchantOffer {
         Ok(Self {
             cost_a: ItemCost::read(input)?,
             result: Option::<ItemStack>::read(input)?,
-            cost_b: if bool::read(input)? { Some(ItemCost::read(input)?) } else { None },
+            cost_b: if bool::read(input)? {
+                Some(ItemCost::read(input)?)
+            } else {
+                None
+            },
             out_of_stock: bool::read(input)?,
             uses: i32::read(input)?,
             max_uses: i32::read(input)?,
@@ -87,7 +97,9 @@ impl Wire for MerchantOffer {
             b.write(out);
         }
         self.out_of_stock.write(out);
-        [self.uses, self.max_uses, self.xp, self.special_price].iter().for_each(|v| v.write(out));
+        [self.uses, self.max_uses, self.xp, self.special_price]
+            .iter()
+            .for_each(|v| v.write(out));
         self.price_multiplier.write(out);
         self.demand.write(out);
     }
@@ -96,8 +108,17 @@ impl Wire for MerchantOffer {
 impl Wire for MerchantOffers {
     fn read(input: &mut &[u8]) -> Result<Self, Error> {
         let container = read_varint(input)?;
-        let offers = (0..crate::wire::read_len(input)?).map(|_| MerchantOffer::read(input)).collect::<Result<_, _>>()?;
-        Ok(Self { container, offers, level: read_varint(input)?, xp: read_varint(input)?, show_progress: bool::read(input)?, can_restock: bool::read(input)? })
+        let offers = (0..crate::wire::read_len(input)?)
+            .map(|_| MerchantOffer::read(input))
+            .collect::<Result<_, _>>()?;
+        Ok(Self {
+            container,
+            offers,
+            level: read_varint(input)?,
+            xp: read_varint(input)?,
+            show_progress: bool::read(input)?,
+            can_restock: bool::read(input)?,
+        })
     }
 
     fn write(&self, out: &mut Vec<u8>) {
@@ -117,11 +138,18 @@ mod tests {
 
     #[test]
     fn offers_round_trip_and_price_follows_demand() {
-        let emeralds = ItemCost { item: 900, count: 10, components: Components::default() };
+        let emeralds = ItemCost {
+            item: 900,
+            count: 10,
+            components: Components::default(),
+        };
         let offer = MerchantOffer {
             cost_a: emeralds.clone(),
             result: Some(ItemStack::new(812, 1)),
-            cost_b: Some(ItemCost { count: 1, ..emeralds }),
+            cost_b: Some(ItemCost {
+                count: 1,
+                ..emeralds
+            }),
             uses: 2,
             max_uses: 12,
             demand: 3,
@@ -129,7 +157,14 @@ mod tests {
             special_price: -2,
             ..MerchantOffer::default()
         };
-        let packet = MerchantOffers { container: 4, offers: vec![offer, MerchantOffer::default()], level: 2, xp: 15, show_progress: true, can_restock: true };
+        let packet = MerchantOffers {
+            container: 4,
+            offers: vec![offer, MerchantOffer::default()],
+            level: 2,
+            xp: 15,
+            show_progress: true,
+            can_restock: true,
+        };
         let mut bytes = Vec::new();
         packet.write(&mut bytes);
         let read = MerchantOffers::read(&mut &bytes[..]).expect("reads back");

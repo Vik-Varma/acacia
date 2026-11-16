@@ -2,7 +2,10 @@
 //! their results over a scroller.
 
 use super::input::{Press, drag_scroll};
-use super::{Base, Env, Screen, Slot, blit, carried, contents, hovered_tooltip, item_tooltip, menus, transparent_background};
+use super::{
+    Base, Env, Screen, Slot, blit, carried, contents, hovered_tooltip, item_tooltip, menus,
+    transparent_background,
+};
 use crate::java::gui::Gui;
 use crate::java::mth::clamp;
 use crate::java::text::Text;
@@ -25,7 +28,14 @@ impl Stonecutter {
         menus::standard_inventory(&mut slots, 8, 84);
         let mut base = Base::new(width, height, [176, 166], title, inventory, slots);
         base.title_label[1] -= 1;
-        Stonecutter { base, recipes: Vec::new(), selected: -1, scroll_offs: 0.0, start_index: 0, display_recipes: false }
+        Stonecutter {
+            base,
+            recipes: Vec::new(),
+            selected: -1,
+            scroll_offs: 0.0,
+            start_index: 0,
+            display_recipes: false,
+        }
     }
 
     /// `containerChanged`, after the input or its recipes change.
@@ -74,14 +84,20 @@ impl Stonecutter {
         let (xo, yo) = (self.base.left + 52, self.base.top + 14);
         for index in self.start_index..self.start_index + 12 {
             let pos = (index - self.start_index) as i32;
-            let (xx, yy) = (mouse[0] - f64::from(xo + pos % 4 * 16), mouse[1] - f64::from(yo + pos / 4 * 18));
+            let (xx, yy) = (
+                mouse[0] - f64::from(xo + pos % 4 * 16),
+                mouse[1] - f64::from(yo + pos / 4 * 18),
+            );
             if xx >= 0.0 && yy >= 0.0 && xx < 16.0 && yy < 18.0 && self.selected != index as i32 {
                 // Taken past the last recipe too, selecting nothing.
                 return Some(Press::Button(index));
             }
         }
         let (x, y) = (self.base.left + 119, self.base.top + 9);
-        let on = mouse[0] >= f64::from(x) && mouse[0] < f64::from(x + 12) && mouse[1] >= f64::from(y) && mouse[1] < f64::from(y + 54);
+        let on = mouse[0] >= f64::from(x)
+            && mouse[0] < f64::from(x + 12)
+            && mouse[1] >= f64::from(y)
+            && mouse[1] < f64::from(y + 54);
         on.then_some(Press::Scroller)
     }
 
@@ -89,7 +105,8 @@ impl Stonecutter {
     pub fn mouse_dragged(&mut self, mouse: [f64; 2]) {
         if self.scroll_bar_active() {
             self.scroll_offs = drag_scroll(mouse[1], self.base.top + 14, 54, 7.5);
-            self.start_index = (f64::from(self.scroll_offs * self.offscreen_rows() as f32) + 0.5) as usize * 4;
+            self.start_index =
+                (f64::from(self.scroll_offs * self.offscreen_rows() as f32) + 0.5) as usize * 4;
         }
     }
 
@@ -117,9 +134,21 @@ impl Screen for Stonecutter {
     fn background(&mut self, gui: &mut Gui, _env: &Env, mouse: [i32; 2], _partial: f32) {
         transparent_background(gui);
         let (xo, yo) = (self.base.left, self.base.top);
-        blit(gui, "gui/container/stonecutter", xo, yo, [0.0, 0.0], self.base.image_width, self.base.image_height);
+        blit(
+            gui,
+            "gui/container/stonecutter",
+            xo,
+            yo,
+            [0.0, 0.0],
+            self.base.image_width,
+            self.base.image_height,
+        );
         let sy = (41.0 * self.scroll_offs) as i32;
-        let sprite = if self.scroll_bar_active() { "container/stonecutter/scroller" } else { "container/stonecutter/scroller_disabled" };
+        let sprite = if self.scroll_bar_active() {
+            "container/stonecutter/scroller"
+        } else {
+            "container/stonecutter/scroller_disabled"
+        };
         gui.sprite(sprite, xo + 119, yo + 15 + sy, 12, 15);
         for (i, x, y) in self.visible() {
             let sprite = if i as i32 == self.selected {
@@ -143,7 +172,9 @@ impl Screen for Stonecutter {
         if !self.display_recipes {
             return;
         }
-        let hit = self.visible().into_iter().find(|&(_, x, y)| mouse[0] >= x && mouse[0] < x + 16 && mouse[1] >= y && mouse[1] < y + 18);
+        let hit = self.visible().into_iter().find(|&(_, x, y)| {
+            mouse[0] >= x && mouse[0] < x + 16 && mouse[1] >= y && mouse[1] < y + 18
+        });
         if let Some((i, _, _)) = hit {
             let t = item_tooltip(self, &self.recipes[i].0, env, mouse);
             self.base.tooltip.set(t, false);

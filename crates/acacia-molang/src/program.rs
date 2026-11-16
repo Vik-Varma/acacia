@@ -65,38 +65,76 @@ pub(crate) enum Node {
     Const(Value),
     This,
     /// `variable.root.member.member`
-    Var { slot: u32, path: List },
-    Temp { slot: u32, path: List },
+    Var {
+        slot: u32,
+        path: List,
+    },
+    Temp {
+        slot: u32,
+        path: List,
+    },
     Context(u32),
-    Query { id: u32, args: List },
+    Query {
+        id: u32,
+        args: List,
+    },
     /// `query.name.member.member`: members of the struct a query returned.
-    Member { of: u32, path: List },
-    Math { function: MathFn, args: [u32; 3], count: u8 },
+    Member {
+        of: u32,
+        path: List,
+    },
+    Math {
+        function: MathFn,
+        args: [u32; 3],
+        count: u8,
+    },
     Not(u32),
     /// Arithmetic, comparisons and `==`; `&&` and `||` are [`Node::Logic`].
     Binary(Op, u32, u32),
     /// `of`'s result through a post-op (`post.rs`): what `-x`, `x·c` and `x + c` become.
-    Post { of: u32, post: Post },
+    Post {
+        of: u32,
+        post: Post,
+    },
     /// `a + b - c + ...`, flattened as BDS does (`optimise.rs`); `-` negates its term.
     Sum(List),
     /// `a && b && ...` (`any` false) or `a || b || ...`.
-    Logic { any: bool, terms: List },
+    Logic {
+        any: bool,
+        terms: List,
+    },
     Coalesce(u32, u32),
     Ternary(u32, u32, u32),
     /// `a ? b`
     When(u32, u32),
     /// The target is a `Var` or `Temp` node.
-    Assign { target: u32, value: u32 },
+    Assign {
+        target: u32,
+        value: u32,
+    },
     Block(List),
-    Loop { count: u32, body: u32 },
+    Loop {
+        count: u32,
+        body: u32,
+    },
     /// `for_each(variable, array, { body })`; the variable is a `Var` or `Temp` node.
-    ForEach { variable: u32, array: u32, body: u32 },
+    ForEach {
+        variable: u32,
+        array: u32,
+        body: u32,
+    },
     Break,
     Continue,
     Return(u32),
     /// `array.name[index]`, the array's elements compiled in place.
-    Index { items: List, index: u32 },
-    Arrow { entity: u32, of: u32 },
+    Index {
+        items: List,
+        index: u32,
+    },
+    Arrow {
+        entity: u32,
+        of: u32,
+    },
 }
 
 /// A compiled expression; see [`crate::Compiler::compile`] and [`Program::eval`](crate::Program::eval).

@@ -8,10 +8,16 @@ use bytes::BytesMut;
 
 use super::{Peer, Server};
 use crate::conn::{Conn, ConnConfig};
-use crate::wire::{offline as o, WireError};
+use crate::wire::{WireError, offline as o};
 
 impl Server {
-    pub(super) fn handle_offline(&mut self, now: Instant, from: SocketAddr, id: u8, data: &[u8]) -> Result<(), WireError> {
+    pub(super) fn handle_offline(
+        &mut self,
+        now: Instant,
+        from: SocketAddr,
+        id: u8,
+        data: &[u8],
+    ) -> Result<(), WireError> {
         let mut out = BytesMut::new();
         match id {
             _ if o::is_unconnected_ping(id) => {
@@ -28,7 +34,13 @@ impl Server {
         Ok(())
     }
 
-    fn open_1(&mut self, now: Instant, from: SocketAddr, data: &[u8], out: &mut BytesMut) -> Result<(), WireError> {
+    fn open_1(
+        &mut self,
+        now: Instant,
+        from: SocketAddr,
+        data: &[u8],
+        out: &mut BytesMut,
+    ) -> Result<(), WireError> {
         let (protocol, mtu) = o::parse_request_1(data)?;
         if mtu < o::MIN_MTU {
             return Ok(());
@@ -41,15 +53,28 @@ impl Server {
             o::incompatible_protocol(out, self.cfg.protocol_version, self.cfg.guid);
             return Ok(());
         }
-        let cookie = self.cfg.cookies.then(|| self.cookies.issue(from, now.saturating_duration_since(self.epoch)));
+        let cookie = self.cfg.cookies.then(|| {
+            self.cookies
+                .issue(from, now.saturating_duration_since(self.epoch))
+        });
         o::reply_1(out, self.cfg.guid, cookie, mtu.min(self.cfg.max_mtu));
         Ok(())
     }
 
-    fn open_2(&mut self, now: Instant, from: SocketAddr, data: &[u8], out: &mut BytesMut) -> Result<(), WireError> {
+    fn open_2(
+        &mut self,
+        now: Instant,
+        from: SocketAddr,
+        data: &[u8],
+        out: &mut BytesMut,
+    ) -> Result<(), WireError> {
         let request = o::parse_request_2(data, self.cfg.cookies)?;
         let age = now.saturating_duration_since(self.epoch);
-        if request.cookie.is_some_and(|c| !self.cookies.verify(from, age, c)) || request.mtu < o::MIN_MTU {
+        if request
+            .cookie
+            .is_some_and(|c| !self.cookies.verify(from, age, c))
+            || request.mtu < o::MIN_MTU
+        {
             return Ok(());
         }
         let refuse = match self.peers.get(&from) {
@@ -57,7 +82,9 @@ impl Server {
             // Our reply 2 got lost, or the client restarted mid-handshake: start over.
             Some(p) if !p.connected && p.guid == request.client_guid => None,
             Some(_) => Some(o::ID_ALREADY_CONNECTED),
-            None if self.peers.len() >= self.cfg.max_peers => Some(o::ID_NO_FREE_INCOMING_CONNECTIONS),
+            None if self.peers.len() >= self.cfg.max_peers => {
+                Some(o::ID_NO_FREE_INCOMING_CONNECTIONS)
+            }
             None => None,
         };
         if let Some(id) = refuse {
@@ -72,7 +99,11 @@ impl Server {
             recv_limits: self.cfg.recv_limits,
             congestion_window: true,
         };
-        let mut peer = Peer::new(Conn::new(self.epoch, cfg, now), request.client_guid, now + self.cfg.handshake_timeout);
+        let mut peer = Peer::new(
+            Conn::new(self.epoch, cfg, now),
+            request.client_guid,
+            now + self.cfg.handshake_timeout,
+        );
         self.schedule.touch(from, &mut peer);
         self.peers.insert(from, peer);
         o::reply_2(out, self.cfg.guid, from, mtu);

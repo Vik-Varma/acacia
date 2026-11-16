@@ -12,7 +12,11 @@ const TAIL_UP: f32 = 1.727_876_1;
 
 pub(super) fn feline(p: &mut Poses, s: &RenderState) {
     let (age, baby) = (s.age_scale(), s.baby());
-    let (crouching, sprinting, sitting) = (s.flag("isCrouching"), s.flag("isSprinting"), s.flag("isSitting"));
+    let (crouching, sprinting, sitting) = (
+        s.flag("isCrouching"),
+        s.flag("isSprinting"),
+        s.flag("isSitting"),
+    );
     if crouching {
         p.get("body").y += 1.0 * age;
         p.get("head").y += 2.0 * age;
@@ -42,7 +46,10 @@ pub(super) fn feline(p: &mut Poses, s: &RenderState) {
         p.x_rot("left_hind_leg", cos(pos * 0.6662) * speed);
         p.x_rot("right_hind_leg", cos(pos * 0.6662 + right_hind) * speed);
         p.x_rot("left_front_leg", cos(pos * 0.6662 + PI + lag) * speed);
-        p.x_rot("right_front_leg", cos(pos * 0.6662 + if sprinting { PI } else { 0.0 }) * speed);
+        p.x_rot(
+            "right_front_leg",
+            cos(pos * 0.6662 + if sprinting { PI } else { 0.0 }) * speed,
+        );
         p.x_rot("tail2", TAIL_UP + tail_swing * cos(pos) * speed);
     } else if baby {
         baby_sitting(p);
@@ -80,10 +87,30 @@ fn adult_sitting(p: &mut Poses, a: f32) {
     shift(p, "head", [0.0, -3.3 * a, 1.0 * a], None);
     shift(p, "tail1", [0.0, 8.0 * a, -2.0 * a], Some(TAIL_UP));
     shift(p, "tail2", [0.0, 2.0 * a, -0.8 * a], Some(2.670_354));
-    shift(p, "left_front_leg", [0.0, 2.0 * a, -2.0 * a], Some(pi_div(-20.0)));
-    shift(p, "right_front_leg", [0.0, 2.0 * a, -2.0 * a], Some(pi_div(-20.0)));
-    shift(p, "left_hind_leg", [0.0, 3.0 * a, -4.0 * a], Some(-PI / 2.0));
-    shift(p, "right_hind_leg", [0.0, 3.0 * a, -4.0 * a], Some(-PI / 2.0));
+    shift(
+        p,
+        "left_front_leg",
+        [0.0, 2.0 * a, -2.0 * a],
+        Some(pi_div(-20.0)),
+    );
+    shift(
+        p,
+        "right_front_leg",
+        [0.0, 2.0 * a, -2.0 * a],
+        Some(pi_div(-20.0)),
+    );
+    shift(
+        p,
+        "left_hind_leg",
+        [0.0, 3.0 * a, -4.0 * a],
+        Some(-PI / 2.0),
+    );
+    shift(
+        p,
+        "right_hind_leg",
+        [0.0, 3.0 * a, -4.0 * a],
+        Some(-PI / 2.0),
+    );
 }
 
 fn baby_sitting(p: &mut Poses) {
@@ -120,7 +147,12 @@ fn baby_lying(p: &mut Poses, lie: f32, tail: f32) {
     shift(p, "head", [1.5, 0.75, -0.5], None);
     shift(p, "right_front_leg", [3.5, -0.5, 0.0], Some(pi_div(-4.0)));
     shift(p, "left_front_leg", [1.5, -1.0, -2.0], Some(-PI / 2.0));
-    shift(p, "right_hind_leg", [2.5, -0.25, 0.5], Some((std::f64::consts::PI * 2.0 / 9.0) as f32));
+    shift(
+        p,
+        "right_hind_leg",
+        [2.5, -0.25, 0.5],
+        Some((std::f64::consts::PI * 2.0 / 9.0) as f32),
+    );
     p.y_rot("right_hind_leg", pi_div(9.0));
     p.z_rot("right_hind_leg", pi_div(-9.0));
     shift(p, "left_hind_leg", [1.5, 0.0, -1.0], None);

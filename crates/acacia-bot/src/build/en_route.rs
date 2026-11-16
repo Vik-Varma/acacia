@@ -14,12 +14,28 @@ pub(super) fn enabled() -> bool {
 /// the click is made by stopping, as without en-route placing (live: offers on runs and leaps were dropped and
 /// the cells walked past, 116 placed en route and no time saved).
 pub(super) fn plain_step(cx: &crate::pathfind::process::Ctx) -> bool {
-    cx.on_ground && cx.path.first().is_some_and(|n| n.kind == crate::pathfind::MoveKind::Walk && n.work.is_empty() && n.mac.is_none())
+    cx.on_ground
+        && cx.path.first().is_some_and(|n| {
+            n.kind == crate::pathfind::MoveKind::Walk && n.work.is_empty() && n.mac.is_none()
+        })
 }
 
 /// The placed state does not follow the look (BDS takes facing blocks' direction from the last rotation it
 /// got, which mid-walk is the aim, not the stand's): these wait for a stand.
 pub(super) fn look_free(name: &str) -> bool {
     let n = name.trim_start_matches("minecraft:");
-    !["stairs", "furnace", "observer", "piston", "dispenser", "dropper", "chest", "barrel", "door", "hopper"].iter().any(|k| n.contains(k))
+    ![
+        "stairs",
+        "furnace",
+        "observer",
+        "piston",
+        "dispenser",
+        "dropper",
+        "chest",
+        "barrel",
+        "door",
+        "hopper",
+    ]
+    .iter()
+    .any(|k| n.contains(k))
 }

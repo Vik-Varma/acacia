@@ -6,8 +6,20 @@ use std::sync::LazyLock;
 use crate::blocks::placed::Draw;
 
 /// x and y of `GradientNoise.GRADIENT`'s first twelve.
-const GRADIENT: [[f64; 2]; 12] =
-    [[1.0, 1.0], [-1.0, 1.0], [1.0, -1.0], [-1.0, -1.0], [1.0, 0.0], [-1.0, 0.0], [1.0, 0.0], [-1.0, 0.0], [0.0, 1.0], [0.0, -1.0], [0.0, 1.0], [0.0, -1.0]];
+const GRADIENT: [[f64; 2]; 12] = [
+    [1.0, 1.0],
+    [-1.0, 1.0],
+    [1.0, -1.0],
+    [-1.0, -1.0],
+    [1.0, 0.0],
+    [-1.0, 0.0],
+    [1.0, 0.0],
+    [-1.0, 0.0],
+    [0.0, 1.0],
+    [0.0, -1.0],
+    [0.0, 1.0],
+    [0.0, -1.0],
+];
 
 pub struct Simplex {
     permutation: [u8; 256],
@@ -35,22 +47,32 @@ impl Simplex {
         let t = f64::from(i.wrapping_add(j)) * g2;
         let (x0, y0) = (x - (f64::from(i) - t), y - (f64::from(j) - t));
         let (i1, j1) = if x0 > y0 { (1, 0) } else { (0, 1) };
-        let corners = [(0, 0, x0, y0), (i1, j1, x0 - f64::from(i1) + g2, y0 - f64::from(j1) + g2), (1, 1, x0 - 1.0 + 2.0 * g2, y0 - 1.0 + 2.0 * g2)];
+        let corners = [
+            (0, 0, x0, y0),
+            (i1, j1, x0 - f64::from(i1) + g2, y0 - f64::from(j1) + g2),
+            (1, 1, x0 - 1.0 + 2.0 * g2, y0 - 1.0 + 2.0 * g2),
+        ];
         let permute = |v: i32| i32::from(self.permutation[(v & 0xff) as usize]);
         let sum: f64 = corners
             .iter()
             .map(|&(di, dj, x, y)| {
-                let [gx, gy] = GRADIENT[(permute((i & 0xff) + di + permute((j & 0xff) + dj)) % 12) as usize];
+                let [gx, gy] =
+                    GRADIENT[(permute((i & 0xff) + di + permute((j & 0xff) + dj)) % 12) as usize];
                 let t = 0.5 - x * x - y * y;
                 let squared = t * t;
-                if t < 0.0 { 0.0 } else { squared * squared * (gx * x + gy * y) }
+                if t < 0.0 {
+                    0.0
+                } else {
+                    squared * squared * (gx * x + gy * y)
+                }
             })
             .sum();
         (70.0 * sum) as f32
     }
 }
 
-pub static BIOME_INFO: LazyLock<Simplex> = LazyLock::new(|| Simplex::from_draw(&mut Draw::new(2345)));
+pub static BIOME_INFO: LazyLock<Simplex> =
+    LazyLock::new(|| Simplex::from_draw(&mut Draw::new(2345)));
 
 /// Whether swamp grass is its darker colour in the column of world position `(x, z)`.
 pub fn grass_patch(x: i32, z: i32) -> bool {
@@ -59,7 +81,9 @@ pub fn grass_patch(x: i32, z: i32) -> bool {
 
 #[test]
 fn the_noise_is_low_in_patches() {
-    let low = (0..2000).filter(|i| grass_patch(i * 7, 300 - i * 3)).count();
+    let low = (0..2000)
+        .filter(|i| grass_patch(i * 7, 300 - i * 3))
+        .count();
     assert!((200..1200).contains(&low), "{low}");
     assert_eq!(grass_patch(40, -90), grass_patch(40, -90));
 }

@@ -82,7 +82,15 @@ pub const SEARCH: &str = "search";
 pub fn filtered<'a>(packs: &'a [Pack], search: &str) -> Vec<&'a Pack> {
     let f = search.to_lowercase();
     let blank = search.trim().is_empty();
-    packs.iter().filter(|p| blank || [p.id.clone(), p.title.plain(), p.description.plain()].iter().any(|s| s.to_lowercase().contains(&f))).collect()
+    packs
+        .iter()
+        .filter(|p| {
+            blank
+                || [p.id.clone(), p.title.plain(), p.description.plain()]
+                    .iter()
+                    .any(|s| s.to_lowercase().contains(&f))
+        })
+        .collect()
 }
 
 struct HeaderEntry {
@@ -91,7 +99,12 @@ struct HeaderEntry {
 
 impl Entry for HeaderEntry {
     fn extract_content(&mut self, ctx: &mut Ctx, [x, y, w, h]: [i32; 4], _hovered: bool) {
-        ctx.centered_text(self.text.clone(), x + w / 2, y + 2 + (h - 4) / 2 - 9 / 2, 0xFFFF_FFFF);
+        ctx.centered_text(
+            self.text.clone(),
+            x + w / 2,
+            y + 2 + (h - 4) / 2 - 9 / 2,
+            0xFFFF_FFFF,
+        );
     }
 }
 
@@ -113,8 +126,14 @@ impl PackEntry {
     /// The icon's quadrant actions for a point `rel` from its corner: (action, highlighted).
     fn actions(&self, rel: [i32; 2]) -> Vec<(&'static str, bool)> {
         let [rx, ry] = rel;
-        let (icon, left) = ((0..32).contains(&rx) && (0..32).contains(&ry), (0..16).contains(&rx) && (0..32).contains(&ry));
-        let (top_right, bottom_right) = ((16..32).contains(&rx) && (0..16).contains(&ry), (16..32).contains(&rx) && (16..32).contains(&ry));
+        let (icon, left) = (
+            (0..32).contains(&rx) && (0..32).contains(&ry),
+            (0..16).contains(&rx) && (0..32).contains(&ry),
+        );
+        let (top_right, bottom_right) = (
+            (16..32).contains(&rx) && (0..16).contains(&ry),
+            (16..32).contains(&rx) && (16..32).contains(&ry),
+        );
         let p = &self.pack;
         if !p.selected {
             return vec![("select", icon)];
@@ -146,9 +165,21 @@ impl Entry for PackEntry {
         let (right, bottom) = (cx + row[2] - 4, cy + row[3] - 4);
         let p = &self.pack;
         if p.compat != Compat::Compatible {
-            ctx.gui.fill(cx - 1, cy - 1, right + 1, bottom + 1, 0xFF77_0000);
+            ctx.gui
+                .fill(cx - 1, cy - 1, right + 1, bottom + 1, 0xFF77_0000);
         }
-        let icon = GuiDraw::Blit { texture: Cow::Owned(p.icon.clone()), blend: Blend::Textured, x: cx, y: cy, w: 32, h: 32, uv: [0.0, 0.0], src: [32, 32], tex: [32, 32], color: 0xFFFF_FFFF };
+        let icon = GuiDraw::Blit {
+            texture: Cow::Owned(p.icon.clone()),
+            blend: Blend::Textured,
+            x: cx,
+            y: cy,
+            w: 32,
+            h: 32,
+            uv: [0.0, 0.0],
+            src: [32, 32],
+            tex: [32, 32],
+            color: 0xFFFF_FFFF,
+        };
         ctx.gui.draws.push(icon);
         let mut name = p.title.clone();
         let mut description = p.description.clone().with_color(0x80_8080);
@@ -158,12 +189,17 @@ impl Entry for PackEntry {
             ctx.gui.fill(cx, cy, cx + 32, cy + 32, 0xA090_9090);
             if p.compat != Compat::Compatible {
                 name = ctx.tr("pack.incompatible");
-                description = ctx.tr(&format!("pack.incompatible.{}", p.compat.key())).with_color(0xAA_AAAA);
+                description = ctx
+                    .tr(&format!("pack.incompatible.{}", p.compat.key()))
+                    .with_color(0xAA_AAAA);
                 ellipsis = Style::color(0xAA_AAAA);
             }
             let rel = [ctx.mouse.0 - cx, ctx.mouse.1 - cy];
             for (action, lit) in self.actions(rel) {
-                let sprite = format!("transferable_list/{action}{}", if lit { "_highlighted" } else { "" });
+                let sprite = format!(
+                    "transferable_list/{action}{}",
+                    if lit { "_highlighted" } else { "" }
+                );
                 ctx.gui.sprite(sprite, cx, cy, 32, 32);
             }
         }
@@ -188,19 +224,41 @@ impl Entry for PackEntry {
             "move_down" => "down",
             a => a,
         };
-        Some(Fired { id: format!("pack.{verb}:{}", self.pack.id).into(), action: Action::Press })
+        Some(Fired {
+            id: format!("pack.{verb}:{}", self.pack.id).into(),
+            action: Action::Press,
+        })
     }
 }
 
 /// `TransferableSelectionList.updateList`: the bold underlined title, then the packs.
-fn list(ctx: &Ctx, env: &Env, title: &str, packs: &[&Pack], x: i32, y: i32, h: i32) -> SelectionList {
+fn list(
+    ctx: &Ctx,
+    env: &Env,
+    title: &str,
+    packs: &[&Pack],
+    x: i32,
+    y: i32,
+    h: i32,
+) -> SelectionList {
     let mut list = SelectionList::new(200, h, y, 196, env.in_world);
     list.base.x = x;
     (list.bar_at_right, list.narrow_entries) = (true, true);
-    let header = ctx.tr(title).with_style(&Style { bold: Some(true), underlined: Some(true), ..Style::default() });
+    let header = ctx.tr(title).with_style(&Style {
+        bold: Some(true),
+        underlined: Some(true),
+        ..Style::default()
+    });
     list.push(Box::new(HeaderEntry { text: header }), 13);
     for p in packs {
-        list.push(Box::new(PackEntry { pack: (*p).clone(), state: ListState::default(), content: [0, 0] }), 36);
+        list.push(
+            Box::new(PackEntry {
+                pack: (*p).clone(),
+                state: ListState::default(),
+                content: [0, 0],
+            }),
+            36,
+        );
     }
     list
 }
@@ -212,24 +270,53 @@ pub fn build(ctx: &Ctx, env: Env, p: &Packs) -> ListedScreen {
     let mut header = Linear::new(true, 4);
     header.grid.defaults = header.grid.defaults.align_x(0.5);
     header.add_default(b.add(StringWidget::fit(ctx.font, p.title.clone())));
-    header.add_default(b.add(StringWidget::fit(ctx.font, ctx.tr("pack.dropInfo").with_color(0xAA_AAAA))));
+    header.add_default(b.add(StringWidget::fit(
+        ctx.font,
+        ctx.tr("pack.dropInfo").with_color(0xAA_AAAA),
+    )));
     let mut search = EditBox::new(0, 0, 200, 15, Text::default());
-    let hint = Style { color: Some(0xAA_AAAA), italic: Some(true), ..Style::default() };
+    let hint = Style {
+        color: Some(0xAA_AAAA),
+        italic: Some(true),
+        ..Style::default()
+    };
     search.set_hint(ctx.tr("gui.packSelection.search").with_style(&hint));
     search.set_value(ctx.font, p.search);
-    (search.base.focused, search.focused_time, search.base.id) = (p.search_focused, p.focused_time, SEARCH.into());
+    (search.base.focused, search.focused_time, search.base.id) =
+        (p.search_focused, p.focused_time, SEARCH.into());
     header.add_default(b.add(search));
     b.layout.add_header(header.into_elem());
     for _ in 0..2 {
-        b.layout.add_contents(Elem::Spacer { x: 0, y: 0, w: 200, h: env.height - 66 });
+        b.layout.add_contents(Elem::Spacer {
+            x: 0,
+            y: 0,
+            w: 200,
+            h: env.height - 66,
+        });
     }
     let mut footer = Linear::new(false, 8);
     footer.add_default(b.add(Button::named(ctx, 150, OPEN_FOLDER)));
     footer.add_default(b.add(Button::named(ctx, 150, DONE)));
     b.layout.add_footer(footer.into_elem());
     let (h, y) = (b.layout.content_height(env.height), b.layout.header_h);
-    let available = list(ctx, &env, "pack.available.title", &filtered(p.available, p.search), env.width / 2 - 15 - 200, y, h);
-    let selected = list(ctx, &env, "pack.selected.title", &filtered(p.selected, p.search), env.width / 2 + 15, y, h);
+    let available = list(
+        ctx,
+        &env,
+        "pack.available.title",
+        &filtered(p.available, p.search),
+        env.width / 2 - 15 - 200,
+        y,
+        h,
+    );
+    let selected = list(
+        ctx,
+        &env,
+        "pack.selected.title",
+        &filtered(p.selected, p.search),
+        env.width / 2 + 15,
+        y,
+        h,
+    );
     let mut screen = b.finish(env, vec![(available, 36), (selected, 36)]);
     for (l, s) in screen.lists.iter_mut().zip(p.scroll) {
         l.set_scroll(s);

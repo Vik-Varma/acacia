@@ -37,7 +37,12 @@ impl Default for Atlas {
 impl Atlas {
     /// An atlas holding only [`WHITE`], an opaque white texel for flat fills.
     pub fn new() -> Atlas {
-        let mut atlas = Atlas { image: RgbaImage::new(WIDTH, 1), sprites: HashMap::new(), shelf: (0, 0, 0), version: 0 };
+        let mut atlas = Atlas {
+            image: RgbaImage::new(WIDTH, 1),
+            sprites: HashMap::new(),
+            shelf: (0, 0, 0),
+            version: 0,
+        };
         atlas.add(WHITE, &RgbaImage::from_pixel(1, 1, image::Rgba([255; 4])));
         atlas
     }
@@ -56,14 +61,19 @@ impl Atlas {
         let e = 1e-3;
         self.sprites.values().any(|s| {
             let (sx, sy) = (s.x as f32, s.y as f32);
-            x0 >= sx - e && y0 >= sy - e && x1 <= sx + s.width as f32 + e && y1 <= sy + s.height as f32 + e
+            x0 >= sx - e
+                && y0 >= sy - e
+                && x1 <= sx + s.width as f32 + e
+                && y1 <= sy + s.height as f32 + e
         })
     }
 
     /// The quads whose atlas lookups leave their sprite: a repeating texture without `wrap`, a
     /// UV past its image. Pictures sample their own texture.
     pub fn stray<'q>(&self, quads: &'q [crate::Quad]) -> impl Iterator<Item = &'q crate::Quad> {
-        quads.iter().filter(|q| !q.picture && !self.holds(q.wrap.unwrap_or(q.uv)))
+        quads
+            .iter()
+            .filter(|q| !q.picture && !self.holds(q.wrap.unwrap_or(q.uv)))
     }
 
     /// [`WHITE`]'s sprite.
@@ -82,13 +92,23 @@ impl Atlas {
             (top, height, used) = (top + height + GAP, 0, 0);
         }
         height = height.max(h);
-        let sprite = Sprite { x: used, y: top, width: w, height: h };
+        let sprite = Sprite {
+            x: used,
+            y: top,
+            width: w,
+            height: h,
+        };
         if top + height > self.image.height() {
             let mut grown = RgbaImage::new(WIDTH, (top + height).next_power_of_two());
             image::imageops::replace(&mut grown, &self.image, 0, 0);
             self.image = grown;
         }
-        image::imageops::replace(&mut self.image, image, i64::from(sprite.x), i64::from(sprite.y));
+        image::imageops::replace(
+            &mut self.image,
+            image,
+            i64::from(sprite.x),
+            i64::from(sprite.y),
+        );
         self.shelf = (top, height, used + w + GAP);
         self.sprites.insert(name.to_owned(), sprite);
         self.version += 1;
@@ -124,23 +144,41 @@ mod tests {
         let sprite = [x, y, x + 16.0, y + 16.0];
         let tiled = crate::Quad::plain([0.0; 4], [x, y, x + 64.0, y + 16.0], [255; 4]);
         assert_eq!(atlas.stray(&[tiled]).count(), 1);
-        assert_eq!(atlas.stray(&[crate::Quad { wrap: Some(sprite), ..tiled }]).count(), 0);
+        assert_eq!(
+            atlas
+                .stray(&[crate::Quad {
+                    wrap: Some(sprite),
+                    ..tiled
+                }])
+                .count(),
+            0
+        );
     }
 
     #[test]
     fn images_never_overlap() {
         let mut atlas = Atlas::new();
         let sizes = [(182, 22), (24, 23), (9, 9), (1000, 5), (128, 128), (9, 9)];
-        let sprites: Vec<Sprite> = sizes.iter().enumerate().map(|(i, &(w, h))| atlas.add(&format!("s{i}"), &RgbaImage::new(w, h))).collect();
+        let sprites: Vec<Sprite> = sizes
+            .iter()
+            .enumerate()
+            .map(|(i, &(w, h))| atlas.add(&format!("s{i}"), &RgbaImage::new(w, h)))
+            .collect();
         for (i, a) in sprites.iter().enumerate() {
             assert!(a.x + a.width <= WIDTH && a.y + a.height <= atlas.image().height());
             for b in &sprites[i + 1..] {
-                let apart = a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
+                let apart = a.x + a.width <= b.x
+                    || b.x + b.width <= a.x
+                    || a.y + a.height <= b.y
+                    || b.y + b.height <= a.y;
                 assert!(apart, "{a:?} {b:?}");
             }
         }
         assert_eq!(atlas.get("s2"), Some(sprites[2]));
-        assert_eq!(atlas.image().get_pixel(atlas.white().x, atlas.white().y).0, [255; 4]);
+        assert_eq!(
+            atlas.image().get_pixel(atlas.white().x, atlas.white().y).0,
+            [255; 4]
+        );
     }
 
     #[test]
@@ -148,7 +186,10 @@ mod tests {
         let mut atlas = Atlas::new();
         let first = atlas.replace("map", &RgbaImage::from_pixel(4, 4, image::Rgba([1; 4])));
         let version = atlas.version;
-        assert_eq!(atlas.replace("map", &RgbaImage::from_pixel(4, 4, image::Rgba([2; 4]))), first);
+        assert_eq!(
+            atlas.replace("map", &RgbaImage::from_pixel(4, 4, image::Rgba([2; 4]))),
+            first
+        );
         assert_eq!(atlas.image().get_pixel(first.x + 3, first.y + 3).0, [2; 4]);
         assert!(atlas.version > version);
         assert_eq!(atlas.replace("map", &RgbaImage::new(8, 8)).width, 8);

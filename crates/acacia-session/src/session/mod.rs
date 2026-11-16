@@ -12,21 +12,21 @@ use std::time::Instant;
 
 use acacia_proto::packets::{Disconnect, PlayStatusStatus, RequestNetworkSettings};
 use acacia_proto::types::DisconnectFailReason;
-use acacia_proto::{encode_packet, Packet, RawPacket, PROTOCOL_VERSION};
+use acacia_proto::{PROTOCOL_VERSION, Packet, RawPacket, encode_packet};
 use acacia_raknet as raknet;
 use bytes::{Bytes, BytesMut};
 use p384::ecdsa::SigningKey;
 
+use crate::Error;
 use crate::batch::BatchCodec;
 use crate::blob_store::BlobStore;
 use crate::pack_store::PackStore;
-use crate::Error;
 use blob_cache::BlobStatus;
 use deferred::Deferred;
 use link::Link;
-use packs::Packs;
-pub use packs::PackFetch;
 pub use link::LinkConfig;
+pub use packs::PackFetch;
+use packs::Packs;
 use strict::JoinOrder;
 pub use strict::{Reason, Violation};
 
@@ -57,7 +57,9 @@ pub enum Event {
     /// Strict mode only; comes before the packet's own [`Event::Packet`].
     Violation(Violation),
     /// Login finished and the player is in the world.
-    Spawned { runtime_entity_id: u64 },
+    Spawned {
+        runtime_entity_id: u64,
+    },
     /// Every packet from the server, including the ones the session also handled internally.
     Packet(RawPacket),
     Disconnected(DisconnectReason),
@@ -68,9 +70,15 @@ pub enum DisconnectReason {
     Transport(raknet::DisconnectReason),
     /// The NetherNet (WebRTC) connection failed or closed; reported by the I/O driver.
     NetherNet(String),
-    Kicked { reason: String, message: String },
+    Kicked {
+        reason: String,
+        message: String,
+    },
     /// The server moved the player elsewhere; reconnect to this address to follow it.
-    Transfer { address: String, port: u16 },
+    Transfer {
+        address: String,
+        port: u16,
+    },
     LoginFailed(PlayStatusStatus),
     Protocol(String),
     LocalClose,
@@ -117,7 +125,11 @@ pub struct Session {
 impl Session {
     pub fn new(cfg: SessionConfig, server: SocketAddr, now: Instant) -> Self {
         let link = Link::new(cfg.link, server, now);
-        let mut codec = if link.is_message() { BatchCodec::without_header() } else { BatchCodec::default() };
+        let mut codec = if link.is_message() {
+            BatchCodec::without_header()
+        } else {
+            BatchCodec::default()
+        };
         codec.set_max_decompressed(cfg.max_batch_bytes);
         let mut session = Self {
             link,
@@ -199,7 +211,12 @@ impl Session {
 
     pub fn poll_timeout(&self) -> Option<Instant> {
         let blobs = self.blobs.as_ref().and_then(BlobStatus::next_due);
-        self.link.poll_timeout().into_iter().chain(self.deferred.next_due()).chain(blobs).min()
+        self.link
+            .poll_timeout()
+            .into_iter()
+            .chain(self.deferred.next_due())
+            .chain(blobs)
+            .min()
     }
 
     /// Batches queued packets into one game message, then yields RakNet datagrams to send, or
@@ -247,14 +264,17 @@ impl Session {
             let result = match event {
                 raknet::Event::Connected { .. } => {
                     self.stage = Stage::LoggingIn;
-                    self.send(&RequestNetworkSettings { client_protocol: PROTOCOL_VERSION });
+                    self.send(&RequestNetworkSettings {
+                        client_protocol: PROTOCOL_VERSION,
+                    });
                     Ok(None)
                 }
                 raknet::Event::Message(msg) => self.handle_batch(&msg),
                 raknet::Event::Disconnected(reason) => {
                     if self.stage != Stage::Closed {
                         self.stage = Stage::Closed;
-                        self.events.push_back(Event::Disconnected(DisconnectReason::Transport(reason)));
+                        self.events
+                            .push_back(Event::Disconnected(DisconnectReason::Transport(reason)));
                     }
                     Ok(None)
                 }
@@ -275,7 +295,9 @@ impl Session {
         self.codec.decode(msg, &mut packets)?;
         let mut outcome = Ok(None);
         for buf in packets.drain(..) {
-            outcome = RawPacket::parse(buf).map_err(Error::from).and_then(|raw| self.handle_packet(raw));
+            outcome = RawPacket::parse(buf)
+                .map_err(Error::from)
+                .and_then(|raw| self.handle_packet(raw));
             if !matches!(outcome, Ok(None)) {
                 break;
             }

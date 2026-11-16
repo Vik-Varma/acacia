@@ -30,7 +30,12 @@ const MAX_HEAD_TURN: f32 = 90.0;
 
 /// The item in a hand as Molang names it: without the namespace, empty for none.
 fn held_name(e: &Tracked, hand: usize) -> Value {
-    Value::Text(e.held[hand].as_ref().map_or("", |(key, _)| key.name.trim_start_matches("minecraft:")).to_owned())
+    Value::Text(
+        e.held[hand]
+            .as_ref()
+            .map_or("", |(key, _)| key.name.trim_start_matches("minecraft:"))
+            .to_owned(),
+    )
 }
 
 #[derive(Default)]
@@ -62,7 +67,11 @@ struct Hurt {
 const HURT_SECS: f32 = 0.5;
 
 fn topple_degrees(dying_secs: f32) -> f32 {
-    ((dying_secs * 20.0 - 1.0) / 20.0 * 1.6).max(0.0).sqrt().min(1.0) * 90.0
+    ((dying_secs * 20.0 - 1.0) / 20.0 * 1.6)
+        .max(0.0)
+        .sqrt()
+        .min(1.0)
+        * 90.0
 }
 
 impl Smoother {
@@ -75,26 +84,42 @@ impl Smoother {
     }
 
     /// An item's model in the shown world's look (the held item's, for the hand).
-    pub fn item(&mut self, key: &acacia_render::item::ItemKey, enchanted: bool) -> Option<ItemModel> {
+    pub fn item(
+        &mut self,
+        key: &acacia_render::item::ItemKey,
+        enchanted: bool,
+    ) -> Option<ItemModel> {
         self.items.as_mut()?.get(key, enchanted)
     }
 
     pub fn push(&mut self, snapshot: Vec<Tracked>) {
         let t = self.progress();
         let now = Instant::now();
-        let shown: HashMap<u64, Motion> = self.to.iter().map(|(e, to)| (e.runtime_id, self.blend(e.runtime_id, *to, t))).collect();
-        let last: HashMap<u64, Motion> = self.to.iter().map(|(e, to)| (e.runtime_id, *to)).collect();
+        let shown: HashMap<u64, Motion> = self
+            .to
+            .iter()
+            .map(|(e, to)| (e.runtime_id, self.blend(e.runtime_id, *to, t)))
+            .collect();
+        let last: HashMap<u64, Motion> =
+            self.to.iter().map(|(e, to)| (e.runtime_id, *to)).collect();
         self.born.retain(|id, _| last.contains_key(id));
         self.hurt.retain(|id, _| last.contains_key(id));
         self.to = snapshot
             .into_iter()
             .map(|e| {
                 self.born.entry(e.runtime_id).or_insert(now);
-                let hurt = self.hurt.entry(e.runtime_id).or_insert(Hurt { count: e.hurts, ..Hurt::default() });
+                let hurt = self.hurt.entry(e.runtime_id).or_insert(Hurt {
+                    count: e.hurts,
+                    ..Hurt::default()
+                });
                 if e.hurts > hurt.count {
                     (hurt.count, hurt.at) = (e.hurts, Some(now));
                 }
-                hurt.dying_since = if e.dying { hurt.dying_since.or(Some(now)) } else { None };
+                hurt.dying_since = if e.dying {
+                    hurt.dying_since.or(Some(now))
+                } else {
+                    None
+                };
                 let walk = last.get(&e.runtime_id).map_or(Walk::default(), |before| {
                     let moved = e.instance.position - before.position;
                     before.walk.step(moved.x.hypot(moved.z) as f32)
@@ -105,8 +130,29 @@ impl Smoother {
             .collect();
         (self.dropped, self.held) = match &mut self.items {
             Some(items) => (
-                self.to.iter().filter_map(|(e, _)| Some((e.runtime_id, e.dropped.as_ref().and_then(|d| items.get(&d.key, d.enchanted))?))).collect(),
-                self.to.iter().map(|(e, _)| (e.runtime_id, e.held.each_ref().map(|h| h.as_ref().and_then(|(key, enchanted)| items.get(key, *enchanted))))).collect(),
+                self.to
+                    .iter()
+                    .filter_map(|(e, _)| {
+                        Some((
+                            e.runtime_id,
+                            e.dropped
+                                .as_ref()
+                                .and_then(|d| items.get(&d.key, d.enchanted))?,
+                        ))
+                    })
+                    .collect(),
+                self.to
+                    .iter()
+                    .map(|(e, _)| {
+                        (
+                            e.runtime_id,
+                            e.held.each_ref().map(|h| {
+                                h.as_ref()
+                                    .and_then(|(key, enchanted)| items.get(key, *enchanted))
+                            }),
+                        )
+                    })
+                    .collect(),
             ),
             None => (HashMap::new(), HashMap::new()),
         };
@@ -115,7 +161,9 @@ impl Smoother {
     }
 
     fn progress(&self) -> f32 {
-        self.since.map_or(1.0, |s| (s.elapsed().as_secs_f32() / SNAPSHOT_SECS).min(1.0))
+        self.since.map_or(1.0, |s| {
+            (s.elapsed().as_secs_f32() / SNAPSHOT_SECS).min(1.0)
+        })
     }
 
     fn blend(&self, id: u64, to: Motion, t: f32) -> Motion {
@@ -124,10 +172,15 @@ impl Smoother {
 
     pub fn instances(&self, camera: DVec3) -> Vec<EntityInstance> {
         let t = self.progress();
-        let visible = |(e, _): &&(Tracked, Motion)| e.own_eyes.is_none_or(|eyes| eyes.distance(camera) > OWN_HEAD_RADIUS);
+        let visible = |(e, _): &&(Tracked, Motion)| {
+            e.own_eyes
+                .is_none_or(|eyes| eyes.distance(camera) > OWN_HEAD_RADIUS)
+        };
         let posed = |(e, to): &(Tracked, Motion)| {
             let m = self.blend(e.runtime_id, *to, t);
-            let (m, vehicle) = self.seated(e, m, t).map_or((m, None), |(m, kind)| (m, Some(kind)));
+            let (m, vehicle) = self
+                .seated(e, m, t)
+                .map_or((m, None), |(m, kind)| (m, Some(kind)));
             self.pieces(e, m, camera, None, vehicle)
         };
         self.to.iter().filter(visible).flat_map(posed).collect()
@@ -139,34 +192,77 @@ impl Smoother {
         let (vehicle, to) = self.to.iter().find(|(v, _)| v.runtime_id == seat.vehicle)?;
         let v = self.blend(vehicle.runtime_id, *to, t);
         let offset = glam::Quat::from_rotation_y(-v.yaw.to_radians()) * seat.offset;
-        Some((Motion { position: v.position + offset.as_dvec3(), yaw: seat.turn.map_or(m.yaw, |turn| v.yaw + turn), walk: Walk::default(), ..m }, &vehicle.kind))
+        Some((
+            Motion {
+                position: v.position + offset.as_dvec3(),
+                yaw: seat.turn.map_or(m.yaw, |turn| v.yaw + turn),
+                walk: Walk::default(),
+                ..m
+            },
+            &vehicle.kind,
+        ))
     }
 
     /// The own player (or, with `vehicle`, what it rides) standing still at `place` (model space to
     /// where the instance is drawn), its head turned by `head_yaw` and `pitch` degrees from its
     /// body: a figure in a screen.
-    pub fn figure(&self, vehicle: bool, place: glam::Mat4, head_yaw: f32, pitch: f32, camera: DVec3) -> Vec<EntityInstance> {
-        let Some((me, _)) = self.to.iter().find(|(e, _)| e.own_eyes.is_some()) else { return Vec::new() };
+    pub fn figure(
+        &self,
+        vehicle: bool,
+        place: glam::Mat4,
+        head_yaw: f32,
+        pitch: f32,
+        camera: DVec3,
+    ) -> Vec<EntityInstance> {
+        let Some((me, _)) = self.to.iter().find(|(e, _)| e.own_eyes.is_some()) else {
+            return Vec::new();
+        };
         let e = match (vehicle, me.seat) {
             (false, _) => me,
-            (true, Some(seat)) => match self.to.iter().find(|(v, _)| v.runtime_id == seat.vehicle) {
-                Some((v, _)) => v,
-                None => return Vec::new(),
-            },
+            (true, Some(seat)) => {
+                match self.to.iter().find(|(v, _)| v.runtime_id == seat.vehicle) {
+                    Some((v, _)) => v,
+                    None => return Vec::new(),
+                }
+            }
             (true, None) => return Vec::new(),
         };
-        let still = Motion { position: camera, yaw: 0.0, head_yaw, pitch, walk: Walk::default() };
+        let still = Motion {
+            position: camera,
+            yaw: 0.0,
+            head_yaw,
+            pitch,
+            walk: Walk::default(),
+        };
         self.pieces(e, still, camera, Some(place), None)
     }
 
     /// One entity's instances (itself, what it wears and holds) at `m`, or at `place` instead;
     /// `vehicle` is the kind it rides.
-    fn pieces(&self, e: &Tracked, m: Motion, camera: DVec3, place: Option<glam::Mat4>, vehicle: Option<&str>) -> Vec<EntityInstance> {
-        let life = self.born.get(&e.runtime_id).map_or(0.0, |b| b.elapsed().as_secs_f32());
+    fn pieces(
+        &self,
+        e: &Tracked,
+        m: Motion,
+        camera: DVec3,
+        place: Option<glam::Mat4>,
+        vehicle: Option<&str>,
+    ) -> Vec<EntityInstance> {
+        let life = self
+            .born
+            .get(&e.runtime_id)
+            .map_or(0.0, |b| b.elapsed().as_secs_f32());
         if let Some(stack) = &e.dropped {
-            let (Some(model), Some(items)) = (self.dropped.get(&e.runtime_id), &self.items) else { return Vec::new() };
+            let (Some(model), Some(items)) = (self.dropped.get(&e.runtime_id), &self.items) else {
+                return Vec::new();
+            };
             let age_ticks = life / SNAPSHOT_SECS;
-            let at = Drop { feet: m.position, count: stack.count, seed: stack.seed, age_ticks, bob_offset: drop::bob_offset(e.runtime_id) };
+            let at = Drop {
+                feet: m.position,
+                count: stack.count,
+                seed: stack.seed,
+                age_ticks,
+                bob_offset: drop::bob_offset(e.runtime_id),
+            };
             return drop::instances(model, items.dropped(), &at, camera);
         }
         let query = |name: &str| {
@@ -175,28 +271,49 @@ impl Smoother {
                 "modified_distance_moved" => m.walk.distance,
                 "modified_move_speed" => m.walk.speed,
                 "target_x_rotation" => m.pitch,
-                "target_y_rotation" => wrap_degrees(m.head_yaw - m.yaw).clamp(-MAX_HEAD_TURN, MAX_HEAD_TURN),
+                "target_y_rotation" => {
+                    wrap_degrees(m.head_yaw - m.yaw).clamp(-MAX_HEAD_TURN, MAX_HEAD_TURN)
+                }
                 "is_riding" => f32::from(u8::from(vehicle.is_some())),
-                _ if name.starts_with(RIDING_KIND) => f32::from(u8::from(vehicle == name.strip_prefix(RIDING_KIND))),
+                _ if name.starts_with(RIDING_KIND) => {
+                    f32::from(u8::from(vehicle == name.strip_prefix(RIDING_KIND)))
+                }
                 "is_on_ground" => 1.0,
                 // Blocks per model pixel.
                 "model_scale" => e.instance.scale / 16.0,
                 "is_alive" => f32::from(u8::from(!e.dying)),
-                "get_equipped_item_name" | "get_equipped_item_name:main_hand" => return held_name(e, 0),
+                "get_equipped_item_name" | "get_equipped_item_name:main_hand" => {
+                    return held_name(e, 0);
+                }
                 "get_equipped_item_name:off_hand" => return held_name(e, 1),
                 _ => return e.facts.query(name),
             })
         };
-        let mut pose = e.instance.layers.first().map(|l| self.models.pose(&e.kind, l.model, &query)).unwrap_or_default();
+        let mut pose = e
+            .instance
+            .layers
+            .first()
+            .map(|l| self.models.pose(&e.kind, l.model, &query))
+            .unwrap_or_default();
         // The off hand's shield is raised before the main one's.
-        let raised = [1, 0].into_iter().find(|&side| e.facts.blocking() && e.held[side].as_ref().is_some_and(|(key, _)| key.name == SHIELD));
+        let raised = [1, 0].into_iter().find(|&side| {
+            e.facts.blocking()
+                && e.held[side]
+                    .as_ref()
+                    .is_some_and(|(key, _)| key.name == SHIELD)
+        });
         if let Some(side) = raised {
             acacia_render::item::raise_shield_arm(&mut pose, side == 1);
         }
         let mut out = Vec::with_capacity(2);
         let status = self.hurt.get(&e.runtime_id).copied().unwrap_or_default();
-        let dying = status.dying_since.map(|since| since.elapsed().as_secs_f32());
-        let hurt = dying.is_some() || status.at.is_some_and(|at| at.elapsed().as_secs_f32() < HURT_SECS);
+        let dying = status
+            .dying_since
+            .map(|since| since.elapsed().as_secs_f32());
+        let hurt = dying.is_some()
+            || status
+                .at
+                .is_some_and(|at| at.elapsed().as_secs_f32() < HURT_SECS);
         // The body transform the entity pass gives this instance, toppled while dying.
         let s = e.instance.scale;
         let topple = glam::Mat4::from_rotation_z(-dying.map_or(0.0, topple_degrees).to_radians());
@@ -204,36 +321,104 @@ impl Smoother {
         let death_ticks = dying.map_or(0.0, |secs| (secs * 20.0).max(1.0));
         let java = self.models.body(&e.kind, &query, m.yaw, s, death_ticks);
         let at = glam::Mat4::from_translation((m.position - camera).as_vec3());
-        let stood = java.map_or_else(|| at * glam::Mat4::from_rotation_y(-m.yaw.to_radians()) * topple * glam::Mat4::from_scale(glam::Vec3::new(s, s, -s)), |j| at * j);
-        let body = place.map_or(stood, |place| place * glam::Mat4::from_scale(glam::Vec3::splat(s)));
+        let stood = java.map_or_else(
+            || {
+                at * glam::Mat4::from_rotation_y(-m.yaw.to_radians())
+                    * topple
+                    * glam::Mat4::from_scale(glam::Vec3::new(s, s, -s))
+            },
+            |j| at * j,
+        );
+        let body = place.map_or(stood, |place| {
+            place * glam::Mat4::from_scale(glam::Vec3::splat(s))
+        });
         let frame = (dying.is_some() || place.is_some() || java.is_some()).then_some(body);
-        let held = self.held.get(&e.runtime_id).into_iter().flatten().enumerate();
+        let held = self
+            .held
+            .get(&e.runtime_id)
+            .into_iter()
+            .flatten()
+            .enumerate();
         let baby = e.facts.query("is_baby").truthy() && e.kind != "minecraft:armor_stand";
         for (left, item) in held.filter_map(|(side, item)| Some((side == 1, item.as_ref()?))) {
-            let mesh = e.instance.layers.first().and_then(|l| self.models.models().get(l.model as usize)).map(|model| &model.mesh);
+            let mesh = e
+                .instance
+                .layers
+                .first()
+                .and_then(|l| self.models.models().get(l.model as usize))
+                .map(|model| &model.mesh);
             let skin_mesh = e.instance.skin.as_ref().and_then(|skin| skin.mesh.as_ref());
             if let Some(hand) = skin_mesh.or(mesh).and_then(|mesh| mesh.hand(&pose, left)) {
-                out.push(hand::third_person(item, body, hand, hand::Grip { left, baby }, raised == Some(usize::from(left)), m.position + DVec3::Y));
+                out.push(hand::third_person(
+                    item,
+                    body,
+                    hand,
+                    hand::Grip { left, baby },
+                    raised == Some(usize::from(left)),
+                    m.position + DVec3::Y,
+                ));
             }
         }
         let glint = |enchanted: bool| enchanted.then_some(acacia_render::glint::Glint::Armor);
         // A Java armour layer runs its wearer's setupAnim on its own model; a Bedrock one takes the wearer's pose.
-        let worn_pose = |layers: &[Layer]| match layers.first().filter(|l| self.models.is_java(l.model)) {
-            Some(l) => self.models.pose(&e.kind, l.model, &query),
-            None => pose.clone(),
-        };
-        let worn = e.armor.iter().map(|(layers, enchanted)| EntityInstance { layers: layers.clone(), skin: None, position: m.position, yaw: m.yaw, pose: worn_pose(layers), frame, hurt, glint: glint(*enchanted), ..e.instance.clone() });
+        let worn_pose =
+            |layers: &[Layer]| match layers.first().filter(|l| self.models.is_java(l.model)) {
+                Some(l) => self.models.pose(&e.kind, l.model, &query),
+                None => pose.clone(),
+            };
+        let worn = e.armor.iter().map(|(layers, enchanted)| EntityInstance {
+            layers: layers.clone(),
+            skin: None,
+            position: m.position,
+            yaw: m.yaw,
+            pose: worn_pose(layers),
+            frame,
+            hurt,
+            glint: glint(*enchanted),
+            ..e.instance.clone()
+        });
         out.extend(worn);
-        let cape = e.cape.iter().map(|cape| EntityInstance { layers: cape::layers(), skin: Some(cape.clone()), position: m.position, yaw: m.yaw, pose: cape::pose(&pose, m.walk.speed), frame, hurt, ..e.instance.clone() });
+        let cape = e.cape.iter().map(|cape| EntityInstance {
+            layers: cape::layers(),
+            skin: Some(cape.clone()),
+            position: m.position,
+            yaw: m.yaw,
+            pose: cape::pose(&pose, m.walk.speed),
+            frame,
+            hurt,
+            ..e.instance.clone()
+        });
         out.extend(cape);
         let (layers, apart) = self.models.split_posed_apart(&e.instance.layers);
         for layer in apart {
             let pose = self.models.pose(&e.kind, layer.model, &query);
-            out.push(EntityInstance { layers: [layer].into(), position: m.position, yaw: m.yaw, pose, frame, hurt, glint: None, ..e.instance.clone() });
+            out.push(EntityInstance {
+                layers: [layer].into(),
+                position: m.position,
+                yaw: m.yaw,
+                pose,
+                frame,
+                hurt,
+                glint: None,
+                ..e.instance.clone()
+            });
         }
         // CreeperRenderer's flash is on the body's own layers, not its charged aura.
-        let white = if e.kind == "minecraft:creeper" { overlay::creeper_white(bedrock::swelling(&query)) } else { 0.0 };
-        out.push(EntityInstance { layers, position: m.position, yaw: m.yaw, pose, frame, hurt, white, ..e.instance.clone() });
+        let white = if e.kind == "minecraft:creeper" {
+            overlay::creeper_white(bedrock::swelling(&query))
+        } else {
+            0.0
+        };
+        out.push(EntityInstance {
+            layers,
+            position: m.position,
+            yaw: m.yaw,
+            pose,
+            frame,
+            hurt,
+            white,
+            ..e.instance.clone()
+        });
         out
     }
 
@@ -242,7 +427,12 @@ impl Smoother {
         let t = self.progress();
         let hittable = |(e, to): &(Tracked, Motion)| {
             let (width, height) = e.hitbox?;
-            Some(EntityBox { runtime_id: e.runtime_id, feet: self.blend(e.runtime_id, *to, t).position, width, height })
+            Some(EntityBox {
+                runtime_id: e.runtime_id,
+                feet: self.blend(e.runtime_id, *to, t).position,
+                width,
+                height,
+            })
         };
         self.to.iter().filter_map(hittable).collect()
     }
@@ -255,9 +445,15 @@ mod tests {
     #[test]
     fn legs_swing_while_walking_and_settle_when_standing() {
         let walking = (0..40).fold(Walk::default(), |w, _| w.step(0.1));
-        assert!((walking.speed - 0.4).abs() < 1e-3 && walking.distance > 10.0, "{walking:?}");
+        assert!(
+            (walking.speed - 0.4).abs() < 1e-3 && walking.distance > 10.0,
+            "{walking:?}"
+        );
         let stopped = (0..40).fold(walking, |w, _| w.step(0.0));
-        assert!(stopped.speed < 1e-3 && stopped.distance - walking.distance < 1.0, "{stopped:?}");
+        assert!(
+            stopped.speed < 1e-3 && stopped.distance - walking.distance < 1.0,
+            "{stopped:?}"
+        );
     }
 
     #[test]

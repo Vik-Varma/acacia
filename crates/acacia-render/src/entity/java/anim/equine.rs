@@ -18,16 +18,35 @@ struct Shape {
 
 fn shape(donkey: bool, baby: bool) -> Shape {
     match (donkey, baby) {
-        (true, true) => Shape { stand_angle: pi_div(3.0), stand_y: 1.0, stand_z: 0.5, stand_x_rot: 0.0, tail_x_rot: pi_div(-4.0) },
-        (false, true) => Shape { stand_angle: pi_div(12.0), stand_y: 4.0, stand_z: 0.0, stand_x_rot: pi_div(-3.0), tail_x_rot: -PI / 2.0 },
-        _ => Shape { stand_angle: pi_div(12.0), stand_y: 12.0, stand_z: 4.0, stand_x_rot: pi_div(-3.0), tail_x_rot: 0.0 },
+        (true, true) => Shape {
+            stand_angle: pi_div(3.0),
+            stand_y: 1.0,
+            stand_z: 0.5,
+            stand_x_rot: 0.0,
+            tail_x_rot: pi_div(-4.0),
+        },
+        (false, true) => Shape {
+            stand_angle: pi_div(12.0),
+            stand_y: 4.0,
+            stand_z: 0.0,
+            stand_x_rot: pi_div(-3.0),
+            tail_x_rot: -PI / 2.0,
+        },
+        _ => Shape {
+            stand_angle: pi_div(12.0),
+            stand_y: 12.0,
+            stand_z: 4.0,
+            stand_x_rot: pi_div(-3.0),
+            tail_x_rot: 0.0,
+        },
     }
 }
 
 /// `(1 - max(standing, eating)) * (π/6 + head pitch + feeding bob)`.
 fn base_head_angle(s: &RenderState, head_x: f32) -> f32 {
     let (eating, standing) = (s.num("eatAnimation"), s.num("standAnimation"));
-    (1.0 - standing.max(eating)) * (pi_div(6.0) + head_x + s.num("feedingAnimation") * sin(s.age()) * 0.05)
+    (1.0 - standing.max(eating))
+        * (pi_div(6.0) + head_x + s.num("feedingAnimation") * sin(s.age()) * 0.05)
 }
 
 pub(super) fn equine(p: &mut Poses, s: &RenderState, donkey: bool) {
@@ -47,7 +66,8 @@ pub(super) fn equine(p: &mut Poses, s: &RenderState, donkey: bool) {
     let leg_x = leg_anim * 0.8 * speed;
     let base = base_head_angle(s, head_x);
     let parts = p.get("head_parts");
-    parts.x_rot = standing * (pi_div(12.0) + head_x) + eating * (2.181_661_6 + sin(age) * 0.05) + base;
+    parts.x_rot =
+        standing * (pi_div(12.0) + head_x) + eating * (2.181_661_6 + sin(age) * 0.05) + base;
     parts.y_rot = standing * clamped_y * pi_div(180.0) + (1.0 - standing.max(eating)) * head_y;
     match (donkey, baby) {
         (true, true) => {
@@ -74,9 +94,18 @@ pub(super) fn equine(p: &mut Poses, s: &RenderState, donkey: bool) {
     let stand = g.stand_angle * standing;
     let bob = cos(age * 0.6 + PI);
     p.x_rot("left_hind_leg", stand - leg_anim * 0.5 * speed * i_standing);
-    p.x_rot("right_hind_leg", stand + leg_anim * 0.5 * speed * i_standing);
-    p.x_rot("left_front_leg", (g.stand_x_rot + bob) * standing + leg_x * i_standing);
-    p.x_rot("right_front_leg", (g.stand_x_rot - bob) * standing - leg_x * i_standing);
+    p.x_rot(
+        "right_hind_leg",
+        stand + leg_anim * 0.5 * speed * i_standing,
+    );
+    p.x_rot(
+        "left_front_leg",
+        (g.stand_x_rot + bob) * standing + leg_x * i_standing,
+    );
+    p.x_rot(
+        "right_front_leg",
+        (g.stand_x_rot - bob) * standing - leg_x * i_standing,
+    );
     if donkey && baby {
         let left = p.get("left_hind_leg");
         left.y = lerp(standing, left.y, -0.3);
@@ -89,7 +118,11 @@ pub(super) fn equine(p: &mut Poses, s: &RenderState, donkey: bool) {
     tail.x_rot = g.tail_x_rot + pi_div(6.0) + speed * 0.75;
     tail.y += speed * scale;
     tail.z += speed * 2.0 * scale;
-    tail.y_rot = if s.flag("animateTail") { cos(age * 0.7) } else { 0.0 };
+    tail.y_rot = if s.flag("animateTail") {
+        cos(age * 0.7)
+    } else {
+        0.0
+    };
     if donkey {
         let chest = s.flag("hasChest");
         p.set_visible("left_chest", chest);
@@ -99,6 +132,9 @@ pub(super) fn equine(p: &mut Poses, s: &RenderState, donkey: bool) {
         // BabyDonkeyModel overwrites the state's pitch with -30 and recomputes the head.
         let head_x = -30.0 * pi_div(180.0);
         let base = base_head_angle(s, head_x);
-        p.x_rot("head_parts", standing * (pi_div(12.0) + head_x) + eating * (PI / 2.0 + sin(age) * 0.05) + base);
+        p.x_rot(
+            "head_parts",
+            standing * (pi_div(12.0) + head_x) + eating * (PI / 2.0 + sin(age) * 0.05) + base,
+        );
     }
 }

@@ -24,16 +24,29 @@ fn table() -> &'static Table {
     static TABLE: OnceLock<Table> = OnceLock::new();
     TABLE.get_or_init(|| {
         let states = u32_at(0);
-        let state_shape = DATA[4..4 + states * 2].chunks_exact(2).map(|b| u16::from_le_bytes([b[0], b[1]])).collect();
+        let state_shape = DATA[4..4 + states * 2]
+            .chunks_exact(2)
+            .map(|b| u16::from_le_bytes([b[0], b[1]]))
+            .collect();
         let shapes_at = 4 + states * 2;
         let shapes = u32_at(shapes_at);
-        let first_box: Vec<u32> = (0..=shapes).map(|i| u32_at(shapes_at + 4 + i * 4) as u32).collect();
+        let first_box: Vec<u32> = (0..=shapes)
+            .map(|i| u32_at(shapes_at + 4 + i * 4) as u32)
+            .collect();
         let boxes_at = shapes_at + 4 + (shapes + 1) * 4;
         let boxes = DATA[boxes_at..]
             .chunks_exact(48)
-            .map(|b| std::array::from_fn(|i| f64::from_le_bytes(b[i * 8..i * 8 + 8].try_into().expect("eight bytes"))))
+            .map(|b| {
+                std::array::from_fn(|i| {
+                    f64::from_le_bytes(b[i * 8..i * 8 + 8].try_into().expect("eight bytes"))
+                })
+            })
             .collect();
-        Table { state_shape, first_box, boxes }
+        Table {
+            state_shape,
+            first_box,
+            boxes,
+        }
     })
 }
 
@@ -48,16 +61,25 @@ impl BlockState {
 
 #[cfg(test)]
 mod tests {
+    use crate::Block;
     use crate::prop;
     use crate::value;
-    use crate::Block;
 
     #[test]
     fn known_shapes() {
         assert_eq!(Block::Air.default_state().java_collision(), Some(&[][..]));
-        assert_eq!(Block::Stone.default_state().java_collision(), Some(&[[0.0, 0.0, 0.0, 1.0, 1.0, 1.0]][..]));
-        let slab = Block::OakSlab.default_state().with(prop::SlabType, value::SlabType::Top).unwrap();
-        assert_eq!(slab.java_collision(), Some(&[[0.0, 0.5, 0.0, 1.0, 1.0, 1.0]][..]));
+        assert_eq!(
+            Block::Stone.default_state().java_collision(),
+            Some(&[[0.0, 0.0, 0.0, 1.0, 1.0, 1.0]][..])
+        );
+        let slab = Block::OakSlab
+            .default_state()
+            .with(prop::SlabType, value::SlabType::Top)
+            .unwrap();
+        assert_eq!(
+            slab.java_collision(),
+            Some(&[[0.0, 0.5, 0.0, 1.0, 1.0, 1.0]][..])
+        );
     }
 
     #[test]

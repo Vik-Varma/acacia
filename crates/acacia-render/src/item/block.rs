@@ -46,12 +46,25 @@ pub fn skin(block: &RenderBlock, atlas: &Atlas) -> Option<Skin> {
         let normal = [n.x, n.y, -n.z];
         let vertex = |i: usize| {
             let [u, v] = face.uv[i];
-            Vertex { position: at(face.corners[i]), bone: 0, normal, uv: [u.clamp(0.0, 1.0), (row + v.clamp(0.0, 1.0)) / rows] }
+            Vertex {
+                position: at(face.corners[i]),
+                bone: 0,
+                normal,
+                uv: [u.clamp(0.0, 1.0), (row + v.clamp(0.0, 1.0)) / rows],
+            }
         };
         vertices.extend([0, 1, 2, 0, 2, 3].map(vertex));
     }
-    let rgba = tiles.iter().flat_map(|t| texels(atlas.layers.get(t.layer as usize), *t)).collect();
-    Some(Skin { width: TILE, height: TILE * tiles.len() as u32, rgba, mesh: Some(Mesh::one_bone(vertices)) })
+    let rgba = tiles
+        .iter()
+        .flat_map(|t| texels(atlas.layers.get(t.layer as usize), *t))
+        .collect();
+    Some(Skin {
+        width: TILE,
+        height: TILE * tiles.len() as u32,
+        rgba,
+        mesh: Some(Mesh::one_bone(vertices)),
+    })
 }
 
 /// The block's faces, or `None` for shapes that are not boxes or model faces.
@@ -66,8 +79,16 @@ pub(super) fn faces(block: &RenderBlock) -> Option<Vec<Face>> {
                 let [c0, c1, c3] = f.corners.map(|c| Vec3::from(c) / 16.0);
                 let [t0, t1, t3] = f.uv.map(|[u, v]| [u / 16.0, v / 16.0]);
                 let t2 = [t1[0] + t3[0] - t0[0], t1[1] + t3[1] - t0[1]];
-                let tile = Tile { layer: f.texture, tint: f.tint, material: f.material };
-                Face { corners: [c0, c1, c1 + c3 - c0, c3], uv: [t0, t1, t2, t3], tile }
+                let tile = Tile {
+                    layer: f.texture,
+                    tint: f.tint,
+                    material: f.material,
+                };
+                Face {
+                    corners: [c0, c1, c1 + c3 - c0, c3],
+                    uv: [t0, t1, t2, t3],
+                    tile,
+                }
             })
             .collect(),
         _ => return None,
@@ -87,7 +108,13 @@ pub(super) fn texels(texture: Option<&Texture>, tile: Tile) -> Vec<u8> {
         }
         px[3] = match tile.material {
             Material::Opaque | Material::Overlay => 255,
-            Material::Cutout => if px[3] < 128 { 0 } else { 255 },
+            Material::Cutout => {
+                if px[3] < 128 {
+                    0
+                } else {
+                    255
+                }
+            }
             Material::Blend => px[3],
         };
     }
@@ -95,7 +122,11 @@ pub(super) fn texels(texture: Option<&Texture>, tile: Tile) -> Vec<u8> {
 }
 
 pub(super) fn tile_of(block: &RenderBlock, face: usize) -> Tile {
-    Tile { layer: block.textures[face], tint: block.tint[face], material: block.material[face] }
+    Tile {
+        layer: block.textures[face],
+        tint: block.tint[face],
+        material: block.material[face],
+    }
 }
 
 type UvOf = fn(Vec3) -> [f32; 2];
@@ -108,21 +139,90 @@ fn box_faces(b: Box16, tile: impl Fn(usize) -> Tile) -> impl Iterator<Item = Fac
     (0..6).filter_map(move |face| {
         // Corners counter-clockwise from outside, then each corner's texel position.
         let (corners, uv): ([Vec3; 4], UvOf) = match face {
-            0 => (quad_corners(max.x, [min.z, max.z], [min.y, max.y], |x, z, y| Vec3::new(x, y, z), true), |p| [1.0 - p.z, 1.0 - p.y]),
-            1 => (quad_corners(min.x, [min.z, max.z], [min.y, max.y], |x, z, y| Vec3::new(x, y, z), false), |p| [p.z, 1.0 - p.y]),
-            2 => (quad_corners(max.y, [min.x, max.x], [min.z, max.z], |y, x, z| Vec3::new(x, y, z), true), |p| [p.x, p.z]),
-            3 => (quad_corners(min.y, [min.x, max.x], [min.z, max.z], |y, x, z| Vec3::new(x, y, z), false), |p| [p.x, 1.0 - p.z]),
-            4 => (quad_corners(max.z, [min.x, max.x], [min.y, max.y], |z, x, y| Vec3::new(x, y, z), false), |p| [p.x, 1.0 - p.y]),
-            _ => (quad_corners(min.z, [min.x, max.x], [min.y, max.y], |z, x, y| Vec3::new(x, y, z), true), |p| [1.0 - p.x, 1.0 - p.y]),
+            0 => (
+                quad_corners(
+                    max.x,
+                    [min.z, max.z],
+                    [min.y, max.y],
+                    |x, z, y| Vec3::new(x, y, z),
+                    true,
+                ),
+                |p| [1.0 - p.z, 1.0 - p.y],
+            ),
+            1 => (
+                quad_corners(
+                    min.x,
+                    [min.z, max.z],
+                    [min.y, max.y],
+                    |x, z, y| Vec3::new(x, y, z),
+                    false,
+                ),
+                |p| [p.z, 1.0 - p.y],
+            ),
+            2 => (
+                quad_corners(
+                    max.y,
+                    [min.x, max.x],
+                    [min.z, max.z],
+                    |y, x, z| Vec3::new(x, y, z),
+                    true,
+                ),
+                |p| [p.x, p.z],
+            ),
+            3 => (
+                quad_corners(
+                    min.y,
+                    [min.x, max.x],
+                    [min.z, max.z],
+                    |y, x, z| Vec3::new(x, y, z),
+                    false,
+                ),
+                |p| [p.x, 1.0 - p.z],
+            ),
+            4 => (
+                quad_corners(
+                    max.z,
+                    [min.x, max.x],
+                    [min.y, max.y],
+                    |z, x, y| Vec3::new(x, y, z),
+                    false,
+                ),
+                |p| [p.x, 1.0 - p.y],
+            ),
+            _ => (
+                quad_corners(
+                    min.z,
+                    [min.x, max.x],
+                    [min.y, max.y],
+                    |z, x, y| Vec3::new(x, y, z),
+                    true,
+                ),
+                |p| [1.0 - p.x, 1.0 - p.y],
+            ),
         };
         let flat = (max - min).cmpeq(Vec3::ZERO).any();
-        (!flat).then(|| Face { corners, uv: corners.map(uv), tile: tile(face) })
+        (!flat).then(|| Face {
+            corners,
+            uv: corners.map(uv),
+            tile: tile(face),
+        })
     })
 }
 
 /// The four corners of a face on plane `at`, spanning `a` and `b`; `flip` reverses the winding.
-fn quad_corners(at: f32, a: [f32; 2], b: [f32; 2], place: impl Fn(f32, f32, f32) -> Vec3, flip: bool) -> [Vec3; 4] {
-    let c = [place(at, a[0], b[0]), place(at, a[1], b[0]), place(at, a[1], b[1]), place(at, a[0], b[1])];
+fn quad_corners(
+    at: f32,
+    a: [f32; 2],
+    b: [f32; 2],
+    place: impl Fn(f32, f32, f32) -> Vec3,
+    flip: bool,
+) -> [Vec3; 4] {
+    let c = [
+        place(at, a[0], b[0]),
+        place(at, a[1], b[0]),
+        place(at, a[1], b[1]),
+        place(at, a[0], b[1]),
+    ];
     if flip { [c[0], c[3], c[2], c[1]] } else { c }
 }
 
@@ -131,7 +231,12 @@ mod tests {
     use super::*;
 
     fn atlas() -> Atlas {
-        Atlas { layers: vec![Texture { rgba: Box::new([200; TEXEL_BYTES]) }], animations: Vec::new() }
+        Atlas {
+            layers: vec![Texture {
+                rgba: Box::new([200; TEXEL_BYTES]),
+            }],
+            animations: Vec::new(),
+        }
     }
 
     fn cube() -> RenderBlock {
@@ -153,8 +258,17 @@ mod tests {
 
     #[test]
     fn tints_multiply_and_opaque_faces_lose_alpha() {
-        let tile = Tile { layer: 0, tint: Tint::Fixed([255, 0, 128]), material: Material::Opaque };
-        let rgba = texels(Some(&Texture { rgba: Box::new([200; TEXEL_BYTES]) }), tile);
+        let tile = Tile {
+            layer: 0,
+            tint: Tint::Fixed([255, 0, 128]),
+            material: Material::Opaque,
+        };
+        let rgba = texels(
+            Some(&Texture {
+                rgba: Box::new([200; TEXEL_BYTES]),
+            }),
+            tile,
+        );
         assert_eq!(&rgba[..4], &[200, 0, 100, 255]);
     }
 }

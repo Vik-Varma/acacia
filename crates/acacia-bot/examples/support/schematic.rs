@@ -1,8 +1,8 @@
 //! File mode of `examples/build.rs` (`SCHEMATIC=<path>`, research/schematic-trial.md): a `.mcstructure` built on
 //! the bare pad, nothing pasted, from barrels stocked with its bill of materials.
 
-use acacia_bot::build::{bill, BuildJob, Structure, Transform};
 use acacia_bot::Bot;
+use acacia_bot::build::{BuildJob, Structure, Transform, bill};
 
 use super::{Error, Pad};
 
@@ -16,7 +16,13 @@ fn stack_size(item: &str) -> u32 {
     let n = item.trim_start_matches("minecraft:");
     match () {
         _ if n.starts_with("bed") || n.ends_with("_bucket") || n == "cake" => 1,
-        _ if n.ends_with("sign") || n.ends_with("banner") || n.ends_with("egg") || n == "snowball" => 16,
+        _ if n.ends_with("sign")
+            || n.ends_with("banner")
+            || n.ends_with("egg")
+            || n == "snowball" =>
+        {
+            16
+        }
         _ => 64,
     }
 }
@@ -26,7 +32,9 @@ fn stack_size(item: &str) -> u32 {
 pub fn stacks(structure: &Structure) -> Vec<(String, String, u32)> {
     let mut out = Vec::new();
     for (item, n) in bill(structure) {
-        let (name, aux) = item.split_once('@').map_or((item.as_str(), "0"), |(n, a)| (n, a));
+        let (name, aux) = item
+            .split_once('@')
+            .map_or((item.as_str(), "0"), |(n, a)| (n, a));
         let (max, mut left) = (stack_size(name), n + n / 2 + 2);
         while left > 0 {
             out.push((name.to_string(), aux.to_string(), left.min(max)));
@@ -43,7 +51,16 @@ pub async fn setup(a: &mut Bot, pad: &Pad, path: &str) -> Result<BuildJob, Error
     pad.run(a, "/gamerule randomtickspeed 0");
     // Grass under the footprint: plants in a structure's bottom layer stood on terrain, and refuse stone.
     let [sx, _, sz] = structure.size;
-    pad.build(a, &[([AT[0], -1, AT[2]], [AT[0] + sx - 1, -1, AT[2] + sz - 1], "grass_block")], 5).await?;
+    pad.build(
+        a,
+        &[(
+            [AT[0], -1, AT[2]],
+            [AT[0] + sx - 1, -1, AT[2] + sz - 1],
+            "grass_block",
+        )],
+        5,
+    )
+    .await?;
     let stacks = stacks(&structure);
     let mut stations = Vec::new();
     for (i, chunk) in stacks.chunks(SLOTS).enumerate() {
@@ -51,20 +68,39 @@ pub async fn setup(a: &mut Bot, pad: &Pad, path: &str) -> Result<BuildJob, Error
         pad.run(a, &format!("/setblock {x} {y} {z} barrel"));
         a.wait_ticks(2).await?;
         for (slot, (item, aux, count)) in chunk.iter().enumerate() {
-            pad.run(a, &format!("/replaceitem block {x} {y} {z} slot.container {slot} {item} {count} {aux}"));
+            pad.run(
+                a,
+                &format!(
+                    "/replaceitem block {x} {y} {z} slot.container {slot} {item} {count} {aux}"
+                ),
+            );
         }
         a.wait_ticks(2).await?;
         stations.push([x, y, z]);
     }
-    println!("stocked {} stacks in {} barrels: {:?}", stacks.len(), stations.len(), bill(&structure));
+    println!(
+        "stocked {} stacks in {} barrels: {:?}",
+        stacks.len(),
+        stations.len(),
+        bill(&structure)
+    );
     a.wait_ticks(4).await?;
-    let mut job = BuildJob::new(path, Transform { origin: pad.block(AT), ..Transform::default() });
+    let mut job = BuildJob::new(
+        path,
+        Transform {
+            origin: pad.block(AT),
+            ..Transform::default()
+        },
+    );
     job.stations = stations;
     Ok(job)
 }
 
 /// Wall-time budget: 3 min plus 1.5 s a block to place (house16, ~600 blocks, takes ~250 s).
 pub fn budget(path: &str) -> u64 {
-    let blocks = std::fs::read(path).ok().and_then(|b| Structure::load(&b).ok()).map_or(0, |s| s.cells().filter(|(_, b)| !b.is_air()).count());
+    let blocks = std::fs::read(path)
+        .ok()
+        .and_then(|b| Structure::load(&b).ok())
+        .map_or(0, |s| s.cells().filter(|(_, b)| !b.is_air()).count());
     180 + blocks as u64 * 3 / 2
 }

@@ -1,11 +1,14 @@
 //! Pings servers without logging in, optionally through the SOCKS5 proxy in `BEDROCK_PROXY`
 //! (`host:port[:user:pass]` or `socks5://...`).
 //! `cargo run -p acacia-client --example ping -- play.example.net`
-use acacia_client::{ping, Socks5Proxy};
+use acacia_client::{Socks5Proxy, ping};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let proxy = std::env::var("BEDROCK_PROXY").ok().map(|p| Socks5Proxy::parse(&p)).transpose()?;
+    let proxy = std::env::var("BEDROCK_PROXY")
+        .ok()
+        .map(|p| Socks5Proxy::parse(&p))
+        .transpose()?;
     if let Some(p) = &proxy {
         println!("via proxy {}:{}", p.host, p.port);
     }

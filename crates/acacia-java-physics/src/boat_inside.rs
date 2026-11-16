@@ -5,7 +5,7 @@ use acacia_registry::Block;
 
 use crate::boat::{Boat, HEIGHT, WIDTH};
 use crate::collide::Blocks;
-use crate::inside::{inside_bubble_column, nothing_above, InsideBody};
+use crate::inside::{InsideBody, inside_bubble_column, nothing_above};
 use crate::support::LEGACY_ON_POS;
 
 impl Boat {
@@ -64,7 +64,9 @@ impl InsideBody for Boat {
             Block::HoneyBlock => {
                 self.slide_on_honey(pos);
             }
-            Block::BubbleColumn if precise && !nothing_above(world, pos) => inside_bubble_column(&mut self.delta, state),
+            Block::BubbleColumn if precise && !nothing_above(world, pos) => {
+                inside_bubble_column(&mut self.delta, state)
+            }
             _ => {}
         }
     }

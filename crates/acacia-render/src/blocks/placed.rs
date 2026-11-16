@@ -33,14 +33,24 @@ impl<T> Weighted<T> {
     }
 
     pub fn map<U>(&self, f: impl Fn(&T) -> U) -> Weighted<U> {
-        Weighted(self.0.iter().map(|(weight, alternative)| (*weight, f(alternative))).collect())
+        Weighted(
+            self.0
+                .iter()
+                .map(|(weight, alternative)| (*weight, f(alternative)))
+                .collect(),
+        )
     }
 }
 
 /// The hash of a block position that seeds its [`Draw`].
 pub fn seed([x, y, z]: [i32; 3]) -> i64 {
-    let seed = i64::from(x.wrapping_mul(3_129_871)) ^ i64::from(z).wrapping_mul(116_129_781) ^ i64::from(y);
-    seed.wrapping_mul(seed).wrapping_mul(42_317_861).wrapping_add(seed.wrapping_mul(11)) >> 16
+    let seed = i64::from(x.wrapping_mul(3_129_871))
+        ^ i64::from(z).wrapping_mul(116_129_781)
+        ^ i64::from(y);
+    seed.wrapping_mul(seed)
+        .wrapping_mul(42_317_861)
+        .wrapping_add(seed.wrapping_mul(11))
+        >> 16
 }
 
 /// Java's 48-bit linear congruential generator.
@@ -100,8 +110,15 @@ impl Offset {
     pub fn at(&self, x: i32, z: i32) -> [f32; 3] {
         let seed = seed([x, 0, z]);
         let sixteenth = |shift: u32| f64::from(((seed >> shift) & 15) as f32 / 15.0);
-        let sideways = |shift: u32| ((sixteenth(shift) - 0.5) * 0.5).clamp(f64::from(-self.horizontal), f64::from(self.horizontal)) as f32;
-        [sideways(0), ((sixteenth(4) - 1.0) * f64::from(self.vertical)) as f32, sideways(8)]
+        let sideways = |shift: u32| {
+            ((sixteenth(shift) - 0.5) * 0.5)
+                .clamp(f64::from(-self.horizontal), f64::from(self.horizontal)) as f32
+        };
+        [
+            sideways(0),
+            ((sixteenth(4) - 1.0) * f64::from(self.vertical)) as f32,
+            sideways(8),
+        ]
     }
 }
 
@@ -112,7 +129,9 @@ mod tests {
     #[test]
     fn alternatives_are_picked_by_weight() {
         let list = Weighted(Box::new([(1, 'a'), (0, 'b'), (3, 'c')]));
-        let picks: Vec<char> = (0..40).map(|x| *list.pick(Draw::new(seed([x, 70, -3]))).unwrap()).collect();
+        let picks: Vec<char> = (0..40)
+            .map(|x| *list.pick(Draw::new(seed([x, 70, -3]))).unwrap())
+            .collect();
         assert!(picks.contains(&'a') && !picks.contains(&'b'));
         assert!(picks.iter().filter(|p| **p == 'c').count() > 20);
         assert_eq!(Weighted::<char>(Box::new([])).pick(Draw::new(0)), None);
@@ -121,11 +140,24 @@ mod tests {
 
     #[test]
     fn a_shift_stays_within_its_limits() {
-        let offset = Offset { horizontal: 0.125, vertical: 0.2 };
+        let offset = Offset {
+            horizontal: 0.125,
+            vertical: 0.2,
+        };
         for x in -20..20 {
             let [dx, dy, dz] = offset.at(x, 7 - x);
-            assert!(dx.abs() <= 0.125 && dz.abs() <= 0.125 && (-0.2..=0.0).contains(&dy), "{dx} {dy} {dz}");
+            assert!(
+                dx.abs() <= 0.125 && dz.abs() <= 0.125 && (-0.2..=0.0).contains(&dy),
+                "{dx} {dy} {dz}"
+            );
         }
-        assert_eq!(Offset { horizontal: 0.25, vertical: 0.0 }.at(3, 4)[1], 0.0);
+        assert_eq!(
+            Offset {
+                horizontal: 0.25,
+                vertical: 0.0
+            }
+            .at(3, 4)[1],
+            0.0
+        );
     }
 }

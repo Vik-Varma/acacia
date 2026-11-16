@@ -29,7 +29,9 @@ impl ServerData {
         let mut r = data;
         let version = byte(&mut r)?;
         if version != VERSION {
-            return Err(Error::Lan(format!("ServerData version {version}, want {VERSION}")));
+            return Err(Error::Lan(format!(
+                "ServerData version {version}, want {VERSION}"
+            )));
         }
         let d = Self {
             server_name: string(&mut r)?,
@@ -61,7 +63,15 @@ impl ServerData {
         put_varint(&mut b, self.player_count);
         put_varint(&mut b, self.max_player_count);
         put_varint(&mut b, self.game_type);
-        b.extend([self.editor_world, self.hardcore, self.accepts_online_auth, self.accepts_self_signed_auth].map(u8::from));
+        b.extend(
+            [
+                self.editor_world,
+                self.hardcore,
+                self.accepts_online_auth,
+                self.accepts_self_signed_auth,
+            ]
+            .map(u8::from),
+        );
         put_string(&mut b, &self.nonce);
         put_varint(&mut b, self.connection_type);
         b
@@ -69,7 +79,9 @@ impl ServerData {
 }
 
 fn byte(r: &mut &[u8]) -> Result<u8, Error> {
-    let (&b, rest) = r.split_first().ok_or_else(|| Error::Lan("truncated ServerData".into()))?;
+    let (&b, rest) = r
+        .split_first()
+        .ok_or_else(|| Error::Lan("truncated ServerData".into()))?;
     *r = rest;
     Ok(b)
 }
@@ -124,16 +136,41 @@ mod tests {
 
     /// go-nethernet `server_data_test.go` vector.
     const GN: &[u8] = &[
-        0x07, 0x06, b's', b'e', b'r', b'v', b'e', b'r', 0x8A, 0x22, 0x07, b'1', b'.', b'2', b'6', b'.', b'5', b'0', 0x05,
-        b'w', b'o', b'r', b'l', b'd', 0x02, 0x10, 0x04, 0x00, 0x01, 0x01, 0x01, 0x05, b'n', b'o', b'n', b'c', b'e', 0x08,
+        0x07, 0x06, b's', b'e', b'r', b'v', b'e', b'r', 0x8A, 0x22, 0x07, b'1', b'.', b'2', b'6',
+        b'.', b'5', b'0', 0x05, b'w', b'o', b'r', b'l', b'd', 0x02, 0x10, 0x04, 0x00, 0x01, 0x01,
+        0x01, 0x05, b'n', b'o', b'n', b'c', b'e', 0x08,
     ];
 
     #[test]
     fn matches_go_nethernet_vector() {
         let d = ServerData::decode(GN).unwrap();
-        assert_eq!((d.server_name.as_str(), d.protocol, d.version.as_str(), d.level_name.as_str()), ("server", 2181, "1.26.50", "world"));
-        assert_eq!((d.player_count, d.max_player_count, d.game_type, d.connection_type), (1, 8, 2, 4));
-        assert_eq!((d.editor_world, d.hardcore, d.accepts_online_auth, d.accepts_self_signed_auth), (false, true, true, true));
+        assert_eq!(
+            (
+                d.server_name.as_str(),
+                d.protocol,
+                d.version.as_str(),
+                d.level_name.as_str()
+            ),
+            ("server", 2181, "1.26.50", "world")
+        );
+        assert_eq!(
+            (
+                d.player_count,
+                d.max_player_count,
+                d.game_type,
+                d.connection_type
+            ),
+            (1, 8, 2, 4)
+        );
+        assert_eq!(
+            (
+                d.editor_world,
+                d.hardcore,
+                d.accepts_online_auth,
+                d.accepts_self_signed_auth
+            ),
+            (false, true, true, true)
+        );
         assert_eq!(d.encode(), GN);
         let neg = ServerData { protocol: -3, ..d };
         assert_eq!(ServerData::decode(&neg.encode()).unwrap(), neg);

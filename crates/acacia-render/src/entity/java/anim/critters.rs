@@ -42,7 +42,15 @@ pub(super) fn bee(p: &mut Poses, s: &RenderState) {
     }
 }
 
-const PARROT_BODY: [&str; 7] = ["head", "tail", "body", "left_wing", "right_wing", "left_leg", "right_leg"];
+const PARROT_BODY: [&str; 7] = [
+    "head",
+    "tail",
+    "body",
+    "left_wing",
+    "right_wing",
+    "left_leg",
+    "right_leg",
+];
 
 /// `ParrotModel.prepare` then the pose's own motion (Java's switch falls through).
 pub(super) fn parrot(p: &mut Poses, s: &RenderState) {
@@ -105,7 +113,12 @@ pub(super) fn parrot(p: &mut Poses, s: &RenderState) {
 // TODO: faceplanting; Java keeps its leg motion in the model between frames.
 pub(super) fn fox(p: &mut Poses, s: &RenderState, baby: bool) {
     let (pos, speed, age) = (s.walk_pos(), s.walk_speed(), s.age());
-    let legs = ["right_hind_leg", "left_hind_leg", "right_front_leg", "left_front_leg"];
+    let legs = [
+        "right_hind_leg",
+        "left_hind_leg",
+        "right_front_leg",
+        "left_front_leg",
+    ];
     p.z_rot("head", s.num("headRollAngle"));
     for leg in legs {
         p.set_visible(leg, true);
@@ -118,7 +131,11 @@ pub(super) fn fox(p: &mut Poses, s: &RenderState, baby: bool) {
         p.x_rot("right_front_leg", cos(pos * 0.6662 + PI) * 1.4 * speed);
         p.x_rot("left_front_leg", cos(pos * 0.6662) * 1.4 * speed);
     }
-    let (crouching, sleeping, crouch) = (s.flag("isCrouching"), s.flag("isSleeping"), s.num("crouchAmount"));
+    let (crouching, sleeping, crouch) = (
+        s.flag("isCrouching"),
+        s.flag("isSleeping"),
+        s.num("crouchAmount"),
+    );
     if crouching {
         p.get("body").x_rot += 0.104_719_76;
         p.get("head").y += crouch * s.age_scale();
@@ -163,7 +180,11 @@ pub(super) fn fox(p: &mut Poses, s: &RenderState, baby: bool) {
     }
     if sleeping {
         let head = p.get("head");
-        (head.x_rot, head.y_rot, head.z_rot) = (0.0, (-std::f64::consts::PI * 2.0 / 3.0) as f32, cos(age * 0.027) / 22.0);
+        (head.x_rot, head.y_rot, head.z_rot) = (
+            0.0,
+            (-std::f64::consts::PI * 2.0 / 3.0) as f32,
+            cos(age * 0.027) / 22.0,
+        );
     }
 }
 

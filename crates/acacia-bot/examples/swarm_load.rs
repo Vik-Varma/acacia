@@ -30,7 +30,11 @@ fn next(seed: &mut u64) -> i32 {
 }
 
 async fn wander(bot: &mut Bot, mut seed: u64) -> Result<(), ActionError> {
-    while bot.bedrock().and_then(|b| b.movement()).is_none_or(|m| !m.is_started()) {
+    while bot
+        .bedrock()
+        .and_then(|b| b.movement())
+        .is_none_or(|m| !m.is_started())
+    {
         bot.wait_ticks(1).await?;
     }
     bot.wait_ticks(40).await?;
@@ -54,7 +58,9 @@ async fn wander(bot: &mut Bot, mut seed: u64) -> Result<(), ActionError> {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let [server, bots, wanderers, rest @ ..] = args.as_slice() else {
         return Err("usage: swarm_load <server> <bots> <wanderers> [seconds] [shards]".into());
@@ -64,10 +70,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut builder = Swarm::builder().bot_config(|spec: &BotSpec<Role>| BotConfig {
         physics: matches!(spec.state, Role::Wander),
-        trackers: Trackers { entities: true, ..Trackers::default() },
+        trackers: Trackers {
+            entities: true,
+            ..Trackers::default()
+        },
         ..BotConfig::default()
     });
-    if let Some(ms) = std::env::var("JOIN_MS").ok().map(|s| s.parse()).transpose()? {
+    if let Some(ms) = std::env::var("JOIN_MS")
+        .ok()
+        .map(|s| s.parse())
+        .transpose()?
+    {
         builder = builder.join_spacing(Duration::from_millis(ms), Duration::from_millis(ms / 2));
     }
     if let Some(shards) = rest.get(1) {
@@ -76,15 +89,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let swarm = builder.start(async |bot: &mut Bot, role: &mut Role| match role {
         Role::Stand => while bot.next().await.is_some() {},
         Role::Wander => {
-            let seed = bot.name().bytes().fold(0x9e37_79b9_7f4a_7c15u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3));
+            let seed = bot.name().bytes().fold(0x9e37_79b9_7f4a_7c15u64, |h, b| {
+                (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3)
+            });
             let _ = wander(bot, seed).await;
         }
     })?;
     let mut events = swarm.events();
     for i in 0..bots {
-        let state = if i < wanderers { Role::Wander } else { Role::Stand };
-        let login = Login::Offline { name: format!("Load{i}") };
-        swarm.add(BotSpec { id: BotId(format!("b{i}")), login, target: Target::Server { address: server.clone() }, proxy: None, state })?;
+        let state = if i < wanderers {
+            Role::Wander
+        } else {
+            Role::Stand
+        };
+        let login = Login::Offline {
+            name: format!("Load{i}"),
+        };
+        swarm.add(BotSpec {
+            id: BotId(format!("b{i}")),
+            login,
+            target: Target::Server {
+                address: server.clone(),
+            },
+            proxy: None,
+            state,
+        })?;
     }
 
     let deadline = tokio::time::sleep(Duration::from_secs(secs));

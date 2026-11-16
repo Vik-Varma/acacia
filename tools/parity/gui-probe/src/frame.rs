@@ -10,13 +10,13 @@ use acacia_ui::draw::Blend;
 use acacia_ui::java::font::Pen;
 use acacia_ui::java::gui::{Gui, GuiDraw, Metrics};
 use acacia_ui::java::hud::decor;
-use acacia_ui::java::tooltip::game::Game;
 use acacia_ui::java::mth::JavaRandom;
 use acacia_ui::java::paint::assets::{self, Images};
 use acacia_ui::java::paint::blit::Scaling;
 use acacia_ui::java::paint::{self, Glyphs, Source};
 use acacia_ui::java::picture::Picture;
 use acacia_ui::java::text::Text;
+use acacia_ui::java::tooltip::game::Game;
 use acacia_ui::{Quad, Sprite};
 use serde_json::{Value, json};
 
@@ -48,7 +48,16 @@ pub struct Names<'a> {
 impl<'a> Names<'a> {
     pub fn new(assets: &'a Assets, case: &'a Value) -> Names<'a> {
         let images = Images::new(&assets.root);
-        Names { assets, case, game: kit::game(case), names: Vec::new(), index: HashMap::new(), scaling: HashMap::new(), images, random: JavaRandom::new(0) }
+        Names {
+            assets,
+            case,
+            game: kit::game(case),
+            names: Vec::new(),
+            index: HashMap::new(),
+            scaling: HashMap::new(),
+            images,
+            random: JavaRandom::new(0),
+        }
     }
 
     fn region(&mut self, name: String) -> Sprite {
@@ -60,11 +69,20 @@ impl<'a> Names<'a> {
                 self.names.len() - 1
             }
         } as u32;
-        Sprite { x: i * STRIDE + STRIDE / 2, y: 0, width: SIZE, height: SIZE }
+        Sprite {
+            x: i * STRIDE + STRIDE / 2,
+            y: 0,
+            width: SIZE,
+            height: SIZE,
+        }
     }
 
     fn exists(&self, path: &str) -> bool {
-        self.assets.root.join("textures").join(format!("{path}.png")).is_file()
+        self.assets
+            .root
+            .join("textures")
+            .join(format!("{path}.png"))
+            .is_file()
     }
 
     /// One painted quad as the comparison reads it.
@@ -84,11 +102,19 @@ impl<'a> Names<'a> {
         if name == "fill" {
             return json!({"k": "fill", "r": r, "c": [argb(q.color), argb(q.bottom)], "b": blend(q.blend), "ab": after_blur});
         }
-        let uv = [(ul - ox) / SIZE as f32, (vt - oy) / SIZE as f32, (ur - ox) / SIZE as f32, (vb - oy) / SIZE as f32].map(round);
+        let uv = [
+            (ul - ox) / SIZE as f32,
+            (vt - oy) / SIZE as f32,
+            (ur - ox) / SIZE as f32,
+            (vb - oy) / SIZE as f32,
+        ]
+        .map(round);
         let mut out = json!({"k": "blit", "t": name, "uv": uv, "r": r, "c": [argb(q.color)], "b": blend(q.blend), "ab": after_blur});
         // The renderer samples `wrap` or `uv`: either must stay in the sprite, or the atlas bleeds.
         let [l, t, rr, b] = q.wrap.unwrap_or(q.uv);
-        let inside = |lo: f32, hi: f32, o: f32| lo.min(hi) >= o - 1e-3 && lo.max(hi) <= o + SIZE as f32 + 1e-3;
+        let inside = |lo: f32, hi: f32, o: f32| {
+            lo.min(hi) >= o - 1e-3 && lo.max(hi) <= o + SIZE as f32 + 1e-3
+        };
         if !(inside(l, rr, ox) && inside(t, b, oy)) {
             out["stray"] = json!(true);
         }
@@ -124,8 +150,12 @@ impl Source for Names<'_> {
             Some(s) => *s,
             None => {
                 let base = self.images.sprite_file(id).unwrap_or_default();
-                let meta = std::fs::read_to_string(base.with_extension("png.mcmeta")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
-                let s = (base.with_extension("png").is_file() || id == assets::MISSING).then(|| Scaling::from_mcmeta(&meta));
+                let meta = std::fs::read_to_string(base.with_extension("png.mcmeta"))
+                    .ok()
+                    .and_then(|t| serde_json::from_str(&t).ok())
+                    .unwrap_or_default();
+                let s = (base.with_extension("png").is_file() || id == assets::MISSING)
+                    .then(|| Scaling::from_mcmeta(&meta));
                 self.scaling.insert(id.to_owned(), s);
                 s
             }
@@ -149,8 +179,19 @@ impl Source for Names<'_> {
     }
 
     fn text(&mut self, text: &Text, x: i32, y: i32, color: u32, shadow: bool) -> Glyphs {
-        let prepared = self.assets.fonts.prepare(text, Pen::gui(x as f32, y as f32, color, shadow), &mut self.random);
-        prepared.glyphs(|_| Some(Sprite { x: GLYPH_X, y: 0, width: 1, height: 1 }))
+        let prepared = self.assets.fonts.prepare(
+            text,
+            Pen::gui(x as f32, y as f32, color, shadow),
+            &mut self.random,
+        );
+        prepared.glyphs(|_| {
+            Some(Sprite {
+                x: GLYPH_X,
+                y: 0,
+                width: 1,
+                height: 1,
+            })
+        })
     }
 
     fn width(&mut self, text: &Text) -> i32 {
@@ -163,14 +204,26 @@ impl Source for Names<'_> {
 
     fn item(&mut self, _: i32, x: i32, y: i32, _: i32) -> Vec<Quad> {
         let (x, y, u) = (x as f32, y as f32, ITEM_X as f32);
-        vec![Quad::plain([x, y, x + 16.0, y + 16.0], [u, 0.0, u + 16.0, 16.0], [255; 4])]
+        vec![Quad::plain(
+            [x, y, x + 16.0, y + 16.0],
+            [u, 0.0, u + 16.0, 16.0],
+            [255; 4],
+        )]
     }
 
     /// The case's resolved stack under `key`; none where the source keeps no stacks (the HUD).
     fn decorations(&mut self, key: i32, x: i32, y: i32, count: Option<&str>) -> Vec<GuiDraw> {
-        let Some(stack) = kit::item(self.case, key).filter(|s| !s.is_empty()) else { return Vec::new() };
+        let Some(stack) = kit::item(self.case, key).filter(|s| !s.is_empty()) else {
+            return Vec::new();
+        };
         let mut gui = Gui::new(0, 0);
-        decor::item_decorations(&mut gui, &*self.assets.fonts, x, y, &decor::of_stack(&stack, &self.game, count));
+        decor::item_decorations(
+            &mut gui,
+            &*self.assets.fonts,
+            x,
+            y,
+            &decor::of_stack(&stack, &self.game, count),
+        );
         gui.draws
     }
 
@@ -189,11 +242,24 @@ impl Source for Names<'_> {
 
 /// The frame `draws` paint for `case` (its `width` × `height` GUI).
 pub fn frame(case: &Value, draws: Vec<GuiDraw>, assets: &Assets) -> Value {
-    let draws: Vec<GuiDraw> = draws.into_iter().filter(|d| !matches!(d, GuiDraw::Picture(_))).collect();
+    let draws: Vec<GuiDraw> = draws
+        .into_iter()
+        .filter(|d| !matches!(d, GuiDraw::Picture(_)))
+        .collect();
     let size = |k: &str, d: i64| case[k].as_i64().unwrap_or(d) as i32;
     let mut names = Names::new(assets, case);
-    let painted = paint::paint(&draws, [size("width", 427), size("height", 240)], 1.0, &mut names);
+    let painted = paint::paint(
+        &draws,
+        [size("width", 427), size("height", 240)],
+        1.0,
+        &mut names,
+    );
     let blur = painted.blur_at.unwrap_or(usize::MAX);
-    let quads: Vec<Value> = painted.quads.iter().enumerate().map(|(i, q)| names.describe(q, i >= blur)).collect();
+    let quads: Vec<Value> = painted
+        .quads
+        .iter()
+        .enumerate()
+        .map(|(i, q)| names.describe(q, i >= blur))
+        .collect();
     json!({"frame": quads})
 }

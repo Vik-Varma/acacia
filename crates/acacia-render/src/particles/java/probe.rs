@@ -78,17 +78,32 @@ fn begin(engine: &mut Engine, seeds: &[Seeds], tick: usize) {
 
 fn end(engine: &mut Engine) -> Tick {
     let spawns = engine.spawned.replace(Vec::new()).unwrap_or_default();
-    let mut particles: Vec<Snapshot> = engine.particles.iter().filter(|p| !p.no_render).map(Snapshot::of).collect();
+    let mut particles: Vec<Snapshot> = engine
+        .particles
+        .iter()
+        .filter(|p| !p.no_render)
+        .map(Snapshot::of)
+        .collect();
     particles.sort_by_key(|p| p.seed);
     Tick { spawns, particles }
 }
 
 /// The block at `cell` animating once a tick, as `doAnimateTick` once it has picked the cell, after
 /// a lit campfire's block-entity tick, then `ParticleEngine.tick`. `foliage` is the biome's colour there.
-pub fn block(blocks: &impl Blocks, cell: IVec3, seed: i64, ticks: usize, foliage: u32, seeds: &[Seeds]) -> Vec<Tick> {
+pub fn block(
+    blocks: &impl Blocks,
+    cell: IVec3,
+    seed: i64,
+    ticks: usize,
+    foliage: u32,
+    seeds: &[Seeds],
+) -> Vec<Tick> {
     let mut engine = engine(seed, cell.as_dvec3() + DVec3::splat(0.5));
     engine.foliage = foliage;
-    if blocks.block(cell).is_some_and(|s| matches!(classify(s), Animate::Campfire { .. })) {
+    if blocks
+        .block(cell)
+        .is_some_and(|s| matches!(classify(s), Animate::Campfire { .. }))
+    {
         engine.campfires.insert(cell);
     }
     (0..ticks)
@@ -104,7 +119,15 @@ pub fn block(blocks: &impl Blocks, cell: IVec3, seed: i64, ticks: usize, foliage
 
 /// One particle made before the first tick, then `ticks` of `ParticleEngine.tick`, following what
 /// it spawns.
-pub fn particle(blocks: &impl Blocks, o: &Options, at: DVec3, velocity: DVec3, seed: i64, ticks: usize, seeds: &[Seeds]) -> Vec<Tick> {
+pub fn particle(
+    blocks: &impl Blocks,
+    o: &Options,
+    at: DVec3,
+    velocity: DVec3,
+    seed: i64,
+    ticks: usize,
+    seeds: &[Seeds],
+) -> Vec<Tick> {
     let mut engine = engine(seed, at);
     (0..ticks)
         .map(|t| {
@@ -120,7 +143,14 @@ pub fn particle(blocks: &impl Blocks, o: &Options, at: DVec3, velocity: DVec3, s
 
 impl Engine {
     /// A particle as its provider makes it, ticked by its constructor where Java's is.
-    pub fn probe_create(&mut self, o: &Options, p: DVec3, v: DVec3, seed: i64, blocks: &impl Blocks) -> Option<Particle> {
+    pub fn probe_create(
+        &mut self,
+        o: &Options,
+        p: DVec3,
+        v: DVec3,
+        seed: i64,
+        blocks: &impl Blocks,
+    ) -> Option<Particle> {
         let mut particle = self.make(o, p, v, seed)?;
         self.constructor_tick(&mut particle, blocks);
         Some(particle)

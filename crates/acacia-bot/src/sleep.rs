@@ -49,7 +49,10 @@ impl Bot {
         }
         if let Some((_, block)) = self.block_at(pos) {
             if !tick::is_bed(block) {
-                return Err(ActionError::NotPossible(format!("{} at {pos:?} is not a bed", block.name)));
+                return Err(ActionError::NotPossible(format!(
+                    "{} at {pos:?} is not a bed",
+                    block.name
+                )));
             }
             self.bed.lying = tick::lying_in(block, pos);
         }
@@ -69,10 +72,17 @@ impl Bot {
         match outcome {
             Ok(Ok(())) => {}
             Ok(Err(e)) => return Err(e),
-            Err(ActionError::Timeout) => return Err(ActionError::Rejected("the server did not put the player to bed".into())),
+            Err(ActionError::Timeout) => {
+                return Err(ActionError::Rejected(
+                    "the server did not put the player to bed".into(),
+                ));
+            }
             Err(e) => return Err(e),
         }
-        let settle = self.human.between(START_SLEEP).saturating_sub(clicked.elapsed());
+        let settle = self
+            .human
+            .between(START_SLEEP)
+            .saturating_sub(clicked.elapsed());
         self.pause(settle).await?;
         self.send_bedrock(&player_action(self.runtime_id(), Action::StartSleeping));
         self.reflexes.in_bed = true;
@@ -86,7 +96,8 @@ impl Bot {
             return Err(ActionError::NotPossible("not sleeping".into()));
         }
         self.leave_bed();
-        self.wait_until(WAKE_TIMEOUT, |bot, _| (!bot.is_sleeping()).then_some(())).await
+        self.wait_until(WAKE_TIMEOUT, |bot, _| (!bot.is_sleeping()).then_some(()))
+            .await
     }
 
     /// Presses "leave bed" without waiting.
@@ -101,7 +112,13 @@ impl Bot {
 /// (capture 2026-10-02).
 pub(crate) fn player_action(runtime_entity_id: u64, action: Action) -> PlayerAction {
     let origin = BlockCoordinates { x: 0, y: 0, z: 0 };
-    PlayerAction { runtime_entity_id, action, position: origin.clone(), result_position: origin, face: 0 }
+    PlayerAction {
+        runtime_entity_id,
+        action,
+        position: origin.clone(),
+        result_position: origin,
+        face: 0,
+    }
 }
 
 /// The server's message if `packet` is a refusal to let the player sleep.

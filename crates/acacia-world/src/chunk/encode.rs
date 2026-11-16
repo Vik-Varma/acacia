@@ -47,6 +47,7 @@ impl LevelChunkData {
             cache_enabled: !self.blobs.is_empty(),
             blobs: self.blobs.iter().map(|b| b.hash).collect(),
             payload: self.payload.clone(),
+            client_biome_update: false,
         }
     }
 }
@@ -91,7 +92,10 @@ struct Layers<'a> {
 impl Section {
     /// Compacted layers, or `None` when both are all air.
     fn layers(&self, air: u32) -> Option<Layers<'_>> {
-        let layers = Layers { blocks: self.blocks.compacted(), liquid: self.liquid.compacted() };
+        let layers = Layers {
+            blocks: self.blocks.compacted(),
+            liquid: self.liquid.compacted(),
+        };
         let is_air = layers.blocks.single() == Some(air) && layers.liquid.single() == Some(air);
         (!is_air).then_some(layers)
     }
@@ -99,16 +103,31 @@ impl Section {
 
 /// `None` writes an all-air section: no storages, as Geyser sends them. The liquid layer is written
 /// only when it holds something.
-fn write_section(out: &mut Vec<u8>, y_index: i32, layers: Option<&Layers>, air: u32, map: &dyn Fn(u32) -> u32) {
+fn write_section(
+    out: &mut Vec<u8>,
+    y_index: i32,
+    layers: Option<&Layers>,
+    air: u32,
+    map: &dyn Fn(u32) -> u32,
+) {
     let blocks = layers.map(|l| &*l.blocks);
-    let liquid = layers.map(|l| &*l.liquid).filter(|l| l.single() != Some(air));
+    let liquid = layers
+        .map(|l| &*l.liquid)
+        .filter(|l| l.single() != Some(air));
     let storages = [blocks, liquid].into_iter().flatten();
-    out.extend([SECTION_VERSION, storages.clone().count() as u8, y_index as i8 as u8]);
+    out.extend([
+        SECTION_VERSION,
+        storages.clone().count() as u8,
+        y_index as i8 as u8,
+    ]);
     storages.for_each(|s| s.encode(out, map));
 }
 
 fn blob(data: Vec<u8>) -> Blob {
-    Blob { hash: xxh64(&data), payload: data.into() }
+    Blob {
+        hash: xxh64(&data),
+        payload: data.into(),
+    }
 }
 
 fn tail(block_entities: &[u8]) -> Vec<u8> {
@@ -120,13 +139,28 @@ impl Chunk {
     /// full `LevelChunk`, `highest_subchunk_count` in request mode.
     pub fn sub_chunk_count(&self) -> u32 {
         let air = self.dim.air;
-        let filled = |s: &Option<Box<Section>>| s.as_deref().is_some_and(|s| s.layers(air).is_some());
-        self.sections.iter().rposition(filled).map_or(0, |top| top as u32 + 1)
+        let filled =
+            |s: &Option<Box<Section>>| s.as_deref().is_some_and(|s| s.layers(air).is_some());
+        self.sections
+            .iter()
+            .rposition(filled)
+            .map_or(0, |top| top as u32 + 1)
     }
 
-    fn section_bytes(&self, slot: usize, layers: Option<&Layers>, map: &dyn Fn(u32) -> u32) -> Vec<u8> {
+    fn section_bytes(
+        &self,
+        slot: usize,
+        layers: Option<&Layers>,
+        map: &dyn Fn(u32) -> u32,
+    ) -> Vec<u8> {
         let mut out = Vec::new();
-        write_section(&mut out, (self.dim.min_y >> 4) + slot as i32, layers, self.dim.air, map);
+        write_section(
+            &mut out,
+            (self.dim.min_y >> 4) + slot as i32,
+            layers,
+            self.dim.air,
+            map,
+        );
         out
     }
 
@@ -137,7 +171,11 @@ impl Chunk {
             let layers = s.as_deref().and_then(|s| s.layers(self.dim.air));
             self.section_bytes(slot, layers.as_ref(), map)
         };
-        self.sections[..count].iter().enumerate().map(encode).collect()
+        self.sections[..count]
+            .iter()
+            .enumerate()
+            .map(encode)
+            .collect()
     }
 
     /// One biome storage per section of the dimension: the biome blob, and the start of a
@@ -153,49 +191,103 @@ impl Chunk {
         let sections = self.sections_bytes(map);
         let sub_chunk_count = sections.len() as u32;
         let payload = [sections.concat(), self.biome_bytes(), tail(block_entities)].concat();
-        LevelChunkData { sub_chunk_count, highest_subchunk_count: None, blobs: Vec::new(), payload: payload.into() }
+        LevelChunkData {
+            sub_chunk_count,
+            highest_subchunk_count: None,
+            blobs: Vec::new(),
+            payload: payload.into(),
+        }
     }
 
     /// [`Chunk::level_chunk`] for a client with the blob cache: one blob per section plus the biomes.
-    pub fn level_chunk_cached(&self, block_entities: &[u8], map: &dyn Fn(u32) -> u32) -> LevelChunkData {
+    pub fn level_chunk_cached(
+        &self,
+        block_entities: &[u8],
+        map: &dyn Fn(u32) -> u32,
+    ) -> LevelChunkData {
         let mut blobs: Vec<Blob> = self.sections_bytes(map).into_iter().map(blob).collect();
         let sub_chunk_count = blobs.len() as u32;
         blobs.push(blob(self.biome_bytes()));
-        LevelChunkData { sub_chunk_count, highest_subchunk_count: None, blobs, payload: tail(block_entities).into() }
+        LevelChunkData {
+            sub_chunk_count,
+            highest_subchunk_count: None,
+            blobs,
+            payload: tail(block_entities).into(),
+        }
     }
 
     /// Request mode: only the biomes travel; sections follow from [`Chunk::sub_chunk`].
     pub fn level_chunk_request(&self) -> LevelChunkData {
         let payload = [self.biome_bytes(), tail(&[])].concat();
-        LevelChunkData { sub_chunk_count: 0, highest_subchunk_count: Some(self.sub_chunk_count() as i32), blobs: Vec::new(), payload: payload.into() }
+        LevelChunkData {
+            sub_chunk_count: 0,
+            highest_subchunk_count: Some(self.sub_chunk_count() as i32),
+            blobs: Vec::new(),
+            payload: payload.into(),
+        }
     }
 
     /// [`Chunk::level_chunk_request`] for a client with the blob cache: the biomes are the only blob.
     pub fn level_chunk_request_cached(&self) -> LevelChunkData {
         let blobs = vec![blob(self.biome_bytes())];
-        LevelChunkData { sub_chunk_count: 0, highest_subchunk_count: Some(self.sub_chunk_count() as i32), blobs, payload: tail(&[]).into() }
+        LevelChunkData {
+            sub_chunk_count: 0,
+            highest_subchunk_count: Some(self.sub_chunk_count() as i32),
+            blobs,
+            payload: tail(&[]).into(),
+        }
     }
 
     /// Section `section_y` (world y >> 4) for a `Subchunk` entry: payload = section, block
     /// entities. `None` when the dimension has no such section (`YIndexOutOfBounds`).
-    pub fn sub_chunk(&self, section_y: i32, heights: &ColumnHeights, block_entities: &[u8], map: &dyn Fn(u32) -> u32) -> Option<SubChunkData> {
+    pub fn sub_chunk(
+        &self,
+        section_y: i32,
+        heights: &ColumnHeights,
+        block_entities: &[u8],
+        map: &dyn Fn(u32) -> u32,
+    ) -> Option<SubChunkData> {
         let section = self.sub_chunk_section(section_y, map)?;
         let payload = section.map(|s| [&s[..], block_entities].concat().into());
-        Some(SubChunkData { payload, blob: None, heightmap: heights.sub_chunk(section_y) })
+        Some(SubChunkData {
+            payload,
+            blob: None,
+            heightmap: heights.sub_chunk(section_y),
+        })
     }
 
     /// [`Chunk::sub_chunk`] for a client with the blob cache (`Subchunk.cache_enabled`): the section
     /// is the blob and the payload keeps the block entities.
-    pub fn sub_chunk_cached(&self, section_y: i32, heights: &ColumnHeights, block_entities: &[u8], map: &dyn Fn(u32) -> u32) -> Option<SubChunkData> {
+    pub fn sub_chunk_cached(
+        &self,
+        section_y: i32,
+        heights: &ColumnHeights,
+        block_entities: &[u8],
+        map: &dyn Fn(u32) -> u32,
+    ) -> Option<SubChunkData> {
         let section = self.sub_chunk_section(section_y, map)?;
-        let payload = section.is_some().then(|| Bytes::copy_from_slice(block_entities));
-        Some(SubChunkData { payload, blob: section.map(blob), heightmap: heights.sub_chunk(section_y) })
+        let payload = section
+            .is_some()
+            .then(|| Bytes::copy_from_slice(block_entities));
+        Some(SubChunkData {
+            payload,
+            blob: section.map(blob),
+            heightmap: heights.sub_chunk(section_y),
+        })
     }
 
     /// Outer `None`: out of range. Inner `None`: all air.
-    fn sub_chunk_section(&self, section_y: i32, map: &dyn Fn(u32) -> u32) -> Option<Option<Vec<u8>>> {
+    fn sub_chunk_section(
+        &self,
+        section_y: i32,
+        map: &dyn Fn(u32) -> u32,
+    ) -> Option<Option<Vec<u8>>> {
         let slot = usize::try_from(section_y - (self.dim.min_y >> 4)).ok()?;
-        let layers = self.sections.get(slot)?.as_deref().and_then(|s| s.layers(self.dim.air));
+        let layers = self
+            .sections
+            .get(slot)?
+            .as_deref()
+            .and_then(|s| s.layers(self.dim.air));
         Some(layers.map(|l| self.section_bytes(slot, Some(&l), map)))
     }
 }

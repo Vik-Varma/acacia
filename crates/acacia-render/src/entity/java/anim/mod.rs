@@ -3,25 +3,25 @@
 //! point; the harness `entity_poses` proves them.
 
 mod arms;
+mod axolotl;
+mod beasts;
+mod critters;
+mod dragon;
+mod equine;
+mod feline;
+mod flyers;
 mod humanoid;
+mod illager;
+mod keyframed;
+mod layers;
+mod monsters;
+mod nether;
+mod piglin;
 mod player;
 mod quadruped;
 mod simple;
-mod piglin;
-mod monsters;
-mod illager;
-mod beasts;
-mod tame;
-mod feline;
-mod flyers;
-mod equine;
-mod critters;
-mod nether;
-mod axolotl;
 mod stand;
-mod keyframed;
-mod layers;
-mod dragon;
+mod tame;
 
 pub use arms::ArmPose;
 pub use humanoid::{Humanoid, Model};

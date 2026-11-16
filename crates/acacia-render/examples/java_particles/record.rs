@@ -30,11 +30,23 @@ pub fn case(name: &str, run: &[Tick]) -> Value {
 }
 
 fn tick(t: &Tick) -> Value {
-    let mut spawns: Vec<(&str, [f64; 6])> =
-        t.spawns.iter().map(|(o, p, v)| (o.ty.name(), [p.x, p.y, p.z, v.x, v.y, v.z])).collect();
-    let numbers = |a: &[f64; 6], b: &[f64; 6]| a.iter().zip(b).map(|(x, y)| x.total_cmp(y)).find(|o| o.is_ne()).unwrap_or(std::cmp::Ordering::Equal);
+    let mut spawns: Vec<(&str, [f64; 6])> = t
+        .spawns
+        .iter()
+        .map(|(o, p, v)| (o.ty.name(), [p.x, p.y, p.z, v.x, v.y, v.z]))
+        .collect();
+    let numbers = |a: &[f64; 6], b: &[f64; 6]| {
+        a.iter()
+            .zip(b)
+            .map(|(x, y)| x.total_cmp(y))
+            .find(|o| o.is_ne())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    };
     spawns.sort_by(|a, b| a.0.cmp(b.0).then_with(|| numbers(&a.1, &b.1)));
-    let spawns: Vec<Value> = spawns.iter().map(|(ty, c)| json!([ty, c[0], c[1], c[2], c[3], c[4], c[5]])).collect();
+    let spawns: Vec<Value> = spawns
+        .iter()
+        .map(|(ty, c)| json!([ty, c[0], c[1], c[2], c[3], c[4], c[5]]))
+        .collect();
     json!({ "spawns": spawns, "particles": t.particles.iter().map(particle).collect::<Vec<_>>() })
 }
 

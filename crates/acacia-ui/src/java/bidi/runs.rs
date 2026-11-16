@@ -19,7 +19,11 @@ impl Bidi {
             return Vec::new();
         }
         if self.direction != MIXED {
-            return vec![Run { start: 0, len: n, odd: self.para_level & 1 == 1 }];
+            return vec![Run {
+                start: 0,
+                len: n,
+                odd: self.para_level & 1 == 1,
+            }];
         }
         let levels = &self.levels;
         let mut runs: Vec<(usize, usize)> = Vec::new();
@@ -38,7 +42,13 @@ impl Bidi {
         if runs.len() > 1 {
             reorder_line(&mut runs, levels, min, max);
         }
-        runs.into_iter().map(|(start, len)| Run { start, len, odd: levels[start] & 1 == 1 }).collect()
+        runs.into_iter()
+            .map(|(start, len)| Run {
+                start,
+                len,
+                odd: levels[start] & 1 == 1,
+            })
+            .collect()
     }
 }
 

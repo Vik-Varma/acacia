@@ -33,17 +33,35 @@ impl Seat {
     pub(crate) fn of(state: &GameState) -> Option<Seat> {
         let vehicle = state.riding.vehicle.as_ref()?;
         let pose = vehicle_pose(state, vehicle);
-        let predicts = vehicle.driver && vehicle.kind.as_deref().is_some_and(|k| PREDICTED.contains(&k));
+        let predicts = vehicle.driver
+            && vehicle
+                .kind
+                .as_deref()
+                .is_some_and(|k| PREDICTED.contains(&k));
         let seat = match (&pose, &state.riding.seat_offset) {
-            (Some(p), Some(o)) => Vec3f { x: p.position.x + o.x, y: p.position.y + o.y, z: p.position.z + o.z },
+            (Some(p), Some(o)) => Vec3f {
+                x: p.position.x + o.x,
+                y: p.position.y + o.y,
+                z: p.position.z + o.z,
+            },
             _ => state.player.eye_position(),
         };
         Some(match pose {
             // Without the vehicle's position a predicted move would drag the vehicle; report the seat instead.
-            Some(p) if predicts => {
-                Seat { position: p.position, predicted: Some((vehicle.unique_id, Vec2f { x: p.pitch, z: p.yaw })) }
-            }
-            _ => Seat { position: seat, predicted: None },
+            Some(p) if predicts => Seat {
+                position: p.position,
+                predicted: Some((
+                    vehicle.unique_id,
+                    Vec2f {
+                        x: p.pitch,
+                        z: p.yaw,
+                    },
+                )),
+            },
+            _ => Seat {
+                position: seat,
+                predicted: None,
+            },
         })
     }
 
@@ -51,7 +69,11 @@ impl Seat {
     /// vehicle's own, not an eye position (subtracting the eye height put the bot a block underground).
     pub(crate) fn leaving_feet(&self) -> [f32; 3] {
         let p = &self.position;
-        let eye = if self.predicted.is_some() { 0.0 } else { EYE_HEIGHT };
+        let eye = if self.predicted.is_some() {
+            0.0
+        } else {
+            EYE_HEIGHT
+        };
         [p.x, p.y - eye, p.z]
     }
 }
@@ -60,7 +82,11 @@ impl Seat {
 pub(super) fn vehicle_pose(state: &GameState, vehicle: &Vehicle) -> Option<Pose> {
     let tracked = vehicle.runtime_id.and_then(|id| state.entities.get(id));
     match tracked {
-        Some(e) => Some(Pose { position: e.position.clone(), pitch: e.pitch, yaw: e.yaw }),
+        Some(e) => Some(Pose {
+            position: e.position.clone(),
+            pitch: e.pitch,
+            yaw: e.yaw,
+        }),
         None => state.riding.spawn_pose(vehicle.unique_id).cloned(),
     }
 }
@@ -70,16 +96,26 @@ pub(super) fn vehicle_pose(state: &GameState, vehicle: &Vehicle) -> Option<Pose>
 pub(crate) fn apply_seat(input: &mut PlayerAuthInput, seat: &Seat, first: bool) {
     input.position = seat.position.clone();
     if !first || seat.predicted.is_some() {
-        input.delta = Vec3f { x: 0.0, y: 0.0, z: 0.0 };
+        input.delta = Vec3f {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
     }
-    input.input_data.retain(|f| matches!(f, F::BlockBreakingDelayEnabled | F::HandledTeleport | F::VerticalCollision));
+    input.input_data.retain(|f| {
+        matches!(
+            f,
+            F::BlockBreakingDelayEnabled | F::HandledTeleport | F::VerticalCollision
+        )
+    });
     if !input.input_data.contains(&F::VerticalCollision) {
         input.input_data.push(F::VerticalCollision);
     }
     (input.vehicle_rotation, input.predicted_vehicle) = (None, None);
     if let Some((unique_id, rotation)) = &seat.predicted {
         input.input_data.push(F::ClientPredictedVehicle);
-        (input.vehicle_rotation, input.predicted_vehicle) = (Some(rotation.clone()), Some(*unique_id));
+        (input.vehicle_rotation, input.predicted_vehicle) =
+            (Some(rotation.clone()), Some(*unique_id));
     }
 }
 
@@ -87,7 +123,9 @@ pub(crate) fn apply_seat(input: &mut PlayerAuthInput, seat: &Seat, first: bool) 
 /// and no sneak, and no VerticalCollision until the tick after.
 pub(crate) fn apply_dismount(input: &mut PlayerAuthInput, eye: Vec3f) {
     input.position = eye;
-    input.input_data.retain(|f| !matches!(f, F::VerticalCollision | F::ClientPredictedVehicle));
+    input
+        .input_data
+        .retain(|f| !matches!(f, F::VerticalCollision | F::ClientPredictedVehicle));
     (input.vehicle_rotation, input.predicted_vehicle) = (None, None);
 }
 

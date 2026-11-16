@@ -19,10 +19,20 @@ pub struct Rect {
 }
 
 impl Rect {
-    pub const EMPTY: Rect = Rect { x: 0, y: 0, w: 0, h: 0 };
+    pub const EMPTY: Rect = Rect {
+        x: 0,
+        y: 0,
+        w: 0,
+        h: 0,
+    };
 
     pub fn corners(x0: i32, y0: i32, x1: i32, y1: i32) -> Rect {
-        Rect { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
+        Rect {
+            x: x0,
+            y: y0,
+            w: x1 - x0,
+            h: y1 - y0,
+        }
     }
 
     pub fn right(self) -> i32 {
@@ -49,17 +59,37 @@ impl Rect {
 
     /// `transformMaxBounds`: the integer box around the transformed corners.
     pub fn max_bounds(self, m: &Pose) -> Rect {
-        let pts = [(self.x, self.y), (self.right(), self.y), (self.x, self.bottom()), (self.right(), self.bottom())].map(|(x, y)| transform(m, x as f32, y as f32));
-        let (min_x, max_x) = pts.iter().fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p[0]), b.max(p[0])));
-        let (min_y, max_y) = pts.iter().fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p[1]), b.max(p[1])));
-        Rect { x: floor(min_x), y: floor(min_y), w: ceil(max_x - min_x), h: ceil(max_y - min_y) }
+        let pts = [
+            (self.x, self.y),
+            (self.right(), self.y),
+            (self.x, self.bottom()),
+            (self.right(), self.bottom()),
+        ]
+        .map(|(x, y)| transform(m, x as f32, y as f32));
+        let (min_x, max_x) = pts
+            .iter()
+            .fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p[0]), b.max(p[0])));
+        let (min_y, max_y) = pts
+            .iter()
+            .fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p[1]), b.max(p[1])));
+        Rect {
+            x: floor(min_x),
+            y: floor(min_y),
+            w: ceil(max_x - min_x),
+            h: ceil(max_y - min_y),
+        }
     }
 
     /// `transformAxisAligned`, what a scissor goes through.
     pub fn axis_aligned(self, m: &Pose) -> Rect {
         let a = transform(m, self.x as f32, self.y as f32);
         let b = transform(m, self.right() as f32, self.bottom() as f32);
-        Rect { x: floor(a[0]), y: floor(a[1]), w: floor(b[0] - a[0]), h: floor(b[1] - a[1]) }
+        Rect {
+            x: floor(a[0]),
+            y: floor(a[1]),
+            w: floor(b[0] - a[0]),
+            h: floor(b[1] - a[1]),
+        }
     }
 
     /// An element's bounds: `self` through `pose`, cut to `scissor`.
@@ -95,7 +125,13 @@ pub struct Layers {
 
 impl Default for Layers {
     fn default() -> Self {
-        Layers { nodes: vec![Node::default()], strata: vec![0], current: 0, last: None, blur: None }
+        Layers {
+            nodes: vec![Node::default()],
+            strata: vec![0],
+            current: 0,
+            last: None,
+            blur: None,
+        }
     }
 }
 
@@ -143,7 +179,10 @@ impl Layers {
         let up = match self.nodes[self.current].up {
             Some(up) => up,
             None => {
-                self.nodes.push(Node { parent: Some(self.current), ..Node::default() });
+                self.nodes.push(Node {
+                    parent: Some(self.current),
+                    ..Node::default()
+                });
                 let up = self.nodes.len() - 1;
                 self.nodes[self.current].up = Some(up);
                 up
@@ -195,7 +234,9 @@ mod tests {
 
     fn tagged(layers: &mut Layers, rect: Rect, tag: f32) {
         assert!(layers.place(Some(rect)));
-        layers.blits().push(Quad::plain([tag; 4], [0.0; 4], [255; 4]));
+        layers
+            .blits()
+            .push(Quad::plain([tag; 4], [0.0; 4], [255; 4]));
     }
 
     fn order(layers: Layers) -> Vec<f32> {
@@ -216,21 +257,45 @@ mod tests {
     fn glyphs_follow_their_nodes_blits_and_strata_follow_everything() {
         let mut layers = Layers::default();
         assert!(layers.place(Some(Rect::corners(0, 0, 10, 10))));
-        layers.glyphs().push(Quad::plain([1.0; 4], [0.0; 4], [255; 4]));
+        layers
+            .glyphs()
+            .push(Quad::plain([1.0; 4], [0.0; 4], [255; 4]));
         tagged(&mut layers, Rect::corners(20, 0, 30, 10), 2.0);
         layers.next_stratum();
         layers.blur();
         tagged(&mut layers, Rect::corners(40, 0, 50, 10), 3.0);
         let (quads, blur) = layers.flatten();
-        assert_eq!(quads.iter().map(|q| q.rect[0]).collect::<Vec<_>>(), [2.0, 1.0, 3.0]);
+        assert_eq!(
+            quads.iter().map(|q| q.rect[0]).collect::<Vec<_>>(),
+            [2.0, 1.0, 3.0]
+        );
         assert_eq!(blur, Some(2));
     }
 
     #[test]
     fn bounds_round_outwards_and_scissors_cut_them() {
         let pose = [1.5, 0.0, 0.0, 1.5, 0.25, 0.0];
-        assert_eq!(Rect::corners(0, 0, 3, 3).max_bounds(&pose), Rect { x: 0, y: 0, w: 5, h: 5 });
-        assert_eq!(Rect::corners(0, 0, 3, 3).bounds(&IDENTITY, Some(Rect::corners(5, 5, 9, 9))), None);
-        assert_eq!(Rect::corners(0, 0, 3, 3).axis_aligned(&pose), Rect { x: 0, y: 0, w: 4, h: 4 });
+        assert_eq!(
+            Rect::corners(0, 0, 3, 3).max_bounds(&pose),
+            Rect {
+                x: 0,
+                y: 0,
+                w: 5,
+                h: 5
+            }
+        );
+        assert_eq!(
+            Rect::corners(0, 0, 3, 3).bounds(&IDENTITY, Some(Rect::corners(5, 5, 9, 9))),
+            None
+        );
+        assert_eq!(
+            Rect::corners(0, 0, 3, 3).axis_aligned(&pose),
+            Rect {
+                x: 0,
+                y: 0,
+                w: 4,
+                h: 4
+            }
+        );
     }
 }

@@ -1,14 +1,17 @@
 //! Any-angle shortcuts while following (plan step 6b): straight lines instead of the 8-direction staircase.
 
-use super::drive::{PROFILES, Style, assert_arrived, drive, macro_opts, plan, plan_and_follow, seeds, standing};
+use super::drive::{
+    PROFILES, Style, assert_arrived, drive, macro_opts, plan, plan_and_follow, seeds, standing,
+};
 use super::grid::Grid;
-use crate::pathfind::shortcut::over_floor;
 use crate::movement::{Rollout, Sim};
+use crate::pathfind::shortcut::over_floor;
 use crate::pathfind::{Goal, MovementProfile, SearchOpts};
 
 /// Ticks to [15, 1, 6] under every execution seed.
 fn follow(g: &Grid, opts: &SearchOpts, shortcuts: bool) -> Vec<u32> {
-    let (_, runs) = plan_and_follow(g, [-15.5, 1.0, -5.5], [15, 1, 6], opts, shortcuts).expect("plan");
+    let (_, runs) =
+        plan_and_follow(g, [-15.5, 1.0, -5.5], [15, 1, 6], opts, shortcuts).expect("plan");
     runs.iter().map(|o| o.ticks).collect()
 }
 
@@ -18,10 +21,18 @@ fn shortcuts_cut_a_long_diagonal() {
     let g = Grid::floor(-31, 46);
     for profile in PROFILES {
         for macros in [false, true] {
-            let opts = SearchOpts { macros, ..macro_opts(profile) };
+            let opts = SearchOpts {
+                macros,
+                ..macro_opts(profile)
+            };
             let (without, with) = (follow(&g, &opts, false), follow(&g, &opts, true));
-            eprintln!("{profile:?}, macros {macros}: {with:?} ticks with shortcuts, {without:?} without");
-            assert!(with.iter().zip(&without).all(|(w, o)| w < o), "{profile:?}, macros {macros}: {with:?} vs {without:?}");
+            eprintln!(
+                "{profile:?}, macros {macros}: {with:?} ticks with shortcuts, {without:?} without"
+            );
+            assert!(
+                with.iter().zip(&without).all(|(w, o)| w < o),
+                "{profile:?}, macros {macros}: {with:?} vs {without:?}"
+            );
         }
     }
 }
@@ -39,14 +50,28 @@ fn human_shortcuts_keep_off_pit_edges() {
         for &seed in seeds(opts.profile) {
             let mut m = standing(from);
             let mut over_air = Vec::new();
-            let o = drive(&g, &mut m, path.nodes.clone(), &goal, &opts, Style { seed, shortcuts: true }, |t, m| {
-                let st = m.state().expect("started");
-                if st.on_ground && !over_floor(&g.physics(), &Rollout::new(st.clone()).body()) {
-                    over_air.push((t, st.pos));
-                }
-            });
+            let o = drive(
+                &g,
+                &mut m,
+                path.nodes.clone(),
+                &goal,
+                &opts,
+                Style {
+                    seed,
+                    shortcuts: true,
+                },
+                |t, m| {
+                    let st = m.state().expect("started");
+                    if st.on_ground && !over_floor(&g.physics(), &Rollout::new(st.clone()).body()) {
+                        over_air.push((t, st.pos));
+                    }
+                },
+            );
             assert_arrived(&o, [-6, 1, 4]);
-            assert!(over_air.is_empty(), "from {from:?} seed {seed}: centre over the pit {over_air:?}");
+            assert!(
+                over_air.is_empty(),
+                "from {from:?} seed {seed}: centre over the pit {over_air:?}"
+            );
         }
     }
 }

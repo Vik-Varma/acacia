@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use str0m::{IceConnectionState, Output};
 
-use super::{Connection, Event, Transmit, RELIABLE_LABEL, UNRELIABLE_LABEL};
+use super::{Connection, Event, RELIABLE_LABEL, Transmit, UNRELIABLE_LABEL};
 use crate::frame::fragments;
 
 /// str0m buffers at most 128 KiB across streams (`MAX_BUFFERED_ACROSS_STREAMS`); a bigger frame
@@ -71,7 +71,9 @@ impl Connection {
             E::ChannelClose(id) => self.close_with(format!("data channel {id:?} closed")),
             // The peer's DTLS close_notify; str0m reports it with no channel event.
             E::Closed => self.close_with("peer closed".into()),
-            E::IceConnectionStateChange(IceConnectionState::Disconnected) => self.close_with("ICE disconnected".into()),
+            E::IceConnectionStateChange(IceConnectionState::Disconnected) => {
+                self.close_with("ICE disconnected".into())
+            }
             _ => {}
         }
     }
@@ -87,7 +89,9 @@ impl Connection {
                 Err(e) => return self.close_with(e.to_string()),
             }
         }
-        let Some(mut channel) = self.reliable.and_then(|id| self.rtc.channel(id)) else { return };
+        let Some(mut channel) = self.reliable.and_then(|id| self.rtc.channel(id)) else {
+            return;
+        };
         let mut failed = None;
         while let Some(frame) = self.outbound.front() {
             match channel.write(true, frame) {

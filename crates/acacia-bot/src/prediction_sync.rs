@@ -3,7 +3,8 @@
 //! health or hunger changes are the ones the capture shows, so those are what we follow.
 
 use acacia_client::proto::packets::{
-    ClientMovementPredictionSync, ClientMovementPredictionSyncBoundingBox, SetEntityData, UpdateAttributes,
+    ClientMovementPredictionSync, ClientMovementPredictionSyncBoundingBox, SetEntityData,
+    UpdateAttributes,
 };
 use acacia_client::proto::types::{MetadataDictionaryItemValue, MetadataFlags1};
 use acacia_client::proto::{Packet, RawPacket};
@@ -52,7 +53,9 @@ impl PredictionSync {
     pub const PACKETS: &[u32] = &[SetEntityData::ID, UpdateAttributes::ID];
 
     pub fn apply(&mut self, packet: &RawPacket, runtime_id: u64) {
-        if !Self::PACKETS.contains(&packet.id) || crate::state::leading_entity(packet) != Some(runtime_id) {
+        if !Self::PACKETS.contains(&packet.id)
+            || crate::state::leading_entity(packet) != Some(runtime_id)
+        {
             return;
         }
         if let Ok(p) = packet.decode::<SetEntityData>() {
@@ -100,7 +103,8 @@ impl PredictionSync {
             None => false,
         };
         let state = (player.health, player.hunger);
-        let changed = self.last.is_some_and(|last| last != state) && self.since_last >= MIN_GAP_TICKS;
+        let changed =
+            self.last.is_some_and(|last| last != state) && self.since_last >= MIN_GAP_TICKS;
         if !first && !changed {
             return None;
         }
@@ -113,14 +117,23 @@ impl PredictionSync {
     fn packet(&self, player: &PlayerState, first: bool) -> ClientMovementPredictionSync {
         let zigzag = ((player.unique_entity_id << 1) ^ (player.unique_entity_id >> 63)) as u64;
         ClientMovementPredictionSync {
-            data_flags: (u128::from(self.flags_extended as u64) << 64) | u128::from(self.flags as u64),
+            data_flags: (u128::from(self.flags_extended as u64) << 64)
+                | u128::from(self.flags as u64),
             // Gliding shrinks the box to 0.6 tall (vanilla capture 2026-10-02).
             bounding_box: ClientMovementPredictionSyncBoundingBox {
                 scale: 1.0,
                 width: 0.6,
-                height: if self.flags & MetadataFlags1::GLIDING.0 != 0 { 0.6 } else { 1.8 },
+                height: if self.flags & MetadataFlags1::GLIDING.0 != 0 {
+                    0.6
+                } else {
+                    1.8
+                },
             },
-            movement_speed: if first { FIRST_MOVEMENT_SPEED } else { self.movement },
+            movement_speed: if first {
+                FIRST_MOVEMENT_SPEED
+            } else {
+                self.movement
+            },
             underwater_movement_speed: self.underwater_movement,
             lava_movement_speed: self.lava_movement,
             jump_strength: 0.0,
@@ -140,16 +153,28 @@ mod tests {
     use super::*;
 
     fn player() -> PlayerState {
-        PlayerState { unique_entity_id: -51_539_607_551, alive: true, health: 20.0, hunger: 20.0, ..PlayerState::default() }
+        PlayerState {
+            unique_entity_id: -51_539_607_551,
+            alive: true,
+            health: 20.0,
+            hunger: 20.0,
+            ..PlayerState::default()
+        }
     }
 
     #[test]
     fn first_sync_after_spawn_like_vanilla() {
-        let mut sync = PredictionSync { flags: 0x3_0008_0008_0000, flags_extended: 0x2000_0200_0000, ..Default::default() };
+        let mut sync = PredictionSync {
+            flags: 0x3_0008_0008_0000,
+            flags_extended: 0x2000_0200_0000,
+            ..Default::default()
+        };
         let p = player();
         assert!(sync.tick(&p).is_none(), "nothing before spawn completes");
         sync.spawned();
-        let sent: Vec<_> = (0..400).filter_map(|i| sync.tick(&p).map(|s| (i, s))).collect();
+        let sent: Vec<_> = (0..400)
+            .filter_map(|i| sync.tick(&p).map(|s| (i, s)))
+            .collect();
         assert_eq!(sent.len(), 1);
         let (at, s) = &sent[0];
         assert_eq!(*at, FIRST_DELAY_TICKS);
@@ -157,7 +182,10 @@ mod tests {
         s.write(&mut wire);
         // Vanilla's bytes for the same state (capture session 2).
         let vanilla = "8080a0808081c08180808080a08080100000803f9a99193f6666e63f3333333f0ad7a33c0ad7a33c000000000000a0410000a0410000803f000000000000803ffdffffffff0200";
-        assert_eq!(wire.iter().map(|b| format!("{b:02x}")).collect::<String>(), vanilla);
+        assert_eq!(
+            wire.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+            vanilla
+        );
     }
 
     #[test]
@@ -169,6 +197,9 @@ mod tests {
         p.hunger = 17.0;
         let at = (1..=MIN_GAP_TICKS).find(|_| sync.tick(&p).is_some());
         assert_eq!(at, Some(MIN_GAP_TICKS));
-        assert!((0..500).all(|_| sync.tick(&p).is_none()), "unchanged state sends nothing");
+        assert!(
+            (0..500).all(|_| sync.tick(&p).is_none()),
+            "unchanged state sends nothing"
+        );
     }
 }

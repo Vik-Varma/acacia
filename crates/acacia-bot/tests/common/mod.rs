@@ -5,7 +5,10 @@ use tokio::sync::broadcast;
 use tokio::time::timeout;
 
 /// The first event matching `want`, skipping the rest.
-pub async fn wait_for(events: &mut broadcast::Receiver<SwarmEvent>, want: impl Fn(&SwarmEvent) -> bool) -> SwarmEvent {
+pub async fn wait_for(
+    events: &mut broadcast::Receiver<SwarmEvent>,
+    want: impl Fn(&SwarmEvent) -> bool,
+) -> SwarmEvent {
     timeout(Duration::from_secs(20), async {
         loop {
             let event = events.recv().await.expect("event stream open");

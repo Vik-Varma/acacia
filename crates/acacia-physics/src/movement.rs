@@ -16,7 +16,8 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
         let own = self.w.block(block_pos(st.pos)).traversal;
         let is_scaffolding = |p: BlockPos| self.w.block(p).traversal == Traversal::Scaffolding;
         if own == Traversal::None
-            && (st.supporting_block.is_some_and(is_scaffolding) || overlapped_cells(&st.bounding_box()).any(is_scaffolding))
+            && (st.supporting_block.is_some_and(is_scaffolding)
+                || overlapped_cells(&st.bounding_box()).any(is_scaffolding))
         {
             return Traversal::Scaffolding;
         }
@@ -65,7 +66,13 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
         known
     }
 
-    fn travel(&self, st: &mut PlayerState, in_water: bool, water: &[[i32; 3]], lava: &[[i32; 3]]) -> bool {
+    fn travel(
+        &self,
+        st: &mut PlayerState,
+        in_water: bool,
+        water: &[[i32; 3]],
+        lava: &[[i32; 3]],
+    ) -> bool {
         // BDS `TravelTypeSensingSystem` picks flying over liquid travel.
         if st.flight.travel {
             return (!st.gliding || self.stop_gliding(st)) && self.fly(st);
@@ -73,7 +80,8 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
         // A flight's first tick: its vertical input on the walking travel (strict BDS, drill `flight`).
         let idle_friction = crate::flight::control_vertical(st);
         // Observed lava takes precedence over retained water evidence.
-        let water_travel = in_water || (st.swimming && st.swim_water_grace_ticks > 0 && lava.is_empty());
+        let water_travel =
+            in_water || (st.swimming && st.swim_water_grace_ticks > 0 && lava.is_empty());
         if water_travel || !lava.is_empty() {
             attempt_knockback(st);
             if water_travel {
@@ -83,7 +91,8 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
                     }
                     st.glide_boost_ticks = 0;
                 }
-                let can_sink = st.want_down || !st.swimming && self.standing_head_in(st, LiquidKind::Water);
+                let can_sink =
+                    st.want_down || !st.swimming && self.standing_head_in(st, LiquidKind::Water);
                 return self.apply_liquid_flow(st, water, LiquidKind::Water)
                     && self.simulate_liquid_travel(st, LiquidKind::Water, in_water, can_sink);
             }

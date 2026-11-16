@@ -36,7 +36,8 @@ pub struct TextureRef {
 impl Pack {
     /// `$ACACIA_ASSETS`, else `assets/vanilla` under the working directory.
     pub fn default_dir() -> PathBuf {
-        std::env::var_os("ACACIA_ASSETS").map_or_else(|| PathBuf::from("assets/vanilla"), PathBuf::from)
+        std::env::var_os("ACACIA_ASSETS")
+            .map_or_else(|| PathBuf::from("assets/vanilla"), PathBuf::from)
     }
 
     pub fn load(root: &Path) -> Result<Pack, Error> {
@@ -47,7 +48,12 @@ impl Pack {
         let blocks = object(json::read(&root.join("blocks.json"))?);
         let mut terrain = object(json::read(&root.join("textures/terrain_texture.json"))?);
         let terrain = object(terrain.remove("texture_data").unwrap_or_default());
-        Ok(Pack { root: root.to_owned(), blocks, terrain, flipbooks: flipbook::load(root) })
+        Ok(Pack {
+            root: root.to_owned(),
+            blocks,
+            terrain,
+            flipbooks: flipbook::load(root),
+        })
     }
 
     /// How a terrain texture animates, if it does.
@@ -66,10 +72,15 @@ impl Pack {
             Value::String(s) => Some(std::array::from_fn(|_| s.clone())),
             Value::Object(m) => {
                 let get = |k: &str| m.get(k).and_then(Value::as_str);
-                let any = get("side").or(get("up")).or_else(|| m.values().find_map(Value::as_str))?;
+                let any = get("side")
+                    .or(get("up"))
+                    .or_else(|| m.values().find_map(Value::as_str))?;
                 Some(FACE_NAMES.map(|face| {
                     let horizontal = !matches!(face, "up" | "down");
-                    get(face).or(if horizontal { get("side") } else { None }).unwrap_or(any).to_owned()
+                    get(face)
+                        .or(if horizontal { get("side") } else { None })
+                        .unwrap_or(any)
+                        .to_owned()
                 }))
             }
             _ => None,
@@ -86,12 +97,24 @@ impl Pack {
             v => v,
         };
         match first {
-            Value::String(s) => Some(TextureRef { path: s.clone(), overlay: false, quad }),
+            Value::String(s) => Some(TextureRef {
+                path: s.clone(),
+                overlay: false,
+                quad,
+            }),
             Value::Object(o) => {
                 let path = o.get("path").and_then(Value::as_str).or_else(|| {
-                    o.get("variations")?.as_array()?.first()?.get("path")?.as_str()
+                    o.get("variations")?
+                        .as_array()?
+                        .first()?
+                        .get("path")?
+                        .as_str()
                 })?;
-                Some(TextureRef { path: path.to_owned(), overlay: o.contains_key("overlay_color"), quad })
+                Some(TextureRef {
+                    path: path.to_owned(),
+                    overlay: o.contains_key("overlay_color"),
+                    quad,
+                })
             }
             _ => None,
         }
@@ -104,5 +127,8 @@ impl Pack {
 
 /// The image file for a texture path under `root`, trying `.png` then `.tga`.
 pub fn image_file(root: &Path, path: &str) -> Option<PathBuf> {
-    ["png", "tga"].iter().map(|ext| root.join(format!("{path}.{ext}"))).find(|p| p.is_file())
+    ["png", "tga"]
+        .iter()
+        .map(|ext| root.join(format!("{path}.{ext}")))
+        .find(|p| p.is_file())
 }

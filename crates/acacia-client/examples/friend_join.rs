@@ -6,11 +6,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use acacia_client::auth::{Account, AuthClient, AuthConfig, FileTokenCache};
-use acacia_client::{friend_builder, Event};
+use acacia_client::{Event, friend_builder};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
     let mut args = std::env::args().skip(1);
     let Some(account) = args.next() else {
         return Err("usage: friend_join <account> [host gamertag or #] [seconds]".into());
@@ -20,7 +22,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
 
     let auth = Arc::new(AuthClient::new(AuthConfig::default())?);
-    let account = Account::new(auth.clone(), Arc::new(FileTokenCache::new(".tokens")?), account);
+    let account = Account::new(
+        auth.clone(),
+        Arc::new(FileTokenCache::new(".tokens")?),
+        account,
+    );
     let worlds = account.friend_worlds().await?;
     for (i, w) in worlds.iter().enumerate() {
         let kinds: Vec<_> = w.connections.iter().map(|c| c.kind).collect();
@@ -32,7 +38,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let Some(pick) = pick else { return Ok(()) };
     let world = match pick.strip_prefix('#') {
         Some(i) => worlds.get(i.parse::<usize>()?),
-        None => worlds.iter().find(|w| w.host_name.eq_ignore_ascii_case(&pick)),
+        None => worlds
+            .iter()
+            .find(|w| w.host_name.eq_ignore_ascii_case(&pick)),
     };
     let world = world.ok_or("no such world")?;
 
@@ -40,7 +48,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("join target: {} ({:?})", builder.server(), start.elapsed());
 
     let mut client = builder.connect().await?;
-    println!("spawned as {} in {:?}", client.display_name(), start.elapsed());
+    println!(
+        "spawned as {} in {:?}",
+        client.display_name(),
+        start.elapsed()
+    );
     let deadline = tokio::time::sleep(Duration::from_secs(secs));
     tokio::pin!(deadline);
     let mut packets = 0usize;

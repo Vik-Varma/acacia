@@ -61,10 +61,15 @@ impl App {
     fn form_input(&mut self, input: Input) {
         let look = self.settings.look;
         let Some(form) = &mut self.form else { return };
-        let Some(outcome) = form.handle(&input, self.ui.theme_mut(look)) else { return };
+        let Some(outcome) = form.handle(&input, self.ui.theme_mut(look)) else {
+            return;
+        };
         let _ = match form.id {
             SHOT_FORM_ID => Ok(()),
-            id => self.net.commands.send(Command::AnswerForm(id, forms::reply(outcome))),
+            id => self
+                .net
+                .commands
+                .send(Command::AnswerForm(id, forms::reply(outcome))),
         };
         self.close_form();
     }
@@ -86,7 +91,13 @@ impl App {
             _ => return,
         };
         if pressed {
-            self.form_input(Input::Key(key, Mods { shift: self.shift, ctrl: false }));
+            self.form_input(Input::Key(
+                key,
+                Mods {
+                    shift: self.shift,
+                    ctrl: false,
+                },
+            ));
         }
     }
 
@@ -99,7 +110,11 @@ impl App {
             return;
         }
         let at = self.gui_mouse();
-        self.form_input(if pressed { Input::Press(at) } else { Input::Release(at) });
+        self.form_input(if pressed {
+            Input::Press(at)
+        } else {
+            Input::Release(at)
+        });
     }
 
     pub(super) fn form_scroll(&mut self, lines: f32) {

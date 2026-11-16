@@ -8,7 +8,9 @@ use acacia_bot::proto::types::GameMode;
 use acacia_render::LookPack;
 use acacia_render::blocks::BlockTable;
 use acacia_render::glint::Foil;
-use acacia_render::item::{ItemIcons, JavaItems, block_icon, java_icon, leather, model_icon, pattern_icon};
+use acacia_render::item::{
+    ItemIcons, JavaItems, block_icon, java_icon, leather, model_icon, pattern_icon,
+};
 use acacia_ui::Sprite;
 use acacia_ui::hud::{HudState, Item};
 use acacia_ui::theme::Theme;
@@ -33,12 +35,25 @@ pub(super) struct Skin {
 
 impl Skin {
     pub(super) fn new(theme: Theme, root: &Path, foil: Foil) -> Skin {
-        Skin { theme, icons: ItemIcons::load(root), java_items: JavaItems::shared(root), root: root.to_owned(), added: HashMap::new(), blocks: None, generation: 0, foil }
+        Skin {
+            theme,
+            icons: ItemIcons::load(root),
+            java_items: JavaItems::shared(root),
+            root: root.to_owned(),
+            added: HashMap::new(),
+            blocks: None,
+            generation: 0,
+            foil,
+        }
     }
 
     /// A stack as a slot shows it; `None` for an item without an icon.
     pub(super) fn item(&mut self, s: &Stack) -> Option<Item> {
-        Some(Item { icon: self.icon(s)?, count: s.count, glint: s.enchanted || self.foil.always(&s.name) })
+        Some(Item {
+            icon: self.icon(s)?,
+            count: s.count,
+            glint: s.enchanted || self.foil.always(&s.name),
+        })
     }
 
     pub(super) fn state(&mut self, me: &Me) -> HudState {
@@ -64,7 +79,8 @@ impl Skin {
         if let Some(sprite) = self.added.get(&key) {
             return *sprite;
         }
-        let image = pattern_icon(&self.root, code).or_else(|| pattern_icon(&acacia_render::assets::Pack::default_dir(), code));
+        let image = pattern_icon(&self.root, code)
+            .or_else(|| pattern_icon(&acacia_render::assets::Pack::default_dir(), code));
         let sprite = image.map(|i| self.theme.atlas.add(&key.0, &i));
         self.added.insert(key, sprite);
         sprite
@@ -76,22 +92,57 @@ impl Skin {
         let (name, aux, block) = (s.name.as_str(), s.aux, s.block);
         let dyed = leather::dyeable(name).then_some(s.dye);
         let variant = crate::item_look::variant(dyed.flatten(), s.banner.as_deref());
-        let (banner, key) = (s.banner.as_deref(), (format!("{name}/{variant}{}", s.trim.as_deref().unwrap_or_default()), aux));
+        let (banner, key) = (
+            s.banner.as_deref(),
+            (
+                format!("{name}/{variant}{}", s.trim.as_deref().unwrap_or_default()),
+                aux,
+            ),
+        );
         if let Some(sprite) = self.added.get(&key) {
             return *sprite;
         }
-        let java = self.java_items.as_deref().filter(|_| banner.is_none()).and_then(|items| java_icon::icon(items, name, aux, s.trim.as_deref(), acacia_render::item::first_tint(name, aux, s.dye)));
-        let model = java.or_else(|| model_icon(&self.root, name, banner)).or_else(|| model_icon(&acacia_render::assets::Pack::default_dir(), name, banner));
-        let image = model.or_else(|| self.icons.path(name, aux).and_then(|p| leather::icon(&self.root, p, dyed)));
+        let java = self
+            .java_items
+            .as_deref()
+            .filter(|_| banner.is_none())
+            .and_then(|items| {
+                java_icon::icon(
+                    items,
+                    name,
+                    aux,
+                    s.trim.as_deref(),
+                    acacia_render::item::first_tint(name, aux, s.dye),
+                )
+            });
+        let model = java
+            .or_else(|| model_icon(&self.root, name, banner))
+            .or_else(|| model_icon(&acacia_render::assets::Pack::default_dir(), name, banner));
+        let image = model.or_else(|| {
+            self.icons
+                .path(name, aux)
+                .and_then(|p| leather::icon(&self.root, p, dyed))
+        });
         let sprite = match image {
             Some(i) => {
                 let side = i.width().min(i.height());
                 let frame = image::imageops::crop_imm(&i, 0, 0, side, side).to_image();
-                Some(self.theme.atlas.add(&format!("item/{}/{aux}", key.0), &frame))
+                Some(
+                    self.theme
+                        .atlas
+                        .add(&format!("item/{}/{aux}", key.0), &frame),
+                )
             }
-            None => self.blocks.as_ref().filter(|_| block != 0).and_then(|(pack, table)| block_icon(table.get(block), &pack.atlas)).map(|icon| {
-                self.theme.atlas.add(&format!("block/{}/{block}", self.generation), &icon)
-            }),
+            None => self
+                .blocks
+                .as_ref()
+                .filter(|_| block != 0)
+                .and_then(|(pack, table)| block_icon(table.get(block), &pack.atlas))
+                .map(|icon| {
+                    self.theme
+                        .atlas
+                        .add(&format!("block/{}/{block}", self.generation), &icon)
+                }),
         };
         self.added.insert(key, sprite);
         sprite

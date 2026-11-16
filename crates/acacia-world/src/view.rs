@@ -1,7 +1,7 @@
 //! One bot's loaded chunks: strong refs into a shared [`World`] (see the `world` module docs).
 
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use rustc_hash::FxHashMap;
 
@@ -16,21 +16,41 @@ pub struct ChunkView {
 impl ChunkView {
     pub fn new(world: Arc<World>) -> Self {
         let id = world.next_view.fetch_add(1, Ordering::Relaxed);
-        ChunkView { world, id, chunks: FxHashMap::default() }
+        ChunkView {
+            world,
+            id,
+            chunks: FxHashMap::default(),
+        }
     }
 
     pub fn world(&self) -> &Arc<World> {
         &self.world
     }
 
-    pub fn insert_level_chunk(&mut self, x: i32, z: i32, sub_chunk_count: u32, payload: &[u8]) -> Result<Inserted, Error> {
-        let (c, how) = self.world.insert_level_chunk_by(self.id, x, z, sub_chunk_count, payload)?;
+    pub fn insert_level_chunk(
+        &mut self,
+        x: i32,
+        z: i32,
+        sub_chunk_count: u32,
+        payload: &[u8],
+    ) -> Result<Inserted, Error> {
+        let (c, how) = self
+            .world
+            .insert_level_chunk_by(self.id, x, z, sub_chunk_count, payload)?;
         self.chunks.insert((x, z), c);
         Ok(how)
     }
 
-    pub fn insert_sub_chunk(&mut self, x: i32, section_y: i32, z: i32, payload: &[u8]) -> Result<(), Error> {
-        let c = self.world.insert_sub_chunk_by(self.id, x, section_y, z, payload)?;
+    pub fn insert_sub_chunk(
+        &mut self,
+        x: i32,
+        section_y: i32,
+        z: i32,
+        payload: &[u8],
+    ) -> Result<(), Error> {
+        let c = self
+            .world
+            .insert_sub_chunk_by(self.id, x, section_y, z, payload)?;
         self.chunks.insert((x, z), c);
         Ok(())
     }
@@ -53,7 +73,8 @@ impl ChunkView {
     /// Applies a block update if this view owns the chunk's updates; returns false if the chunk is not
     /// in this view.
     pub fn set_block(&self, x: i32, y: i32, z: i32, layer: u32, id: u32) -> bool {
-        self.chunks.contains_key(&(x >> 4, z >> 4)) && self.world.set_block_by(self.id, x, y, z, layer, id)
+        self.chunks.contains_key(&(x >> 4, z >> 4))
+            && self.world.set_block_by(self.id, x, y, z, layer, id)
     }
 
     pub fn remove(&mut self, x: i32, z: i32) {

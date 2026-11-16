@@ -24,7 +24,13 @@ pub struct Focus<'a> {
 
 impl<'a> Focus<'a> {
     pub fn new(m: &'a dyn Metrics, lang: Lang<'a>, mouse: (i32, i32)) -> Focus<'a> {
-        Focus { m, lang, mouse, hovered: None, tooltip: Deferred::default() }
+        Focus {
+            m,
+            lang,
+            mouse,
+            hovered: None,
+            tooltip: Deferred::default(),
+        }
     }
 
     /// `handleMessage`'s style scan: whether any glyph of `text` is under the mouse.
@@ -39,9 +45,24 @@ impl<'a> Focus<'a> {
 
     /// `showTooltip`: the tag's text split to 210.
     fn tag_tooltip(&mut self, tag: &Tag) {
-        let Some(text) = tag.text(self.lang) else { return };
-        let lines = split(self.m, &text, 210).into_iter().map(tooltip::Line::Text).collect();
-        self.tooltip.set(Tooltip { lines, x: self.mouse.0, y: self.mouse.1, positioner: Positioner::Default, style: None, extra_space: false }, false);
+        let Some(text) = tag.text(self.lang) else {
+            return;
+        };
+        let lines = split(self.m, &text, 210)
+            .into_iter()
+            .map(tooltip::Line::Text)
+            .collect();
+        self.tooltip.set(
+            Tooltip {
+                lines,
+                x: self.mouse.0,
+                y: self.mouse.1,
+                positioner: Positioner::Default,
+                style: None,
+                extra_space: false,
+            },
+            false,
+        );
     }
 }
 
@@ -79,7 +100,17 @@ impl Chat {
         let visible: Vec<(i32, &Line, f32)> = (0..(total - self.scroll).min(per_page))
             .rev()
             .map(|i| (i, &self.lines[(i + self.scroll) as usize]))
-            .map(|(i, line)| (i, line, if focused { 1.0 } else { time_alpha(ticks, line.added) }))
+            .map(|(i, line)| {
+                (
+                    i,
+                    line,
+                    if focused {
+                        1.0
+                    } else {
+                        time_alpha(ticks, line.added)
+                    },
+                )
+            })
             .filter(|l| l.2 > 1.0e-5)
             .collect();
         let ops = vec![PoseOp::Scale(scale, scale), PoseOp::Translate(4.0, 0.0)];
@@ -88,7 +119,13 @@ impl Chat {
         gui.push(ops);
         for &(i, _, alpha) in &visible {
             let bottom = chat_bottom - i * entry_height;
-            gui.fill(-4, bottom - entry_height, max_width + 4 + 4, bottom, as8(alpha * background_opacity) << 24);
+            gui.fill(
+                -4,
+                bottom - entry_height,
+                max_width + 4 + 4,
+                bottom,
+                as8(alpha * background_opacity) << 24,
+            );
         }
         let mut hovered_message = false;
         for &(i, line, alpha) in &visible {
@@ -96,19 +133,27 @@ impl Chat {
             let (top, text_top) = (bottom - entry_height, bottom - bottom_to_text);
             let opacity = alpha * text_opacity;
             gui.text(line.content.clone(), 0, text_top, white(opacity), true);
-            let hit = focus.as_deref_mut().is_some_and(|f| f.scan(&line.content, &pose, text_top, white(opacity)));
+            let hit = focus
+                .as_deref_mut()
+                .is_some_and(|f| f.scan(&line.content, &pose, text_top, white(opacity)));
             hovered_message |= hit;
             let force_icon = line.end && std::mem::take(&mut hovered_message);
             let Some(tag) = &line.tag else { continue };
             gui.fill(-4, top, -2, bottom, with_alpha(as8(opacity), tag.indicator));
-            let Some(f) = focus.as_deref_mut() else { continue };
+            let Some(f) = focus.as_deref_mut() else {
+                continue;
+            };
             if mouse_over(&pose, f.mouse, rect(-4, top, -2, bottom)) {
                 f.tag_tooltip(tag);
             }
             if let Some(icon) = tag.icon {
                 let left = f.m.visual_width(&line.content) + 4;
                 let (icon_top, icon_bottom) = (text_top + 9 - icon.height - 1, text_top + 9);
-                let over = mouse_over(&pose, f.mouse, rect(left, icon_top, left + icon.width, icon_bottom));
+                let over = mouse_over(
+                    &pose,
+                    f.mouse,
+                    rect(left, icon_top, left + icon.width, icon_bottom),
+                );
                 if over {
                     f.tag_tooltip(tag);
                 }
@@ -124,7 +169,11 @@ impl Chat {
             let height = chat_height * chat_height / virtual_height;
             if virtual_height != chat_height {
                 let alpha = if y > 0 { 170 } else { 96 };
-                let color = if self.new_since_scroll { 0xCC3333 } else { 0x3333AA };
+                let color = if self.new_since_scroll {
+                    0xCC3333
+                } else {
+                    0x3333AA
+                };
                 let x = max_width + 4;
                 gui.fill(x, -y, x + 2, -y - height, with_alpha(alpha, color));
                 gui.fill(x + 2, -y, x + 1, -y - height, with_alpha(alpha, 0xCCCCCC));

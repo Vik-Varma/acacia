@@ -48,9 +48,27 @@ struct Profile {
 
 async fn profile(http: &Http, xsts: &XboxToken) -> Result<JavaProfile> {
     let body = json!({ "identityToken": xsts.authorization() }).to_string();
-    let login: Login = http.json(http.client.post(LOGIN).header(CONTENT_TYPE, "application/json").body(body), LOGIN).await?;
-    let p: Profile = http.json(http.client.get(PROFILE).bearer_auth(&login.access_token), PROFILE).await?;
-    Ok(JavaProfile { access_token: login.access_token, uuid: p.id, name: p.name, expires_at: now_unix() + login.expires_in })
+    let login: Login = http
+        .json(
+            http.client
+                .post(LOGIN)
+                .header(CONTENT_TYPE, "application/json")
+                .body(body),
+            LOGIN,
+        )
+        .await?;
+    let p: Profile = http
+        .json(
+            http.client.get(PROFILE).bearer_auth(&login.access_token),
+            PROFILE,
+        )
+        .await?;
+    Ok(JavaProfile {
+        access_token: login.access_token,
+        uuid: p.id,
+        name: p.name,
+        expires_at: now_unix() + login.expires_in,
+    })
 }
 
 async fn java_xsts(client: &AuthClient, state: &mut CachedTokens) -> Result<XboxToken> {
@@ -61,8 +79,18 @@ async fn java_xsts(client: &AuthClient, state: &mut CachedTokens) -> Result<Xbox
     let msa = client.valid_msa(state).await?;
     let key = state.xbox_key();
     let device = client.valid_device(state, &key).await?;
-    let (title_token, user) = xbox::live_tokens(client.http(), title, &key, &msa.access_token, &device).await?;
-    let t = xbox::xsts(client.http(), title, &key, JAVA_RELYING_PARTY, &device, &title_token, &user).await?;
+    let (title_token, user) =
+        xbox::live_tokens(client.http(), title, &key, &msa.access_token, &device).await?;
+    let t = xbox::xsts(
+        client.http(),
+        title,
+        &key,
+        JAVA_RELYING_PARTY,
+        &device,
+        &title_token,
+        &user,
+    )
+    .await?;
     state.xsts.insert(JAVA_RELYING_PARTY.to_owned(), t.clone());
     Ok(t)
 }
@@ -88,11 +116,23 @@ impl Account {
     /// Tells the session server this player is joining the server identified by `server_hash`.
     pub async fn join_java_session(&self, player: &JavaProfile, server_hash: &str) -> Result<()> {
         let body = json!({ "accessToken": player.access_token, "selectedProfile": player.uuid, "serverId": server_hash }).to_string();
-        let resp = self.client().http().client.post(JOIN).header(CONTENT_TYPE, "application/json").body(body).send().await?;
+        let resp = self
+            .client()
+            .http()
+            .client
+            .post(JOIN)
+            .header(CONTENT_TYPE, "application/json")
+            .body(body)
+            .send()
+            .await?;
         let status = resp.status();
         if status.is_success() {
             return Ok(());
         }
-        Err(Error::Status { endpoint: JOIN.into(), status: status.as_u16(), body: resp.text().await.unwrap_or_default() })
+        Err(Error::Status {
+            endpoint: JOIN.into(),
+            status: status.as_u16(),
+            body: resp.text().await.unwrap_or_default(),
+        })
     }
 }

@@ -4,8 +4,8 @@
 //! `cargo run -p acacia-bot --example cmd -- <server> <@account> <command>...`
 use std::sync::Arc;
 
-use acacia_bot::client::auth::{Account, AuthClient, AuthConfig, FileTokenCache};
 use acacia_bot::client::Client;
+use acacia_bot::client::auth::{Account, AuthClient, AuthConfig, FileTokenCache};
 use acacia_bot::{Bot, BotConfig};
 
 #[tokio::main(flavor = "current_thread")]
@@ -14,10 +14,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (Some(server), Some(name)) = (args.next(), args.next()) else {
         return Err("usage: cmd <server> <@account> <command>...".into());
     };
-    let account = name.strip_prefix('@').ok_or("the account must be an online one (@name)")?;
-    let account = Account::new(Arc::new(AuthClient::new(AuthConfig::default())?), Arc::new(FileTokenCache::new(".tokens")?), account);
+    let account = name
+        .strip_prefix('@')
+        .ok_or("the account must be an online one (@name)")?;
+    let account = Account::new(
+        Arc::new(AuthClient::new(AuthConfig::default())?),
+        Arc::new(FileTokenCache::new(".tokens")?),
+        account,
+    );
     let (key, credentials) = account.login_credentials().await?;
-    let mut bot = Bot::connect(Client::builder(&server).online(credentials, key), BotConfig::default()).await?;
+    let mut bot = Bot::connect(
+        Client::builder(&server).online(credentials, key),
+        BotConfig::default(),
+    )
+    .await?;
     bot.wait_ticks(40).await?;
     for command in args {
         println!("{command}");

@@ -5,35 +5,67 @@ use acacia_sound::fsb::{self, Pcm};
 use std::path::Path;
 
 fn fixture(name: &str) -> Pcm {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data").join(name);
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/data")
+        .join(name);
     fsb::decode(&std::fs::read(&path).unwrap()).unwrap_or_else(|e| panic!("{name}: {e}"))
 }
 
 /// FNV-1a 64 over the samples as little-endian bytes, as hashed from vgmstream's WAV data chunk.
 fn fnv1a(samples: &[i16]) -> u64 {
-    samples.iter().flat_map(|s| s.to_le_bytes()).fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3))
+    samples
+        .iter()
+        .flat_map(|s| s.to_le_bytes())
+        .fold(0xcbf2_9ce4_8422_2325, |h, b| {
+            (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3)
+        })
 }
 
 fn check(name: &str, rate: u32, channels: u16, len: usize, head: [i16; 8], hash: u64) {
     let pcm = fixture(name);
-    assert_eq!((pcm.sample_rate, pcm.channels, pcm.samples.len()), (rate, channels, len), "{name}");
+    assert_eq!(
+        (pcm.sample_rate, pcm.channels, pcm.samples.len()),
+        (rate, channels, len),
+        "{name}"
+    );
     assert_eq!(pcm.samples[..8], head, "{name}");
     assert_eq!(fnv1a(&pcm.samples), hash, "{name}");
 }
 
 #[test]
 fn fadpcm_mono_matches_vgmstream() {
-    check("wood_click.fsb", 37035, 1, 5888, [128, 372, 333, 414, 349, 277, 72, 5], 0x14ab_07f6_45a9_4844);
+    check(
+        "wood_click.fsb",
+        37035,
+        1,
+        5888,
+        [128, 372, 333, 414, 349, 277, 72, 5],
+        0x14ab_07f6_45a9_4844,
+    );
 }
 
 #[test]
 fn fadpcm_stereo_matches_vgmstream() {
-    check("click.fsb", 38320, 2, 21504, [0, 64, 64, -30, 34, -101, -3, -129], 0x421e_30c4_05e7_ba47);
+    check(
+        "click.fsb",
+        38320,
+        2,
+        21504,
+        [0, 64, 64, -30, 34, -101, -3, -129],
+        0x421e_30c4_05e7_ba47,
+    );
 }
 
 #[test]
 fn pcm16_matches_vgmstream() {
-    check("turn3.fsb", 48000, 1, 2192, [0, 0, 0, 0, 0, 0, 1, 1], 0x2b1a_7429_249c_7ff6);
+    check(
+        "turn3.fsb",
+        48000,
+        1,
+        2192,
+        [0, 0, 0, 0, 0, 0, 1, 1],
+        0x2b1a_7429_249c_7ff6,
+    );
 }
 
 /// Decodes every `.fsb` under `$ACACIA_FSB_DIR` (e.g. bedrock-samples' resource_pack/sounds). If
@@ -51,7 +83,12 @@ fn every_file_in_acacia_fsb_dir() {
         .unwrap_or_default()
         .lines()
         .filter_map(|l| l.split_once(' '))
-        .map(|(p, h)| (p.to_owned(), u64::from_str_radix(h.trim_start_matches("0x"), 16).unwrap()))
+        .map(|(p, h)| {
+            (
+                p.to_owned(),
+                u64::from_str_radix(h.trim_start_matches("0x"), 16).unwrap(),
+            )
+        })
         .collect();
     let mut files = Vec::new();
     collect(dir, &mut files);
@@ -59,17 +96,35 @@ fn every_file_in_acacia_fsb_dir() {
     let mut failures = Vec::new();
     let mut compared = 0;
     for path in &files {
-        let rel = path.strip_prefix(dir).unwrap().to_string_lossy().replace('\\', "/");
+        let rel = path
+            .strip_prefix(dir)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
         match fsb::decode(&std::fs::read(path).unwrap()) {
-            Ok(pcm) if reference.get(&rel).is_some_and(|&h| h != fnv1a(&pcm.samples)) => {
+            Ok(pcm)
+                if reference
+                    .get(&rel)
+                    .is_some_and(|&h| h != fnv1a(&pcm.samples)) =>
+            {
                 failures.push(format!("{rel}: differs from reference"));
             }
             Ok(pcm) if plausible(&pcm) => compared += usize::from(reference.contains_key(&rel)),
-            Ok(pcm) => failures.push(format!("{}: implausible {}Hz x{} len {}", path.display(), pcm.sample_rate, pcm.channels, pcm.samples.len())),
+            Ok(pcm) => failures.push(format!(
+                "{}: implausible {}Hz x{} len {}",
+                path.display(),
+                pcm.sample_rate,
+                pcm.channels,
+                pcm.samples.len()
+            )),
             Err(e) => failures.push(format!("{}: {e}", path.display())),
         }
     }
-    eprintln!("decoded {} files, {compared} matched the reference, {} failures", files.len(), failures.len());
+    eprintln!(
+        "decoded {} files, {compared} matched the reference, {} failures",
+        files.len(),
+        failures.len()
+    );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

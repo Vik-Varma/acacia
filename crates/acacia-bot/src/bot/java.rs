@@ -6,11 +6,11 @@ use acacia_java_client::{Client, Error, Packet};
 use acacia_java_physics::Keys;
 use acacia_java_proto::ids::play::clientbound::{PLAYER_POSITION, SET_PASSENGERS};
 
-use super::bedrock::Backend;
-use super::Step;
 use super::Assembly;
+use super::Step;
+use super::bedrock::Backend;
 use crate::events::{EventOut, EventSource};
-use crate::movement::{java_keys, Controls, JavaSim, Live};
+use crate::movement::{Controls, JavaSim, Live, java_keys};
 use crate::state::GameState;
 use crate::{Bot, BotConfig};
 
@@ -51,7 +51,8 @@ impl Live for Java {
     }
 
     fn fork(&self) -> Option<JavaSim> {
-        self.started().then(|| JavaSim(self.client.movement.player.clone()))
+        self.started()
+            .then(|| JavaSim(self.client.movement.player.clone()))
     }
 
     fn on_ground(&self) -> bool {
@@ -73,13 +74,29 @@ impl Live for Java {
 
 impl Bot {
     /// Joins an offline-mode Java server as `name`. Only `config`'s edition-neutral settings apply.
-    pub async fn connect_java_offline(host: &str, port: u16, name: &str, config: BotConfig) -> Result<Bot, Error> {
-        Ok(Self::java_bot(Client::join_offline(host, port, name).await?, config))
+    pub async fn connect_java_offline(
+        host: &str,
+        port: u16,
+        name: &str,
+        config: BotConfig,
+    ) -> Result<Bot, Error> {
+        Ok(Self::java_bot(
+            Client::join_offline(host, port, name).await?,
+            config,
+        ))
     }
 
     /// Joins any Java server as `account`'s Java profile. Only `config`'s edition-neutral settings apply.
-    pub async fn connect_java(host: &str, port: u16, account: &acacia_client::auth::Account, config: BotConfig) -> Result<Bot, Error> {
-        Ok(Self::java_bot(Client::join_online(host, port, account).await?, config))
+    pub async fn connect_java(
+        host: &str,
+        port: u16,
+        account: &acacia_client::auth::Account,
+        config: BotConfig,
+    ) -> Result<Bot, Error> {
+        Ok(Self::java_bot(
+            Client::join_online(host, port, account).await?,
+            config,
+        ))
     }
 
     fn java_bot(client: Client, config: BotConfig) -> Bot {
@@ -87,9 +104,28 @@ impl Bot {
         let mut state = GameState::new(config.trackers, 0);
         state.items = crate::state::ItemRegistry::java();
         state.recipes = crate::state::Recipes::java();
-        let java = Java { client, controls: Controls::default(), awaiting: 0, inventory_held: false, ticks: 0, teleports: 0, last_setback: None, setback_before: None };
-        let assembly = Assembly { auto_respawn: config.auto_respawn, auto_eat: config.auto_eat, snapshots: config.snapshots };
-        Bot::assemble(Backend::Java(Box::new(java)), state, events, EventOut::new(config.event_sink), assembly)
+        let java = Java {
+            client,
+            controls: Controls::default(),
+            awaiting: 0,
+            inventory_held: false,
+            ticks: 0,
+            teleports: 0,
+            last_setback: None,
+            setback_before: None,
+        };
+        let assembly = Assembly {
+            auto_respawn: config.auto_respawn,
+            auto_eat: config.auto_eat,
+            snapshots: config.snapshots,
+        };
+        Bot::assemble(
+            Backend::Java(Box::new(java)),
+            state,
+            events,
+            EventOut::new(config.event_sink),
+            assembly,
+        )
     }
 
     /// The Java side, for Java bots.
@@ -105,7 +141,9 @@ impl Bot {
         if self.closed.is_some() {
             return None;
         }
-        let Backend::Java(java) = &mut self.backend else { return None };
+        let Backend::Java(java) = &mut self.backend else {
+            return None;
+        };
         if !self.ticker.due()
             && let Some(result) = java.client.try_next()
         {
@@ -144,7 +182,9 @@ impl Bot {
                     && let Backend::Java(java) = &mut self.backend
                 {
                     java.controls.yaw = java.client.movement.player.yaw;
-                    if java.client.movement.riding.is_some() && java.last_setback == Some(java.ticks) {
+                    if java.client.movement.riding.is_some()
+                        && java.last_setback == Some(java.ticks)
+                    {
                         java.last_setback = java.setback_before;
                     }
                 }
@@ -167,7 +207,10 @@ impl Bot {
             return;
         }
         match acacia_java_proto::packets::SetHealth::read(&mut &packet.body[..]) {
-            Ok(h) => self.state.player.set_vitals(h.health, h.food.0 as f32, h.saturation),
+            Ok(h) => self
+                .state
+                .player
+                .set_vitals(h.health, h.food.0 as f32, h.saturation),
             Err(e) => tracing::debug!(error = %e, "bad SetHealth"),
         }
     }
@@ -175,7 +218,9 @@ impl Bot {
     /// Mirrors the open dialog into `state.forms`; a new one is also a [`BotEvent::Form`].
     fn on_java_dialog(&mut self, id: i32) {
         use acacia_java_proto::ids::play::clientbound as from;
-        let Backend::Java(java) = &self.backend else { return };
+        let Backend::Java(java) = &self.backend else {
+            return;
+        };
         if matches!(id, from::SHOW_DIALOG | from::CLEAR_DIALOG)
             && let Some(form) = self.state.forms.set_java(java.client.dialog.as_ref())
         {
@@ -186,21 +231,33 @@ impl Bot {
     /// Mirrors the Java inventory after a packet that changed it; a server-set held slot is taken as the bot's.
     fn on_java_inventory(&mut self, id: i32) {
         use acacia_java_proto::ids::play::clientbound as from;
-        let Backend::Java(java) = &self.backend else { return };
+        let Backend::Java(java) = &self.backend else {
+            return;
+        };
         let inventory = &java.client.inventory;
         match id {
-            from::CONTAINER_SET_CONTENT | from::CONTAINER_SET_SLOT | from::SET_PLAYER_INVENTORY | from::SET_CURSOR_ITEM => {
+            from::CONTAINER_SET_CONTENT
+            | from::CONTAINER_SET_SLOT
+            | from::SET_PLAYER_INVENTORY
+            | from::SET_CURSOR_ITEM => {
                 crate::state::java_inventory::mirror(&mut self.state.inventory, inventory);
                 if matches!(id, from::CONTAINER_SET_CONTENT | from::CONTAINER_SET_SLOT) {
-                    crate::state::java_inventory::mirror_window(&mut self.state.containers, inventory);
+                    crate::state::java_inventory::mirror_window(
+                        &mut self.state.containers,
+                        inventory,
+                    );
                 }
             }
-            from::CONTAINER_SET_DATA => crate::state::java_inventory::mirror_window(&mut self.state.containers, inventory),
+            from::CONTAINER_SET_DATA => {
+                crate::state::java_inventory::mirror_window(&mut self.state.containers, inventory)
+            }
             from::OPEN_SCREEN | from::CONTAINER_CLOSE => {
                 crate::state::java_inventory::mirror_window(&mut self.state.containers, inventory);
                 crate::state::java_trade::mirror_trade(&mut self.state.stations, inventory);
             }
-            from::MERCHANT_OFFERS => crate::state::java_trade::mirror_trade(&mut self.state.stations, inventory),
+            from::MERCHANT_OFFERS => {
+                crate::state::java_trade::mirror_trade(&mut self.state.stations, inventory)
+            }
             from::SET_HELD_SLOT => self.state.inventory.select(inventory.selected),
             _ => {}
         }
@@ -210,7 +267,9 @@ impl Bot {
         self.governor.tick(None);
         self.tick_survival();
         let dismounting = self.java_dismounting();
-        let Backend::Java(java) = &mut self.backend else { return };
+        let Backend::Java(java) = &mut self.backend else {
+            return;
+        };
         java.ticks += 1;
         let player = &mut java.client.movement.player;
         // Turned by the shorter way and never wrapped, as a mouse turns it: Grim's AimModulo360 flags a 360° jump.
@@ -228,7 +287,10 @@ impl Bot {
         }
         if self.state.keeps_entities() {
             self.state.entities.advance();
-            self.state.entities.mirror_java(&java.client.world.entities, i64::from(java.client.world.player_id));
+            self.state.entities.mirror_java(
+                &java.client.world.entities,
+                i64::from(java.client.world.player_id),
+            );
         }
         self.mirror_java_riding();
     }
@@ -242,7 +304,8 @@ const ELYTRA_DURABILITY: i32 = 432;
 fn usable_elytra(chest: Option<&acacia_java_proto::item::ItemStack>) -> bool {
     chest.is_some_and(|s| {
         let max = s.components.max_damage.unwrap_or(ELYTRA_DURABILITY);
-        i32::from(acacia_world::neutral::Item::Elytra.java_id()) == s.item && s.components.damage.unwrap_or(0) < max - 1
+        i32::from(acacia_world::neutral::Item::Elytra.java_id()) == s.item
+            && s.components.damage.unwrap_or(0) < max - 1
     })
 }
 
@@ -263,7 +326,10 @@ fn disconnect_reason(e: Error) -> DisconnectReason {
         // The link's tasks ended without an error of their own: Client::close stopped them.
         Error::Closed => DisconnectReason::LocalClose,
         Error::Io(e) => DisconnectReason::Io(e.to_string()),
-        Error::Disconnected(message) => DisconnectReason::Kicked { reason: String::new(), message },
+        Error::Disconnected(message) => DisconnectReason::Kicked {
+            reason: String::new(),
+            message,
+        },
         e => DisconnectReason::Protocol(e.to_string()),
     }
 }

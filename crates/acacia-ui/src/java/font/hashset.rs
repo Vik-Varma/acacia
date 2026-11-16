@@ -12,7 +12,10 @@ fn mix(x: i32) -> i32 {
 
 /// `HashCommon.arraySize(expected, f)`.
 fn array_size(expected: usize) -> usize {
-    ((expected as f32 / LOAD) as f64).ceil().max(2.0).min(f64::from(1u32 << 30)) as usize
+    ((expected as f32 / LOAD) as f64)
+        .ceil()
+        .max(2.0)
+        .min(f64::from(1u32 << 30)) as usize
 }
 
 fn power_of_two(n: usize) -> usize {
@@ -41,7 +44,12 @@ impl IntSet {
     /// `new IntOpenHashSet(expected)` / `new Int2ObjectOpenHashMap(expected)`.
     pub fn with_expected(expected: usize) -> IntSet {
         let n = power_of_two(array_size(expected));
-        IntSet { key: vec![0; n + 1], has_zero: false, size: 0, max_fill: max_fill(n) }
+        IntSet {
+            key: vec![0; n + 1],
+            has_zero: false,
+            size: 0,
+            max_fill: max_fill(n),
+        }
     }
 
     fn n(&self) -> usize {
@@ -113,7 +121,13 @@ impl IntSet {
     /// The iterator's (and `forEach`'s) order: the null key, then the slots from the last down.
     pub fn iter(&self) -> impl Iterator<Item = i32> + '_ {
         let zero = self.has_zero.then_some(0);
-        zero.into_iter().chain(self.key[..self.n()].iter().rev().copied().filter(|&k| k != 0))
+        zero.into_iter().chain(
+            self.key[..self.n()]
+                .iter()
+                .rev()
+                .copied()
+                .filter(|&k| k != 0),
+        )
     }
 }
 

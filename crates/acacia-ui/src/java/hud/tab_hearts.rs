@@ -16,7 +16,12 @@ pub struct HealthState {
 
 impl HealthState {
     pub fn new(value: i32) -> HealthState {
-        HealthState { last_value: value, displayed_value: value, last_update_tick: 0, blink_until_tick: 0 }
+        HealthState {
+            last_value: value,
+            displayed_value: value,
+            last_update_tick: 0,
+            blink_until_tick: 0,
+        }
     }
 
     pub fn update(&mut self, value: i32, tick: i64) {
@@ -49,7 +54,17 @@ pub fn java_float(v: f32) -> String {
 
 /// `extractTablistHearts` between `left` and `right` on row `y`, `health` already updated.
 #[allow(clippy::too_many_arguments)]
-pub fn hearts(gui: &mut Gui, font: &dyn Metrics, lang: Lang, health: &HealthState, tick: i64, y: i32, left: i32, right: i32, score: i32) {
+pub fn hearts(
+    gui: &mut Gui,
+    font: &dyn Metrics,
+    lang: Lang,
+    health: &HealthState,
+    tick: i64,
+    y: i32,
+    left: i32,
+    right: i32,
+    score: i32,
+) {
     let displayed = health.displayed_value;
     let full_hearts = -(-(score.max(displayed))).div_euclid(2);
     let to_render = score.max(displayed.max(20)) / 2;
@@ -62,13 +77,31 @@ pub fn hearts(gui: &mut Gui, font: &dyn Metrics, lang: Lang, health: &HealthStat
         let pct = clamp(score as f32 / 20.0, 0.0, 1.0);
         let color = (((1.0 - pct) * 255.0) as i32) << 16 | ((pct * 255.0) as i32) << 8;
         let hearts = java_float(score as f32 / 2.0);
-        let hp = Text::translate("multiplayer.player.list.hp", &[Text::literal(hearts.clone())], lang);
-        let text = if right - font.width(&hp) >= left { hp } else { Text::literal(hearts) };
+        let hp = Text::translate(
+            "multiplayer.player.list.hp",
+            &[Text::literal(hearts.clone())],
+            lang,
+        );
+        let text = if right - font.width(&hp) >= left {
+            hp
+        } else {
+            Text::literal(hearts)
+        };
         let width = font.width(&text);
-        gui.text(text, (right + left - width) / 2, y, color as u32 | BLACK, true);
+        gui.text(
+            text,
+            (right + left - width) / 2,
+            y,
+            color as u32 | BLACK,
+            true,
+        );
         return;
     }
-    let container = if blink { "hud/heart/container_blinking" } else { "hud/heart/container" };
+    let container = if blink {
+        "hud/heart/container_blinking"
+    } else {
+        "hud/heart/container"
+    };
     let x = |n: i32| left + n * per_heart;
     for n in full_hearts..to_render {
         gui.sprite(container, x(n), y, 9, 9);
@@ -84,10 +117,30 @@ pub fn hearts(gui: &mut Gui, font: &dyn Metrics, lang: Lang, health: &HealthStat
             }
         }
         if n * 2 + 1 < score {
-            gui.sprite(if n >= 10 { "hud/heart/absorbing_full_blinking" } else { "hud/heart/full" }, x(n), y, 9, 9);
+            gui.sprite(
+                if n >= 10 {
+                    "hud/heart/absorbing_full_blinking"
+                } else {
+                    "hud/heart/full"
+                },
+                x(n),
+                y,
+                9,
+                9,
+            );
         }
         if n * 2 + 1 == score {
-            gui.sprite(if n >= 10 { "hud/heart/absorbing_half_blinking" } else { "hud/heart/half" }, x(n), y, 9, 9);
+            gui.sprite(
+                if n >= 10 {
+                    "hud/heart/absorbing_half_blinking"
+                } else {
+                    "hud/heart/half"
+                },
+                x(n),
+                y,
+                9,
+                9,
+            );
         }
     }
 }

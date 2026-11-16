@@ -31,10 +31,23 @@ pub enum Material {
 impl Material {
     pub(crate) fn from_u8(v: u8) -> Material {
         use Material::*;
-        [Default, Pickaxe, Shovel, Axe, Hoe, Leaves, Plant, Gourd, Vine, Cobweb, Wool, SwordInstant]
-            .get(usize::from(v))
-            .copied()
-            .unwrap_or(Default)
+        [
+            Default,
+            Pickaxe,
+            Shovel,
+            Axe,
+            Hoe,
+            Leaves,
+            Plant,
+            Gourd,
+            Vine,
+            Cobweb,
+            Wool,
+            SwordInstant,
+        ]
+        .get(usize::from(v))
+        .copied()
+        .unwrap_or(Default)
     }
 }
 
@@ -124,7 +137,10 @@ impl Tool {
     pub fn from_identifier(identifier: &str) -> Option<Tool> {
         let name = identifier.strip_prefix("minecraft:").unwrap_or(identifier);
         if name == "shears" {
-            return Some(Tool { kind: ToolKind::Shears, tier: None });
+            return Some(Tool {
+                kind: ToolKind::Shears,
+                tier: None,
+            });
         }
         let (tier, kind) = name.split_once('_')?;
         let tier = match tier {
@@ -145,7 +161,10 @@ impl Tool {
             "hoe" => ToolKind::Hoe,
             _ => return None,
         };
-        Some(Tool { kind, tier: Some(tier) })
+        Some(Tool {
+            kind,
+            tier: Some(tier),
+        })
     }
 }
 
@@ -162,7 +181,12 @@ pub struct Mining {
 }
 
 impl Mining {
-    pub const UNKNOWN: Mining = Mining { hardness: f32::NAN, material: Material::Default, harvest_tools: 0, min_level: 0 };
+    pub const UNKNOWN: Mining = Mining {
+        hardness: f32::NAN,
+        material: Material::Default,
+        harvest_tools: 0,
+        min_level: 0,
+    };
 
     pub fn is_unbreakable(&self) -> bool {
         self.hardness < 0.0
@@ -175,6 +199,7 @@ impl Mining {
             return true;
         }
         let Some(tool) = tool else { return false };
-        self.harvest_tools & tool.kind.bit() != 0 && tool.tier.map_or(0, ToolTier::level) >= self.min_level
+        self.harvest_tools & tool.kind.bit() != 0
+            && tool.tier.map_or(0, ToolTier::level) >= self.min_level
     }
 }

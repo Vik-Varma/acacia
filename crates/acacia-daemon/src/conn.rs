@@ -3,16 +3,23 @@
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
+use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::handshake::server::{ErrorResponse, Request, Response};
 use tokio_tungstenite::tungstenite::http::StatusCode;
-use tokio_tungstenite::tungstenite::Message;
 
 use crate::router::{ConnId, ToRouter};
 
-pub(crate) async fn accept(listener: TcpListener, router: mpsc::UnboundedSender<ToRouter>, queue: usize, token: bool) {
+pub(crate) async fn accept(
+    listener: TcpListener,
+    router: mpsc::UnboundedSender<ToRouter>,
+    queue: usize,
+    token: bool,
+) {
     let mut next: ConnId = 0;
     loop {
-        let Ok((tcp, _)) = listener.accept().await else { continue };
+        let Ok((tcp, _)) = listener.accept().await else {
+            continue;
+        };
         next += 1;
         tokio::spawn(serve(tcp, next, router.clone(), queue, token));
     }
@@ -25,15 +32,24 @@ fn check_origin(token: bool) -> impl FnOnce(&Request, Response) -> Result<Respon
         if token || !request.headers().contains_key("origin") {
             return Ok(response);
         }
-        let mut refused = ErrorResponse::new(Some("browser origins need the daemon's --token".into()));
+        let mut refused =
+            ErrorResponse::new(Some("browser origins need the daemon's --token".into()));
         *refused.status_mut() = StatusCode::FORBIDDEN;
         Err(refused)
     }
 }
 
-async fn serve(tcp: TcpStream, conn: ConnId, router: mpsc::UnboundedSender<ToRouter>, queue: usize, token: bool) {
+async fn serve(
+    tcp: TcpStream,
+    conn: ConnId,
+    router: mpsc::UnboundedSender<ToRouter>,
+    queue: usize,
+    token: bool,
+) {
     let _ = tcp.set_nodelay(true);
-    let Ok(ws) = tokio_tungstenite::accept_hdr_async(tcp, check_origin(token)).await else { return };
+    let Ok(ws) = tokio_tungstenite::accept_hdr_async(tcp, check_origin(token)).await else {
+        return;
+    };
     let (mut sink, mut stream) = ws.split();
     let (tx, mut rx) = mpsc::channel::<String>(queue);
     if router.send(ToRouter::Open { conn, tx }).is_err() {

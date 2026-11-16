@@ -3,15 +3,19 @@
 
 use std::time::Duration;
 
-use acacia_auth::{Account, FriendWorld, SessionRef, RTA_CONNECTIONS_URI};
+use acacia_auth::{Account, FriendWorld, RTA_CONNECTIONS_URI, SessionRef};
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
 
-use super::rta::{self, Frame, Rta};
 use super::FriendJoinError;
+use super::rta::{self, Frame, Rta};
 use crate::socks5::Socks5Proxy;
 
-const RECONNECT_DELAYS: [Duration; 3] = [Duration::from_secs(1), Duration::from_secs(2), Duration::from_secs(4)];
+const RECONNECT_DELAYS: [Duration; 3] = [
+    Duration::from_secs(1),
+    Duration::from_secs(2),
+    Duration::from_secs(4),
+];
 
 pub(crate) struct Presence {
     /// The session document the join returned.
@@ -23,7 +27,11 @@ pub(crate) struct Presence {
 }
 
 /// Opens RTA, joins `world`'s session tied to it, publishes the activity and keeps both alive.
-pub(crate) async fn join(account: Account, world: &FriendWorld, proxy: Option<Socks5Proxy>) -> Result<Presence, FriendJoinError> {
+pub(crate) async fn join(
+    account: Account,
+    world: &FriendWorld,
+    proxy: Option<Socks5Proxy>,
+) -> Result<Presence, FriendJoinError> {
     let (rta, sub_id, connection_id) = open_rta(&account, proxy.as_ref()).await?;
     let session = account.join_friend_world(world, &connection_id).await?;
     if let Err(e) = account.publish_friend_activity(&world.session).await {
@@ -31,18 +39,34 @@ pub(crate) async fn join(account: Account, world: &FriendWorld, proxy: Option<So
     }
     let (changes_tx, changes) = mpsc::unbounded_channel();
     let (close, closed) = oneshot::channel();
-    let held = Held { account, session: world.session.clone(), proxy, changes: changes_tx };
+    let held = Held {
+        account,
+        session: world.session.clone(),
+        proxy,
+        changes: changes_tx,
+    };
     tokio::spawn(held.run(rta, sub_id, closed));
-    Ok(Presence { session, changes, close })
+    Ok(Presence {
+        session,
+        changes,
+        close,
+    })
 }
 
 /// A connected RTA socket subscribed to MPSD connections: `(socket, subscription id, ConnectionId)`.
-async fn open_rta(account: &Account, proxy: Option<&Socks5Proxy>) -> Result<(Rta, i64, String), FriendJoinError> {
+async fn open_rta(
+    account: &Account,
+    proxy: Option<&Socks5Proxy>,
+) -> Result<(Rta, i64, String), FriendJoinError> {
     let headers = account.xbox_live_websocket_headers(rta::URL).await?;
     let mut rta = Rta::connect(headers, proxy).await?;
     let (sub_id, data) = rta.subscribe(RTA_CONNECTIONS_URI).await?;
-    let connection_id = data.get("ConnectionId").and_then(Value::as_str).map(str::to_owned);
-    let connection_id = connection_id.ok_or_else(|| FriendJoinError::Rta(format!("no ConnectionId in {data}")))?;
+    let connection_id = data
+        .get("ConnectionId")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    let connection_id =
+        connection_id.ok_or_else(|| FriendJoinError::Rta(format!("no ConnectionId in {data}")))?;
     Ok((rta, sub_id, connection_id))
 }
 
@@ -85,7 +109,12 @@ impl Held {
             tokio::time::sleep(delay).await;
             let opened = open_rta(&self.account, self.proxy.as_ref()).await;
             let result = match opened {
-                Ok((rta, sub_id, id)) => self.account.set_friend_session_connection(&self.session, &id).await.map(|()| (rta, sub_id)).map_err(FriendJoinError::from),
+                Ok((rta, sub_id, id)) => self
+                    .account
+                    .set_friend_session_connection(&self.session, &id)
+                    .await
+                    .map(|()| (rta, sub_id))
+                    .map_err(FriendJoinError::from),
                 Err(e) => Err(e),
             };
             match result {

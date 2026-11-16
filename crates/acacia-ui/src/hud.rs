@@ -62,18 +62,34 @@ pub fn draw(list: &mut DrawList, theme: &Theme, state: &HudState, size: [f32; 2]
     let sprite = |name| atlas.get(name);
     let centre = (w / 2.0).floor();
     if let Some(cross) = sprite(sprite::CROSSHAIR).filter(|_| state.crosshair) {
-        list.sprite(cross, ((w - cross.width as f32) / 2.0).floor(), ((h - cross.height as f32) / 2.0).floor(), WHITE);
+        list.sprite(
+            cross,
+            ((w - cross.width as f32) / 2.0).floor(),
+            ((h - cross.height as f32) / 2.0).floor(),
+            WHITE,
+        );
     }
     let left = centre - 91.0;
     if let Some(bar) = sprite(sprite::HOTBAR) {
         list.sprite(bar, left, h - 22.0, WHITE);
     }
     if let Some(sel) = sprite(sprite::HOTBAR_SELECTION) {
-        list.sprite(sel, left - 1.0 + f32::from(state.selected) * 20.0, h - 23.0, WHITE);
+        list.sprite(
+            sel,
+            left - 1.0 + f32::from(state.selected) * 20.0,
+            h - 23.0,
+            WHITE,
+        );
     }
     for (slot, item) in state.hotbar.iter().enumerate() {
         if let Some(item) = item {
-            stack(list, theme.font.as_ref(), *item, left + 3.0 + slot as f32 * 20.0, h - 19.0);
+            stack(
+                list,
+                theme.font.as_ref(),
+                *item,
+                left + 3.0 + slot as f32 * 20.0,
+                h - 19.0,
+            );
         }
     }
     if !state.survival {
@@ -83,38 +99,100 @@ pub fn draw(list: &mut DrawList, theme: &Theme, state: &HudState, size: [f32; 2]
     let top = h - 39.0;
     let hearts_rows = (state.max_health / 2.0 / 10.0).ceil().max(1.0);
     let row_gap = (10.0 - (hearts_rows - 2.0)).max(3.0);
-    icons(list, atlas, (state.max_health / 2.0).ceil() as u32, state.health, |i| (left + (i % 10) as f32 * 8.0, top - (i / 10) as f32 * row_gap), [sprite::HEART_CONTAINER, sprite::HEART_FULL, sprite::HEART_HALF]);
-    icons(list, atlas, 10, state.food, |i| (centre + 91.0 - 9.0 - i as f32 * 8.0, top), [sprite::FOOD_EMPTY, sprite::FOOD_FULL, sprite::FOOD_HALF]);
+    icons(
+        list,
+        atlas,
+        (state.max_health / 2.0).ceil() as u32,
+        state.health,
+        |i| {
+            (
+                left + (i % 10) as f32 * 8.0,
+                top - (i / 10) as f32 * row_gap,
+            )
+        },
+        [
+            sprite::HEART_CONTAINER,
+            sprite::HEART_FULL,
+            sprite::HEART_HALF,
+        ],
+    );
+    icons(
+        list,
+        atlas,
+        10,
+        state.food,
+        |i| (centre + 91.0 - 9.0 - i as f32 * 8.0, top),
+        [sprite::FOOD_EMPTY, sprite::FOOD_FULL, sprite::FOOD_HALF],
+    );
     let above_hearts = top - (hearts_rows - 1.0) * row_gap - 10.0;
     if state.armor > 0 {
-        icons(list, atlas, 10, state.armor as f32, |i| (left + i as f32 * 8.0, above_hearts), [sprite::ARMOR_EMPTY, sprite::ARMOR_FULL, sprite::ARMOR_HALF]);
+        icons(
+            list,
+            atlas,
+            10,
+            state.armor as f32,
+            |i| (left + i as f32 * 8.0, above_hearts),
+            [sprite::ARMOR_EMPTY, sprite::ARMOR_FULL, sprite::ARMOR_HALF],
+        );
     }
     if let (Some((air, max)), Some(bubble)) = (state.air, sprite(sprite::AIR)) {
         let full = (air * 10).div_ceil(max.max(1));
         for i in 0..full.min(10) {
-            list.sprite(bubble, centre + 91.0 - 9.0 - i as f32 * 8.0, top - 10.0, WHITE);
+            list.sprite(
+                bubble,
+                centre + 91.0 - 9.0 - i as f32 * 8.0,
+                top - 10.0,
+                WHITE,
+            );
         }
     }
 }
 
 /// An item's icon in a 16×16 slot at (`x`, `y`), with the stack size bottom-right above one.
-pub(crate) fn stack(list: &mut DrawList, font: Option<&Font>, Item { icon, count, glint }: Item, x: f32, y: f32) {
+pub(crate) fn stack(
+    list: &mut DrawList,
+    font: Option<&Font>,
+    Item { icon, count, glint }: Item,
+    x: f32,
+    y: f32,
+) {
     list.icon(icon, [x, y, x + 16.0, y + 16.0], glint);
     if let (true, Some(font)) = (count > 1, font) {
         let text = count.to_string();
-        font.draw(list, &text, x + 17.0 - font.width(&text), y + 9.0, 0xFFFFFF, 1.0, true);
+        font.draw(
+            list,
+            &text,
+            x + 17.0 - font.width(&text),
+            y + 9.0,
+            0xFFFFFF,
+            1.0,
+            true,
+        );
     }
 }
 
 /// `count` icons of a row worth 2 points each: the empty sprite, then full or half over it.
-fn icons(list: &mut DrawList, atlas: &Atlas, count: u32, value: f32, at: impl Fn(u32) -> (f32, f32), [empty, full, half]: [&str; 3]) {
+fn icons(
+    list: &mut DrawList,
+    atlas: &Atlas,
+    count: u32,
+    value: f32,
+    at: impl Fn(u32) -> (f32, f32),
+    [empty, full, half]: [&str; 3],
+) {
     let points = value.ceil().max(0.0) as u32;
     for i in 0..count {
         let (x, y) = at(i);
         if let Some(s) = atlas.get(empty) {
             list.sprite(s, x, y, WHITE);
         }
-        let over = if points >= i * 2 + 2 { full } else if points == i * 2 + 1 { half } else { continue };
+        let over = if points >= i * 2 + 2 {
+            full
+        } else if points == i * 2 + 1 {
+            half
+        } else {
+            continue;
+        };
         if let Some(s) = atlas.get(over) {
             list.sprite(s, x, y, WHITE);
         }
@@ -131,9 +209,17 @@ fn xp(list: &mut DrawList, theme: &Theme, state: &HudState, centre: f32, h: f32)
         list.sprite(bg, left, h - 29.0, WHITE);
     }
     if let Some(fill) = atlas.get(sprite::XP_PROGRESS) {
-        let filled = (state.xp_progress.clamp(0.0, 1.0) * 183.0).floor().min(fill.width as f32);
+        let filled = (state.xp_progress.clamp(0.0, 1.0) * 183.0)
+            .floor()
+            .min(fill.width as f32);
         if filled > 0.0 {
-            list.sprite_part(fill, left, h - 29.0, [0.0, 0.0, filled, fill.height as f32], WHITE);
+            list.sprite_part(
+                fill,
+                left,
+                h - 29.0,
+                [0.0, 0.0, filled, fill.height as f32],
+                WHITE,
+            );
         }
     }
     if let (true, Some(font)) = (state.xp_level > 0, &theme.font) {
@@ -150,25 +236,61 @@ mod tests {
 
     fn atlas() -> Atlas {
         let mut a = Atlas::new();
-        for (name, w, h) in [(sprite::HOTBAR, 182, 22), (sprite::HOTBAR_SELECTION, 24, 23), (sprite::HEART_CONTAINER, 9, 9), (sprite::HEART_FULL, 9, 9), (sprite::HEART_HALF, 9, 9)] {
+        for (name, w, h) in [
+            (sprite::HOTBAR, 182, 22),
+            (sprite::HOTBAR_SELECTION, 24, 23),
+            (sprite::HEART_CONTAINER, 9, 9),
+            (sprite::HEART_FULL, 9, 9),
+            (sprite::HEART_HALF, 9, 9),
+        ] {
             a.add(name, &RgbaImage::new(w, h));
         }
         a
     }
 
     fn state() -> HudState {
-        HudState { health: 15.0, max_health: 20.0, food: 20.0, armor: 0, air: None, xp_level: 0, xp_progress: 0.0, selected: 2, hotbar: [None; 9], survival: true, crosshair: true }
+        HudState {
+            health: 15.0,
+            max_health: 20.0,
+            food: 20.0,
+            armor: 0,
+            air: None,
+            xp_level: 0,
+            xp_progress: 0.0,
+            selected: 2,
+            hotbar: [None; 9],
+            survival: true,
+            crosshair: true,
+        }
     }
 
     #[test]
     fn hotbar_and_hearts_sit_where_java_puts_them() {
         let mut atlas = atlas();
-        let widgets = crate::widget::Widgets::Bedrock(Box::new(crate::widget::bedrock::Kit::load(std::path::Path::new(""), &mut atlas)));
-        let theme = Theme { atlas, font: None, galactic: None, style: crate::theme::bedrock::STYLE, widgets };
+        let widgets = crate::widget::Widgets::Bedrock(Box::new(crate::widget::bedrock::Kit::load(
+            std::path::Path::new(""),
+            &mut atlas,
+        )));
+        let theme = Theme {
+            atlas,
+            font: None,
+            galactic: None,
+            style: crate::theme::bedrock::STYLE,
+            widgets,
+        };
         let atlas = &theme.atlas;
         let mut list = DrawList::new(1.0);
         draw(&mut list, &theme, &state(), [320.0, 240.0]);
-        let at = |name| list.quads.iter().filter(|q| q.uv[0] == atlas.get(name).unwrap().x as f32 && q.uv[1] == atlas.get(name).unwrap().y as f32).map(|q| [q.rect[0], q.rect[1]]).collect::<Vec<_>>();
+        let at = |name| {
+            list.quads
+                .iter()
+                .filter(|q| {
+                    q.uv[0] == atlas.get(name).unwrap().x as f32
+                        && q.uv[1] == atlas.get(name).unwrap().y as f32
+                })
+                .map(|q| [q.rect[0], q.rect[1]])
+                .collect::<Vec<_>>()
+        };
         assert_eq!(at(sprite::HOTBAR), [[69.0, 218.0]]);
         assert_eq!(at(sprite::HOTBAR_SELECTION), [[108.0, 217.0]]);
         let full = at(sprite::HEART_FULL);

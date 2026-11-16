@@ -2,8 +2,9 @@ use acacia_client::proto::packets::MovePlayerMode;
 use acacia_client::proto::types::{ItemV4, Rotation, WindowID};
 
 use acacia_client::proto::packets::{
-    AddEntity, AddItemEntity, AddPlayer, ChangeDimension, MobArmorEquipment, MobEffect, MobEquipment, MoveEntity,
-    MoveEntityDelta, MovePlayer, RemoveEntity, SetEntityData, SetEntityMotion, SyncEntityProperty, UpdateAttributes,
+    AddEntity, AddItemEntity, AddPlayer, ChangeDimension, MobArmorEquipment, MobEffect,
+    MobEquipment, MoveEntity, MoveEntityDelta, MovePlayer, RemoveEntity, SetEntityData,
+    SetEntityMotion, SyncEntityProperty, UpdateAttributes,
 };
 use acacia_client::proto::types::Vec3f;
 use acacia_client::proto::{Packet, RawPacket};
@@ -12,7 +13,10 @@ use super::*;
 use crate::state::Me;
 use crate::state::queries::test_support::{fixtures, raw};
 
-const ME: Me = Me { runtime_entity_id: 1, unique_entity_id: -1 };
+const ME: Me = Me {
+    runtime_entity_id: 1,
+    unique_entity_id: -1,
+};
 
 fn fixture<T: Packet>() -> T {
     fixtures::<T>()[0].decode().unwrap()
@@ -31,7 +35,8 @@ fn add_player(runtime_id: u64, unique_id: i64, name: &str, pos: Vec3f) -> RawPac
 
 fn add_entity(runtime_id: u64, unique_id: i64, kind: &str, pos: Vec3f) -> RawPacket {
     let mut p: AddEntity = fixture();
-    (p.runtime_id, p.unique_id, p.entity_type, p.position) = (runtime_id, unique_id, kind.into(), pos);
+    (p.runtime_id, p.unique_id, p.entity_type, p.position) =
+        (runtime_id, unique_id, kind.into(), pos);
     raw(&p)
 }
 
@@ -60,9 +65,15 @@ fn delta(runtime_id: u64) -> MoveEntityDelta {
 
 fn world() -> Entities {
     let mut es = Entities::default();
-    es.apply(&add_player(1, -1, "Me", v(0.0, 0.0, 0.0)), &ME).unwrap();
-    es.apply(&add_player(2, -2, "Steve", v(10.0, 65.62, 0.0)), &ME).unwrap();
-    es.apply(&add_entity(3, -3, "minecraft:zombie", v(2.0, 64.0, 0.0)), &ME).unwrap();
+    es.apply(&add_player(1, -1, "Me", v(0.0, 0.0, 0.0)), &ME)
+        .unwrap();
+    es.apply(&add_player(2, -2, "Steve", v(10.0, 65.62, 0.0)), &ME)
+        .unwrap();
+    es.apply(
+        &add_entity(3, -3, "minecraft:zombie", v(2.0, 64.0, 0.0)),
+        &ME,
+    )
+    .unwrap();
     es.apply(&add_item(4, -4, v(-5.0, 64.0, 0.0)), &ME).unwrap();
     es
 }
@@ -74,7 +85,10 @@ fn spawns_are_tracked_without_local_player() {
     assert!(es.get(1).is_none());
 
     let steve = es.get(2).unwrap();
-    assert_eq!((steve.kind.as_str(), steve.username.as_deref()), (PLAYER_KIND, Some("Steve")));
+    assert_eq!(
+        (steve.kind.as_str(), steve.username.as_deref()),
+        (PLAYER_KIND, Some("Steve"))
+    );
     assert_eq!((steve.yaw, steve.pitch, steve.head_yaw), (90.0, 10.0, 95.0));
     assert!((steve.feet().y - 64.0).abs() < 1e-4);
 
@@ -87,8 +101,8 @@ fn spawns_are_tracked_without_local_player() {
 #[test]
 fn metadata_updates_reach_tracked_entities_only() {
     use acacia_client::proto::types::{
-        MetadataDictionaryItem, MetadataDictionaryItemKey, MetadataDictionaryItemType, MetadataDictionaryItemValue as Value,
-        MetadataFlags1,
+        MetadataDictionaryItem, MetadataDictionaryItemKey, MetadataDictionaryItemType,
+        MetadataDictionaryItemValue as Value, MetadataFlags1,
     };
     let mut es = world();
     assert!(es.get(2).unwrap().uuid.is_some() && es.get(3).unwrap().uuid.is_none());
@@ -101,17 +115,30 @@ fn metadata_updates_reach_tracked_entities_only() {
     }];
     p.runtime_entity_id = 3;
     es.apply(&raw(&p), &ME).unwrap();
-    assert!(es.get(3).unwrap().metadata.flags().contains(MetadataFlags1::BABY));
+    assert!(
+        es.get(3)
+            .unwrap()
+            .metadata
+            .flags()
+            .contains(MetadataFlags1::BABY)
+    );
     assert_eq!(es.get(3).unwrap().metadata.scale(), 1.0);
     p.runtime_entity_id = 99;
     es.apply(&raw(&p), &ME).unwrap();
-    assert!(!es.get(2).unwrap().metadata.flags().contains(MetadataFlags1::BABY));
+    assert!(
+        !es.get(2)
+            .unwrap()
+            .metadata
+            .flags()
+            .contains(MetadataFlags1::BABY)
+    );
 }
 
 #[test]
 fn remove_uses_unique_id() {
     let mut es = world();
-    es.apply(&raw(&RemoveEntity { entity_id_self: -3 }), &ME).unwrap();
+    es.apply(&raw(&RemoveEntity { entity_id_self: -3 }), &ME)
+        .unwrap();
     assert!(es.get(3).is_none());
     assert!(es.by_unique(-3).is_none());
     assert_eq!(es.len(), 2);
@@ -126,17 +153,36 @@ fn move_delta_updates_only_present_fields() {
     es.apply(&raw(&p), &ME).unwrap();
     let z = es.get(3).unwrap();
     assert_eq!(z.position, v(7.5, 64.0, 0.0));
-    assert_eq!((z.pitch, z.yaw, z.head_yaw, z.on_ground), (pitch, 90.0, 180.0, true));
+    assert_eq!(
+        (z.pitch, z.yaw, z.head_yaw, z.on_ground),
+        (pitch, 90.0, 180.0, true)
+    );
 }
 
 #[test]
 fn move_absolute_sets_position_rotation_and_ground() {
     let mut es = world();
-    let rotation = Rotation { yaw: 45.0, pitch: 90.0, head_yaw: 180.0 };
-    es.apply(&raw(&MoveEntity { runtime_entity_id: 3, flags: 1, position: v(1.0, 2.0, 3.0), rotation }), &ME).unwrap();
+    let rotation = Rotation {
+        yaw: 45.0,
+        pitch: 90.0,
+        head_yaw: 180.0,
+    };
+    es.apply(
+        &raw(&MoveEntity {
+            runtime_entity_id: 3,
+            flags: 1,
+            position: v(1.0, 2.0, 3.0),
+            rotation,
+        }),
+        &ME,
+    )
+    .unwrap();
     let z = es.get(3).unwrap();
     assert_eq!(z.position, v(1.0, 2.0, 3.0));
-    assert_eq!((z.pitch, z.yaw, z.head_yaw, z.on_ground), (45.0, 90.0, 180.0, true));
+    assert_eq!(
+        (z.pitch, z.yaw, z.head_yaw, z.on_ground),
+        (45.0, 90.0, 180.0, true)
+    );
 }
 
 #[test]
@@ -158,10 +204,21 @@ fn move_player_and_motion() {
         &ME,
     )
     .unwrap();
-    es.apply(&raw(&SetEntityMotion { runtime_entity_id: 2, velocity: v(0.0, 0.42, 0.0), tick: 0 }), &ME).unwrap();
+    es.apply(
+        &raw(&SetEntityMotion {
+            runtime_entity_id: 2,
+            velocity: v(0.0, 0.42, 0.0),
+            tick: 0,
+        }),
+        &ME,
+    )
+    .unwrap();
     let s = es.get(2).unwrap();
     assert_eq!(s.position, v(11.0, 66.62, 1.0));
-    assert_eq!((s.pitch, s.yaw, s.head_yaw, s.on_ground), (-5.0, 180.0, 170.0, true));
+    assert_eq!(
+        (s.pitch, s.yaw, s.head_yaw, s.on_ground),
+        (-5.0, 180.0, 170.0, true)
+    );
     assert_eq!(s.velocity, v(0.0, 0.42, 0.0));
 }
 
@@ -170,14 +227,24 @@ fn nearest_respects_filter() {
     let es = world();
     let origin = v(0.0, 64.0, 0.0);
     assert_eq!(es.nearest(&origin, |_| true).unwrap().runtime_id, 3);
-    assert_eq!(es.nearest(&origin, Entity::is_player).unwrap().runtime_id, 2);
-    assert!(es.nearest(&origin, |e| e.kind == "minecraft:creeper").is_none());
+    assert_eq!(
+        es.nearest(&origin, Entity::is_player).unwrap().runtime_id,
+        2
+    );
+    assert!(
+        es.nearest(&origin, |e| e.kind == "minecraft:creeper")
+            .is_none()
+    );
 }
 
 #[test]
 fn respawned_runtime_id_drops_stale_unique_index() {
     let mut es = world();
-    es.apply(&add_entity(3, -30, "minecraft:skeleton", v(0.0, 0.0, 0.0)), &ME).unwrap();
+    es.apply(
+        &add_entity(3, -30, "minecraft:skeleton", v(0.0, 0.0, 0.0)),
+        &ME,
+    )
+    .unwrap();
     assert!(es.by_unique(-3).is_none());
     assert_eq!(es.by_unique(-30).unwrap().kind, "minecraft:skeleton");
 }
@@ -186,8 +253,9 @@ fn respawned_runtime_id_drops_stale_unique_index() {
 fn metadata_attributes_and_effects_update_the_entity() {
     use acacia_client::proto::packets::MobEffectEventId;
     use acacia_client::proto::types::{
-        MetadataDictionaryItem, MetadataDictionaryItemKey as Key, MetadataDictionaryItemType, MetadataDictionaryItemValue,
-        MetadataDictionaryItemValueDefault as Plain, PlayerAttributesItem,
+        MetadataDictionaryItem, MetadataDictionaryItemKey as Key, MetadataDictionaryItemType,
+        MetadataDictionaryItemValue, MetadataDictionaryItemValueDefault as Plain,
+        PlayerAttributesItem,
     };
     let mut es = world();
     let mut data: SetEntityData = fixture();
@@ -215,7 +283,12 @@ fn metadata_attributes_and_effects_update_the_entity() {
     es.apply(&raw(&attrs), &ME).unwrap();
 
     let mut effect: MobEffect = fixture();
-    (effect.runtime_entity_id, effect.event_id, effect.effect_id, effect.amplifier) = (3, MobEffectEventId::Add, 1, 1);
+    (
+        effect.runtime_entity_id,
+        effect.event_id,
+        effect.effect_id,
+        effect.amplifier,
+    ) = (3, MobEffectEventId::Add, 1, 1);
     es.apply(&raw(&effect), &ME).unwrap();
 
     let z = es.get(3).unwrap();
@@ -234,10 +307,17 @@ fn equipment_and_dropped_stacks_are_tracked() {
     let mut es = world();
     assert!(es.get(3).unwrap().equipment.is_none());
     let dropped = i32::from(fixture::<AddItemEntity>().item.network_id);
-    assert!(es.get(4).unwrap().item.as_ref().is_some_and(|s| s.network_id == dropped));
+    assert!(
+        es.get(4)
+            .unwrap()
+            .item
+            .as_ref()
+            .is_some_and(|s| s.network_id == dropped)
+    );
 
     let mut hand: MobEquipment = fixture();
-    (hand.runtime_entity_id, hand.window_id, hand.item) = (3, WindowID::Inventory, item(hand.item, 7));
+    (hand.runtime_entity_id, hand.window_id, hand.item) =
+        (3, WindowID::Inventory, item(hand.item, 7));
     es.apply(&raw(&hand), &ME).unwrap();
     (hand.window_id, hand.item) = (WindowID::Offhand, item(hand.item, 8));
     es.apply(&raw(&hand), &ME).unwrap();
@@ -248,7 +328,14 @@ fn equipment_and_dropped_stacks_are_tracked() {
     es.apply(&raw(&armor), &ME).unwrap();
 
     let gear = es.get(3).unwrap().equipment.as_deref().unwrap();
-    assert_eq!((gear.main_hand.network_id, gear.off_hand.network_id, gear.armor[0].network_id), (7, 8, 9));
+    assert_eq!(
+        (
+            gear.main_hand.network_id,
+            gear.off_hand.network_id,
+            gear.armor[0].network_id
+        ),
+        (7, 8, 9)
+    );
 }
 
 #[test]
@@ -266,20 +353,48 @@ fn synced_properties_read_by_their_kinds_definitions() {
     // BDS's pig: climate_variant (temperate, warm, cold), then sound_variant.
     let pig = include_bytes!("../../../../acacia-nbt/corpus/network/entity-property-08.nbt");
     let mut es = world();
-    es.apply(&raw(&SyncEntityProperty { nbt: Raw::<Network>::read(&mut &pig[..]).unwrap() }), &ME).unwrap();
-    let ints = |pairs: &[(u32, i32)]| EntityProperties { ints: pairs.iter().map(|&(index, value)| EntityPropertiesIntsItem { index, value }).collect(), floats: vec![] };
+    es.apply(
+        &raw(&SyncEntityProperty {
+            nbt: Raw::<Network>::read(&mut &pig[..]).unwrap(),
+        }),
+        &ME,
+    )
+    .unwrap();
+    let ints = |pairs: &[(u32, i32)]| EntityProperties {
+        ints: pairs
+            .iter()
+            .map(|&(index, value)| EntityPropertiesIntsItem { index, value })
+            .collect(),
+        floats: vec![],
+    };
     let mut p: AddEntity = fixture();
-    (p.runtime_id, p.unique_id, p.entity_type, p.properties) = (5, -5, "minecraft:pig".into(), ints(&[(0, 2), (1, 1)]));
+    (p.runtime_id, p.unique_id, p.entity_type, p.properties) =
+        (5, -5, "minecraft:pig".into(), ints(&[(0, 2), (1, 1)]));
     es.apply(&raw(&p), &ME).unwrap();
     let pig = es.get(5).unwrap();
-    assert_eq!(es.property(pig, "minecraft:climate_variant"), Some(Property::Enum("cold")));
-    assert_eq!(es.property(pig, "minecraft:sound_variant"), Some(Property::Enum("big")));
+    assert_eq!(
+        es.property(pig, "minecraft:climate_variant"),
+        Some(Property::Enum("cold"))
+    );
+    assert_eq!(
+        es.property(pig, "minecraft:sound_variant"),
+        Some(Property::Enum("big"))
+    );
     let mut data: SetEntityData = fixture();
     (data.runtime_entity_id, data.properties) = (5, ints(&[(0, 1)]));
     es.apply(&raw(&data), &ME).unwrap();
     let pig = es.get(5).unwrap();
-    assert_eq!(es.property(pig, "minecraft:climate_variant"), Some(Property::Enum("warm")));
-    assert_eq!(es.property(pig, "minecraft:sound_variant"), Some(Property::Enum("big")));
+    assert_eq!(
+        es.property(pig, "minecraft:climate_variant"),
+        Some(Property::Enum("warm"))
+    );
+    assert_eq!(
+        es.property(pig, "minecraft:sound_variant"),
+        Some(Property::Enum("big"))
+    );
     assert_eq!(es.properties(pig).count(), 2);
-    assert_eq!(es.property(es.get(3).unwrap(), "minecraft:climate_variant"), None);
+    assert_eq!(
+        es.property(es.get(3).unwrap(), "minecraft:climate_variant"),
+        None
+    );
 }

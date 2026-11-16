@@ -18,7 +18,11 @@ use tokio::time::{Instant, Sleep};
 pub(crate) fn tick_scale() -> f64 {
     static SCALE: OnceLock<f64> = OnceLock::new();
     *SCALE.get_or_init(|| {
-        std::env::var("ACACIA_TICK_SCALE").ok().and_then(|v| v.parse().ok()).filter(|s: &f64| s.is_finite() && *s > 0.0).unwrap_or(1.0)
+        std::env::var("ACACIA_TICK_SCALE")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|s: &f64| s.is_finite() && *s > 0.0)
+            .unwrap_or(1.0)
     })
 }
 
@@ -33,11 +37,7 @@ pub(crate) fn unscaled(d: Duration) -> Duration {
 }
 
 fn scaled_by(d: Duration, scale: f64) -> Duration {
-    if scale == 1.0 {
-        d
-    } else {
-        d.div_f64(scale)
-    }
+    if scale == 1.0 { d } else { d.div_f64(scale) }
 }
 
 const PERIOD: Duration = Duration::from_millis(51);
@@ -69,7 +69,11 @@ impl Cadence {
     }
 
     pub fn with_scale(seed: u64, scale: f64) -> Self {
-        Self { slot: Duration::ZERO, rng: seed, scale }
+        Self {
+            slot: Duration::ZERO,
+            rng: seed,
+            scale,
+        }
     }
 
     /// The next firing after `now`. A caller late by more than [`SLACK`] slides the schedule
@@ -79,14 +83,21 @@ impl Cadence {
     pub fn next(&mut self, now: Duration) -> Fire {
         let period = scaled_by(PERIOD, self.scale);
         let due = self.slot + period;
-        self.slot = if now > due + scaled_by(SLACK, self.scale) { now } else { due };
+        self.slot = if now > due + scaled_by(SLACK, self.scale) {
+            now
+        } else {
+            due
+        };
         let mut ticks = 1;
         if self.random().is_multiple_of(BURST_ONE_IN) {
             self.slot += period;
             ticks = 2;
         }
         let jitter = Duration::from_millis(self.random() % (JITTER_MS + 1));
-        Fire { at: self.slot + scaled_by(jitter, self.scale), ticks }
+        Fire {
+            at: self.slot + scaled_by(jitter, self.scale),
+            ticks,
+        }
     }
 
     fn random(&mut self) -> u64 {
@@ -126,9 +137,18 @@ impl Ticker {
     pub fn new() -> Self {
         let mut cadence = Cadence::with_scale(seed(), tick_scale());
         let next = cadence.next(Duration::ZERO);
-        let lag = std::env::var("ACACIA_TICK_LAG_MS").ok().and_then(|ms| ms.parse().ok());
+        let lag = std::env::var("ACACIA_TICK_LAG_MS")
+            .ok()
+            .and_then(|ms| ms.parse().ok());
         let start = Instant::now();
-        Self { start, cadence, next, lag, lag_rng: seed(), sleep: Box::pin(tokio::time::sleep_until(start + next.at)) }
+        Self {
+            start,
+            cadence,
+            next,
+            lag,
+            lag_rng: seed(),
+            sleep: Box::pin(tokio::time::sleep_until(start + next.at)),
+        }
     }
 
     /// Waits for the next firing and returns how many ticks to run. Cancel-safe.
@@ -140,7 +160,12 @@ impl Ticker {
         self.sleep.as_mut().await;
         if let Some(lag) = self.lag {
             // One wake-up in fifty hangs for twenty times the usual lateness.
-            let late = splitmix(&mut self.lag_rng) % (lag + 1) * if splitmix(&mut self.lag_rng).is_multiple_of(50) { 20 } else { 1 };
+            let late = splitmix(&mut self.lag_rng) % (lag + 1)
+                * if splitmix(&mut self.lag_rng).is_multiple_of(50) {
+                    20
+                } else {
+                    1
+                };
             tokio::time::sleep(Duration::from_millis(late)).await;
         }
         let ticks = self.next.ticks;
@@ -179,20 +204,31 @@ mod tests {
         let mut sent = 0u64;
         for fire in run(20_000) {
             sent += u64::from(fire.ticks);
-            assert!(fire.at >= Duration::from_millis(50) * sent as u32, "{sent} ticks by {:?}", fire.at);
+            assert!(
+                fire.at >= Duration::from_millis(50) * sent as u32,
+                "{sent} ticks by {:?}",
+                fire.at
+            );
         }
     }
 
     #[test]
     fn gaps_look_like_vanilla() {
         let fires = run(20_000);
-        let mut gaps: Vec<u128> = fires.windows(2).map(|w| (w[1].at - w[0].at).as_millis()).collect();
+        let mut gaps: Vec<u128> = fires
+            .windows(2)
+            .map(|w| (w[1].at - w[0].at).as_millis())
+            .collect();
         let ticks: u32 = fires.iter().map(|f| f.ticks).sum();
         let mean = fires.last().unwrap().at.as_millis() as f64 / f64::from(ticks);
         assert!((50.5..52.0).contains(&mean), "mean {mean}");
         gaps.sort_unstable();
         let pct = |p: usize| gaps[gaps.len() * p / 100];
-        assert!((25..=40).contains(&pct(10)) && (45..=56).contains(&pct(50)) && (60..=80).contains(&pct(90)));
+        assert!(
+            (25..=40).contains(&pct(10))
+                && (45..=56).contains(&pct(50))
+                && (60..=80).contains(&pct(90))
+        );
         let bursts = fires.iter().filter(|f| f.ticks == 2).count();
         assert!((60..=220).contains(&bursts), "{bursts} bursts");
     }
@@ -214,11 +250,23 @@ mod tests {
     #[test]
     fn a_tick_scale_compresses_the_same_schedule() {
         let (mut one, mut two) = (Cadence::new(9), Cadence::with_scale(9, 2.0));
-        let (mut a, mut b) = (Fire { at: Duration::ZERO, ticks: 0 }, Fire { at: Duration::ZERO, ticks: 0 });
+        let (mut a, mut b) = (
+            Fire {
+                at: Duration::ZERO,
+                ticks: 0,
+            },
+            Fire {
+                at: Duration::ZERO,
+                ticks: 0,
+            },
+        );
         for _ in 0..1_000 {
             (a, b) = (one.next(a.at), two.next(b.at));
             assert_eq!(a.ticks, b.ticks);
-            assert!(a.at.abs_diff(b.at * 2) <= Duration::from_micros(1), "{a:?} vs {b:?}");
+            assert!(
+                a.at.abs_diff(b.at * 2) <= Duration::from_micros(1),
+                "{a:?} vs {b:?}"
+            );
         }
     }
 

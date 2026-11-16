@@ -9,10 +9,13 @@ use std::collections::HashMap;
 
 use acacia_bot::proto::types::GameMode;
 use acacia_ui::effects::{Active, EFFECTS};
+use acacia_ui::inventory::Layout;
 use acacia_ui::java::hud::bars::BossBar;
 use acacia_ui::java::hud::effects::EffectIcon;
-use acacia_ui::inventory::Layout;
-use acacia_ui::java::hud::frame::{AttackIndicator, GameType, HudInputs, ScreenInfo, SidebarObjective, TabFrame, container_shows_effects};
+use acacia_ui::java::hud::frame::{
+    AttackIndicator, GameType, HudInputs, ScreenInfo, SidebarObjective, TabFrame,
+    container_shows_effects,
+};
 use acacia_ui::java::hud::health::{Health, HeartKind};
 use acacia_ui::java::hud::hotbar::Hotbar;
 use acacia_ui::java::hud::overlays::CameraOverlays;
@@ -74,7 +77,16 @@ pub fn inputs(v: &HudView, size: [i32; 2], millis: i64, delta: f32) -> HudInputs
         xp_level: me.xp_level,
         effects: v.effects.iter().filter_map(effect_icon).collect(),
         demo: false,
-        bosses: me.bosses.iter().map(|(title, progress, color)| BossBar { name: Text::literal(v.lang.translate(title, &[])), progress: *progress, color: *color, overlay: 0 }).collect(),
+        bosses: me
+            .bosses
+            .iter()
+            .map(|(title, progress, color)| BossBar {
+                name: Text::literal(v.lang.translate(title, &[])),
+                progress: *progress,
+                color: *color,
+                overlay: 0,
+            })
+            .collect(),
         sleep_timer: 0,
         team_sidebar: None,
         sidebar: v.sidebar.map(sidebar),
@@ -82,7 +94,17 @@ pub fn inputs(v: &HudView, size: [i32; 2], millis: i64, delta: f32) -> HudInputs
         chat_only: true,
         text_opacity: 0.5,
         chat_focused: v.chat_open,
-        tab: TabFrame { key_down: v.players.is_some(), players: v.players.unwrap_or_default().iter().enumerate().map(|(n, name)| tab_player(n, name)).collect(), ..TabFrame::default() },
+        tab: TabFrame {
+            key_down: v.players.is_some(),
+            players: v
+                .players
+                .unwrap_or_default()
+                .iter()
+                .enumerate()
+                .map(|(n, name)| tab_player(n, name))
+                .collect(),
+            ..TabFrame::default()
+        },
         subtitles: SubtitleFrame::default(),
     }
 }
@@ -90,15 +112,28 @@ pub fn inputs(v: &HudView, size: [i32; 2], millis: i64, delta: f32) -> HudInputs
 /// The open screen as the HUD asks about it: `other` is a menu, form or the chat screen (not in-game
 /// UI); `in_game` a book or sign; `container` an inventory screen's layout, whose player and
 /// creative screens list the effects themselves where they fit beside it.
-pub fn screen_info(container: Option<Layout>, in_game: bool, other: bool, width: i32) -> Option<ScreenInfo> {
+pub fn screen_info(
+    container: Option<Layout>,
+    in_game: bool,
+    other: bool,
+    width: i32,
+) -> Option<ScreenInfo> {
     if other {
         return Some(ScreenInfo::default());
     }
     if let Some(layout) = container {
-        let shows_effects = matches!(layout, Layout::Player | Layout::Creative) && container_shows_effects(width, layout.width() as i32);
-        return Some(ScreenInfo { in_game_ui: true, shows_effects, level_loading: false });
+        let shows_effects = matches!(layout, Layout::Player | Layout::Creative)
+            && container_shows_effects(width, layout.width() as i32);
+        return Some(ScreenInfo {
+            in_game_ui: true,
+            shows_effects,
+            level_loading: false,
+        });
     }
-    in_game.then(|| ScreenInfo { in_game_ui: true, ..ScreenInfo::default() })
+    in_game.then(|| ScreenInfo {
+        in_game_ui: true,
+        ..ScreenInfo::default()
+    })
 }
 
 pub fn game_type(mode: GameMode) -> GameType {
@@ -122,9 +157,17 @@ fn camera(me: &Me, partial: f32, delta: f32) -> CameraOverlays {
         vignette: Some((0.0, 0.0)),
         first_person: true,
         game_time_delta: delta,
-        equipment: if pumpkin { vec!["misc/pumpkinblur".to_owned()] } else { Vec::new() },
+        equipment: if pumpkin {
+            vec!["misc/pumpkinblur".to_owned()]
+        } else {
+            Vec::new()
+        },
         partial,
-        nausea: if me.effects.iter().any(|e| e.0 == NAUSEA) { 1.0 } else { 0.0 },
+        nausea: if me.effects.iter().any(|e| e.0 == NAUSEA) {
+            1.0
+        } else {
+            0.0
+        },
         screen_effect_scale: 1.0,
         ..CameraOverlays::default()
     }
@@ -161,7 +204,12 @@ pub fn held_name(me: &Me, lang: &Lang) -> Option<HeldName> {
     let stack = me.items[usize::from(me.hotbar % 9)].as_ref()?;
     Some(HeldName {
         item: stack.name.clone(),
-        hover_name: Text::literal(stack.title.clone().unwrap_or_else(|| lang.item_name(&stack.name))),
+        hover_name: Text::literal(
+            stack
+                .title
+                .clone()
+                .unwrap_or_else(|| lang.item_name(&stack.name)),
+        ),
         rarity_color: if stack.enchanted { RARE } else { COMMON },
         custom_name: stack.title.is_some(),
     })
@@ -172,13 +220,32 @@ pub fn sidebar(s: &Sidebar) -> SidebarObjective {
     SidebarObjective {
         title: Text::literal(s.title.clone()),
         format: None,
-        scores: s.lines.iter().map(|(owner, value)| ScoreEntry { owner: owner.clone(), value: *value, display: None, format: None }).collect(),
+        scores: s
+            .lines
+            .iter()
+            .map(|(owner, value)| ScoreEntry {
+                owner: owner.clone(),
+                value: *value,
+                display: None,
+                format: None,
+            })
+            .collect(),
     }
 }
 
 fn tab_player(n: usize, name: &str) -> TabPlayer {
     let uuid = n as u128;
-    TabPlayer { uuid, name: name.to_owned(), game_mode: 0, latency: 0, display_name: None, list_order: 0, show_hat: true, skin: default_skin(uuid), upside_down: false }
+    TabPlayer {
+        uuid,
+        name: name.to_owned(),
+        game_mode: 0,
+        latency: 0,
+        display_name: None,
+        list_order: 0,
+        show_hat: true,
+        skin: default_skin(uuid),
+        upside_down: false,
+    }
 }
 
 #[cfg(test)]

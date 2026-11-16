@@ -42,12 +42,12 @@ mod tests;
 #[cfg(test)]
 mod vanilla_tests;
 
-pub use break_time::{break_ticks, BreakConditions};
-pub use direct::is_interactive;
+pub use break_time::{BreakConditions, break_ticks};
 pub(crate) use direct::Mining;
-pub use geometry::{facing_face, Face, BLOCK_REACH, ENTITY_REACH};
+pub use direct::is_interactive;
+pub use geometry::{BLOCK_REACH, ENTITY_REACH, Face, facing_face};
 pub(crate) use geometry::{block_distance, ray_box};
-pub use wire::{to_wire, SwingSource};
+pub use wire::{SwingSource, to_wire};
 
 use acacia_physics::{BlockPos, Vec3};
 use acacia_world::{BlockAccess, BlockState};
@@ -63,25 +63,45 @@ impl Bot {
     pub(crate) fn sight(&self) -> Option<sight::Sight<'_, dyn BlockAccess + '_>> {
         #[cfg(feature = "java")]
         if let Some(java) = self.java() {
-            return Some(sight::Sight { world: java_access::JavaAccess::new(java.client().world.chunks()), registry: acacia_world::BlockRegistry::java() });
+            return Some(sight::Sight {
+                world: java_access::JavaAccess::new(java.client().world.chunks()),
+                registry: acacia_world::BlockRegistry::java(),
+            });
         }
         let world = self.backend.world()?;
-        Some(sight::Sight { world: world.view()?, registry: world.registry()? })
+        Some(sight::Sight {
+            world: world.view()?,
+            registry: world.registry()?,
+        })
     }
 
     /// A face of the block at `pos` the eye sees and a point on its shape to aim at, drawn among the visible ones
     /// so aims vary as a player's do; on `prefer` when that face shows. Without a tracked world, `prefer` or the
     /// face towards the centre, at its centre.
-    pub(crate) fn visible_aim(&mut self, pos: BlockPos, prefer: Option<Face>) -> Result<(Face, Vec3), ActionError> {
+    pub(crate) fn visible_aim(
+        &mut self,
+        pos: BlockPos,
+        prefer: Option<Face>,
+    ) -> Result<(Face, Vec3), ActionError> {
         let eye = self.eye_position();
         let Some(points) = self.sight().map(|s| s.visible_points(eye, pos)) else {
             let face = prefer.unwrap_or_else(|| facing_face(eye, pos));
             return Ok((face, geometry::face_point(pos, face)));
         };
-        let preferred: Vec<_> = points.iter().copied().filter(|&(f, _)| Some(f) == prefer).collect();
-        let pool = if preferred.is_empty() { points } else { preferred };
+        let preferred: Vec<_> = points
+            .iter()
+            .copied()
+            .filter(|&(f, _)| Some(f) == prefer)
+            .collect();
+        let pool = if preferred.is_empty() {
+            points
+        } else {
+            preferred
+        };
         if pool.is_empty() {
-            return Err(ActionError::NotVisible(format!("block {pos:?} is behind other blocks")));
+            return Err(ActionError::NotVisible(format!(
+                "block {pos:?} is behind other blocks"
+            )));
         }
         Ok(pool[self.human.pick(pool.len())])
     }
@@ -89,7 +109,8 @@ impl Bot {
     /// The eye sees the centre of `face` of the block at `pos` (true without a tracked world): the check a
     /// placement against that face makes, for planners choosing among faces.
     pub fn sees_face(&self, pos: BlockPos, face: Face) -> bool {
-        self.sight().is_none_or(|s| s.sees_face_centre(self.eye_position(), pos, face))
+        self.sight()
+            .is_none_or(|s| s.sees_face_centre(self.eye_position(), pos, face))
     }
 
     pub fn eye_position(&self) -> Vec3 {
@@ -109,12 +130,20 @@ impl Bot {
 
     pub(crate) fn hand(&self) -> wire::Hand {
         let inv = &self.state.inventory;
-        wire::Hand::main(inv.selected_hotbar_slot, to_wire(inv.held()), self.eye_position())
+        wire::Hand::main(
+            inv.selected_hotbar_slot,
+            to_wire(inv.held()),
+            self.eye_position(),
+        )
     }
 
     pub(crate) fn offhand_hand(&self) -> wire::Hand {
         let inv = &self.state.inventory;
-        wire::Hand::offhand(inv.selected_hotbar_slot, to_wire(&inv.offhand), self.eye_position())
+        wire::Hand::offhand(
+            inv.selected_hotbar_slot,
+            to_wire(&inv.offhand),
+            self.eye_position(),
+        )
     }
 
     pub(crate) fn runtime_id(&self) -> u64 {
@@ -137,9 +166,14 @@ impl Bot {
     /// The id the server uses for the block at `pos`. BDS ignores a click naming another block, so an
     /// unknown block is refused rather than clicked blind.
     fn block_wire_id(&self, pos: BlockPos) -> Result<u32, ActionError> {
-        match (self.backend.world().and_then(|w| w.view()), self.block_at(pos)) {
+        match (
+            self.backend.world().and_then(|w| w.view()),
+            self.block_at(pos),
+        ) {
             (Some(view), Some((id, _))) => Ok(view.world().wire_id(id)),
-            _ => Err(ActionError::NotPossible(format!("block {pos:?} is not known (not loaded, or not received near an idle bot)"))),
+            _ => Err(ActionError::NotPossible(format!(
+                "block {pos:?} is not known (not loaded, or not received near an idle bot)"
+            ))),
         }
     }
 
@@ -159,7 +193,9 @@ impl Bot {
     pub async fn look_at(&mut self, target: Vec3) -> Result<(), ActionError> {
         let eye = self.eye_position();
         let (before, after) = if self.has_physics() {
-            let Some(controls) = self.backend.controls_mut() else { return Ok(()) };
+            let Some(controls) = self.backend.controls_mut() else {
+                return Ok(());
+            };
             let before = *controls;
             controls.look_at(eye, target);
             ((before.yaw, before.pitch), (controls.yaw, controls.pitch))

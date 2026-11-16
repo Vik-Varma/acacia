@@ -8,9 +8,9 @@ use acacia_ui::blur::Blur;
 use acacia_ui::{Atlas, Quad};
 
 use super::blur::MenuBlur;
-use blend::{BLENDS, blend_state, runs};
 use super::glint::GlintTextures;
 use crate::glint::Glint;
+use blend::{BLENDS, blend_state, runs};
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -65,8 +65,16 @@ impl UiPass {
     /// `surface` is the surface's format; the pass draws through a non-sRGB view of it.
     pub fn new(device: &wgpu::Device, surface: wgpu::TextureFormat) -> Self {
         let color = surface.remove_srgb_suffix();
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("ui"), source: wgpu::ShaderSource::Wgsl(include_str!("ui.wgsl").into()) });
-        let entry = |binding, ty| wgpu::BindGroupLayoutEntry { binding, visibility: wgpu::ShaderStages::VERTEX_FRAGMENT, ty, count: None };
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("ui"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("ui.wgsl").into()),
+        });
+        let entry = |binding, ty| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty,
+            count: None,
+        };
         let [glint_item, glint_armor, glint_sampler] = GlintTextures::layout_entries(3);
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("ui"),
@@ -74,7 +82,14 @@ impl UiPass {
                 glint_item,
                 glint_armor,
                 glint_sampler,
-                entry(0, wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }),
+                entry(
+                    0,
+                    wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                ),
                 entry(
                     1,
                     wgpu::BindingType::Texture {
@@ -83,7 +98,10 @@ impl UiPass {
                         multisampled: false,
                     },
                 ),
-                entry(2, wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering)),
+                entry(
+                    2,
+                    wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                ),
                 entry(
                     6,
                     wgpu::BindingType::Texture {
@@ -94,7 +112,11 @@ impl UiPass {
                 ),
             ],
         });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("ui"), bind_group_layouts: &[Some(&layout)], immediate_size: 0 });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("ui"),
+            bind_group_layouts: &[Some(&layout)],
+            immediate_size: 0,
+        });
         let pipeline = |blend| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("ui"),
@@ -123,7 +145,10 @@ impl UiPass {
             })
         };
         let pipelines = BLENDS.map(pipeline).into();
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor { label: Some("ui"), ..Default::default() });
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("ui"),
+            ..Default::default()
+        });
         let screen = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("ui screen"),
             size: SCREEN_BYTES,
@@ -131,14 +156,36 @@ impl UiPass {
             mapped_at_creation: false,
         });
         let instances = instance_buffer(device, 1024);
-        let pictures = Pictures { view: pictures_texture(device, surface, [1, 1]), size: [1, 1] };
-        UiPass { pipelines, runs: Vec::new(), layout, sampler, screen, atlas: None, glint: GlintTextures::new(device), texture: None, instances, count: 0, format: color, surface_format: surface, pictures, menu_blur: MenuBlur::new(device, color), blur: None }
+        let pictures = Pictures {
+            view: pictures_texture(device, surface, [1, 1]),
+            size: [1, 1],
+        };
+        UiPass {
+            pipelines,
+            runs: Vec::new(),
+            layout,
+            sampler,
+            screen,
+            atlas: None,
+            glint: GlintTextures::new(device),
+            texture: None,
+            instances,
+            count: 0,
+            format: color,
+            surface_format: surface,
+            pictures,
+            menu_blur: MenuBlur::new(device, color),
+            blur: None,
+        }
     }
 
     /// The pictures texture at `size` (the window's), made again when that changed.
     pub fn pictures(&mut self, device: &wgpu::Device, size: [u32; 2]) -> &wgpu::TextureView {
         if self.pictures.size != size {
-            self.pictures = Pictures { view: pictures_texture(device, self.surface_format, size), size };
+            self.pictures = Pictures {
+                view: pictures_texture(device, self.surface_format, size),
+                size,
+            };
             // The bind group holds the old texture.
             self.atlas = None;
         }
@@ -158,38 +205,88 @@ impl UiPass {
 
     /// Uploads the atlas when it changed and this frame's quads, with the menu `blur` under some.
     /// `glint_scroll` is [`crate::glint::scroll`] now.
-    pub fn prepare(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, atlas: &Atlas, (quads, blur): (&[Quad], Option<Blur>), window: [u32; 2], glint_scroll: [f32; 2]) {
+    pub fn prepare(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        atlas: &Atlas,
+        (quads, blur): (&[Quad], Option<Blur>),
+        window: [u32; 2],
+        glint_scroll: [f32; 2],
+    ) {
         self.blur = blur;
         if let Some(blur) = blur {
             self.menu_blur.prepare(device, queue, blur, window);
         }
-        if self.atlas.as_ref().is_none_or(|(_, version, _)| *version != atlas.version) {
+        if self
+            .atlas
+            .as_ref()
+            .is_none_or(|(_, version, _)| *version != atlas.version)
+        {
             let image = atlas.image();
-            let view = super::entity_textures::upload(device, queue, image.width(), image.height(), image);
+            let view =
+                super::entity_textures::upload(device, queue, image.width(), image.height(), image);
             let [glint_item, glint_armor, glint_sampler] = self.glint.entries(3);
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("ui"),
                 layout: &self.layout,
                 entries: &[
-                    wgpu::BindGroupEntry { binding: 0, resource: self.screen.as_entire_binding() },
-                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&view) },
-                    wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.sampler) },
-                    wgpu::BindGroupEntry { binding: 6, resource: wgpu::BindingResource::TextureView(&self.pictures.view) },
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.screen.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 6,
+                        resource: wgpu::BindingResource::TextureView(&self.pictures.view),
+                    },
                     glint_item,
                     glint_armor,
                     glint_sampler,
                 ],
             });
-            self.atlas = Some((bind_group, atlas.version, [image.width() as f32, image.height() as f32]));
+            self.atlas = Some((
+                bind_group,
+                atlas.version,
+                [image.width() as f32, image.height() as f32],
+            ));
             self.texture = Some((view, atlas.version));
         }
-        let Some((_, _, size)) = &self.atlas else { return };
+        let Some((_, _, size)) = &self.atlas else {
+            return;
+        };
         // Java draws an icon as the item's 16-texel model, whatever size the atlas holds it at.
         let [icon_scale, _] = Glint::Item.scale([16; 2]);
-        let screen = [window[0] as f32, window[1] as f32, size[0], size[1], glint_scroll[0], glint_scroll[1], icon_scale, 0.0];
+        let screen = [
+            window[0] as f32,
+            window[1] as f32,
+            size[0],
+            size[1],
+            glint_scroll[0],
+            glint_scroll[1],
+            icon_scale,
+            0.0,
+        ];
         queue.write_buffer(&self.screen, 0, bytemuck::cast_slice(&screen));
-        let data: Vec<Instance> =
-            quads.iter().map(|q| Instance { rect: q.rect, uv: q.uv, color: q.color, flags: flags(q), bottom: q.bottom, skew: q.skew, wrap: q.wrap.unwrap_or_default() }).collect();
+        let data: Vec<Instance> = quads
+            .iter()
+            .map(|q| Instance {
+                rect: q.rect,
+                uv: q.uv,
+                color: q.color,
+                flags: flags(q),
+                bottom: q.bottom,
+                skew: q.skew,
+                wrap: q.wrap.unwrap_or_default(),
+            })
+            .collect();
         self.runs = runs(quads);
         let needed = (data.len() * size_of::<Instance>()) as u64;
         if needed > self.instances.size() {
@@ -202,16 +299,29 @@ impl UiPass {
     /// Passes of their own over the finished frame, through a view of `target` in the pass's
     /// format: the quads before the menu blur, the blur, the quads after it.
     pub fn draw(&self, encoder: &mut wgpu::CommandEncoder, target: &wgpu::Texture) {
-        let Some((bind_group, _, _)) = &self.atlas else { return };
-        let view = target.create_view(&wgpu::TextureViewDescriptor { format: Some(self.format), ..Default::default() });
-        let Some(blur) = self.blur else { return self.draw_range(encoder, &view, bind_group, 0..self.count) };
+        let Some((bind_group, _, _)) = &self.atlas else {
+            return;
+        };
+        let view = target.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(self.format),
+            ..Default::default()
+        });
+        let Some(blur) = self.blur else {
+            return self.draw_range(encoder, &view, bind_group, 0..self.count);
+        };
         let at = (blur.at as u32).min(self.count);
         self.draw_range(encoder, &view, bind_group, 0..at);
         self.menu_blur.draw(encoder, target, &view);
         self.draw_range(encoder, &view, bind_group, at..self.count);
     }
 
-    fn draw_range(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView, bind_group: &wgpu::BindGroup, range: std::ops::Range<u32>) {
+    fn draw_range(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        bind_group: &wgpu::BindGroup,
+        range: std::ops::Range<u32>,
+    ) {
         if range.is_empty() {
             return;
         }
@@ -221,7 +331,10 @@ impl UiPass {
                 view,
                 depth_slice: None,
                 resolve_target: None,
-                ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
             })],
             depth_stencil_attachment: None,
             timestamp_writes: None,
@@ -248,11 +361,19 @@ fn flags(q: &Quad) -> f32 {
     }
 }
 
-fn pictures_texture(device: &wgpu::Device, format: wgpu::TextureFormat, [width, height]: [u32; 2]) -> wgpu::TextureView {
+fn pictures_texture(
+    device: &wgpu::Device,
+    format: wgpu::TextureFormat,
+    [width, height]: [u32; 2],
+) -> wgpu::TextureView {
     device
         .create_texture(&wgpu::TextureDescriptor {
             label: Some("ui pictures"),
-            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -280,8 +401,11 @@ mod tests {
     #[test]
     fn the_shader_validates_and_its_uniform_is_as_big_as_the_buffer() {
         let source = include_str!("ui.wgsl");
-        let module = wgsl::parse_str(source).unwrap_or_else(|e| panic!("{}", e.emit_to_string(source)));
-        Validator::new(ValidationFlags::all(), Capabilities::all()).validate(&module).unwrap_or_else(|e| panic!("{e:?}"));
+        let module =
+            wgsl::parse_str(source).unwrap_or_else(|e| panic!("{}", e.emit_to_string(source)));
+        Validator::new(ValidationFlags::all(), Capabilities::all())
+            .validate(&module)
+            .unwrap_or_else(|e| panic!("{e:?}"));
         let screen = module.types.iter().find_map(|(_, t)| match t.inner {
             TypeInner::Struct { span, .. } if t.name.as_deref() == Some("Screen") => Some(span),
             _ => None,

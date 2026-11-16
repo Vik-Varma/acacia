@@ -13,7 +13,9 @@ use sha2::{Digest, Sha256};
 
 /// `dir` holds one file per account; without a dir every join downloads, like a fresh install.
 pub(crate) fn open(dir: Option<&Path>, account: &str) -> Arc<dyn PackStore> {
-    let Some(dir) = dir else { return Arc::new(MemoryPackStore::default()) };
+    let Some(dir) = dir else {
+        return Arc::new(MemoryPackStore::default());
+    };
     let path = DiskPackStore::path_for(dir, account);
     match DiskPackStore::open(&path) {
         Ok(store) => Arc::new(store),
@@ -42,11 +44,18 @@ impl DiskPackStore {
             std::fs::create_dir_all(dir)?;
         }
         let ids = match std::fs::read_to_string(path) {
-            Ok(text) => text.lines().filter(|l| !l.is_empty()).map(str::to_owned).collect(),
+            Ok(text) => text
+                .lines()
+                .filter(|l| !l.is_empty())
+                .map(str::to_owned)
+                .collect(),
             Err(e) if e.kind() == io::ErrorKind::NotFound => HashSet::new(),
             Err(e) => return Err(e),
         };
-        Ok(Self { path: path.to_owned(), ids: Mutex::new(ids) })
+        Ok(Self {
+            path: path.to_owned(),
+            ids: Mutex::new(ids),
+        })
     }
 }
 
@@ -56,10 +65,19 @@ impl PackStore for DiskPackStore {
     }
 
     fn insert(&self, id: &str) {
-        if !self.ids.lock().expect("pack cache lock").insert(id.to_owned()) {
+        if !self
+            .ids
+            .lock()
+            .expect("pack cache lock")
+            .insert(id.to_owned())
+        {
             return;
         }
-        let written = OpenOptions::new().create(true).append(true).open(&self.path).and_then(|mut f| writeln!(f, "{id}"));
+        let written = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+            .and_then(|mut f| writeln!(f, "{id}"));
         if let Err(e) = written {
             tracing::warn!(error = %e, "pack cache write failed");
         }
@@ -76,8 +94,14 @@ mod tests {
         let id = "8fbd6e02-fb25-4e1d-adc2-776df9dfb30b_1.0.0";
         open(Some(&dir), "xbox:1").insert(id);
         assert!(open(Some(&dir), "xbox:1").has(id));
-        assert!(!open(Some(&dir), "xbox:2").has(id), "accounts don't share packs");
-        assert!(!open(None, "xbox:1").has(id), "no dir: a fresh install every join");
+        assert!(
+            !open(Some(&dir), "xbox:2").has(id),
+            "accounts don't share packs"
+        );
+        assert!(
+            !open(None, "xbox:1").has(id),
+            "no dir: a fresh install every join"
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -6,30 +6,47 @@ use acacia_bot::items::SlotRef;
 use acacia_bot::signs::SignSide;
 use acacia_bot::survival::Destination;
 
-use crate::{count, find, stack, wait_chat, Check, Scene};
+use crate::{Check, Scene, count, find, stack, wait_chat};
 
 fn held_name(bot: &Bot) -> String {
-    bot.state().item_name(bot.state().held_item()).unwrap_or("nothing").to_owned()
+    bot.state()
+        .item_name(bot.state().held_item())
+        .unwrap_or("nothing")
+        .to_owned()
 }
 
 pub async fn consume(bot: &mut Bot) -> Check {
-    bot.equip(find(bot, "minecraft:bread")?, Destination::Hand).await?;
+    bot.equip(find(bot, "minecraft:bread")?, Destination::Hand)
+        .await?;
     let (bread, hunger) = (count(bot, "minecraft:bread"), bot.state().player.hunger);
     bot.consume().await?;
     let after = (count(bot, "minecraft:bread"), bot.state().player.hunger);
     // Long enough for a use restarted by the finishing click to complete as well.
     bot.wait_ticks(50).await?;
     if after.0 + 1 != bread || count(bot, "minecraft:bread") != after.0 {
-        return Err(format!("bread {bread} -> {} -> {}, hunger {hunger} -> {}", after.0, count(bot, "minecraft:bread"), after.1).into());
+        return Err(format!(
+            "bread {bread} -> {} -> {}, hunger {hunger} -> {}",
+            after.0,
+            count(bot, "minecraft:bread"),
+            after.1
+        )
+        .into());
     }
     Ok(format!("hunger {hunger} -> {}", after.1))
 }
 
 pub async fn equip(bot: &mut Bot) -> Check {
-    bot.equip(find(bot, "minecraft:iron_helmet")?, Destination::Head).await?;
-    bot.equip(find(bot, "minecraft:iron_boots")?, Destination::Feet).await?;
+    bot.equip(find(bot, "minecraft:iron_helmet")?, Destination::Head)
+        .await?;
+    bot.equip(find(bot, "minecraft:iron_boots")?, Destination::Feet)
+        .await?;
     bot.wait_ticks(10).await?;
-    let worn = |slot| stack(bot, SlotRef::Armor(slot)).and_then(|s| bot.state().item_name(s)).unwrap_or("nothing").to_owned();
+    let worn = |slot| {
+        stack(bot, SlotRef::Armor(slot))
+            .and_then(|s| bot.state().item_name(s))
+            .unwrap_or("nothing")
+            .to_owned()
+    };
     let (head, feet) = (worn(0), worn(3));
     if head != "minecraft:iron_helmet" || feet != "minecraft:iron_boots" {
         return Err(format!("wearing {head} and {feet}").into());
@@ -38,24 +55,42 @@ pub async fn equip(bot: &mut Bot) -> Check {
 }
 
 pub async fn best_tool(bot: &mut Bot, s: &Scene) -> Check {
-    let before = (bot.best_tool_for(s.at("stone")), bot.state().inventory.selected_hotbar_slot);
+    let before = (
+        bot.best_tool_for(s.at("stone")),
+        bot.state().inventory.selected_hotbar_slot,
+    );
     let slot = bot.equip_best_tool(s.at("stone")).await?;
     match held_name(bot).as_str() {
         "minecraft:diamond_pickaxe" => Ok(format!("holding the diamond pickaxe from {slot:?}")),
         other => {
             let picks: Vec<_> = ["minecraft:diamond_pickaxe", "minecraft:iron_pickaxe"]
-                .map(|p| (p, bot.find_item_named(p), bot.find_item_named(p).and_then(|s| stack(bot, s)).map(|s| s.nbt.clone())))
+                .map(|p| {
+                    (
+                        p,
+                        bot.find_item_named(p),
+                        bot.find_item_named(p)
+                            .and_then(|s| stack(bot, s))
+                            .map(|s| s.nbt.clone()),
+                    )
+                })
                 .into();
             let server = crate::server_inv(bot, "").await?;
-            let server: Vec<&str> = server.split("},{").filter(|s| s.contains("pickaxe")).collect();
-            let why = format!("(best, held) before {before:?}, best now {:?}; bot sees {picks:?}; server {server:?}", bot.best_tool_for(s.at("stone")));
+            let server: Vec<&str> = server
+                .split("},{")
+                .filter(|s| s.contains("pickaxe"))
+                .collect();
+            let why = format!(
+                "(best, held) before {before:?}, best now {:?}; bot sees {picks:?}; server {server:?}",
+                bot.best_tool_for(s.at("stone"))
+            );
             Err(format!("holding {other} ({slot:?}); {why}").into())
         }
     }
 }
 
 pub async fn sign(bot: &mut Bot, s: &Scene) -> Check {
-    bot.write_sign(s.at("sign"), SignSide::Front, "Hello\nfrom bot").await?;
+    bot.write_sign(s.at("sign"), SignSide::Front, "Hello\nfrom bot")
+        .await?;
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     while let Some(text) = wait_chat(bot, "sign", deadline - tokio::time::Instant::now()).await {
         if text.contains("Hello") {
@@ -66,7 +101,8 @@ pub async fn sign(bot: &mut Bot, s: &Scene) -> Check {
 }
 
 pub async fn book(bot: &mut Bot) -> Check {
-    bot.equip(find(bot, "minecraft:writable_book")?, Destination::Hand).await?;
+    bot.equip(find(bot, "minecraft:writable_book")?, Destination::Hand)
+        .await?;
     bot.write_book(&["Page one", "Page two"]).await?;
     bot.wait_ticks(10).await?;
     if let Err(e) = bot.sign_book("Bot book").await {
@@ -75,13 +111,18 @@ pub async fn book(bot: &mut Bot) -> Check {
         return Err(format!("{e}; server has {books:?}").into());
     }
     match count(bot, "minecraft:written_book") {
-        1 => Ok(format!("signed; bot predicts {:?}", bot.state().held_item().nbt)),
+        1 => Ok(format!(
+            "signed; bot predicts {:?}",
+            bot.state().held_item().nbt
+        )),
         n => Err(format!("{n} written books").into()),
     }
 }
 
 fn corrections(bot: &Bot) -> u32 {
-    bot.bedrock().and_then(|b| b.movement()).map_or(0, |m| m.corrections)
+    bot.bedrock()
+        .and_then(|b| b.movement())
+        .map_or(0, |m| m.corrections)
 }
 
 /// Simulated feet of a physics bot, the reported ones of an idle bot.
@@ -108,7 +149,10 @@ pub async fn sleep(bot: &mut Bot, s: &Scene) -> Check {
     bot.wake().await?;
     bot.wait_ticks(20).await?;
     let woke = corrections(bot) - asleep - in_bed;
-    let detail = format!("{in_bed} corrections in 40 ticks asleep, {woke} after waking; feet {:?}", feet(bot));
+    let detail = format!(
+        "{in_bed} corrections in 40 ticks asleep, {woke} after waking; feet {:?}",
+        feet(bot)
+    );
     match in_bed {
         0 => Ok(format!("slept and woke; {detail}")),
         _ => Err(detail.into()),
@@ -117,14 +161,30 @@ pub async fn sleep(bot: &mut Bot, s: &Scene) -> Check {
 
 pub async fn ride(bot: &mut Bot, kind: &str) -> Check {
     let me = bot.state().player.position.clone();
-    let id = bot.state().entities.nearest(&me, |e| e.kind == kind).map(|e| e.runtime_id).ok_or(format!("no {kind} tracked"))?;
-    let start = (feet(bot), bot.state().entities.get(id).map(|e| e.position.clone()));
+    let id = bot
+        .state()
+        .entities
+        .nearest(&me, |e| e.kind == kind)
+        .map(|e| e.runtime_id)
+        .ok_or(format!("no {kind} tracked"))?;
+    let start = (
+        feet(bot),
+        bot.state().entities.get(id).map(|e| e.position.clone()),
+    );
     let vehicle = match bot.mount(id).await {
         Ok(v) => v,
         Err(e) => {
             let eye = bot.eye_position();
-            let mine = format!("eye {eye:?} facing {:?}; (bot feet, vehicle) {start:?} now {:?}", bot.facing(), bot.state().entities.get(id));
-            return Err(format!("{e}; {mine}; server sees {}", crate::server_entities(bot, kind).await).into());
+            let mine = format!(
+                "eye {eye:?} facing {:?}; (bot feet, vehicle) {start:?} now {:?}",
+                bot.facing(),
+                bot.state().entities.get(id)
+            );
+            return Err(format!(
+                "{e}; {mine}; server sees {}",
+                crate::server_entities(bot, kind).await
+            )
+            .into());
         }
     };
     bot.wait_ticks(20).await?;
@@ -148,16 +208,27 @@ pub async fn ride(bot: &mut Bot, kind: &str) -> Check {
         return Err(format!("still riding {v:?}").into());
     }
     let server = crate::chat_lines(bot, "dismounted").await;
-    let end = (feet(bot), bot.state().entities.get(id).map(|e| e.position.clone()));
+    let end = (
+        feet(bot),
+        bot.state().entities.get(id).map(|e| e.position.clone()),
+    );
     let detail = format!(
         "rode {vehicle:?}; (bot feet, vehicle) before {start:?} stepped off at {stepped:?} after {end:?}; server off the seat {server:?}; {} corrections",
         corrections(bot) - seated
     );
     // The server pushes the player off the (pushed) vehicle's box after placing it: compare where the
     // bot stepped off with each of the server's first positions.
-    let spots: Vec<[f32; 3]> = server.iter().filter_map(|l| crate::parse_pos(l.rsplit(' ').next()?)).collect();
+    let spots: Vec<[f32; 3]> = server
+        .iter()
+        .filter_map(|l| crate::parse_pos(l.rsplit(' ').next()?))
+        .collect();
     match stepped {
-        Some(f) if !spots.is_empty() && !spots.iter().any(|s| (0..3).all(|i| (f[i] - s[i]).abs() <= 0.05)) => {
+        Some(f)
+            if !spots.is_empty()
+                && !spots
+                    .iter()
+                    .any(|s| (0..3).all(|i| (f[i] - s[i]).abs() <= 0.05)) =>
+        {
             Err(format!("left at the wrong spot: {detail}").into())
         }
         _ => Ok(detail),
@@ -169,15 +240,25 @@ pub async fn fish(bot: &mut Bot, s: &Scene) -> Check {
     let [bx, by, bz] = s.at("base");
     bot.command(&format!("/tp @s {bx}.5 {by} {bz}.5"));
     bot.wait_ticks(20).await?;
-    bot.equip(find(bot, "minecraft:fishing_rod")?, Destination::Hand).await?;
+    bot.equip(find(bot, "minecraft:fishing_rod")?, Destination::Hand)
+        .await?;
     let [x, _, z] = s.at("water");
     let eye = bot.eye_position();
     // Level: a cast aimed down at the pool falls short of it.
-    bot.look_at([x as f32 + 0.5, eye[1], z as f32 + 0.5]).await?;
+    bot.look_at([x as f32 + 0.5, eye[1], z as f32 + 0.5])
+        .await?;
     bot.wait_ticks(3).await?;
     match bot.fish(Duration::from_secs(60)).await? {
-        Some(item) => Ok(format!("caught {:?} x{}", bot.state().item_name(&item), item.count)),
-        None => Err(format!("nothing caught; server inventory {}", crate::server_inv(bot, "").await?).into()),
+        Some(item) => Ok(format!(
+            "caught {:?} x{}",
+            bot.state().item_name(&item),
+            item.count
+        )),
+        None => Err(format!(
+            "nothing caught; server inventory {}",
+            crate::server_inv(bot, "").await?
+        )
+        .into()),
     }
 }
 
@@ -193,7 +274,8 @@ pub async fn elytra(bot: &mut Bot) -> Check {
 /// Teleports up, opens the elytra, glides level, boosts, climbs while turning, then dives until the
 /// landing ends the glide (physics bots). Passes with no server corrections from the start to the landing.
 pub async fn glide(bot: &mut Bot) -> Check {
-    bot.equip(find(bot, "minecraft:firework_rocket")?, Destination::Hand).await?;
+    bot.equip(find(bot, "minecraft:firework_rocket")?, Destination::Hand)
+        .await?;
     bot.command("/tp @s ~ ~30 ~ -90 0");
     bot.wait_ticks(15).await?;
     bot.start_gliding().await?;
@@ -227,10 +309,19 @@ pub async fn glide_water(bot: &mut Bot, s: &Scene) -> Check {
 /// bots). Passes with no server corrections of the horse.
 pub async fn ride_horse(bot: &mut Bot, s: &Scene) -> Check {
     let [x, y, z] = s.at("horse");
-    bot.command(&format!("/tp @s {} {y} {} 90 0", x as f32 + 2.5, z as f32 + 0.5));
+    bot.command(&format!(
+        "/tp @s {} {y} {} 90 0",
+        x as f32 + 2.5,
+        z as f32 + 0.5
+    ));
     bot.wait_ticks(15).await?;
     let me = bot.state().player.position.clone();
-    let id = bot.state().entities.nearest(&me, |e| e.kind == "minecraft:horse").map(|e| e.runtime_id).ok_or("no horse tracked")?;
+    let id = bot
+        .state()
+        .entities
+        .nearest(&me, |e| e.kind == "minecraft:horse")
+        .map(|e| e.runtime_id)
+        .ok_or("no horse tracked")?;
     bot.mount(id).await?;
     bot.wait_ticks(5).await?;
     // The first input after the mount may correct a horse that wandered since the bot last saw it.
@@ -254,26 +345,44 @@ pub async fn ride_horse(bot: &mut Bot, s: &Scene) -> Check {
     if let Some(c) = bot.controls() {
         c.stop();
     }
-    let speed = bot.vehicle().and_then(|v| v.runtime_id).and_then(|id| bot.state().entities.get(id)).and_then(|e| e.attributes.get("minecraft:movement").copied());
+    let speed = bot
+        .vehicle()
+        .and_then(|v| v.runtime_id)
+        .and_then(|id| bot.state().entities.get(id))
+        .and_then(|e| e.attributes.get("minecraft:movement").copied());
     bot.dismount().await?;
     let corrections: u32 = phases.iter().map(|(_, n)| n).sum();
     let detail = format!("horse corrections per phase {phases:?}; speed attribute {speed:?}");
-    if corrections == 0 { Ok(format!("rode; {detail}")) } else { Err(detail.into()) }
+    if corrections == 0 {
+        Ok(format!("rode; {detail}"))
+    } else {
+        Err(detail.into())
+    }
 }
 
 /// Measures BDS's steady horse speed at several movement attributes (`HORSE_SWEEP=0.1,0.2,...`): rides
 /// straight, then reports the horse a little off for one tick so the server's correction shows its own
 /// motion. Lists (speed, server delta x, ours from the simulation's formula).
 pub async fn horse_sweep(bot: &mut Bot, s: &Scene) -> Check {
-    let speeds = std::env::var("HORSE_SWEEP").unwrap_or_else(|_| "0.1,0.15,0.2,0.25,0.3,0.35".into());
+    let speeds =
+        std::env::var("HORSE_SWEEP").unwrap_or_else(|_| "0.1,0.15,0.2,0.25,0.3,0.35".into());
     let [x, y, z] = s.at("horse");
     let mut rows = Vec::new();
     for speed in speeds.split(',').filter_map(|v| v.parse::<f32>().ok()) {
         bot.command(&format!("/scriptevent actiontest:horsespeed {speed}"));
-        bot.command(&format!("/tp @s {} {y} {} 90 0", x as f32 + 2.5, z as f32 + 0.5));
+        bot.command(&format!(
+            "/tp @s {} {y} {} 90 0",
+            x as f32 + 2.5,
+            z as f32 + 0.5
+        ));
         bot.wait_ticks(40).await?;
         let me = bot.state().player.position.clone();
-        let id = bot.state().entities.nearest(&me, |e| e.kind == "minecraft:horse").map(|e| e.runtime_id).ok_or("no horse tracked")?;
+        let id = bot
+            .state()
+            .entities
+            .nearest(&me, |e| e.kind == "minecraft:horse")
+            .map(|e| e.runtime_id)
+            .ok_or("no horse tracked")?;
         bot.mount(id).await?;
         bot.wait_ticks(5).await?;
         // South (+z): away from the ledge west of the horse and from the scene.
@@ -287,9 +396,18 @@ pub async fn horse_sweep(bot: &mut Bot, s: &Scene) -> Check {
         bot.offset_vehicle_report([0.5, 0.0, 0.5]);
         bot.wait_ticks(4).await?;
         let count = vehicle_corrections(bot) - before;
-        let server = (count > 0).then(|| bot.bedrock().and_then(|b| b.movement()).and_then(|m| m.last_vehicle_delta).map(|[_, dy, dz]| (dz, dy))).flatten();
+        let server = (count > 0)
+            .then(|| {
+                bot.bedrock()
+                    .and_then(|b| b.movement())
+                    .and_then(|m| m.last_vehicle_delta)
+                    .map(|[_, dy, dz]| (dz, dy))
+            })
+            .flatten();
         let ours = 0.98 * speed * 0.546 / 0.454;
-        rows.push(format!("({speed}: {count} corrections, last (dz, dy) {server:?}, ours {ours:.6})"));
+        rows.push(format!(
+            "({speed}: {count} corrections, last (dz, dy) {server:?}, ours {ours:.6})"
+        ));
         if let Some(c) = bot.controls() {
             c.stop();
         }
@@ -299,7 +417,9 @@ pub async fn horse_sweep(bot: &mut Bot, s: &Scene) -> Check {
 }
 
 fn vehicle_corrections(bot: &Bot) -> u32 {
-    bot.bedrock().and_then(|b| b.movement()).map_or(0, |m| m.vehicle_corrections)
+    bot.bedrock()
+        .and_then(|b| b.movement())
+        .map_or(0, |m| m.vehicle_corrections)
 }
 
 /// Waits for the glide to end by itself, then checks the server never corrected the bot after `before`.
@@ -310,7 +430,11 @@ async fn glide_until_landed(bot: &mut Bot, before: u32, done: &str) -> Check {
         ticks += 1;
     }
     bot.wait_ticks(10).await?;
-    let detail = format!("{} corrections while gliding; landed after {ticks} ticks at {:?}", corrections(bot) - before, feet(bot));
+    let detail = format!(
+        "{} corrections while gliding; landed after {ticks} ticks at {:?}",
+        corrections(bot) - before,
+        feet(bot)
+    );
     match (bot.is_gliding(), corrections(bot) - before) {
         (true, _) => Err(format!("still gliding; {detail}").into()),
         (false, 0) => Ok(format!("{done}; {detail}")),

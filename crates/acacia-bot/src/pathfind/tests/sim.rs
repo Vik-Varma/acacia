@@ -17,8 +17,16 @@ pub struct Run {
 
 pub fn sense(g: &Grid, m: &Movement) -> Sense {
     let pos = m.position().expect("started");
-    let feet = [pos[0].floor() as i32, pos[1].floor() as i32, pos[2].floor() as i32];
-    Sense { pos, on_ground: m.on_ground(), in_water: g.terrain().cell(feet).is_water() }
+    let feet = [
+        pos[0].floor() as i32,
+        pos[1].floor() as i32,
+        pos[2].floor() as i32,
+    ];
+    Sense {
+        pos,
+        on_ground: m.on_ground(),
+        in_water: g.terrain().cell(feet).is_water(),
+    }
 }
 
 /// Does a node's work in the grid the way the navigator does it on a server: breaks and doors at
@@ -31,7 +39,15 @@ pub fn perform(g: &Grid, world: &PhysicsWorld, m: &mut Movement, node: &PathNode
             }
             Step::Door { pos, open } => g.set_open(pos, open),
             // The leg itself is `boat::tests`'s: here the bot gets off at the far bank.
-            Step::Boat => m.start([node.pos[0] as f32 + 0.5, node.feet, node.pos[2] as f32 + 0.5], 0.0, 0.0),
+            Step::Boat => m.start(
+                [
+                    node.pos[0] as f32 + 0.5,
+                    node.feet,
+                    node.pos[2] as f32 + 0.5,
+                ],
+                0.0,
+                0.0,
+            ),
             Step::Place { against, face } => {
                 let target = face.adjacent(against);
                 let [dx, _, dz] = face.offset();
@@ -40,7 +56,12 @@ pub fn perform(g: &Grid, world: &PhysicsWorld, m: &mut Movement, node: &PathNode
                     let ready = if node.kind == MoveKind::Pillar {
                         maneuver::rise(&s, target, &mut m.controls)
                     } else {
-                        maneuver::to_edge(&s, [target[0] - dx, target[1] + 1, target[2] - dz], (dx, dz), &mut m.controls)
+                        maneuver::to_edge(
+                            &s,
+                            [target[0] - dx, target[1] + 1, target[2] - dz],
+                            (dx, dz),
+                            &mut m.controls,
+                        )
                     };
                     if ready {
                         break;
@@ -59,13 +80,22 @@ fn run(g: &Grid, start: Vec3, goal: Goal, max_ticks: u32, parkour: bool) -> Run 
     run_with(g, start, goal, max_ticks, &opts(parkour))
 }
 
-pub fn run_with(g: &Grid, start: Vec3, goal: Goal, max_ticks: u32, search_opts: &SearchOpts) -> Run {
+pub fn run_with(
+    g: &Grid,
+    start: Vec3,
+    goal: Goal,
+    max_ticks: u32,
+    search_opts: &SearchOpts,
+) -> Run {
     let world = g.physics();
     let mut m = Movement::new();
     m.start(start, 0.0, 0.0);
     let plan = |pos: Vec3| {
         let path = search(&g.terrain(), pos, &goal, search_opts);
-        assert!(!path.nodes.is_empty() || path.complete, "no path from {pos:?}");
+        assert!(
+            !path.nodes.is_empty() || path.complete,
+            "no path from {pos:?}"
+        );
         (!path.complete, Follower::new(path.nodes, pos, 0.25))
     };
     let (mut partial, mut follower) = plan(start);
@@ -83,24 +113,39 @@ pub fn run_with(g: &Grid, start: Vec3, goal: Goal, max_ticks: u32, search_opts: 
             }
             FollowStatus::Arrived if !partial => {
                 eprintln!("arrived at {pos:?} after {tick} ticks, {replans} re-plans");
-                return Run { ticks: tick, replans, end: pos };
+                return Run {
+                    ticks: tick,
+                    replans,
+                    end: pos,
+                };
             }
             status => {
                 if status != FollowStatus::Arrived {
                     replans += 1;
-                    eprintln!("tick {tick}: {status:?} at {pos:?}, target {:?}", follower.ahead().first());
+                    eprintln!(
+                        "tick {tick}: {status:?} at {pos:?}, target {:?}",
+                        follower.ahead().first()
+                    );
                 }
                 (partial, follower) = plan(pos);
             }
         }
         m.tick(&world);
     }
-    panic!("not arrived after {max_ticks} ticks: at {:?}, next {:?}", m.position(), follower.ahead().first());
+    panic!(
+        "not arrived after {max_ticks} ticks: at {:?}, next {:?}",
+        m.position(),
+        follower.ahead().first()
+    );
 }
 
 pub fn assert_at(r: &Run, goal: [f32; 3], tolerance: f32) {
     let d = (r.end[0] - goal[0]).hypot(r.end[2] - goal[2]);
-    assert!(d < tolerance && (r.end[1] - goal[1]).abs() < 0.1, "ended at {:?}, wanted {goal:?}", r.end);
+    assert!(
+        d < tolerance && (r.end[1] - goal[1]).abs() < 0.1,
+        "ended at {:?}, wanted {goal:?}",
+        r.end
+    );
     assert_eq!(r.replans, 0, "re-planned");
 }
 
@@ -138,7 +183,12 @@ fn climbs_stairs_and_drops() {
 #[test]
 fn walks_up_slabs() {
     let g = Grid::floor(-20, 20);
-    g.fill_state([2, 1, -1], [2, 1, 1], "smooth_stone_slab", "minecraft:vertical_half=bottom");
+    g.fill_state(
+        [2, 1, -1],
+        [2, 1, 1],
+        "smooth_stone_slab",
+        "minecraft:vertical_half=bottom",
+    );
     g.fill([3, 1, -1], [5, 1, 1], "stone");
     let r = run(&g, ORIGIN, Goal::Block([5, 2, 0]), 200, true);
     assert_at(&r, [5.5, 2.0, 0.5], 0.3);
@@ -147,7 +197,9 @@ fn walks_up_slabs() {
 #[test]
 fn jumps_gaps() {
     let g = Grid::new();
-    g.fill([-5, 0, -1], [0, 0, 1], "stone").fill([2, 0, -1], [3, 0, 1], "stone").fill([6, 0, -1], [9, 0, 1], "stone");
+    g.fill([-5, 0, -1], [0, 0, 1], "stone")
+        .fill([2, 0, -1], [3, 0, 1], "stone")
+        .fill([6, 0, -1], [9, 0, 1], "stone");
     let r = run(&g, ORIGIN, Goal::Block([8, 1, 0]), 300, true);
     assert_at(&r, [8.5, 1.0, 0.5], 0.3);
 }
@@ -155,7 +207,8 @@ fn jumps_gaps() {
 #[test]
 fn swims_across() {
     let g = Grid::floor(-20, 20);
-    g.fill([2, -3, -10], [5, -3, 10], "stone").fill([2, 0, -10], [5, 0, 10], "air");
+    g.fill([2, -3, -10], [5, -3, 10], "stone")
+        .fill([2, 0, -10], [5, 0, 10], "air");
     g.fill_state([2, -2, -10], [5, 0, 10], "water", "liquid_depth=0");
     let r = run(&g, ORIGIN, Goal::Block([8, 1, 0]), 600, false);
     assert_at(&r, [8.5, 1.0, 0.5], 0.3);
@@ -174,7 +227,11 @@ fn leaves_a_ladder_top_for_the_floor() {
     // Swarm sim drops_after: a bot stood here on the ladder's top 5000 ticks, every walk "Stuck".
     for start in [[11.59, 5.0, 4.38], [11.5, 5.5, 3.5]] {
         let r = run_with(&g, start, Goal::Block([11, 1, 8]), 200, &opts(false));
-        assert!((r.end[0] - 11.5).hypot(r.end[2] - 8.5) < 0.3 && r.end[1] == 1.0, "from {start:?} ended at {:?}", r.end);
+        assert!(
+            (r.end[0] - 11.5).hypot(r.end[2] - 8.5) < 0.3 && r.end[1] == 1.0,
+            "from {start:?} ended at {:?}",
+            r.end
+        );
     }
 }
 
@@ -182,17 +239,32 @@ fn leaves_a_ladder_top_for_the_floor() {
 fn keeps_off_placed_pane_tops_along_a_wall() {
     // Live house16, two bots: a walk north along the west wall's top slid off the window's panes into its cell.
     let g = Grid::floor(-20, 20);
-    g.fill([0, 1, -6], [0, 2, 6], "cobblestone").fill([1, 1, 4], [1, 1, 4], "cobblestone");
+    g.fill([0, 1, -6], [0, 2, 6], "cobblestone")
+        .fill([1, 1, 4], [1, 1, 4], "cobblestone");
     let panes: std::collections::HashSet<_> = (-1..=1).map(|z| [0, 2, z]).collect();
     for &p in &panes {
         g.set_state(p, "glass_pane", "");
     }
     let (start, goal) = ([0.5, 3.0, -5.5], Goal::Block([0, 3, 5]));
-    let on_pane = |p: &crate::pathfind::Path| p.nodes.iter().any(|n| panes.contains(&[n.pos[0], n.pos[1] - 1, n.pos[2]]));
-    assert!(on_pane(&search(&g.terrain(), start, &goal, &opts(false))), "the scene's shortest way runs over the panes");
-    let o = SearchOpts { no_body: Some(std::sync::Arc::new(panes.clone())), ..opts(false) };
+    let on_pane = |p: &crate::pathfind::Path| {
+        p.nodes
+            .iter()
+            .any(|n| panes.contains(&[n.pos[0], n.pos[1] - 1, n.pos[2]]))
+    };
+    assert!(
+        on_pane(&search(&g.terrain(), start, &goal, &opts(false))),
+        "the scene's shortest way runs over the panes"
+    );
+    let o = SearchOpts {
+        no_body: Some(std::sync::Arc::new(panes.clone())),
+        ..opts(false)
+    };
     let p = search(&g.terrain(), start, &goal, &o);
-    assert!(p.complete && !on_pane(&p), "{:?}", p.nodes.iter().map(|n| n.pos).collect::<Vec<_>>());
+    assert!(
+        p.complete && !on_pane(&p),
+        "{:?}",
+        p.nodes.iter().map(|n| n.pos).collect::<Vec<_>>()
+    );
     assert_at(&run_with(&g, start, goal, 600, &o), [0.5, 3.0, 5.5], 0.3);
 }
 

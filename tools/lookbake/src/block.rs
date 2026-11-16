@@ -43,17 +43,32 @@ pub fn model_faces(
 }
 
 /// `model` is [`model_faces`] of `faces`. A full block's six faces make a cube when `cube` allows.
-pub fn render_block(base: &RenderBlock, faces: &[BakedFace], model: Vec<ModelFace>, cube: bool) -> RenderBlock {
+pub fn render_block(
+    base: &RenderBlock,
+    faces: &[BakedFace],
+    model: Vec<ModelFace>,
+    cube: bool,
+) -> RenderBlock {
     let translucent = model.iter().any(|f| f.material == Material::Blend);
     let covered = |opaque: bool| {
-        (0..6).all(|side| faces.iter().zip(&model).any(|(f, m)| f.cull.map(|d| d.face()) == Some(side) && covers_side(f) && (!opaque || m.material == Material::Opaque)))
+        (0..6).all(|side| {
+            faces.iter().zip(&model).any(|(f, m)| {
+                f.cull.map(|d| d.face()) == Some(side)
+                    && covers_side(f)
+                    && (!opaque || m.material == Material::Opaque)
+            })
+        })
     };
     let full = covered(false);
     // An overlay over a side (grass) leaves it opaque.
     let opaque = covered(true) && model.iter().all(|f| f.material != Material::Blend);
     let mut block = RenderBlock {
         shape: Shape::None,
-        layer: if translucent { Layer::Translucent } else { Layer::Solid },
+        layer: if translucent {
+            Layer::Translucent
+        } else {
+            Layer::Solid
+        },
         textures: [0; 6],
         tint: [Tint::None; 6],
         material: [Material::Opaque; 6],
@@ -74,7 +89,8 @@ pub fn render_block(base: &RenderBlock, faces: &[BakedFace], model: Vec<ModelFac
         Some(turns) => {
             for (f, baked) in model.iter().zip(faces) {
                 let side = usize::from(baked.cull.expect("a full block's faces cull").face());
-                (block.textures[side], block.tint[side], block.material[side]) = (f.texture, f.tint, f.material);
+                (block.textures[side], block.tint[side], block.material[side]) =
+                    (f.texture, f.tint, f.material);
             }
             (block.shape, block.turns) = (Shape::Cube, turns);
         }
@@ -89,8 +105,16 @@ pub fn overlaid(faces: &[BakedFace]) -> bool {
     let corners = |f: &BakedFace| {
         let fixed = f.positions.map(|p| p.map(|v| (v * 64.0).round() as i32));
         let (a, b, c) = (fixed[0], fixed[1], fixed[3]);
-        let (e1, e2) = ([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]);
-        let normal = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]].map(i32::signum);
+        let (e1, e2) = (
+            [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
+            [c[0] - a[0], c[1] - a[1], c[2] - a[2]],
+        );
+        let normal = [
+            e1[1] * e2[2] - e1[2] * e2[1],
+            e1[2] * e2[0] - e1[0] * e2[2],
+            e1[0] * e2[1] - e1[1] * e2[0],
+        ]
+        .map(i32::signum);
         let mut c = fixed;
         c.sort_unstable();
         (c, normal)
@@ -105,7 +129,10 @@ pub fn overlaid(faces: &[BakedFace]) -> bool {
 pub fn side_turns(faces: &[BakedFace]) -> Option<[u8; 6]> {
     let mut turns = [0; 6];
     for (side, turn) in turns.iter_mut().enumerate() {
-        *turn = turn_of(faces.iter().find(|f| f.cull.map(|d| usize::from(d.face())) == Some(side) && covers_side(f))?)?;
+        *turn =
+            turn_of(faces.iter().find(|f| {
+                f.cull.map(|d| usize::from(d.face())) == Some(side) && covers_side(f)
+            })?)?;
     }
     Some(turns)
 }
@@ -134,22 +161,50 @@ mod tests {
 
     fn face(positions: [[f32; 3]; 4]) -> BakedFace {
         let uvs = positions.map(|p| Direction::South.project(p));
-        BakedFace { positions, uvs, texture: "block/poppy".into(), cull: None, tint_index: None, shade: None, ambient_occlusion: true }
+        BakedFace {
+            positions,
+            uvs,
+            texture: "block/poppy".into(),
+            cull: None,
+            tint_index: None,
+            shade: None,
+            ambient_occlusion: true,
+        }
     }
 
     #[test]
     fn a_plane_drawn_from_both_sides_is_not_overlaid() {
-        let front = face([[0.0, 16.0, 8.0], [0.0, 0.0, 8.0], [16.0, 0.0, 8.0], [16.0, 16.0, 8.0]]);
-        let back = face([[16.0, 16.0, 8.0], [16.0, 0.0, 8.0], [0.0, 0.0, 8.0], [0.0, 16.0, 8.0]]);
+        let front = face([
+            [0.0, 16.0, 8.0],
+            [0.0, 0.0, 8.0],
+            [16.0, 0.0, 8.0],
+            [16.0, 16.0, 8.0],
+        ]);
+        let back = face([
+            [16.0, 16.0, 8.0],
+            [16.0, 0.0, 8.0],
+            [0.0, 0.0, 8.0],
+            [0.0, 16.0, 8.0],
+        ]);
         assert!(!overlaid(&[front.clone(), back]));
         assert!(overlaid(&[front.clone(), front]));
     }
 
     #[test]
     fn a_full_face_knows_how_its_texture_is_turned() {
-        let south = [[0.0, 16.0, 16.0], [0.0, 0.0, 16.0], [16.0, 0.0, 16.0], [16.0, 16.0, 16.0]];
+        let south = [
+            [0.0, 16.0, 16.0],
+            [0.0, 0.0, 16.0],
+            [16.0, 0.0, 16.0],
+            [16.0, 16.0, 16.0],
+        ];
         let turn = |uvs: [[f32; 2]; 4]| {
-            turn_of(&BakedFace { uvs, cull: Some(Direction::South), shade: Some(Direction::South), ..face(south) })
+            turn_of(&BakedFace {
+                uvs,
+                cull: Some(Direction::South),
+                shade: Some(Direction::South),
+                ..face(south)
+            })
         };
         let plain = south.map(|p| Direction::South.project(p));
         assert_eq!(turn(plain), Some(0));

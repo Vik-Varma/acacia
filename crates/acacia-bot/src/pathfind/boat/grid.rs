@@ -18,7 +18,11 @@ pub(crate) struct WaterGrid<'w, W: WorldView + ?Sized> {
 
 impl<'w, W: WorldView + ?Sized> WaterGrid<'w, W> {
     pub fn new(world: &'w W, y: i32) -> Self {
-        Self { world, y, cells: RefCell::new(HashMap::new()) }
+        Self {
+            world,
+            y,
+            cells: RefCell::new(HashMap::new()),
+        }
     }
 
     /// A source of still water with nothing above it a boat would touch; unloaded columns are not.
@@ -33,13 +37,22 @@ impl<'w, W: WorldView + ?Sized> WaterGrid<'w, W> {
 
     fn read(&self, x: i32, z: i32) -> bool {
         let (w, y) = (self.world, self.y);
-        let cell = Aabb::new(x as f32, y as f32, z as f32, x as f32 + 1.0, y as f32 + 2.0, z as f32 + 1.0);
+        let cell = Aabb::new(
+            x as f32,
+            y as f32,
+            z as f32,
+            x as f32 + 1.0,
+            y as f32 + 2.0,
+            z as f32 + 1.0,
+        );
         if !w.is_area_loaded(&cell) {
             return false;
         }
         let here = w.block([x, y, z]);
         // Flowing water pushes, which the boat model leaves out (still water only, design decision 1).
-        let still = here.liquid.is_some_and(|l| l.kind == LiquidKind::Water && l.depth == 8 && !l.falling);
+        let still = here
+            .liquid
+            .is_some_and(|l| l.kind == LiquidKind::Water && l.depth == 8 && !l.falling);
         let above = w.block([x, y + 1, z]);
         let mut boxes = Vec::new();
         w.block_collisions([x, y, z], &mut boxes);

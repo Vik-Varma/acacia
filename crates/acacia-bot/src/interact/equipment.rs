@@ -12,7 +12,9 @@ impl Bot {
     /// the inventory tracker as if they had.
     pub fn select_hotbar(&mut self, slot: u8) -> Result<(), ActionError> {
         if slot >= Inventory::HOTBAR_SLOTS {
-            return Err(ActionError::NotPossible(format!("hotbar slot {slot} out of range")));
+            return Err(ActionError::NotPossible(format!(
+                "hotbar slot {slot} out of range"
+            )));
         }
         self.state.inventory.select(slot);
         self.equip_now();
@@ -46,5 +48,7 @@ pub(crate) fn needs_mouse_over(last: Option<&(u8, ItemStack)>, slot: u8, item: &
 
 /// Same item as far as `MobEquipment` shows it (stack ids are not sent).
 pub(crate) fn same_content(a: &ItemStack, b: &ItemStack) -> bool {
-    (a.network_id, a.count, a.metadata, a.block_runtime_id) == (b.network_id, b.count, b.metadata, b.block_runtime_id) && a.nbt == b.nbt
+    (a.network_id, a.count, a.metadata, a.block_runtime_id)
+        == (b.network_id, b.count, b.metadata, b.block_runtime_id)
+        && a.nbt == b.nbt
 }

@@ -26,7 +26,11 @@ fn percent_label(ctx: &Ctx, c: Text, v: &V) -> Text {
 }
 
 fn percent_or_off(ctx: &Ctx, c: Text, v: &V) -> Text {
-    if v.f() == 0.0 { generic_key(ctx, c, "options.off") } else { percent(ctx, c, v.f()) }
+    if v.f() == 0.0 {
+        generic_key(ctx, c, "options.off")
+    } else {
+        percent(ctx, c, v.f())
+    }
 }
 
 fn off_composed(ctx: &Ctx, c: Text) -> Text {
@@ -43,26 +47,50 @@ fn chunks(ctx: &Ctx, c: Text, v: &V) -> Text {
 
 /// Java's `Double.toString` for the values these options take (shortest form, `.0` on integers).
 fn java_double(v: f64) -> String {
-    if v.fract() == 0.0 { format!("{v:.1}") } else { format!("{v}") }
+    if v.fract() == 0.0 {
+        format!("{v:.1}")
+    } else {
+        format!("{v}")
+    }
 }
 
 fn cycle(caption: &'static str, default: V, label: Label) -> Def {
-    Def { caption, set: Set::Cycle, default, label }
+    Def {
+        caption,
+        set: Set::Cycle,
+        default,
+        label,
+    }
 }
 
 fn on_off(caption: &'static str, default: bool) -> Def {
     cycle(caption, V::Bool(default), Label::OnOff)
 }
 
-fn keys(caption: &'static str, default: &str, keys: &'static [(&'static str, &'static str)]) -> Def {
+fn keys(
+    caption: &'static str,
+    default: &str,
+    keys: &'static [(&'static str, &'static str)],
+) -> Def {
     cycle(caption, V::Name(default.into()), Label::Keys(keys))
 }
 
 fn slider(caption: &'static str, set: Set, default: V, label: fn(&Ctx, Text, &V) -> Text) -> Def {
-    Def { caption, set, default, label: Label::F(label) }
+    Def {
+        caption,
+        set,
+        default,
+        label: Label::F(label),
+    }
 }
 
-fn int(caption: &'static str, min: i32, max: i32, default: i32, label: fn(&Ctx, Text, &V) -> Text) -> Def {
+fn int(
+    caption: &'static str,
+    min: i32,
+    max: i32,
+    default: i32,
+    label: fn(&Ctx, Text, &V) -> Text,
+) -> Def {
     slider(caption, Set::Int { min, max }, V::Int(default), label)
 }
 
@@ -71,16 +99,27 @@ fn unit(caption: &'static str, default: f64, label: fn(&Ctx, Text, &V) -> Text) 
 }
 
 fn tenths(min: i32, max: i32) -> Set {
-    Set::Mapped { min, max, to: |v| f64::from(v) / 10.0, from: |v| (v * 10.0) as i32 }
+    Set::Mapped {
+        min,
+        max,
+        to: |v| f64::from(v) / 10.0,
+        from: |v| (v * 10.0) as i32,
+    }
 }
 
 fn squared() -> Set {
-    Set::UnitMapped { to: |v| v * v, from: f64::sqrt }
+    Set::UnitMapped {
+        to: |v| v * v,
+        from: f64::sqrt,
+    }
 }
 
 /// The steps k where Java's `floor(Math.log10(pow(10, k / 100)) * 100)` lands on k - 1.
 /// `Math.log10` is a HotSpot intrinsic (not fdlibm, not libm), so these are measured on the JDK.
-const UNLOG_MISSES: &[i32] = &[-112, -111, -110, -109, -56, -55, -40, -30, -29, -28, -27, -23, -17, -14, -8, -7, -3, -1, 1, 5, 7, 12, 13, 14, 16, 24, 29, 31, 41, 44, 57, 58];
+const UNLOG_MISSES: &[i32] = &[
+    -112, -111, -110, -109, -56, -55, -40, -30, -29, -28, -27, -23, -17, -14, -8, -7, -3, -1, 1, 5,
+    7, 12, 13, 14, 16, 24, 29, 31, 41, 44, 57, 58,
+];
 
 /// `Options.unlogMouse`: `floor(log10(v) * 100)`, exact for every value the slider stores (`pow`
 /// agrees with Java's bit for bit), libm's log10 for anything else.
@@ -97,26 +136,56 @@ fn log_mouse(k: i32) -> f64 {
 }
 
 fn toggle_hold(ctx: &Ctx, _: Text, v: &V) -> Text {
-    ctx.tr(if v.b() { "options.key.toggle" } else { "options.key.hold" })
+    ctx.tr(if v.b() {
+        "options.key.toggle"
+    } else {
+        "options.key.hold"
+    })
 }
 
-const CLOUDS: &[(&str, &str)] = &[("OFF", "options.off"), ("FAST", "options.clouds.fast"), ("FANCY", "options.clouds.fancy")];
-const PARTICLES: &[(&str, &str)] = &[("ALL", "options.particles.all"), ("DECREASED", "options.particles.decreased"), ("MINIMAL", "options.particles.minimal")];
+const CLOUDS: &[(&str, &str)] = &[
+    ("OFF", "options.off"),
+    ("FAST", "options.clouds.fast"),
+    ("FANCY", "options.clouds.fancy"),
+];
+const PARTICLES: &[(&str, &str)] = &[
+    ("ALL", "options.particles.all"),
+    ("DECREASED", "options.particles.decreased"),
+    ("MINIMAL", "options.particles.minimal"),
+];
 const CHUNK_UPDATES: &[(&str, &str)] = &[
     ("NONE", "options.prioritizeChunkUpdates.none"),
     ("PLAYER_AFFECTED", "options.prioritizeChunkUpdates.byPlayer"),
     ("NEARBY", "options.prioritizeChunkUpdates.nearby"),
 ];
-const CHAT: &[(&str, &str)] = &[("FULL", "options.chat.visibility.full"), ("SYSTEM", "options.chat.visibility.system"), ("HIDDEN", "options.chat.visibility.hidden")];
-const ATTACK: &[(&str, &str)] = &[("OFF", "options.off"), ("CROSSHAIR", "options.attack.crosshair"), ("HOTBAR", "options.attack.hotbar")];
-const ARM: &[(&str, &str)] = &[("LEFT", "options.mainHand.left"), ("RIGHT", "options.mainHand.right")];
-const INACTIVITY: &[(&str, &str)] = &[("MINIMIZED", "options.inactivityFpsLimit.minimized"), ("AFK", "options.inactivityFpsLimit.afk")];
+const CHAT: &[(&str, &str)] = &[
+    ("FULL", "options.chat.visibility.full"),
+    ("SYSTEM", "options.chat.visibility.system"),
+    ("HIDDEN", "options.chat.visibility.hidden"),
+];
+const ATTACK: &[(&str, &str)] = &[
+    ("OFF", "options.off"),
+    ("CROSSHAIR", "options.attack.crosshair"),
+    ("HOTBAR", "options.attack.hotbar"),
+];
+const ARM: &[(&str, &str)] = &[
+    ("LEFT", "options.mainHand.left"),
+    ("RIGHT", "options.mainHand.right"),
+];
+const INACTIVITY: &[(&str, &str)] = &[
+    ("MINIMIZED", "options.inactivityFpsLimit.minimized"),
+    ("AFK", "options.inactivityFpsLimit.afk"),
+];
 const FILTERING: &[(&str, &str)] = &[
     ("NONE", "options.textureFiltering.none"),
     ("RGSS", "options.textureFiltering.rgss"),
     ("ANISOTROPIC", "options.textureFiltering.anisotropic"),
 ];
-const GRAPHICS_API: &[(&str, &str)] = &[("DEFAULT", "options.graphicsApi.default"), ("OPENGL", "options.graphicsApi.opengl"), ("VULKAN", "options.graphicsApi.vulkan")];
+const GRAPHICS_API: &[(&str, &str)] = &[
+    ("DEFAULT", "options.graphicsApi.default"),
+    ("OPENGL", "options.graphicsApi.opengl"),
+    ("VULKAN", "options.graphicsApi.vulkan"),
+];
 const MUSIC: &[(&str, &str)] = &[
     ("DEFAULT", "options.music_frequency.default"),
     ("FREQUENT", "options.music_frequency.frequent"),
@@ -127,13 +196,21 @@ const MUSIC_TOAST: &[(&str, &str)] = &[
     ("PAUSE", "options.musicToast.pauseMenu"),
     ("PAUSE_AND_TOAST", "options.musicToast.pauseMenuAndToast"),
 ];
-const PRESENCE: &[(&str, &str)] = &[("NONE", "options.sharePresence.none"), ("LIMITED", "options.sharePresence.limited"), ("ALL", "options.sharePresence.all")];
+const PRESENCE: &[(&str, &str)] = &[
+    ("NONE", "options.sharePresence.none"),
+    ("LIMITED", "options.sharePresence.limited"),
+    ("ALL", "options.sharePresence.all"),
+];
 pub const PRESETS: &[&str] = &["FAST", "FANCY", "FABULOUS", "CUSTOM"];
 
 /// The option `id` (an `Options` getter's name, or `sound.<source name>`).
 pub fn def(id: &str) -> Def {
     if let Some(source) = id.strip_prefix("sound.") {
-        let caption: &'static str = SOUND_CAPTIONS.iter().find(|c| c.strip_prefix("soundCategory.") == Some(source)).copied().unwrap_or("soundCategory.master");
+        let caption: &'static str = SOUND_CAPTIONS
+            .iter()
+            .find(|c| c.strip_prefix("soundCategory.") == Some(source))
+            .copied()
+            .unwrap_or("soundCategory.master");
         return unit(caption, 1.0, percent_or_off);
     }
     match id {
@@ -153,13 +230,23 @@ pub fn def(id: &str) -> Def {
         "simulationDistance" => int("options.simulationDistance", 5, 32, 12, chunks),
         "entityDistanceScaling" => slider(
             "options.entityDistanceScaling",
-            Set::Mapped { min: 2, max: 20, to: |v| f64::from(v) / 4.0, from: |v| (v * 4.0) as i32 },
+            Set::Mapped {
+                min: 2,
+                max: 20,
+                to: |v| f64::from(v) / 4.0,
+                from: |v| (v * 4.0) as i32,
+            },
             V::Num(1.0),
             percent_label,
         ),
         "framerateLimit" => slider(
             "options.framerateLimit",
-            Set::Mapped { min: 1, max: 26, to: |v| f64::from(v * 10), from: |v| v as i32 / 10 },
+            Set::Mapped {
+                min: 1,
+                max: 26,
+                to: |v| f64::from(v * 10),
+                from: |v| v as i32 / 10,
+            },
             V::Int(120),
             |ctx, c, v| match v.i() {
                 260 => generic_key(ctx, c, "options.framerateLimit.max"),
@@ -167,20 +254,36 @@ pub fn def(id: &str) -> Def {
             },
         ),
         "preferredGraphicsBackend" => keys("options.graphicsApi", "DEFAULT", GRAPHICS_API),
-        "graphicsPreset" => slider("options.graphics.preset", Set::Enum(PRESETS), V::Name("FANCY".into()), |ctx, c, v| {
-            generic_key(ctx, c, &format!("options.graphics.{}", v.s().to_lowercase()))
-        }),
+        "graphicsPreset" => slider(
+            "options.graphics.preset",
+            Set::Enum(PRESETS),
+            V::Name("FANCY".into()),
+            |ctx, c, v| {
+                generic_key(
+                    ctx,
+                    c,
+                    &format!("options.graphics.{}", v.s().to_lowercase()),
+                )
+            },
+        ),
         "inactivityFpsLimit" => keys("options.inactivityFpsLimit", "AFK", INACTIVITY),
         "cloudStatus" => keys("options.renderClouds", "FANCY", CLOUDS),
         "cloudRange" => int("options.renderCloudsDistance", 2, 128, 128, chunks),
-        "weatherRadius" => int("options.weatherRadius", 3, 10, 10, |ctx, c, v| generic(ctx, c, ctx.tr_args("options.blocks", &[lit(v.i())]))),
+        "weatherRadius" => int("options.weatherRadius", 3, 10, 10, |ctx, c, v| {
+            generic(ctx, c, ctx.tr_args("options.blocks", &[lit(v.i())]))
+        }),
         "cutoutLeaves" => on_off("options.cutoutLeaves", true),
         "vignette" => on_off("options.vignette", true),
         "improvedTransparency" => on_off("options.improvedTransparency", false),
         "ambientOcclusion" => on_off("options.ao", true),
         "chunkSectionFadeInTime" => slider(
             "options.chunkFade",
-            Set::Mapped { min: 0, max: 40, to: |v| f64::from(v) / 20.0, from: |v| (v * 20.0) as i32 },
+            Set::Mapped {
+                min: 0,
+                max: 40,
+                to: |v| f64::from(v) / 20.0,
+                from: |v| (v * 20.0) as i32,
+            },
             V::Num(0.75),
             |ctx, _, v| match v.f() {
                 f if f <= 0.0 => ctx.tr("options.chunkFade.none"),
@@ -189,29 +292,69 @@ pub fn def(id: &str) -> Def {
         ),
         "prioritizeChunkUpdates" => keys("options.prioritizeChunkUpdates", "NONE", CHUNK_UPDATES),
         "chatVisibility" => keys("options.chat.visibility", "FULL", CHAT),
-        "chatOpacity" => unit("options.chat.opacity", 1.0, |ctx, c, v| percent(ctx, c, v.f() * 0.9 + 0.1)),
-        "chatLineSpacing" => unit("options.chat.line_spacing", 0.0, percent_label),
-        "menuBackgroundBlurriness" => int("options.accessibility.menu_background_blurriness", 0, 10, 5, |ctx, c, v| match v.i() {
-            0 => generic_key(ctx, c, "options.off"),
-            n => generic(ctx, c, lit(n)),
+        "chatOpacity" => unit("options.chat.opacity", 1.0, |ctx, c, v| {
+            percent(ctx, c, v.f() * 0.9 + 0.1)
         }),
-        "textBackgroundOpacity" => unit("options.accessibility.text_background_opacity", 0.5, percent_label),
+        "chatLineSpacing" => unit("options.chat.line_spacing", 0.0, percent_label),
+        "menuBackgroundBlurriness" => int(
+            "options.accessibility.menu_background_blurriness",
+            0,
+            10,
+            5,
+            |ctx, c, v| match v.i() {
+                0 => generic_key(ctx, c, "options.off"),
+                n => generic(ctx, c, lit(n)),
+            },
+        ),
+        "textBackgroundOpacity" => unit(
+            "options.accessibility.text_background_opacity",
+            0.5,
+            percent_label,
+        ),
         "panoramaSpeed" => unit("options.accessibility.panorama_speed", 1.0, percent_label),
         "highContrast" => on_off("options.accessibility.high_contrast", false),
-        "highContrastBlockOutline" => on_off("options.accessibility.high_contrast_block_outline", false),
+        "highContrastBlockOutline" => {
+            on_off("options.accessibility.high_contrast_block_outline", false)
+        }
         "narratorHotkey" => on_off("options.accessibility.narrator_hotkey", true),
         "mainHand" => keys("options.mainHand", "RIGHT", ARM),
-        "chatScale" => unit("options.chat.scale", 1.0, |ctx, c, v| if v.f() == 0.0 { off_composed(ctx, c) } else { percent(ctx, c, v.f()) }),
-        "chatWidth" => unit("options.chat.width", 1.0, |ctx, c, v| pixels(ctx, c, (v.f() * 280.0 + 40.0).floor() as i32)),
-        "chatHeightUnfocused" => unit("options.chat.height.unfocused", 0.4375, |ctx, c, v| pixels(ctx, c, (v.f() * 160.0 + 20.0).floor() as i32)),
-        "chatHeightFocused" => unit("options.chat.height.focused", 1.0, |ctx, c, v| pixels(ctx, c, (v.f() * 160.0 + 20.0).floor() as i32)),
-        "chatDelay" => slider("options.chat.delay_instant", tenths(0, 60), V::Num(0.0), |ctx, _, v| match v.f() {
-            f if f <= 0.0 => ctx.tr("options.chat.delay_none"),
-            f => ctx.tr_args("options.chat.delay", &[lit(format!("{f:.1}"))]),
+        "chatScale" => unit("options.chat.scale", 1.0, |ctx, c, v| {
+            if v.f() == 0.0 {
+                off_composed(ctx, c)
+            } else {
+                percent(ctx, c, v.f())
+            }
         }),
-        "notificationDisplayTime" => slider("options.notifications.display_time", tenths(5, 100), V::Num(1.0), |ctx, c, v| {
-            generic(ctx, c, ctx.tr_args("options.multiplier", &[lit(java_double(v.f()))]))
+        "chatWidth" => unit("options.chat.width", 1.0, |ctx, c, v| {
+            pixels(ctx, c, (v.f() * 280.0 + 40.0).floor() as i32)
         }),
+        "chatHeightUnfocused" => unit("options.chat.height.unfocused", 0.4375, |ctx, c, v| {
+            pixels(ctx, c, (v.f() * 160.0 + 20.0).floor() as i32)
+        }),
+        "chatHeightFocused" => unit("options.chat.height.focused", 1.0, |ctx, c, v| {
+            pixels(ctx, c, (v.f() * 160.0 + 20.0).floor() as i32)
+        }),
+        "chatDelay" => slider(
+            "options.chat.delay_instant",
+            tenths(0, 60),
+            V::Num(0.0),
+            |ctx, _, v| match v.f() {
+                f if f <= 0.0 => ctx.tr("options.chat.delay_none"),
+                f => ctx.tr_args("options.chat.delay", &[lit(format!("{f:.1}"))]),
+            },
+        ),
+        "notificationDisplayTime" => slider(
+            "options.notifications.display_time",
+            tenths(5, 100),
+            V::Num(1.0),
+            |ctx, c, v| {
+                generic(
+                    ctx,
+                    c,
+                    ctx.tr_args("options.multiplier", &[lit(java_double(v.f()))]),
+                )
+            },
+        ),
         "mipmapLevels" => int("options.mipmapLevels", 0, 4, 4, |ctx, c, v| match v.i() {
             0 => off_composed(ctx, c),
             n => generic(ctx, c, lit(n)),
@@ -223,11 +366,20 @@ pub fn def(id: &str) -> Def {
         "textureFiltering" => keys("options.textureFiltering", "NONE", FILTERING),
         "attackIndicator" => keys("options.attackIndicator", "CROSSHAIR", ATTACK),
         "biomeBlendRadius" => int("options.biomeBlendRadius", 0, 7, 2, |ctx, c, v| {
-            generic_key(ctx, c, &format!("options.biomeBlendRadius.{}", v.i() * 2 + 1))
+            generic_key(
+                ctx,
+                c,
+                &format!("options.biomeBlendRadius.{}", v.i() * 2 + 1),
+            )
         }),
         "mouseWheelSensitivity" => slider(
             "options.mouseWheelSensitivity",
-            Set::Mapped { min: -200, max: 100, to: log_mouse, from: unlog_mouse },
+            Set::Mapped {
+                min: -200,
+                max: 100,
+                to: log_mouse,
+                from: unlog_mouse,
+            },
             V::Num(1.0),
             |ctx, c, v| generic(ctx, c, lit(format!("{:.2}", v.f()))),
         ),
@@ -255,9 +407,17 @@ pub fn def(id: &str) -> Def {
         "sharePresence" => keys("options.sharePresence", "ALL", PRESENCE),
         "showSubtitles" => on_off("options.showSubtitles", false),
         "directionalAudio" => on_off("options.directionalAudio", false),
-        "backgroundForChatOnly" => cycle("options.accessibility.text_background", V::Bool(true), Label::F(|ctx, _, v| {
-            ctx.tr(if v.b() { "options.accessibility.text_background.chat" } else { "options.accessibility.text_background.everywhere" })
-        })),
+        "backgroundForChatOnly" => cycle(
+            "options.accessibility.text_background",
+            V::Bool(true),
+            Label::F(|ctx, _, v| {
+                ctx.tr(if v.b() {
+                    "options.accessibility.text_background.chat"
+                } else {
+                    "options.accessibility.text_background.everywhere"
+                })
+            }),
+        ),
         "fullscreen" => on_off("options.fullscreen", false),
         "exclusiveFullscreen" => on_off("options.exclusiveFullscreen", false),
         "bobView" => on_off("options.viewBobbing", true),
@@ -279,28 +439,52 @@ pub fn def(id: &str) -> Def {
             n => generic(ctx, c, lit(n)),
         }),
         "screenEffectScale" => unit("options.screenEffectScale", 1.0, percent_or_off),
-        "fovEffectScale" => slider("options.fovEffectScale", squared(), V::Num(1.0), percent_or_off),
-        "darknessEffectScale" => slider("options.darknessEffectScale", squared(), V::Num(1.0), percent_or_off),
+        "fovEffectScale" => slider(
+            "options.fovEffectScale",
+            squared(),
+            V::Num(1.0),
+            percent_or_off,
+        ),
+        "darknessEffectScale" => slider(
+            "options.darknessEffectScale",
+            squared(),
+            V::Num(1.0),
+            percent_or_off,
+        ),
         "glintSpeed" => unit("options.glintSpeed", 0.5, percent_or_off),
         "glintStrength" => unit("options.glintStrength", 0.75, percent_or_off),
         "damageTiltStrength" => unit("options.damageTiltStrength", 1.0, percent_or_off),
-        "gamma" => unit("options.gamma", 0.5, |ctx, c, v| match (v.f() * 100.0) as i32 {
-            0 => generic_key(ctx, c, "options.gamma.min"),
-            50 => generic_key(ctx, c, "options.gamma.default"),
-            100 => generic_key(ctx, c, "options.gamma.max"),
-            n => generic(ctx, c, lit(n)),
+        "gamma" => unit("options.gamma", 0.5, |ctx, c, v| {
+            match (v.f() * 100.0) as i32 {
+                0 => generic_key(ctx, c, "options.gamma.min"),
+                50 => generic_key(ctx, c, "options.gamma.default"),
+                100 => generic_key(ctx, c, "options.gamma.max"),
+                n => generic(ctx, c, lit(n)),
+            }
         }),
-        "guiScale" => cycle("options.guiScale", V::Int(0), Label::F(|ctx, _, v| match v.i() {
-            0 => ctx.tr("options.guiScale.auto"),
-            n => lit(n),
-        })),
+        "guiScale" => cycle(
+            "options.guiScale",
+            V::Int(0),
+            Label::F(|ctx, _, v| match v.i() {
+                0 => ctx.tr("options.guiScale.auto"),
+                n => lit(n),
+            }),
+        ),
         // No narrator library here: `GameNarrator.isActive` is false.
-        "narrator" => cycle("options.narrator", V::Name("OFF".into()), Label::F(|ctx, _, _| ctx.tr("options.narrator.notavailable"))),
+        "narrator" => cycle(
+            "options.narrator",
+            V::Name("OFF".into()),
+            Label::F(|ctx, _, _| ctx.tr("options.narrator.notavailable")),
+        ),
         "particles" => keys("options.particles", "ALL", PARTICLES),
-        "soundDevice" => cycle("options.audioDevice", V::Name(String::new()), Label::F(|ctx, _, v| match v.s() {
-            "" => ctx.tr("options.audioDevice.default"),
-            s => Text::literal(s.strip_prefix("OpenAL Soft on ").unwrap_or(s)),
-        })),
+        "soundDevice" => cycle(
+            "options.audioDevice",
+            V::Name(String::new()),
+            Label::F(|ctx, _, v| match v.s() {
+                "" => ctx.tr("options.audioDevice.default"),
+                s => Text::literal(s.strip_prefix("OpenAL Soft on ").unwrap_or(s)),
+            }),
+        ),
         "musicFrequency" => keys("options.music_frequency", "DEFAULT", MUSIC),
         "musicToast" => keys("options.musicToast", "NEVER", MUSIC_TOAST),
         _ => on_off("", false),

@@ -13,7 +13,10 @@ fn reencoding_a_decoded_chunk_gives_the_same_bytes() {
         *s = match i % 7 {
             0 => stone,
             1 => j
-                .state("minecraft:oak_stairs", &[("facing", "east"), ("half", "top")])
+                .state(
+                    "minecraft:oak_stairs",
+                    &[("facing", "east"), ("half", "top")],
+                )
                 .unwrap(),
             2 => j.state("minecraft:water", &[("level", "3")]).unwrap(),
             _ => AIR,

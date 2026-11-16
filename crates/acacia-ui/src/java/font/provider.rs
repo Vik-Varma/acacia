@@ -57,14 +57,33 @@ impl Glyph {
 }
 
 /// `GlyphBitmap`'s box from its texel size, oversample and bearing top.
-fn bitmap(texture: GlyphTexture, src: [u32; 4], oversample: f32, bearing_top: f32, colored: bool) -> Bitmap {
+fn bitmap(
+    texture: GlyphTexture,
+    src: [u32; 4],
+    oversample: f32,
+    bearing_top: f32,
+    colored: bool,
+) -> Bitmap {
     let top = 7.0 - bearing_top;
-    Bitmap { texture, src, left: 0.0, right: src[2] as f32 / oversample, up: top, down: top + src[3] as f32 / oversample, colored }
+    Bitmap {
+        texture,
+        src,
+        left: 0.0,
+        right: src[2] as f32 / oversample,
+        up: top,
+        down: top + src[3] as f32 / oversample,
+        colored,
+    }
 }
 
 /// `SpecialGlyphs`: advance 6, 5 × 8 texels at the baseline's top.
 pub fn special(texture: GlyphTexture) -> Glyph {
-    Glyph { advance: 6.0, bold_offset: 1.0, shadow_offset: 1.0, bitmap: Some(bitmap(texture, [0, 0, 5, 8], 1.0, 7.0, true)) }
+    Glyph {
+        advance: 6.0,
+        bold_offset: 1.0,
+        shadow_offset: 1.0,
+        bitmap: Some(bitmap(texture, [0, 0, 5, 8], 1.0, 7.0, true)),
+    }
 }
 
 pub struct Sheet {
@@ -87,17 +106,39 @@ pub enum Provider {
 impl Provider {
     pub fn glyph(&self, c: u32) -> Option<Glyph> {
         match self {
-            Provider::Space(advances, _) => advances.get(&c).map(|&advance| Glyph { advance, bold_offset: 1.0, shadow_offset: 1.0, bitmap: None }),
+            Provider::Space(advances, _) => advances.get(&c).map(|&advance| Glyph {
+                advance,
+                bold_offset: 1.0,
+                shadow_offset: 1.0,
+                bitmap: None,
+            }),
             Provider::Bitmap(s, _) => s.glyphs.get(&c).map(|&(col, row, advance)| {
                 let src = [col * s.cell[0], row * s.cell[1], s.cell[0], s.cell[1]];
-                let b = bitmap(GlyphTexture::Sheet(s.id.clone()), src, 1.0 / s.scale, s.ascent as f32, s.image.color().channel_count() > 1);
-                Glyph { advance: advance as f32, bold_offset: 1.0, shadow_offset: 1.0, bitmap: Some(b) }
+                let b = bitmap(
+                    GlyphTexture::Sheet(s.id.clone()),
+                    src,
+                    1.0 / s.scale,
+                    s.ascent as f32,
+                    s.image.color().channel_count() > 1,
+                );
+                Glyph {
+                    advance: advance as f32,
+                    bold_offset: 1.0,
+                    shadow_offset: 1.0,
+                    bitmap: Some(b),
+                }
             }),
             Provider::Unihex(file, glyphs, _) => glyphs.get(&c).map(|g| Glyph {
                 advance: g.advance(),
                 bold_offset: 0.5,
                 shadow_offset: 0.5,
-                bitmap: Some(bitmap(GlyphTexture::Unihex(file.clone(), c), [0, 0, g.width().max(0) as u32, 16], 2.0, 7.0, true)),
+                bitmap: Some(bitmap(
+                    GlyphTexture::Unihex(file.clone(), c),
+                    [0, 0, g.width().max(0) as u32, 16],
+                    2.0,
+                    7.0,
+                    true,
+                )),
             }),
         }
     }
@@ -126,7 +167,8 @@ pub fn load(def: &Value, resources: &Resources) -> Result<Provider, String> {
             let mut map = HashMap::new();
             let mut keys = IntSet::with_expected(advances.len());
             for (k, v) in advances {
-                let c = codepoint(&Value::String(k.clone())).ok_or("advance key is not one codepoint")?;
+                let c = codepoint(&Value::String(k.clone()))
+                    .ok_or("advance key is not one codepoint")?;
                 map.insert(c, v.as_f64().ok_or("advance is not a number")? as f32);
                 keys.add(c as i32);
             }
@@ -137,15 +179,25 @@ pub fn load(def: &Value, resources: &Resources) -> Result<Provider, String> {
             let file = def["hex_file"].as_str().ok_or("no hex_file")?;
             let mut overrides = Vec::new();
             for o in def["size_overrides"].as_array().into_iter().flatten() {
-                let (from, to) = (codepoint(&o["from"]).ok_or("bad from")?, codepoint(&o["to"]).ok_or("bad to")?);
+                let (from, to) = (
+                    codepoint(&o["from"]).ok_or("bad from")?,
+                    codepoint(&o["to"]).ok_or("bad to")?,
+                );
                 if from >= to {
                     return Err(format!("invalid range [{from};{to}]"));
                 }
                 let int = |k: &str| o[k].as_i64().map(|v| v as i32).ok_or(format!("no {k}"));
-                overrides.push(Override { from, to, left: int("left")?, right: int("right")? });
+                overrides.push(Override {
+                    from,
+                    to,
+                    left: int("left")?,
+                    right: int("right")?,
+                });
             }
             let id = qualify(file);
-            let zip = resources.read(&id).ok_or_else(|| format!("{id} not found"))?;
+            let zip = resources
+                .read(&id)
+                .ok_or_else(|| format!("{id} not found"))?;
             let glyphs = unihex::load(&zip, &overrides)?;
             let mut codepoints: Vec<u32> = glyphs.keys().copied().collect();
             codepoints.sort_unstable();
@@ -163,9 +215,18 @@ pub fn qualify(id: &str) -> String {
 
 fn load_bitmap(def: &Value, resources: &Resources) -> Result<Provider, String> {
     let file = def["file"].as_str().ok_or("no file")?;
-    let height = def.get("height").map_or(Some(8), Value::as_i64).ok_or("bad height")? as i32;
+    let height = def
+        .get("height")
+        .map_or(Some(8), Value::as_i64)
+        .ok_or("bad height")? as i32;
     let ascent = def["ascent"].as_i64().ok_or("no ascent")? as i32;
-    let grid: Vec<Vec<u32>> = def["chars"].as_array().ok_or("no chars")?.iter().map(|r| r.as_str().map(|s| s.chars().map(u32::from).collect())).collect::<Option<_>>().ok_or("chars are not strings")?;
+    let grid: Vec<Vec<u32>> = def["chars"]
+        .as_array()
+        .ok_or("no chars")?
+        .iter()
+        .map(|r| r.as_str().map(|s| s.chars().map(u32::from).collect()))
+        .collect::<Option<_>>()
+        .ok_or("chars are not strings")?;
     if grid.is_empty() || grid[0].is_empty() || grid.iter().any(|r| r.len() != grid[0].len()) {
         return Err("bad codepoint grid".into());
     }
@@ -174,8 +235,11 @@ fn load_bitmap(def: &Value, resources: &Resources) -> Result<Provider, String> {
     }
     let (ns, path) = split_id(file);
     let id = format!("{ns}:textures/{path}");
-    let bytes = resources.read(&id).ok_or_else(|| format!("{id} not found"))?;
-    let image = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png).map_err(|e| format!("{id}: {e}"))?;
+    let bytes = resources
+        .read(&id)
+        .ok_or_else(|| format!("{id} not found"))?;
+    let image = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
+        .map_err(|e| format!("{id}: {e}"))?;
     let lit = lit_channel(&image).ok_or_else(|| format!("{id}: no luminance or alpha"))?;
     let (w, h) = (image.width(), image.height());
     let cell = [w / grid[0].len() as u32, h / grid.len() as u32];
@@ -188,15 +252,31 @@ fn load_bitmap(def: &Value, resources: &Resources) -> Result<Provider, String> {
                 continue;
             }
             let (col, row) = (col as u32, row as u32);
-            let width = (0..cell[0]).rev().find(|&x| (0..cell[1]).any(|y| lit(col * cell[0] + x, row * cell[1] + y) != 0)).map_or(0, |x| x + 1);
-            if glyphs.insert(c, (col, row, (0.5 + f64::from(width as f32 * scale)) as i32 + 1)).is_none() {
+            let width = (0..cell[0])
+                .rev()
+                .find(|&x| (0..cell[1]).any(|y| lit(col * cell[0] + x, row * cell[1] + y) != 0))
+                .map_or(0, |x| x + 1);
+            if glyphs
+                .insert(
+                    c,
+                    (col, row, (0.5 + f64::from(width as f32 * scale)) as i32 + 1),
+                )
+                .is_none()
+            {
                 codepoints.push(c);
             }
         }
     }
     codepoints.sort_unstable();
     drop(lit);
-    let sheet = Sheet { id: id.into(), image: Arc::new(image), cell, scale, ascent, glyphs };
+    let sheet = Sheet {
+        id: id.into(),
+        image: Arc::new(image),
+        cell,
+        scale,
+        ascent,
+        glyphs,
+    };
     Ok(Provider::Bitmap(sheet, ascending(codepoints)))
 }
 

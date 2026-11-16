@@ -22,7 +22,10 @@ pub enum Value {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Effect {
     Command(String),
-    Custom { id: String, payload: Option<Tag> },
+    Custom {
+        id: String,
+        payload: Option<Tag>,
+    },
     /// Another dialog opens in this one's place; nothing is sent.
     Open(Dialog),
     Nothing,
@@ -33,8 +36,13 @@ pub fn effect(inputs: &[Input], button: &Button, values: &[Value]) -> Effect {
     match &button.action {
         None | Some(Action::ClientOnly) => Effect::Nothing,
         Some(Action::RunCommand(command)) => Effect::Command(command.clone()),
-        Some(Action::DynamicRunCommand(template)) => Effect::Command(fill(template, inputs, values)),
-        Some(Action::Custom { id, payload }) => Effect::Custom { id: id.clone(), payload: payload.clone() },
+        Some(Action::DynamicRunCommand(template)) => {
+            Effect::Command(fill(template, inputs, values))
+        }
+        Some(Action::Custom { id, payload }) => Effect::Custom {
+            id: id.clone(),
+            payload: payload.clone(),
+        },
         Some(Action::DynamicCustom { id, additions }) => {
             let mut entries = match additions {
                 Some(Tag::Compound(entries)) => entries.clone(),
@@ -44,7 +52,10 @@ pub fn effect(inputs: &[Input], button: &Button, values: &[Value]) -> Effect {
                 entries.retain(|(k, _)| *k != input.key);
                 entries.push((input.key.clone(), tag(input, value)));
             }
-            Effect::Custom { id: id.clone(), payload: Some(Tag::Compound(entries)) }
+            Effect::Custom {
+                id: id.clone(),
+                payload: Some(Tag::Compound(entries)),
+            }
         }
         Some(Action::ShowDialog(dialog)) => Effect::Open((**dialog).clone()),
     }
@@ -66,7 +77,9 @@ pub fn initial_values(inputs: &[Input]) -> Vec<Value> {
 /// `NumberRangeInput`'s snapping: whole steps from `initial`, pulled back inside the range.
 pub fn snap(value: f32, start: f32, end: f32, initial: f32, step: Option<f32>) -> f32 {
     let (lo, hi) = (start.min(end), start.max(end));
-    let Some(step) = step.filter(|s| *s > 0.0) else { return value.clamp(lo, hi) };
+    let Some(step) = step.filter(|s| *s > 0.0) else {
+        return value.clamp(lo, hi);
+    };
     let mut v = initial + ((value - initial) / step).round() * step;
     if v > hi {
         v -= step;
@@ -78,10 +91,33 @@ pub fn snap(value: f32, start: f32, end: f32, initial: f32, step: Option<f32>) -
 
 fn template_text(input: &Input, value: &Value) -> String {
     match (value, &input.control) {
-        (Value::Text(s), _) => s.chars().flat_map(|c| if matches!(c, '"' | '\'' | '\\') { vec!['\\', c] } else { vec![c] }).collect(),
-        (Value::Bool(b), Control::Boolean { on_true, on_false, .. }) => if *b { on_true.clone() } else { on_false.clone() },
+        (Value::Text(s), _) => s
+            .chars()
+            .flat_map(|c| {
+                if matches!(c, '"' | '\'' | '\\') {
+                    vec!['\\', c]
+                } else {
+                    vec![c]
+                }
+            })
+            .collect(),
+        (
+            Value::Bool(b),
+            Control::Boolean {
+                on_true, on_false, ..
+            },
+        ) => {
+            if *b {
+                on_true.clone()
+            } else {
+                on_false.clone()
+            }
+        }
         (Value::Bool(b), _) => b.to_string(),
-        (Value::Option(i), Control::SingleOption { options, .. }) => options.get(*i).map(|(id, _)| id.clone()).unwrap_or_default(),
+        (Value::Option(i), Control::SingleOption { options, .. }) => options
+            .get(*i)
+            .map(|(id, _)| id.clone())
+            .unwrap_or_default(),
         (Value::Option(i), _) => i.to_string(),
         (Value::Number(n), _) if n.fract() == 0.0 => format!("{}", *n as i64),
         (Value::Number(n), _) => format!("{n:?}"),
@@ -92,7 +128,12 @@ fn tag(input: &Input, value: &Value) -> Tag {
     match (value, &input.control) {
         (Value::Text(s), _) => Tag::String(s.clone()),
         (Value::Bool(b), _) => Tag::Byte(i8::from(*b)),
-        (Value::Option(i), Control::SingleOption { options, .. }) => Tag::String(options.get(*i).map(|(id, _)| id.clone()).unwrap_or_default()),
+        (Value::Option(i), Control::SingleOption { options, .. }) => Tag::String(
+            options
+                .get(*i)
+                .map(|(id, _)| id.clone())
+                .unwrap_or_default(),
+        ),
         (Value::Option(i), _) => Tag::Int(*i as i32),
         (Value::Number(n), _) => Tag::Float(*n),
     }
@@ -122,7 +163,13 @@ impl Client {
     pub fn send_effect(&self, effect: &Effect) -> Result<(), Error> {
         match effect {
             Effect::Command(command) => self.command(command),
-            Effect::Custom { id, payload } => self.send(to::CUSTOM_CLICK_ACTION, &CustomClickAction { id: id.clone(), payload: payload.clone() }),
+            Effect::Custom { id, payload } => self.send(
+                to::CUSTOM_CLICK_ACTION,
+                &CustomClickAction {
+                    id: id.clone(),
+                    payload: payload.clone(),
+                },
+            ),
             Effect::Open(_) | Effect::Nothing => Ok(()),
         }
     }

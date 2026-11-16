@@ -5,7 +5,9 @@ use std::sync::OnceLock;
 
 use acacia_ui::java::gui::{Gui, GuiDraw};
 use acacia_ui::java::screen::credits::credits_and_attribution;
-use acacia_ui::java::screen::loading::{ChunkView, GenericMessageScreen, LevelLoadingScreen, Load, Reason};
+use acacia_ui::java::screen::loading::{
+    ChunkView, GenericMessageScreen, LevelLoadingScreen, Load, Reason,
+};
 use acacia_ui::java::screen::win::{WinScreen, lines, scroll_speed};
 use acacia_ui::java::screen::{Env, Screen, extract};
 use acacia_ui::java::widget::Ctx;
@@ -21,7 +23,8 @@ fn texts(assets: &Assets, name: &str) -> String {
 
 fn credits(assets: &Assets) -> &'static Value {
     static CREDITS: OnceLock<Value> = OnceLock::new();
-    CREDITS.get_or_init(|| serde_json::from_str(&texts(assets, "credits.json")).unwrap_or(Value::Null))
+    CREDITS
+        .get_or_init(|| serde_json::from_str(&texts(assets, "credits.json")).unwrap_or(Value::Null))
 }
 
 fn loading(c: &Value) -> LevelLoadingScreen {
@@ -32,9 +35,17 @@ fn loading(c: &Value) -> LevelLoadingScreen {
     };
     let view = c.get("view").map(|v| ChunkView {
         radius: int(v, "radius", 0),
-        cells: ints(&v["cells"]).into_iter().map(|s| usize::try_from(s).ok()).collect(),
+        cells: ints(&v["cells"])
+            .into_iter()
+            .map(|s| usize::try_from(s).ok())
+            .collect(),
     });
-    let load = Load { has_progress: flag(c, "hasProgress", false), progress: float(c, "progress", 0.0), view, visualize: flag(c, "visualize", false) };
+    let load = Load {
+        has_progress: flag(c, "hasProgress", false),
+        progress: float(c, "progress", 0.0),
+        view,
+        visualize: flag(c, "visualize", false),
+    };
     let mut screen = LevelLoadingScreen::new(env(c), reason, load);
     for _ in 0..int(c, "ticks", 0) {
         screen.tick();
@@ -43,7 +54,12 @@ fn loading(c: &Value) -> LevelLoadingScreen {
 }
 
 fn env(c: &Value) -> Env {
-    Env { width: int(c, "width", 427), height: int(c, "height", 240), in_world: flag(c, "inWorld", true), blur: int(c, "blur", 5) >= 1 }
+    Env {
+        width: int(c, "width", 427),
+        height: int(c, "height", 240),
+        in_world: flag(c, "inWorld", true),
+        blur: int(c, "blur", 5) >= 1,
+    }
 }
 
 pub fn replay(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<GuiDraw> {
@@ -55,15 +71,32 @@ pub fn replay(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<Gui
     let mut ctx = Ctx::new(&mut gui, assets.font.as_ref(), &tr, (mouse[0], mouse[1]));
     let mut screen: Box<dyn Screen> = match c["kind"].as_str().unwrap_or_default() {
         "loading" => Box::new(loading(c)),
-        "message" => Box::new(GenericMessageScreen::new(&ctx, env, text(&c["title"], lang))),
+        "message" => Box::new(GenericMessageScreen::new(
+            &ctx,
+            env,
+            text(&c["title"], lang),
+        )),
         "credits" => Box::new(credits_and_attribution(&ctx, env)),
         "win" => {
             let poem = flag(c, "poem", false);
             let (end, post) = (texts(assets, "end.txt"), texts(assets, "postcredits.txt"));
             let player = c["player"].as_str().unwrap_or("Steve");
-            let mut s = WinScreen::new(env, poem, lines(&ctx, poem.then_some((end.as_str(), post.as_str(), player)), credits(assets)));
+            let mut s = WinScreen::new(
+                env,
+                poem,
+                lines(
+                    &ctx,
+                    poem.then_some((end.as_str(), post.as_str(), player)),
+                    credits(assets),
+                ),
+            );
             s.scroll = float(c, "scroll", 0.0);
-            s.speed = scroll_speed(poem, flag(c, "speedup", false), int(c, "modifiers", 0) as usize, flag(c, "reverse", false));
+            s.speed = scroll_speed(
+                poem,
+                flag(c, "speedup", false),
+                int(c, "modifiers", 0) as usize,
+                flag(c, "reverse", false),
+            );
             s.partial = float(c, "partial", 0.0);
             Box::new(s)
         }

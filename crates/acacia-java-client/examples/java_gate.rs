@@ -45,7 +45,11 @@ struct Tick {
 
 impl Tick {
     fn held(keys: Keys) -> Self {
-        Tick { keys, turn: [0.0; 2], dig: Dig::None }
+        Tick {
+            keys,
+            turn: [0.0; 2],
+            dig: Dig::None,
+        }
     }
 }
 
@@ -61,14 +65,34 @@ fn expand(steps: &[String]) -> Vec<Tick> {
             "up" => press(&mut held, value, false),
             "look" => {
                 let (dx, dy) = value.split_once(',').expect("look=dx,dy");
-                let per_tick = |pixels: &str| pixels.parse::<f32>().expect("pixels") * DEGREES_PER_PIXEL / LOOK_TICKS as f32;
-                ticks.extend(std::iter::repeat_n(Tick { turn: [per_tick(dx), per_tick(dy)], ..Tick::held(held) }, LOOK_TICKS as usize));
+                let per_tick = |pixels: &str| {
+                    pixels.parse::<f32>().expect("pixels") * DEGREES_PER_PIXEL / LOOK_TICKS as f32
+                };
+                ticks.extend(std::iter::repeat_n(
+                    Tick {
+                        turn: [per_tick(dx), per_tick(dy)],
+                        ..Tick::held(held)
+                    },
+                    LOOK_TICKS as usize,
+                ));
             }
             "dig" => {
                 let n: usize = value.parse().expect("dig=ticks");
-                ticks.push(Tick { dig: Dig::Start, ..Tick::held(held) });
-                ticks.extend(std::iter::repeat_n(Tick { dig: Dig::Continue, ..Tick::held(held) }, n.saturating_sub(1)));
-                ticks.push(Tick { dig: Dig::Stop, ..Tick::held(held) });
+                ticks.push(Tick {
+                    dig: Dig::Start,
+                    ..Tick::held(held)
+                });
+                ticks.extend(std::iter::repeat_n(
+                    Tick {
+                        dig: Dig::Continue,
+                        ..Tick::held(held)
+                    },
+                    n.saturating_sub(1),
+                ));
+                ticks.push(Tick {
+                    dig: Dig::Stop,
+                    ..Tick::held(held)
+                });
             }
             _ => {
                 let mut keys = held;
@@ -116,7 +140,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let packet = packet?;
                 if packet.id == ids::play::clientbound::PLAYER_POSITION && at > settle {
                     corrections += 1;
-                    println!("server moved the bot at tick {at} to {:?}", client.pose.position);
+                    println!(
+                        "server moved the bot at tick {at} to {:?}",
+                        client.pose.position
+                    );
                 }
             }
             Err(_) => {
@@ -125,7 +152,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 player.yaw += tick.turn[0];
                 player.pitch = (player.pitch + tick.turn[1]).clamp(-90.0, 90.0);
                 let underfoot = player.pos.map(|c| c.floor() as i32);
-                dig(&mut client, tick.dig, [underfoot[0], underfoot[1] - 1, underfoot[2]])?;
+                dig(
+                    &mut client,
+                    tick.dig,
+                    [underfoot[0], underfoot[1] - 1, underfoot[2]],
+                )?;
                 client.step(tick.keys)?;
                 // Control run: proves the gate can fail.
                 if cheat && at > settle {
@@ -139,6 +170,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    println!("finished at {:?} after {total} ticks, {corrections} server corrections", client.pose.position);
+    println!(
+        "finished at {:?} after {total} ticks, {corrections} server corrections",
+        client.pose.position
+    );
     Ok(())
 }

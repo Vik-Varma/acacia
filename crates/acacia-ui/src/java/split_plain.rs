@@ -19,12 +19,22 @@ pub fn plain_index_at_width(m: &dyn Metrics, s: &str, max_width: i32, style: &St
 }
 
 /// `StringSplitter.plainHeadByWidth` (`Font.plainSubstrByWidth`).
-pub fn plain_head_by_width<'a>(m: &dyn Metrics, s: &'a str, max_width: i32, style: &Style) -> &'a str {
+pub fn plain_head_by_width<'a>(
+    m: &dyn Metrics,
+    s: &'a str,
+    max_width: i32,
+    style: &Style,
+) -> &'a str {
     &s[..plain_index_at_width(m, s, max_width, style)]
 }
 
 /// `StringSplitter.plainTailByWidth` (`Font.plainSubstrByWidth(.., true)`).
-pub fn plain_tail_by_width<'a>(m: &dyn Metrics, s: &'a str, max_width: i32, style: &Style) -> &'a str {
+pub fn plain_tail_by_width<'a>(
+    m: &dyn Metrics,
+    s: &'a str,
+    max_width: i32,
+    style: &Style,
+) -> &'a str {
     let mut width = 0.0;
     let mut start = s.len();
     for (i, c) in s.char_indices().rev() {
@@ -51,7 +61,9 @@ pub fn word_position(text: &str, dir: i32, from: usize, strip_spaces: bool) -> u
                 result -= text[..result].chars().next_back().map_or(1, char::len_utf8);
             }
         } else {
-            result = text[result..].find([' ', '\n']).map_or(text.len(), |i| i + result);
+            result = text[result..]
+                .find([' ', '\n'])
+                .map_or(text.len(), |i| i + result);
             while strip_spaces && result < text.len() && sep(text[result..].chars().next()) {
                 result += 1;
             }

@@ -8,7 +8,7 @@ use acacia_physics::Vec3;
 use super::{Hazards, Threat};
 use crate::cadence::splitmix;
 use crate::human;
-use crate::interact::{ray_box, ENTITY_REACH};
+use crate::interact::{ENTITY_REACH, ray_box};
 use crate::movement::Controls;
 use crate::pathfind::MovementProfile;
 
@@ -53,7 +53,15 @@ pub struct Striker {
 
 impl Striker {
     pub fn new(profile: MovementProfile, seed: u64) -> Self {
-        Striker { profile, rng: seed, aimed: None, engaged: None, look: None, next_at: 0, strikes: 0 }
+        Striker {
+            profile,
+            rng: seed,
+            aimed: None,
+            engaged: None,
+            look: None,
+            next_at: 0,
+            strikes: 0,
+        }
     }
 
     /// Clicks sent so far.
@@ -63,7 +71,12 @@ impl Striker {
 
     /// After the steering: turns `controls` to a chaser closing in (keys kept on the course) and returns the
     /// runtime id to attack now, if the crosshair has been on it since last tick and it is in reach.
-    pub fn tick(&mut self, hazards: Option<&Hazards>, body: &Body, controls: &mut Controls) -> Option<u64> {
+    pub fn tick(
+        &mut self,
+        hazards: Option<&Hazards>,
+        body: &Body,
+        controls: &mut Controls,
+    ) -> Option<u64> {
         let Some(t) = hazards.and_then(|h| chaser(&h.melee, body)) else {
             (self.aimed, self.engaged, self.look) = (None, None, None);
             return None;
@@ -74,7 +87,16 @@ impl Striker {
         let mut want = course;
         want.look_at(body.eye, mid);
         // A chaser on the course is struck with the pitch alone: the keys and sprint stay as steered.
-        let on_course = crosshair(body.eye, &Controls { pitch: want.pitch, ..course }, min, max).is_some();
+        let on_course = crosshair(
+            body.eye,
+            &Controls {
+                pitch: want.pitch,
+                ..course
+            },
+            min,
+            max,
+        )
+        .is_some();
         if on_course {
             want.yaw = course.yaw;
         }
@@ -83,7 +105,11 @@ impl Striker {
         } else {
             // Eased from the look sent last tick: the steering set the course's yaw since.
             let (yaw, pitch) = self.look.unwrap_or((course.yaw, course.pitch));
-            controls.yaw = if on_course { course.yaw } else { self.ease(yaw, want.yaw) };
+            controls.yaw = if on_course {
+                course.yaw
+            } else {
+                self.ease(yaw, want.yaw)
+            };
             controls.pitch = self.ease(pitch, want.pitch).clamp(-90.0, 90.0);
         }
         self.look = Some((controls.yaw, controls.pitch));
@@ -93,13 +119,21 @@ impl Striker {
         let hit = crosshair(body.eye, controls, min, max).filter(|h| (body.sees)(body.eye, *h));
         let ready = self.aimed == Some(t.runtime_id) && body.tick >= self.next_at;
         self.aimed = hit.map(|_| t.runtime_id);
-        if self.engaged.replace(t.runtime_id) != Some(t.runtime_id) && self.profile == MovementProfile::Human {
-            self.next_at = self.next_at.max(body.tick + self.between(human::STRIKE_REACT));
+        if self.engaged.replace(t.runtime_id) != Some(t.runtime_id)
+            && self.profile == MovementProfile::Human
+        {
+            self.next_at = self
+                .next_at
+                .max(body.tick + self.between(human::STRIKE_REACT));
         }
         if !ready || hit.is_none_or(|h| dist(body.eye, h) > ENTITY_REACH) {
             return None;
         }
-        let gap = if self.profile == MovementProfile::Optimal { INVULNERABLE_TICKS } else { self.between(human::STRIKE_GAP) };
+        let gap = if self.profile == MovementProfile::Optimal {
+            INVULNERABLE_TICKS
+        } else {
+            self.between(human::STRIKE_GAP)
+        };
         self.next_at = body.tick + gap;
         self.strikes += 1;
         Some(t.runtime_id)
@@ -107,7 +141,8 @@ impl Striker {
 
     fn ease(&mut self, from: f32, to: f32) -> f32 {
         let diff = (to - from + 180.0).rem_euclid(360.0) - 180.0;
-        let step = (diff * human::AIM_EASE).clamp(-human::AIM_MAX_TURN_DEG, human::AIM_MAX_TURN_DEG);
+        let step =
+            (diff * human::AIM_EASE).clamp(-human::AIM_MAX_TURN_DEG, human::AIM_MAX_TURN_DEG);
         let unit = (splitmix(&mut self.rng) >> 40) as f32 / (1u64 << 24) as f32;
         from + step + (unit * 2.0 - 1.0) * human::AIM_JITTER_DEG * 0.5
     }
@@ -131,9 +166,15 @@ fn chaser<'t>(melee: &'t [Threat], body: &Body) -> Option<&'t Threat> {
         let closing = toward - (body.vel[0] * dx + body.vel[2] * dz) / flat;
         let chasing = t.target == Some(body.me) || toward >= CHASE_APPROACH;
         let coming = closing > CLOSING || flat <= DANGER;
-        chasing && coming && (t.feet[1] - body.feet[1]).abs() < MELEE_HEIGHT && reach(t, body.eye) <= ENTITY_REACH + PRE_AIM
+        chasing
+            && coming
+            && (t.feet[1] - body.feet[1]).abs() < MELEE_HEIGHT
+            && reach(t, body.eye) <= ENTITY_REACH + PRE_AIM
     };
-    melee.iter().filter(threat).min_by(|a, b| reach(a, body.eye).total_cmp(&reach(b, body.eye)))
+    melee
+        .iter()
+        .filter(threat)
+        .min_by(|a, b| reach(a, body.eye).total_cmp(&reach(b, body.eye)))
 }
 
 /// Distance from `eye` to the nearest point of `t`'s box.
@@ -145,7 +186,11 @@ fn reach(t: &Threat, eye: Vec3) -> f32 {
 /// Where the look ray of `c` from `eye` enters the box, if it does.
 fn crosshair(eye: Vec3, c: &Controls, min: Vec3, max: Vec3) -> Option<Vec3> {
     let (yaw, pitch) = (c.yaw.to_radians(), c.pitch.to_radians());
-    let dir = [-yaw.sin() * pitch.cos(), -pitch.sin(), yaw.cos() * pitch.cos()];
+    let dir = [
+        -yaw.sin() * pitch.cos(),
+        -pitch.sin(),
+        yaw.cos() * pitch.cos(),
+    ];
     let (t, _) = ray_box(eye, dir, min, max)?;
     (t >= 0.0).then(|| [0, 1, 2].map(|i| eye[i] + dir[i] * t))
 }

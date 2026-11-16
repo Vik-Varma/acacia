@@ -1,14 +1,14 @@
-use acacia_client::proto::RawPacket;
 use acacia_client::Event;
+use acacia_client::proto::RawPacket;
 
 use super::Step;
+use crate::Bot;
 use crate::events::BotEvent;
 use crate::lag::LagLine;
 use crate::movement::Movement;
 use crate::state::PlayerState;
 use crate::trace;
 use crate::world::WorldTracker;
-use crate::Bot;
 
 impl Bot {
     /// [`Bot::step`] on Bedrock.
@@ -21,7 +21,11 @@ impl Bot {
             let rejected = world.rejected.drain(..).filter(|_| b.strict);
             self.out.extend(rejected.map(BotEvent::Violation));
         }
-        if let Some(packet) = b.lag.as_mut().and_then(|l| l.pop_due(tokio::time::Instant::now())) {
+        if let Some(packet) = b
+            .lag
+            .as_mut()
+            .and_then(|l| l.pop_due(tokio::time::Instant::now()))
+        {
             self.apply(&packet);
             return Some(Step::Packet(packet));
         }
@@ -70,12 +74,15 @@ impl Bot {
     }
 
     fn apply(&mut self, packet: &RawPacket) {
-        let Some(b) = self.backend.bedrock_mut() else { return };
+        let Some(b) = self.backend.bedrock_mut() else {
+            return;
+        };
         if let Some(r) = &mut b.recorder
             && (PlayerState::PACKETS.contains(&packet.id)
                 || WorldTracker::PACKETS.contains(&packet.id)
                 || Movement::PACKETS.contains(&packet.id)
-                || trace::ANALYSIS_PACKETS.contains(&packet.id) && trace::about(packet, self.state.me().runtime_entity_id))
+                || trace::ANALYSIS_PACKETS.contains(&packet.id)
+                    && trace::about(packet, self.state.me().runtime_entity_id))
         {
             r.write(&trace::Event::Packet(packet.clone()));
         }
@@ -103,6 +110,7 @@ impl Bot {
         self.reflex_packet(packet);
         self.on_fetch_packet(packet);
         self.publish_entity_changes();
-        self.events.on_packet(packet, &mut self.state, &mut self.out);
+        self.events
+            .on_packet(packet, &mut self.state, &mut self.out);
     }
 }

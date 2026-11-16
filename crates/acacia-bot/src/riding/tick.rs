@@ -2,12 +2,12 @@ use acacia_client::proto::packets::PlayerAuthInput;
 use acacia_client::proto::types::Vec3f;
 
 use super::exit::Mount;
-use super::input::{apply_dismount, apply_seat, Seat};
+use super::input::{Seat, apply_dismount, apply_seat};
 use super::keys::{keys, report_jump, report_keys};
-use crate::movement::{Idle, EYE_HEIGHT};
+use crate::Bot;
+use crate::movement::{EYE_HEIGHT, Idle};
 use crate::spawn::{self, SpawnPacket};
 use crate::world::PhysicsWorld;
-use crate::Bot;
 
 impl Bot {
     /// Idle bots: turns this tick's standing input into a seated one while riding. A dismount steps
@@ -17,7 +17,11 @@ impl Bot {
             self.ride.seated = 0;
             return;
         };
-        let exit = if self.ride.dismount { self.exit_feet() } else { None };
+        let exit = if self.ride.dismount {
+            self.exit_feet()
+        } else {
+            None
+        };
         self.seat_input(input, &seat, exit);
         if let Some(feet @ [x, y, z]) = exit.filter(|_| !self.state.riding.is_riding()) {
             tracing::debug!(?feet, "left the vehicle");
@@ -39,7 +43,11 @@ impl Bot {
             (self.ride.horse, self.ride.boat) = (None, None);
             if let Some(idle) = self.ride.idle.take() {
                 let eye = self.state.player.eye_position();
-                let feet = self.ride.leaving_feet.take().unwrap_or([eye.x, eye.y - EYE_HEIGHT, eye.z]);
+                let feet =
+                    self.ride
+                        .leaving_feet
+                        .take()
+                        .unwrap_or([eye.x, eye.y - EYE_HEIGHT, eye.z]);
                 tracing::debug!(?feet, "left the vehicle");
                 if let Some(movement) = self.backend.movement_mut() {
                     movement.resync(idle.last_tick(), feet, [0.0; 3]);
@@ -52,16 +60,32 @@ impl Bot {
         if self.ride.dismount {
             tracing::debug!(mount = ?Mount::of(&self.state), ?exit, "dismounting");
         }
-        let Some(movement) = self.backend.movement_mut() else { return false };
+        let Some(movement) = self.backend.movement_mut() else {
+            return false;
+        };
         let (yaw, pitch) = (movement.controls.yaw, movement.controls.pitch);
-        let idle = self.ride.idle.get_or_insert_with(|| Idle::continuing(movement.input_tick()));
+        let idle = self
+            .ride
+            .idle
+            .get_or_insert_with(|| Idle::continuing(movement.input_tick()));
         if let Some(mut input) = idle.tick_facing(&self.state.player, yaw, pitch, true) {
             self.seat_input(&mut input, &seat, Some(exit));
-            if self.state.riding.is_riding() && !self.drive_horse(&mut input) && !self.drive_boat(&mut input) {
+            if self.state.riding.is_riding()
+                && !self.drive_horse(&mut input)
+                && !self.drive_boat(&mut input)
+            {
                 // The server moves the rest (pigs, minecarts) from the rider's keys.
-                let controls = self.backend.movement().map(|m| m.controls).unwrap_or_default();
+                let controls = self
+                    .backend
+                    .movement()
+                    .map(|m| m.controls)
+                    .unwrap_or_default();
                 report_keys(&mut input, keys(&controls));
-                report_jump(&mut input, controls.jump, std::mem::replace(&mut self.ride.jump_held, controls.jump));
+                report_jump(
+                    &mut input,
+                    controls.jump,
+                    std::mem::replace(&mut self.ride.jump_held, controls.jump),
+                );
             }
             self.add_queued_flags(&mut input);
             self.send_bedrock(&input);
@@ -77,7 +101,11 @@ impl Bot {
         let mount = Mount::of(&self.state)?;
         let [x, y, z] = mount.vehicle.map(|c| c.floor() as i32);
         let known = |dx, dy, dz| world.knows_block(x + dx, y + dy, z + dz);
-        if ![-2, 2].iter().all(|&dx| [-2, 3].iter().all(|&dy| [-2, 2].iter().all(|&dz| known(dx, dy, dz)))) {
+        if ![-2, 2].iter().all(|&dx| {
+            [-2, 3]
+                .iter()
+                .all(|&dy| [-2, 2].iter().all(|&dz| known(dx, dy, dz)))
+        }) {
             return None;
         }
         mount.exit_feet(&PhysicsWorld { view, registry })
@@ -89,7 +117,11 @@ impl Bot {
         self.ride.leaving_feet = Some(exit.unwrap_or_else(|| seat.leaving_feet()));
         if std::mem::take(&mut self.ride.dismount) {
             let eye = match exit {
-                Some([x, y, z]) => Vec3f { x, y: y + EYE_HEIGHT, z },
+                Some([x, y, z]) => Vec3f {
+                    x,
+                    y: y + EYE_HEIGHT,
+                    z,
+                },
                 None => input.position.clone(),
             };
             apply_dismount(input, eye.clone());
@@ -100,7 +132,11 @@ impl Bot {
         if self.ride.seated == 1 {
             self.clear_aim_assist();
             if let Some(b) = self.backend.bedrock() {
-                spawn::send(&b.client, self.state.player.runtime_entity_id, SpawnPacket::MouseOverNothing);
+                spawn::send(
+                    &b.client,
+                    self.state.player.runtime_entity_id,
+                    SpawnPacket::MouseOverNothing,
+                );
             }
         }
         apply_seat(input, seat, self.ride.seated == 0);

@@ -7,7 +7,11 @@ const SCALE: f64 = 10430.378350470453;
 
 fn table() -> &'static [f32] {
     static SINE: OnceLock<Box<[f32]>> = OnceLock::new();
-    SINE.get_or_init(|| (0..65536).map(|i| (f64::from(i) / SCALE).sin() as f32).collect())
+    SINE.get_or_init(|| {
+        (0..65536)
+            .map(|i| (f64::from(i) / SCALE).sin() as f32)
+            .collect()
+    })
 }
 
 pub fn sin(angle: f32) -> f32 {
@@ -78,9 +82,24 @@ pub fn joml_rotation(axis: glam::Vec3, degrees: f32) -> glam::Mat4 {
     let (s, c) = joml_sin_cos(angle);
     let (x, y, z) = (axis.x != 0.0, axis.y != 0.0, axis.z != 0.0);
     match (x, y, z) {
-        (true, _, _) => Mat4::from_cols(Vec4::X, Vec4::new(0.0, c, s, 0.0), Vec4::new(0.0, -s, c, 0.0), Vec4::W),
-        (_, true, _) => Mat4::from_cols(Vec4::new(c, 0.0, -s, 0.0), Vec4::Y, Vec4::new(s, 0.0, c, 0.0), Vec4::W),
-        _ => Mat4::from_cols(Vec4::new(c, s, 0.0, 0.0), Vec4::new(-s, c, 0.0, 0.0), Vec4::Z, Vec4::W),
+        (true, _, _) => Mat4::from_cols(
+            Vec4::X,
+            Vec4::new(0.0, c, s, 0.0),
+            Vec4::new(0.0, -s, c, 0.0),
+            Vec4::W,
+        ),
+        (_, true, _) => Mat4::from_cols(
+            Vec4::new(c, 0.0, -s, 0.0),
+            Vec4::Y,
+            Vec4::new(s, 0.0, c, 0.0),
+            Vec4::W,
+        ),
+        _ => Mat4::from_cols(
+            Vec4::new(c, s, 0.0, 0.0),
+            Vec4::new(-s, c, 0.0, 0.0),
+            Vec4::Z,
+            Vec4::W,
+        ),
     }
 }
 

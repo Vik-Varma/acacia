@@ -10,13 +10,26 @@ use p384::ecdsa::SigningKey;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let flag = |f: &str| args.iter().any(|a| a == f);
-    let account_id = args.iter().find(|a| !a.starts_with("--")).cloned().unwrap_or("default".into());
-    let title = if flag("--switch") { Title::NintendoSwitch } else { Title::Android };
+    let account_id = args
+        .iter()
+        .find(|a| !a.starts_with("--"))
+        .cloned()
+        .unwrap_or("default".into());
+    let title = if flag("--switch") {
+        Title::NintendoSwitch
+    } else {
+        Title::Android
+    };
 
-    let client = Arc::new(AuthClient::new(AuthConfig { title, ..AuthConfig::default() })?);
+    let client = Arc::new(AuthClient::new(AuthConfig {
+        title,
+        ..AuthConfig::default()
+    })?);
     if flag("--start-only") {
         let p = client.start_device_code().await?;
         println!(
@@ -26,10 +39,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let account = Account::new(client, Arc::new(FileTokenCache::new(".tokens")?), account_id);
+    let account = Account::new(
+        client,
+        Arc::new(FileTokenCache::new(".tokens")?),
+        account_id,
+    );
     if !account.is_signed_in().await? {
         account
-            .sign_in(|p| println!("Sign in at {} with code {}", p.verification_uri, p.user_code))
+            .sign_in(|p| {
+                println!(
+                    "Sign in at {} with code {}",
+                    p.verification_uri, p.user_code
+                )
+            })
             .await?;
     }
 

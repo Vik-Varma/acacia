@@ -24,7 +24,10 @@ static LANG: OnceLock<HashMap<String, String>> = OnceLock::new();
 pub fn lang(assets: &Assets) -> &'static HashMap<String, String> {
     LANG.get_or_init(|| {
         let path = assets.root.join("lang/en_us.json");
-        std::fs::read_to_string(path).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
     })
 }
 
@@ -50,7 +53,12 @@ pub fn flag(c: &Value, k: &str, d: bool) -> bool {
 }
 
 pub fn ints(v: &Value) -> Vec<i32> {
-    v.as_array().into_iter().flatten().filter_map(Value::as_i64).map(|v| v as i32).collect()
+    v.as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_i64)
+        .map(|v| v as i32)
+        .collect()
 }
 
 /// The `AbstractWidget` state the oracle writes on every widget.

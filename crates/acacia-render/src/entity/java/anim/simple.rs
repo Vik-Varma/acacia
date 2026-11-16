@@ -20,7 +20,11 @@ fn crawl(p: &mut Poses, s: &RenderState, segments: i32, turn: f32, slide: f32) {
 
 pub(super) fn silverfish(p: &mut Poses, s: &RenderState) {
     crawl(p, s, 7, 0.05, 0.2);
-    for (layer, segment, moves) in [("layer0", "segment2", false), ("layer1", "segment4", true), ("layer2", "segment1", true)] {
+    for (layer, segment, moves) in [
+        ("layer0", "segment2", false),
+        ("layer1", "segment4", true),
+        ("layer2", "segment1", true),
+    ] {
         let from = p.read(segment);
         p.y_rot(layer, from.y_rot);
         if moves {
@@ -36,10 +40,18 @@ pub(super) fn endermite(p: &mut Poses, s: &RenderState) {
 /// `BlazeModel`: three rings of rods circling at their own speeds and bobbing.
 pub(super) fn blaze(p: &mut Poses, s: &RenderState) {
     let age = s.age();
-    let rings: [(i32, f32, f32, f32); 3] = [(0, age * PI * -0.1, -2.0, 9.0), (4, PI / 4.0 + age * PI * 0.03, 2.0, 7.0), (8, 0.471_238_94 + age * PI * -0.05, 11.0, 5.0)];
+    let rings: [(i32, f32, f32, f32); 3] = [
+        (0, age * PI * -0.1, -2.0, 9.0),
+        (4, PI / 4.0 + age * PI * 0.03, 2.0, 7.0),
+        (8, 0.471_238_94 + age * PI * -0.05, 11.0, 5.0),
+    ];
     for (first, mut angle, y, radius) in rings {
         for i in first..first + 4 {
-            let bob = if first == 8 { cos((i as f32 * 1.5 + age) * 0.5) } else { cos(((i * 2) as f32 + age) * 0.25) };
+            let bob = if first == 8 {
+                cos((i as f32 * 1.5 + age) * 0.5)
+            } else {
+                cos(((i * 2) as f32 + age) * 0.25)
+            };
             let part = p.get(&format!("part{i}"));
             part.y = y + bob;
             part.x = cos(angle) * radius;
@@ -53,13 +65,18 @@ pub(super) fn blaze(p: &mut Poses, s: &RenderState) {
 /// `GhastModel.animateTentacles`.
 pub(super) fn ghast(p: &mut Poses, s: &RenderState) {
     for i in 0..9 {
-        p.x_rot(&format!("tentacle{i}"), 0.2 * sin(s.age() * 0.3 + i as f32) + 0.4);
+        p.x_rot(
+            &format!("tentacle{i}"),
+            0.2 * sin(s.age() * 0.3 + i as f32) + 0.4,
+        );
     }
 }
 
 /// `HappyGhastModel`: a harnessed body squeezes in.
 pub(super) fn happy_ghast(p: &mut Poses, s: &RenderState) {
-    if s.text("bodyItem").is_some_and(|item| !item.is_empty() && item != "minecraft:air") {
+    if s.text("bodyItem")
+        .is_some_and(|item| !item.is_empty() && item != "minecraft:air")
+    {
         let body = p.get("body");
         (body.x_scale, body.y_scale, body.z_scale) = (0.9375, 0.9375, 0.9375);
     }
@@ -70,7 +87,11 @@ pub(super) fn happy_ghast(p: &mut Poses, s: &RenderState) {
 #[allow(clippy::approx_constant)] // Java's literal -0.7854F, not pi/4.
 pub(super) fn happy_ghast_harness(p: &mut Poses, s: &RenderState) {
     let goggles = p.get("goggles");
-    (goggles.x_rot, goggles.y) = if s.flag("isRidden") { (0.0, 14.0) } else { (-0.7854, 9.0) };
+    (goggles.x_rot, goggles.y) = if s.flag("isRidden") {
+        (0.0, 14.0)
+    } else {
+        (-0.7854, 9.0)
+    };
 }
 
 /// `MagmaCubeModel`: the cube's slices spread apart as it squishes.
@@ -96,7 +117,10 @@ pub(super) fn iron_golem(p: &mut Poses, s: &RenderState) {
     } else if flower > 0 {
         (-0.8 + 0.025 * triangle_wave(flower as f32, 70.0), 0.0)
     } else {
-        ((-0.2 + 1.5 * triangle_wave(pos, 13.0)) * speed, (-0.2 - 1.5 * triangle_wave(pos, 13.0)) * speed)
+        (
+            (-0.2 + 1.5 * triangle_wave(pos, 13.0)) * speed,
+            (-0.2 - 1.5 * triangle_wave(pos, 13.0)) * speed,
+        )
     };
     p.x_rot("right_arm", right);
     p.x_rot("left_arm", left);

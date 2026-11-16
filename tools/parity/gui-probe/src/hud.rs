@@ -40,11 +40,18 @@ fn decorations(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<Gu
     let survival = mode == "survival" || mode == "adventure";
     let indicator = c["attackIndicator"].as_str().unwrap_or("OFF");
     let partial = float("partial", 0.0);
-    let effects: Vec<&str> = c["effects"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+    let effects: Vec<&str> = c["effects"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect();
     let has = |e: &str| effects.contains(&e);
     if c["crosshair"].as_bool().unwrap_or(false) && mode != "spectator" {
         let attack = (indicator == "CROSSHAIR").then(|| float("attackScale", 1.0));
-        let full = attack.is_some_and(|a| hotbar::full_attack_indicator(a, float("attackDelay", 5.0), c["target"].as_bool()));
+        let full = attack.is_some_and(|a| {
+            hotbar::full_attack_indicator(a, float("attackDelay", 5.0), c["target"].as_bool())
+        });
         hotbar::crosshair(&mut gui, attack, full);
     }
     if mode != "spectator" {
@@ -58,7 +65,11 @@ fn decorations(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<Gu
         };
         hotbar::hotbar(&mut gui, &bar);
     }
-    let vehicle_hearts = if c.get("vehicleMaxHealth").is_some() { hotbar::vehicle_max_hearts(float("vehicleMaxHealth", 0.0)) } else { 0 };
+    let vehicle_hearts = if c.get("vehicleMaxHealth").is_some() {
+        hotbar::vehicle_max_hearts(float("vehicleMaxHealth", 0.0))
+    } else {
+        0
+    };
     if survival {
         let millis = 1_000_000_000i64;
         let mut hud = HealthHud {
@@ -101,6 +112,12 @@ fn decorations(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<Gu
         hotbar::vehicle_health(&mut gui, vehicle_hearts, float("vehicleHealth", 0.0));
     }
     let level = if survival { int("xpLevel", 0) } else { 0 };
-    hotbar::experience(&mut gui, assets.font.as_ref(), float("xpProgress", 0.0), level, c["experienceBar"].as_bool().unwrap_or(false));
+    hotbar::experience(
+        &mut gui,
+        assets.font.as_ref(),
+        float("xpProgress", 0.0),
+        level,
+        c["experienceBar"].as_bool().unwrap_or(false),
+    );
     gui.draws
 }

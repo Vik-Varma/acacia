@@ -22,17 +22,32 @@ pub struct PictureRequest {
 const FLAG_FRONT: [f32; 4] = [1.0, 1.0, 21.0, 41.0];
 
 /// The quad showing `picture` over `window`, or `None` when the viewer can't draw it.
-pub fn quad(atlas: &mut Atlas, root: &Path, requests: &mut Vec<PictureRequest>, gui_scale: f32, picture: &Picture, window: [f32; 4]) -> Option<Quad> {
+pub fn quad(
+    atlas: &mut Atlas,
+    root: &Path,
+    requests: &mut Vec<PictureRequest>,
+    gui_scale: f32,
+    picture: &Picture,
+    window: [f32; 4],
+) -> Option<Quad> {
     match picture {
         Picture::Entity { .. } => {
-            requests.push(PictureRequest { picture: picture.clone(), window, gui_scale });
+            requests.push(PictureRequest {
+                picture: picture.clone(),
+                window,
+                gui_scale,
+            });
             Some(Quad::picture(window))
         }
         Picture::Banner { base, patterns, .. } => {
             let sprite = banner_sprite(atlas, root, &Banner::from_java(base, patterns))?;
             let [l, t, r, b] = FLAG_FRONT.map(|v| v * sprite.width as f32 / 64.0);
             let (u, v) = (sprite.x as f32, sprite.y as f32);
-            Some(Quad::plain(window, [u + l, v + t, u + r, v + b], acacia_ui::draw::WHITE))
+            Some(Quad::plain(
+                window,
+                [u + l, v + t, u + r, v + b],
+                acacia_ui::draw::WHITE,
+            ))
         }
         // TODO: the enchanting table's book needs Java's BookModel from the entity models.
         _ => None,
@@ -48,7 +63,11 @@ fn banner_sprite(atlas: &mut Atlas, root: &Path, banner: &Banner) -> Option<Spri
 }
 
 /// A sprite of `atlas` whose ids are texture paths (`minecraft:entity/banner/creeper`).
-pub fn atlas_sprite(images: &mut acacia_ui::java::paint::assets::Images, atlas: &mut Atlas, sprite: &str) -> Option<Sprite> {
+pub fn atlas_sprite(
+    images: &mut acacia_ui::java::paint::assets::Images,
+    atlas: &mut Atlas,
+    sprite: &str,
+) -> Option<Sprite> {
     let path = sprite.split_once(':').map_or(sprite, |(_, p)| p);
     images.texture(atlas, path)
 }

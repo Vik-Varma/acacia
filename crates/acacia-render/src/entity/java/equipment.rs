@@ -43,11 +43,16 @@ pub struct Equipment(HashMap<String, Asset>);
 
 impl Equipment {
     pub fn load(root: &Path) -> Equipment {
-        let Ok(dir) = std::fs::read_dir(root.join("java/equipment")) else { return Equipment::default() };
+        let Ok(dir) = std::fs::read_dir(root.join("java/equipment")) else {
+            return Equipment::default();
+        };
         let assets = dir.flatten().filter_map(|entry| {
             let path = entry.path();
             let name = path.file_stem()?.to_str()?.to_owned();
-            Some((name, serde_json::from_slice(&std::fs::read(&path).ok()?).ok()?))
+            Some((
+                name,
+                serde_json::from_slice(&std::fs::read(&path).ok()?).ok()?,
+            ))
         });
         Equipment(assets.collect())
     }
@@ -55,36 +60,77 @@ impl Equipment {
     /// Every layer's texture path, for registering up front.
     pub fn textures(&self) -> impl Iterator<Item = String> + '_ {
         let layers = self.0.values().flat_map(|asset| &asset.layers);
-        layers.flat_map(|(kind, layers)| layers.iter().map(move |layer| texture_path(kind, &layer.texture)))
+        layers.flat_map(|(kind, layers)| {
+            layers
+                .iter()
+                .map(move |layer| texture_path(kind, &layer.texture))
+        })
     }
 
     /// What `item` draws in its slot on a humanoid (`baby`: the baby's layers); the slot's index
     /// in [`SLOTS`] and the draws, bottom first, its trim's last. `dye` and `trim` are the stack's.
-    pub fn worn(&self, item: &str, baby: bool, dye: Option<[u8; 3]>, trim: Option<(&Trims, &Trim)>) -> Option<(usize, Vec<Draw>)> {
+    pub fn worn(
+        &self,
+        item: &str,
+        baby: bool,
+        dye: Option<[u8; 3]>,
+        trim: Option<(&Trims, &Trim)>,
+    ) -> Option<(usize, Vec<Draw>)> {
         let (asset, slot) = piece(item)?;
-        let layer_type = if baby { "humanoid_baby" } else if slot == 2 { "humanoid_leggings" } else { "humanoid" };
+        let layer_type = if baby {
+            "humanoid_baby"
+        } else if slot == 2 {
+            "humanoid_leggings"
+        } else {
+            "humanoid"
+        };
         let draws = self.draws(asset, layer_type, dye)?;
-        let trim = trim.filter(|_| !baby).and_then(|(trims, trim)| trims.texture(&self.0.get(asset)?.trim_overrides, layer_type, trim));
-        Some((slot, draws.into_iter().chain(trim.map(|texture| Draw { texture, color: None })).collect()))
+        let trim = trim.filter(|_| !baby).and_then(|(trims, trim)| {
+            trims.texture(&self.0.get(asset)?.trim_overrides, layer_type, trim)
+        });
+        Some((
+            slot,
+            draws
+                .into_iter()
+                .chain(trim.map(|texture| Draw {
+                    texture,
+                    color: None,
+                }))
+                .collect(),
+        ))
     }
 
     /// `EquipmentLayerRenderer.renderLayers`' draws of `asset`'s `layer_type` layers, bottom
     /// first; `None` when the asset has none.
     pub fn draws(&self, asset: &str, layer_type: &str, dye: Option<[u8; 3]>) -> Option<Vec<Draw>> {
-        let layers = self.0.get(asset)?.layers.get(layer_type).filter(|l| !l.is_empty())?;
+        let layers = self
+            .0
+            .get(asset)?
+            .layers
+            .get(layer_type)
+            .filter(|l| !l.is_empty())?;
         let draws = layers.iter().filter_map(|layer| {
             let color = match &layer.dyeable {
                 // An undyed layer without a colour of its own is skipped (Java's colour 0).
                 Some(d) => Some(dye.or_else(|| d.color_when_undyed.map(rgb))?),
                 None => None,
             };
-            Some(Draw { texture: texture_path(layer_type, &layer.texture), color })
+            Some(Draw {
+                texture: texture_path(layer_type, &layer.texture),
+                color,
+            })
         });
         Some(draws.collect())
     }
 
     /// The image `trim` draws on equipment asset `asset` (`iron`) for `layer_type`.
-    pub fn trim_texture(&self, asset: &str, layer_type: &str, trims: &Trims, trim: &Trim) -> Option<String> {
+    pub fn trim_texture(
+        &self,
+        asset: &str,
+        layer_type: &str,
+        trims: &Trims,
+        trim: &Trim,
+    ) -> Option<String> {
         trims.texture(&self.0.get(asset)?.trim_overrides, layer_type, trim)
     }
 }
@@ -104,8 +150,15 @@ fn rgb(argb: i32) -> [u8; 3] {
 /// nautilus's armour by material, wolf armour, carpets, harnesses, the saddle, the elytra.
 pub fn asset(item: &str) -> Option<&str> {
     let name = item.strip_prefix("minecraft:").unwrap_or(item);
-    if let Some(material) = name.strip_suffix("_horse_armor").or_else(|| name.strip_suffix("_nautilus_armor")) {
-        return Some(if material == "golden" { "gold" } else { material });
+    if let Some(material) = name
+        .strip_suffix("_horse_armor")
+        .or_else(|| name.strip_suffix("_nautilus_armor"))
+    {
+        return Some(if material == "golden" {
+            "gold"
+        } else {
+            material
+        });
     }
     match name {
         "wolf_armor" => Some("armadillo_scute"),
@@ -140,22 +193,52 @@ mod tests {
 
     #[test]
     fn leather_takes_its_dye_or_the_undyed_brown() {
-        let equipment = Equipment(HashMap::from([("leather".to_owned(), serde_json::from_str(LEATHER).unwrap())]));
-        let (slot, draws) = equipment.worn("minecraft:leather_leggings", false, None, None).unwrap();
+        let equipment = Equipment(HashMap::from([(
+            "leather".to_owned(),
+            serde_json::from_str(LEATHER).unwrap(),
+        )]));
+        let (slot, draws) = equipment
+            .worn("minecraft:leather_leggings", false, None, None)
+            .unwrap();
         assert_eq!(slot, 2);
-        assert_eq!(draws[0], Draw { texture: "java/textures/entity/equipment/humanoid_leggings/leather.png".into(), color: Some([0xA0, 0x65, 0x40]) });
+        assert_eq!(
+            draws[0],
+            Draw {
+                texture: "java/textures/entity/equipment/humanoid_leggings/leather.png".into(),
+                color: Some([0xA0, 0x65, 0x40])
+            }
+        );
         assert_eq!(draws[1].color, None);
-        let (_, dyed) = equipment.worn("minecraft:leather_helmet", false, Some([1, 2, 3]), None).unwrap();
+        let (_, dyed) = equipment
+            .worn("minecraft:leather_helmet", false, Some([1, 2, 3]), None)
+            .unwrap();
         assert_eq!(dyed[0].color, Some([1, 2, 3]));
-        assert!(equipment.worn("minecraft:leather_helmet", true, None, None).is_none());
+        assert!(
+            equipment
+                .worn("minecraft:leather_helmet", true, None, None)
+                .is_none()
+        );
     }
 
     #[test]
     fn an_unknown_trim_adds_nothing() {
-        let equipment = Equipment(HashMap::from([("leather".to_owned(), serde_json::from_str(LEATHER).unwrap())]));
+        let equipment = Equipment(HashMap::from([(
+            "leather".to_owned(),
+            serde_json::from_str(LEATHER).unwrap(),
+        )]));
         let trims = Trims::default();
-        let trim = Trim { material: "iron".into(), pattern: "coast".into() };
-        let (_, draws) = equipment.worn("minecraft:leather_helmet", false, None, Some((&trims, &trim))).unwrap();
+        let trim = Trim {
+            material: "iron".into(),
+            pattern: "coast".into(),
+        };
+        let (_, draws) = equipment
+            .worn(
+                "minecraft:leather_helmet",
+                false,
+                None,
+                Some((&trims, &trim)),
+            )
+            .unwrap();
         assert_eq!(draws.len(), 2);
     }
 

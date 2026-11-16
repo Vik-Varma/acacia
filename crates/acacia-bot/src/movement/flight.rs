@@ -29,7 +29,9 @@ impl Movement {
     /// and when it turns off: BDS reported our own flight start 7 s late (drill `flight`), so a late
     /// "flying" may predate our stop.
     pub(crate) fn set_abilities(&mut self, player: &PlayerState) {
-        let Some(st) = self.physics.as_mut() else { return };
+        let Some(st) = self.physics.as_mut() else {
+            return;
+        };
         let (abilities, flight) = (&player.abilities, &mut st.flight);
         flight.may_fly = player.may_fly();
         flight.fly_speed = abilities.fly_speed;

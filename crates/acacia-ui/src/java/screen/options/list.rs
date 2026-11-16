@@ -20,7 +20,10 @@ impl Entry for Widgets {
         }
     }
     fn children(&mut self) -> Vec<&mut dyn Widget> {
-        self.widgets.iter_mut().map(|w| w.as_mut() as &mut dyn Widget).collect()
+        self.widgets
+            .iter_mut()
+            .map(|w| w.as_mut() as &mut dyn Widget)
+            .collect()
     }
     fn place(&mut self, row: [i32; 4]) {
         let x = self.screen_width / 2 - 155;
@@ -63,13 +66,22 @@ impl OptionsList {
     pub fn new(width: i32, height: i32, y: i32, in_world: bool) -> OptionsList {
         let mut list = SelectionList::new(width, height, y, 310, in_world);
         list.selectable = false;
-        OptionsList { list, screen_width: width }
+        OptionsList {
+            list,
+            screen_width: width,
+        }
     }
 
     /// `addBig`: one widget the row's width.
     pub fn add_big(&mut self, mut widget: Box<dyn Widget>) {
         widget.base_mut().w = 310;
-        self.list.push(Box::new(Widgets { widgets: vec![widget], screen_width: self.screen_width }), 25);
+        self.list.push(
+            Box::new(Widgets {
+                widgets: vec![widget],
+                screen_width: self.screen_width,
+            }),
+            25,
+        );
     }
 
     /// `addSmall`: two to a row.
@@ -78,7 +90,13 @@ impl OptionsList {
         while let Some(first) = it.next() {
             let mut row = vec![first];
             row.extend(it.next());
-            self.list.push(Box::new(Widgets { widgets: row, screen_width: self.screen_width }), 25);
+            self.list.push(
+                Box::new(Widgets {
+                    widgets: row,
+                    screen_width: self.screen_width,
+                }),
+                25,
+            );
         }
     }
 
@@ -86,7 +104,14 @@ impl OptionsList {
     pub fn add_header(&mut self, ctx: &Ctx, text: Text) {
         let pad_top = if self.list.rows.is_empty() { 0 } else { 18 };
         let widget = FocusableTextWidget::new(ctx.font, text, 4, -1, false, Fill::OnFocus);
-        self.list.push(Box::new(Header { widget, pad_top, screen_width: self.screen_width }), pad_top + 18);
+        self.list.push(
+            Box::new(Header {
+                widget,
+                pad_top,
+                screen_width: self.screen_width,
+            }),
+            pad_top + 18,
+        );
     }
 
     /// `updateSizeAndPosition(width, height, 0, y)`: the scroll amount clamped to the new size.

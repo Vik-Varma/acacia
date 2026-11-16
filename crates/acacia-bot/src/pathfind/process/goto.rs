@@ -1,6 +1,6 @@
 use super::{Ctx, Process, Want};
-use crate::pathfind::{Goal, GotoOpts};
 use crate::ActionError;
+use crate::pathfind::{Goal, GotoOpts};
 
 /// Drives to a goal; done on arrival, failed when the pilot gives up. Pre-empted, it re-plans from where it
 /// regains control.

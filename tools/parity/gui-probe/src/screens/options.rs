@@ -24,7 +24,12 @@ pub fn replay(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<Gui
     let lang = lang(assets);
     let tr = |k: &str| lang.get(k).cloned();
     let blur = int(&c["values"], "menuBackgroundBlurriness", 5) >= 1;
-    let env = Env { width: int(c, "width", 427), height: int(c, "height", 240), in_world: true, blur };
+    let env = Env {
+        width: int(c, "width", 427),
+        height: int(c, "height", 240),
+        in_world: true,
+        blur,
+    };
     let mut gui = Gui::new(env.width, env.height);
     let mouse = ints(&c["mouse"]);
     let mut ctx = Ctx::new(&mut gui, assets.font.as_ref(), &tr, (mouse[0], mouse[1]));
@@ -37,7 +42,13 @@ pub fn replay(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<Gui
         friend_requests: flag(c, "friendRequests", false),
         ticked: flag(c, "tick", false),
     };
-    let Some(mut screen) = build(&ctx, env, c["kind"].as_str().unwrap_or_default(), &values, client) else {
+    let Some(mut screen) = build(
+        &ctx,
+        env,
+        c["kind"].as_str().unwrap_or_default(),
+        &values,
+        client,
+    ) else {
         return Vec::new();
     };
     if let Some(list) = &mut screen.list {

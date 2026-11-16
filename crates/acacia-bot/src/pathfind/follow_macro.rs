@@ -4,9 +4,9 @@
 use acacia_physics::{BlockPos, Vec3};
 
 use super::PathNode;
-use super::node::Entry;
 use super::control::{Controller, Phase};
 use super::mac::Macro;
+use super::node::Entry;
 use super::rollout::{self, Body, Spend};
 use super::shortcut::ShortcutCtl;
 use super::solve::{STRAIGHT, Solver, WIDE};
@@ -68,19 +68,45 @@ impl MacroRunner {
 
     /// Runs a shortcut the follower found, predicted as `predicted`, ending on path index `last`.
     pub fn begin(&mut self, ctl: ShortcutCtl, predicted: Vec<Body>, last: usize) {
-        let report = MacroReport { predicted: predicted.len() - 1, executed: 0, max_error: 0.0, repredicted: 0, resolved: false };
+        let report = MacroReport {
+            predicted: predicted.len() - 1,
+            executed: 0,
+            max_error: 0.0,
+            repredicted: 0,
+            resolved: false,
+        };
         let tolerance = ctl.aim.profile.tolerance();
-        self.exec = Some(Exec { ctl: Macro::Shortcut(ctl), predicted, t: 0, tolerance, want: None, last, report });
+        self.exec = Some(Exec {
+            ctl: Macro::Shortcut(ctl),
+            predicted,
+            t: 0,
+            tolerance,
+            want: None,
+            last,
+            report,
+        });
     }
 
     /// Runs the move under way, else starts the macro move of `path[index]` if due, setting `c` for the tick
     /// after `live`.
-    pub fn tick<S: StepIn<W>, W: SimWorld + ?Sized>(&mut self, path: &[PathNode], index: usize, live: Option<&S>, w: &W, c: &mut Controls, spend: &mut Spend) -> MacroStep {
-        let Some(live) = live else { return MacroStep::Idle };
+    pub fn tick<S: StepIn<W>, W: SimWorld + ?Sized>(
+        &mut self,
+        path: &[PathNode],
+        index: usize,
+        live: Option<&S>,
+        w: &W,
+        c: &mut Controls,
+        spend: &mut Spend,
+    ) -> MacroStep {
+        let Some(live) = live else {
+            return MacroStep::Idle;
+        };
         let exec = match &mut self.exec {
             Some(e) => e,
             None => {
-                let Some(mac) = path[index].mac.filter(|_| self.done != Some(index)) else { return MacroStep::Idle };
+                let Some(mac) = path[index].mac.filter(|_| self.done != Some(index)) else {
+                    return MacroStep::Idle;
+                };
                 // Planned from standing on the node before: a classic jump onto it still in the air (an Ascend counts as
                 // reached mid-air) lands first, steered classically.
                 if !live.body().on_ground {
@@ -133,7 +159,15 @@ const ARRIVAL_SLOP: f32 = 0.03;
 impl Exec {
     /// Predicts `ctl` from the live state; solves it again if it does not finish from there, or arrives
     /// too far from the planned velocity `want`.
-    fn start<S: StepIn<W>, W: SimWorld + ?Sized>(ctl: Macro, want: Option<Vec3>, last: usize, live: &S, c: Controls, w: &W, spend: &mut Spend) -> Option<Self> {
+    fn start<S: StepIn<W>, W: SimWorld + ?Sized>(
+        ctl: Macro,
+        want: Option<Vec3>,
+        last: usize,
+        live: &S,
+        c: Controls,
+        w: &W,
+        spend: &mut Spend,
+    ) -> Option<Self> {
         let off = |p: &(Macro, Vec<Body>)| {
             let end = p.1[p.1.len() - 1].vel;
             want.map_or(0.0, |v| (end[0] - v[0]).hypot(end[2] - v[2]))
@@ -141,27 +175,63 @@ impl Exec {
         let planned = predict(ctl, live, c, w, spend).filter(|p| off(p) <= ARRIVAL_SLOP);
         let ((ctl, predicted), resolved) = match planned {
             Some(p) => (p, false),
-            None => (resolve(&ctl, want, live, c, w, spend).or_else(|| predict(ctl, live, c, w, spend))?, true),
+            None => (
+                resolve(&ctl, want, live, c, w, spend)
+                    .or_else(|| predict(ctl, live, c, w, spend))?,
+                true,
+            ),
         };
-        let report = MacroReport { predicted: predicted.len() - 1, executed: 0, max_error: 0.0, repredicted: 0, resolved };
-        Some(Self { ctl, predicted, t: 0, tolerance: ctl.profile().tolerance(), want, last, report })
+        let report = MacroReport {
+            predicted: predicted.len() - 1,
+            executed: 0,
+            max_error: 0.0,
+            repredicted: 0,
+            resolved,
+        };
+        Some(Self {
+            ctl,
+            predicted,
+            t: 0,
+            tolerance: ctl.profile().tolerance(),
+            want,
+            last,
+            report,
+        })
     }
 
     /// Steps the controller on the live body, predicting again from it when it left the tolerance.
     /// `Failed` when nothing from the live body finishes the move.
-    fn tick<S: StepIn<W>, W: SimWorld + ?Sized>(&mut self, live: &S, w: &W, c: &mut Controls, spend: &mut Spend) -> Phase {
+    fn tick<S: StepIn<W>, W: SimWorld + ?Sized>(
+        &mut self,
+        live: &S,
+        w: &W,
+        c: &mut Controls,
+        spend: &mut Spend,
+    ) -> Phase {
         let b = live.body();
-        let err = self.predicted.get(self.t).map_or(f32::INFINITY, |p| p.error(&b));
+        let err = self
+            .predicted
+            .get(self.t)
+            .map_or(f32::INFINITY, |p| p.error(&b));
         if err > self.tolerance {
-            let again = predict(self.ctl, live, *c, w, spend).or_else(|| resolve(&self.ctl, self.want, live, *c, w, spend));
-            let Some((ctl, again)) = again else { return Phase::Failed };
-            tracing::debug!(t = self.t, err, "macro move off its prediction; predicted again");
+            let again = predict(self.ctl, live, *c, w, spend)
+                .or_else(|| resolve(&self.ctl, self.want, live, *c, w, spend));
+            let Some((ctl, again)) = again else {
+                return Phase::Failed;
+            };
+            tracing::debug!(
+                t = self.t,
+                err,
+                "macro move off its prediction; predicted again"
+            );
             (self.ctl, self.predicted, self.t) = (ctl, again, 0);
             self.report.repredicted += 1;
         } else {
             self.report.max_error = self.report.max_error.max(err);
         }
-        let phase = self.ctl.step(&b, &mut |pc: &Controls| rollout::peek(live, pc, w), c);
+        let phase = self
+            .ctl
+            .step(&b, &mut |pc: &Controls| rollout::peek(live, pc, w), c);
         if phase == Phase::Going {
             self.t += 1;
             self.report.executed += 1;
@@ -171,7 +241,13 @@ impl Exec {
 }
 
 /// `ctl` run on from the live state, if it finishes (and the budget allows the run).
-fn predict<S: StepIn<W>, W: ?Sized>(mut ctl: Macro, live: &S, c: Controls, w: &W, spend: &mut Spend) -> Option<(Macro, Vec<Body>)> {
+fn predict<S: StepIn<W>, W: ?Sized>(
+    mut ctl: Macro,
+    live: &S,
+    c: Controls,
+    w: &W,
+    spend: &mut Spend,
+) -> Option<(Macro, Vec<Body>)> {
     if !spend.affords(u64::from(MAX_TICKS)) {
         return None;
     }
@@ -183,14 +259,25 @@ fn predict<S: StepIn<W>, W: ?Sized>(mut ctl: Macro, live: &S, c: Controls, w: &W
 
 /// Another way to finish `ctl`'s move from the live state, arriving near velocity `want`: a leap's other
 /// timings or coasts.
-fn resolve<S: StepIn<W>, W: SimWorld + ?Sized>(ctl: &Macro, want: Option<Vec3>, live: &S, held: Controls, w: &W, spend: &mut Spend) -> Option<(Macro, Vec<Body>)> {
+fn resolve<S: StepIn<W>, W: SimWorld + ?Sized>(
+    ctl: &Macro,
+    want: Option<Vec3>,
+    live: &S,
+    held: Controls,
+    w: &W,
+    spend: &mut Spend,
+) -> Option<(Macro, Vec<Body>)> {
     let avoid = |p: BlockPos| w.hazard(p);
     match ctl {
         Macro::Leap(l) => {
             let profile = l.aim.profile;
             let mut s = Solver::new(w, &avoid, &|_| false, profile, false, held);
             s.budget = spend.left();
-            let found = s.retry(l, live, STRAIGHT, want).or_else(|| (!l.airborne() && !s.starved).then(|| s.retry(l, live, WIDE, want)).flatten());
+            let found = s.retry(l, live, STRAIGHT, want).or_else(|| {
+                (!l.airborne() && !s.starved)
+                    .then(|| s.retry(l, live, WIDE, want))
+                    .flatten()
+            });
             spend.charge(&s);
             found.map(|(l, b)| (Macro::Leap(l), b))
         }

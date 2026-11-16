@@ -28,21 +28,35 @@ pub struct MemoryBlobStore {
 
 impl MemoryBlobStore {
     pub fn hashes_only() -> Self {
-        Self { payloads: false, blobs: Mutex::default() }
+        Self {
+            payloads: false,
+            blobs: Mutex::default(),
+        }
     }
 
     pub fn with_payloads() -> Self {
-        Self { payloads: true, blobs: Mutex::default() }
+        Self {
+            payloads: true,
+            blobs: Mutex::default(),
+        }
     }
 }
 
 impl BlobStore for MemoryBlobStore {
     fn has(&self, id: u64) -> bool {
-        self.blobs.lock().expect("blob store lock").contains_key(&id)
+        self.blobs
+            .lock()
+            .expect("blob store lock")
+            .contains_key(&id)
     }
 
     fn get(&self, id: u64) -> Option<Bytes> {
-        self.blobs.lock().expect("blob store lock").get(&id).cloned().flatten()
+        self.blobs
+            .lock()
+            .expect("blob store lock")
+            .get(&id)
+            .cloned()
+            .flatten()
     }
 
     fn insert(&self, id: u64, blob: &Bytes) {
@@ -63,7 +77,10 @@ mod tests {
 
     #[test]
     fn hash_only_store_claims_without_payload() {
-        let (lean, full) = (MemoryBlobStore::hashes_only(), MemoryBlobStore::with_payloads());
+        let (lean, full) = (
+            MemoryBlobStore::hashes_only(),
+            MemoryBlobStore::with_payloads(),
+        );
         let blob = Bytes::from_static(b"section");
         for store in [&lean, &full] {
             store.insert(7, &blob);

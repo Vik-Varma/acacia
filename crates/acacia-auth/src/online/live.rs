@@ -143,7 +143,10 @@ async fn token_request(req: reqwest::RequestBuilder) -> Result<MsaToken> {
     let body = resp.bytes().await?;
     if !status.is_success() {
         return Err(match serde_json::from_slice::<OAuthError>(&body) {
-            Ok(e) => Error::OAuth { code: e.error, description: e.error_description },
+            Ok(e) => Error::OAuth {
+                code: e.error,
+                description: e.error_description,
+            },
             Err(_) => Error::Status {
                 endpoint: ep::LIVE_TOKEN.into(),
                 status: status.as_u16(),

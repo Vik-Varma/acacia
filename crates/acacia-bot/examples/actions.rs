@@ -12,14 +12,14 @@ use acacia_bot::items::SlotRef;
 use acacia_bot::state::{ItemStack, Trackers};
 use acacia_bot::{Bot, BotConfig, BotEvent, Events};
 
+#[path = "actions/direct.rs"]
+mod direct;
+#[path = "actions/pickup.rs"]
+mod pickup;
 #[path = "actions/stations.rs"]
 mod stations;
 #[path = "actions/survival.rs"]
 mod survival;
-#[path = "actions/pickup.rs"]
-mod pickup;
-#[path = "actions/direct.rs"]
-mod direct;
 
 pub type Check = Result<String, Box<dyn Error>>;
 pub type Pos = [i32; 3];
@@ -43,11 +43,16 @@ impl Scene {
 }
 
 pub fn count(bot: &Bot, name: &str) -> u32 {
-    bot.state().inventory_summary().into_iter().find(|(n, _)| n == name).map_or(0, |(_, c)| c)
+    bot.state()
+        .inventory_summary()
+        .into_iter()
+        .find(|(n, _)| n == name)
+        .map_or(0, |(_, c)| c)
 }
 
 pub fn find(bot: &Bot, name: &str) -> Result<SlotRef, Box<dyn Error>> {
-    bot.find_item_named(name).ok_or_else(|| format!("no {name} in the inventory").into())
+    bot.find_item_named(name)
+        .ok_or_else(|| format!("no {name} in the inventory").into())
 }
 
 pub fn stack(bot: &Bot, slot: SlotRef) -> Option<&ItemStack> {
@@ -61,11 +66,19 @@ pub fn stack(bot: &Bot, slot: SlotRef) -> Option<&ItemStack> {
 
 /// Main-inventory stacks of item `name`.
 pub fn stacks<'a>(bot: &'a Bot, name: &str) -> Vec<&'a ItemStack> {
-    bot.state().inventory.main.iter().filter(|s| !s.is_empty() && bot.state().item_name(s) == Some(name)).collect()
+    bot.state()
+        .inventory
+        .main
+        .iter()
+        .filter(|s| !s.is_empty() && bot.state().item_name(s) == Some(name))
+        .collect()
 }
 
 pub fn has_nbt(stack: &ItemStack, key: &str) -> bool {
-    stack.nbt.as_ref().is_some_and(|n| n.value.get(key).is_some())
+    stack
+        .nbt
+        .as_ref()
+        .is_some_and(|n| n.value.get(key).is_some())
 }
 
 /// Waits for a chat line from the pack matching pattern `name`; returns its first group.
@@ -73,7 +86,9 @@ pub async fn wait_chat(bot: &mut Bot, name: &str, timeout: Duration) -> Option<S
     let deadline = tokio::time::Instant::now() + timeout;
     loop {
         match tokio::time::timeout_at(deadline, bot.next()).await {
-            Ok(Some(BotEvent::ChatMatch(m))) if m.pattern == name => return m.groups.into_iter().next(),
+            Ok(Some(BotEvent::ChatMatch(m))) if m.pattern == name => {
+                return m.groups.into_iter().next();
+            }
             Ok(Some(BotEvent::Disconnected(r))) => panic!("disconnected: {r:?}"),
             Ok(Some(_)) => {}
             Ok(None) | Err(_) => return None,
@@ -116,13 +131,17 @@ pub async fn recent_chat(bot: &mut Bot) -> Vec<String> {
 /// The server's view of the bot's stacks of `item` (JSON from the pack's `actiontest:inv` event).
 pub async fn server_inv(bot: &mut Bot, item: &str) -> Result<String, Box<dyn Error>> {
     bot.command(&format!("/scriptevent actiontest:inv {item}"));
-    Ok(wait_chat(bot, "inv", Duration::from_secs(5)).await.ok_or("no inventory dump from the pack")?)
+    Ok(wait_chat(bot, "inv", Duration::from_secs(5))
+        .await
+        .ok_or("no inventory dump from the pack")?)
 }
 
 /// The server's view of the scene's entities of type `kind` (the pack's `actiontest:ent` event).
 pub async fn server_entities(bot: &mut Bot, kind: &str) -> String {
     bot.command(&format!("/scriptevent actiontest:ent {kind}"));
-    wait_chat(bot, "ent", Duration::from_secs(5)).await.unwrap_or_else(|| "no entity dump from the pack".into())
+    wait_chat(bot, "ent", Duration::from_secs(5))
+        .await
+        .unwrap_or_else(|| "no entity dump from the pack".into())
 }
 
 macro_rules! run {
@@ -143,7 +162,9 @@ macro_rules! run {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let _ = tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
     let mut args = std::env::args().skip(1);
     let server = args.next().unwrap_or_else(|| "127.0.0.1:19170".into());
     let name = args.next().unwrap_or_else(|| "ActionBot".into());
@@ -151,7 +172,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config = BotConfig {
         physics,
         mouse_input: std::env::var_os("MOUSE").is_some(),
-        trackers: Trackers { entities: true, ..Trackers::default() },
+        trackers: Trackers {
+            entities: true,
+            ..Trackers::default()
+        },
         events: Events::CHAT,
         chat_patterns: ["scene", "sign", "inv", "ent", "dismounted"]
             .into_iter()
@@ -160,13 +184,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
         ..BotConfig::default()
     };
     let mut bot = Bot::connect(Client::builder(&server).offline(&name), config).await?;
-    let line = wait_chat(&mut bot, "scene", Duration::from_secs(30)).await.ok_or("no scene message from the pack")?;
+    let line = wait_chat(&mut bot, "scene", Duration::from_secs(30))
+        .await
+        .ok_or("no scene message from the pack")?;
     let scene = Scene::parse(&line);
-    while physics && bot.bedrock().and_then(|b| b.movement()).is_none_or(|m| !m.is_started()) {
+    while physics
+        && bot
+            .bedrock()
+            .and_then(|b| b.movement())
+            .is_none_or(|m| !m.is_started())
+    {
         bot.wait_ticks(1).await?;
     }
     bot.wait_ticks(20).await?;
-    println!("scene: {line}\ninventory: {:?}", bot.state().inventory_summary());
+    println!(
+        "scene: {line}\ninventory: {:?}",
+        bot.state().inventory_summary()
+    );
 
     let mut results = Vec::new();
     let s = &scene;
@@ -175,37 +209,100 @@ async fn main() -> Result<(), Box<dyn Error>> {
     run!(bot, results, "brew", stations::brew(&mut bot, s));
     run!(bot, results, "enchant", stations::enchant(&mut bot, s));
     run!(bot, results, "anvil", stations::anvil(&mut bot, s));
-    run!(bot, results, "anvil_rename", stations::anvil_rename(&mut bot, s));
-    run!(bot, results, "grindstone", stations::grindstone(&mut bot, s));
+    run!(
+        bot,
+        results,
+        "anvil_rename",
+        stations::anvil_rename(&mut bot, s)
+    );
+    run!(
+        bot,
+        results,
+        "grindstone",
+        stations::grindstone(&mut bot, s)
+    );
     run!(bot, results, "stonecut", stations::stonecut(&mut bot, s));
     run!(bot, results, "smith", stations::smith(&mut bot, s));
     run!(bot, results, "loom", stations::loom(&mut bot, s));
-    run!(bot, results, "trade", stations::trade(&mut bot, "minecraft:wandering_trader"));
-    run!(bot, results, "trade_villager", stations::trade(&mut bot, "minecraft:villager"));
+    run!(
+        bot,
+        results,
+        "trade",
+        stations::trade(&mut bot, "minecraft:wandering_trader")
+    );
+    run!(
+        bot,
+        results,
+        "trade_villager",
+        stations::trade(&mut bot, "minecraft:villager")
+    );
     run!(bot, results, "consume", survival::consume(&mut bot));
     run!(bot, results, "equip", survival::equip(&mut bot));
     run!(bot, results, "equip_use", pickup::equip_use(&mut bot));
     run!(bot, results, "pickup", pickup::pickup(&mut bot));
-    run!(bot, results, "equip_best_tool", survival::best_tool(&mut bot, s));
+    run!(
+        bot,
+        results,
+        "equip_best_tool",
+        survival::best_tool(&mut bot, s)
+    );
     run!(bot, results, "write_sign", survival::sign(&mut bot, s));
     run!(bot, results, "book", survival::book(&mut bot));
     run!(bot, results, "sleep", survival::sleep(&mut bot, s));
-    run!(bot, results, "mount_pig", survival::ride(&mut bot, "minecraft:pig"));
-    run!(bot, results, "mount_boat", survival::ride(&mut bot, "minecraft:boat"));
+    run!(
+        bot,
+        results,
+        "mount_pig",
+        survival::ride(&mut bot, "minecraft:pig")
+    );
+    run!(
+        bot,
+        results,
+        "mount_boat",
+        survival::ride(&mut bot, "minecraft:boat")
+    );
     run!(bot, results, "fish", survival::fish(&mut bot, s));
     run!(bot, results, "equip_elytra", survival::elytra(&mut bot));
     run!(bot, results, "glide", survival::glide(&mut bot));
-    run!(bot, results, "glide_water", survival::glide_water(&mut bot, s));
-    run!(bot, results, "ride_horse", survival::ride_horse(&mut bot, s));
+    run!(
+        bot,
+        results,
+        "glide_water",
+        survival::glide_water(&mut bot, s)
+    );
+    run!(
+        bot,
+        results,
+        "ride_horse",
+        survival::ride_horse(&mut bot, s)
+    );
     run!(bot, results, "mine_held", direct::mine_held(&mut bot));
-    run!(bot, results, "mine_creative", direct::mine_creative(&mut bot));
+    run!(
+        bot,
+        results,
+        "mine_creative",
+        direct::mine_creative(&mut bot)
+    );
     run!(bot, results, "place_aimed", direct::place_aimed(&mut bot));
     if std::env::var_os("HORSE_SWEEP").is_some() {
-        run!(bot, results, "horse_sweep", survival::horse_sweep(&mut bot, s));
+        run!(
+            bot,
+            results,
+            "horse_sweep",
+            survival::horse_sweep(&mut bot, s)
+        );
     }
 
-    let failed: Vec<_> = results.iter().filter(|(_, ok)| !ok).map(|(n, _)| *n).collect();
-    println!("{} passed, {} failed {failed:?}", results.len() - failed.len(), failed.len());
+    let failed: Vec<_> = results
+        .iter()
+        .filter(|(_, ok)| !ok)
+        .map(|(n, _)| *n)
+        .collect();
+    println!(
+        "{} passed, {} failed {failed:?}",
+        results.len() - failed.len(),
+        failed.len()
+    );
     bot.disconnect().await;
     Ok(())
 }

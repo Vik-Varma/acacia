@@ -1928,6 +1928,82 @@ impl Link {
 
 pub type Links = Vec<Link>;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct PassengerOfBlockData {
+    pub block_position: BlockCoordinates,
+    pub offset: Vec3f,
+    pub rotation: f32,
+    pub rotation_limit: f32,
+    pub emote_type: PassengerOfBlockDataEmoteType,
+}
+impl PassengerOfBlockData {
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let f_block_position = (|| -> Result<_> { Ok(BlockCoordinates::read(r)?) })()
+            .map_err(|e| e.at("PassengerOfBlockData.block_position"))?;
+        let f_offset = (|| -> Result<_> { Ok(Vec3f::read(r)?) })()
+            .map_err(|e| e.at("PassengerOfBlockData.offset"))?;
+        let f_rotation = (|| -> Result<_> { Ok(read_lf32(r)?) })()
+            .map_err(|e| e.at("PassengerOfBlockData.rotation"))?;
+        let f_rotation_limit = (|| -> Result<_> { Ok(read_lf32(r)?) })()
+            .map_err(|e| e.at("PassengerOfBlockData.rotation_limit"))?;
+        let f_emote_type = (|| -> Result<_> { Ok(PassengerOfBlockDataEmoteType::read(r)?) })()
+            .map_err(|e| e.at("PassengerOfBlockData.emote_type"))?;
+        Ok(Self {
+            block_position: f_block_position,
+            offset: f_offset,
+            rotation: f_rotation,
+            rotation_limit: f_rotation_limit,
+            emote_type: f_emote_type,
+        })
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        self.block_position.write(w);
+        self.offset.write(w);
+        write_lf32(w, self.rotation);
+        write_lf32(w, self.rotation_limit);
+        self.emote_type.write(w);
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PassengerOfBlockDataEmoteType {
+    Standing,
+    Riding,
+    Laying,
+    Unknown(i64),
+}
+impl PassengerOfBlockDataEmoteType {
+    pub fn from_raw(v: i64) -> Self {
+        match v {
+            0 => Self::Standing,
+            1 => Self::Riding,
+            2 => Self::Laying,
+            v => Self::Unknown(v),
+        }
+    }
+    pub fn to_raw(self) -> i64 {
+        match self {
+            Self::Standing => 0,
+            Self::Riding => 1,
+            Self::Laying => 2,
+            Self::Unknown(v) => v,
+        }
+    }
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let v = Self::from_raw(read_u8(r)? as i64);
+        if let Self::Unknown(value) = v {
+            crate::strict::note(crate::strict::Leniency::UnknownEnum {
+                ty: "PassengerOfBlockDataEmoteType",
+                value,
+            });
+        }
+        Ok(v)
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        write_u8(w, self.to_raw() as u8)
+    }
+}
+
 pub type EntityAttributes = Vec<EntityAttributesItem>;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2357,148 +2433,4 @@ impl TransactionUseItemClientCooldownState {
     pub fn write(&self, w: &mut BytesMut) {
         write_u8(w, self.to_raw() as u8)
     }
-}
-
-pub type TransactionActions = Vec<TransactionActionsItem>;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TransactionActionsItem {
-    pub source_type: TransactionActionsItemSourceType,
-    pub window_id: Option<i8>,
-    pub flags: Option<u32>,
-    pub slot: u32,
-    pub old_item: ItemV4,
-    pub new_item: ItemV4,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum TransactionActionsItemSourceType {
-    Container,
-    Global,
-    WorldInteraction,
-    Creative,
-    CraftSlot,
-    Craft,
-    Unknown(i64),
-}
-impl TransactionActionsItemSourceType {
-    pub fn from_raw(v: i64) -> Self {
-        match v {
-            0 => Self::Container,
-            1 => Self::Global,
-            2 => Self::WorldInteraction,
-            3 => Self::Creative,
-            100 => Self::CraftSlot,
-            99999 => Self::Craft,
-            v => Self::Unknown(v),
-        }
-    }
-    pub fn to_raw(self) -> i64 {
-        match self {
-            Self::Container => 0,
-            Self::Global => 1,
-            Self::WorldInteraction => 2,
-            Self::Creative => 3,
-            Self::CraftSlot => 100,
-            Self::Craft => 99999,
-            Self::Unknown(v) => v,
-        }
-    }
-    pub fn read(r: &mut &[u8]) -> Result<Self> {
-        let v = Self::from_raw(read_varint(r)? as i64);
-        if let Self::Unknown(value) = v {
-            crate::strict::note(crate::strict::Leniency::UnknownEnum {
-                ty: "TransactionActionsItemSourceType",
-                value,
-            });
-        }
-        Ok(v)
-    }
-    pub fn write(&self, w: &mut BytesMut) {
-        write_varint(w, self.to_raw() as u32)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TransactionLegacy {
-    pub legacy_request_id: i32,
-    pub legacy_transactions: Option<Vec<TransactionLegacyLegacyTransactionsItem>>,
-}
-impl TransactionLegacy {
-    pub fn read(r: &mut &[u8]) -> Result<Self> {
-        let f_legacy_request_id = (|| -> Result<_> { Ok(read_zigzag32(r)?) })()
-            .map_err(|e| e.at("TransactionLegacy.legacy_request_id"))?;
-        let f_legacy_transactions = (|| -> Result<_> {
-            Ok(if read_bool(r)? {
-                Some({
-                    let n = to_len(read_varint(r)?)?;
-                    let mut v = Vec::with_capacity(cap(n, r));
-                    for _ in 0..n {
-                        v.push({
-                            let f1_container_id = read_u8(r)?;
-                            let f1_changed_slots = {
-                                let n = to_len(read_varint(r)?)?;
-                                let mut v = Vec::with_capacity(cap(n, r));
-                                for _ in 0..n {
-                                    v.push({
-                                        let f2_slot_id = read_u8(r)?;
-                                        TransactionLegacyLegacyTransactionsItemChangedSlotsItem {
-                                            slot_id: f2_slot_id,
-                                        }
-                                    });
-                                }
-                                v
-                            };
-                            TransactionLegacyLegacyTransactionsItem {
-                                container_id: f1_container_id,
-                                changed_slots: f1_changed_slots,
-                            }
-                        });
-                    }
-                    v
-                })
-            } else {
-                None
-            })
-        })()
-        .map_err(|e| e.at("TransactionLegacy.legacy_transactions"))?;
-        Ok(Self {
-            legacy_request_id: f_legacy_request_id,
-            legacy_transactions: f_legacy_transactions,
-        })
-    }
-    pub fn write(&self, w: &mut BytesMut) {
-        write_zigzag32(w, self.legacy_request_id);
-        match &self.legacy_transactions {
-            Some(x0) => {
-                write_bool(w, true);
-                write_varint(w, x0.len() as u32);
-                for x1 in x0.iter() {
-                    {
-                        let x2 = x1;
-                        write_u8(w, x2.container_id);
-                        write_varint(w, x2.changed_slots.len() as u32);
-                        for x3 in x2.changed_slots.iter() {
-                            {
-                                let x4 = x3;
-                                write_u8(w, x4.slot_id);
-                            }
-                        }
-                    }
-                }
-            }
-            None => write_bool(w, false),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TransactionLegacyLegacyTransactionsItem {
-    pub container_id: u8,
-    pub changed_slots: Vec<TransactionLegacyLegacyTransactionsItemChangedSlotsItem>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TransactionLegacyLegacyTransactionsItemChangedSlotsItem {
-    pub slot_id: u8,
 }

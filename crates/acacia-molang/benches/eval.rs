@@ -20,11 +20,26 @@ const CASES: [(&str, &str); 8] = [
     ("constant", "-20.0"),
     ("constant arithmetic", "math.sin(90) * 57.3 + 2 * 3"),
     ("one query", "query.life_time"),
-    ("animation channel", "math.sin(query.life_time * 38.17) * 57.3 + this"),
-    ("conditional chain", "query.is_baby ? 1.0 : query.variant == 2 ? 0.5 : query.is_tamed ? 0.25 : 0.0"),
-    ("variables", "v.count = (v.count ?? 0) + 1; t.half = v.count / 2; v.half = t.half;"),
-    ("struct members", "v.pos.x = q.life_time; v.pos.y = v.pos.x * 2; return v.pos.x + v.pos.y;"),
-    ("loop of 16", "v.i = 0; loop(16, { v.i = v.i + math.cos(v.i); });"),
+    (
+        "animation channel",
+        "math.sin(query.life_time * 38.17) * 57.3 + this",
+    ),
+    (
+        "conditional chain",
+        "query.is_baby ? 1.0 : query.variant == 2 ? 0.5 : query.is_tamed ? 0.25 : 0.0",
+    ),
+    (
+        "variables",
+        "v.count = (v.count ?? 0) + 1; t.half = v.count / 2; v.half = t.half;",
+    ),
+    (
+        "struct members",
+        "v.pos.x = q.life_time; v.pos.y = v.pos.x * 2; return v.pos.x + v.pos.y;",
+    ),
+    (
+        "loop of 16",
+        "v.i = 0; loop(16, { v.i = v.i + math.cos(v.i); });",
+    ),
 ];
 
 /// The fastest of many short timed batches, in nanoseconds per call: the minimum shrugs off a busy machine.
@@ -51,7 +66,12 @@ fn time(mut call: impl FnMut()) -> f64 {
 
 fn evaluate(programs: &[Program], variables: &mut Variables, scratch: &mut Scratch) {
     for program in programs {
-        black_box(program.eval(&mut Env { host: &Busy, variables, scratch, this: 1.0 }));
+        black_box(program.eval(&mut Env {
+            host: &Busy,
+            variables,
+            scratch,
+            this: 1.0,
+        }));
     }
 }
 
@@ -66,14 +86,25 @@ fn main() {
     }
 
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/molang/corpus.txt");
-    let Ok(corpus) = std::fs::read_to_string(std::env::var_os("MOLANG_CORPUS").map_or(path, PathBuf::from)) else {
+    let Ok(corpus) =
+        std::fs::read_to_string(std::env::var_os("MOLANG_CORPUS").map_or(path, PathBuf::from))
+    else {
         return println!("no corpus: run tools/molang-oracle/corpus.py for the vanilla rows");
     };
     let sources: Vec<&str> = corpus.lines().collect();
-    let compile_all = |compiler: &mut Compiler| sources.iter().filter_map(|source| compiler.compile(source).ok()).collect::<Vec<Program>>();
+    let compile_all = |compiler: &mut Compiler| {
+        sources
+            .iter()
+            .filter_map(|source| compiler.compile(source).ok())
+            .collect::<Vec<Program>>()
+    };
     let programs = compile_all(&mut Compiler::new());
-    let compile = time(|| drop(black_box(compile_all(&mut Compiler::new())))) / sources.len() as f64;
+    let compile =
+        time(|| drop(black_box(compile_all(&mut Compiler::new())))) / sources.len() as f64;
     variables.clear();
     let eval = time(|| evaluate(&programs, &mut variables, &mut scratch)) / programs.len() as f64;
-    println!("{:<24}{compile:>12.0}{eval:>12.1}", format!("vanilla ({})", programs.len()));
+    println!(
+        "{:<24}{compile:>12.0}{eval:>12.1}",
+        format!("vanilla ({})", programs.len())
+    );
 }

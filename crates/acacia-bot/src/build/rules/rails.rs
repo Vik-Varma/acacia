@@ -6,7 +6,12 @@
 
 use acacia_physics::BlockPos;
 
-pub const RAILS: [&str; 4] = ["minecraft:rail", "minecraft:golden_rail", "minecraft:detector_rail", "minecraft:activator_rail"];
+pub const RAILS: [&str; 4] = [
+    "minecraft:rail",
+    "minecraft:golden_rail",
+    "minecraft:detector_rail",
+    "minecraft:activator_rail",
+];
 const NS: u8 = 0;
 const EW: u8 = 1;
 const SE: u8 = 6;
@@ -68,11 +73,19 @@ pub struct World<'a> {
 
 impl<'a> World<'a> {
     pub fn new(base: &'a dyn Fn(BlockPos) -> Option<Rail>) -> Self {
-        Self { base, over: Vec::new() }
+        Self {
+            base,
+            over: Vec::new(),
+        }
     }
 
     pub fn get(&self, p: BlockPos) -> Option<Rail> {
-        self.over.iter().rev().find(|(q, _)| *q == p).map(|(_, r)| *r).or_else(|| (self.base)(p))
+        self.over
+            .iter()
+            .rev()
+            .find(|(q, _)| *q == p)
+            .map(|(_, r)| *r)
+            .or_else(|| (self.base)(p))
     }
 
     fn set(&mut self, p: BlockPos, r: Rail) {
@@ -81,13 +94,23 @@ impl<'a> World<'a> {
 
     /// The rail at `p`, or one up or down from it.
     fn near(&self, p: BlockPos) -> Option<BlockPos> {
-        [p, up(p), at(p, [0, -1, 0])].into_iter().find(|q| self.get(*q).is_some())
+        [p, up(p), at(p, [0, -1, 0])]
+            .into_iter()
+            .find(|q| self.get(*q).is_some())
     }
 
     /// The ends of the rail at `p` that a rail leading back meets (Java `removeSoftConnections`), as rail cells.
     pub fn joined(&self, p: BlockPos) -> Vec<BlockPos> {
-        let Some((_, shape)) = self.get(p) else { return Vec::new() };
-        ends(p, shape).into_iter().filter_map(|e| self.near(e).filter(|q| self.get(*q).is_some_and(|(_, s)| leads_to(&ends(*q, s), p)))).collect()
+        let Some((_, shape)) = self.get(p) else {
+            return Vec::new();
+        };
+        ends(p, shape)
+            .into_iter()
+            .filter_map(|e| {
+                self.near(e)
+                    .filter(|q| self.get(*q).is_some_and(|(_, s)| leads_to(&ends(*q, s), p)))
+            })
+            .collect()
     }
 
     /// The rail beside at `p` would join the rail at `to` (Java `hasNeighborRail`).
@@ -110,7 +133,9 @@ impl<'a> World<'a> {
     }
 
     fn turned_to(&self, pos: BlockPos, other: BlockPos) -> u8 {
-        let Some((straight, _)) = self.get(pos) else { return NS };
+        let Some((straight, _)) = self.get(pos) else {
+            return NS;
+        };
         let mut j = self.joined(pos);
         j.push(other);
         let [n, s, w, e] = [N, S, W, E].map(|d| leads_to(&j, at(pos, d)));
@@ -172,13 +197,31 @@ fn corner(n: bool, s: bool, w: bool, e: bool) -> Option<u8> {
 /// `shape` turned `turns` clockwise after an east-west mirror (`transform`).
 pub fn turned(shape: u8, turns: u8, mirror: bool) -> u8 {
     // Each shape as its end directions (0 north, 1 east, 2 south, 3 west), the rising end second.
-    const DIRS: [(u8, u8, bool); 10] = [(0, 2, false), (3, 1, false), (3, 1, true), (1, 3, true), (2, 0, true), (0, 2, true), (2, 1, false), (2, 3, false), (0, 3, false), (0, 1, false)];
+    const DIRS: [(u8, u8, bool); 10] = [
+        (0, 2, false),
+        (3, 1, false),
+        (3, 1, true),
+        (1, 3, true),
+        (2, 0, true),
+        (0, 2, true),
+        (2, 1, false),
+        (2, 3, false),
+        (0, 3, false),
+        (0, 1, false),
+    ];
     let turn = |d: u8| {
         let d = if mirror && d % 2 == 1 { 4 - d } else { d };
         (d + turns) % 4
     };
     let (a, b, rise) = DIRS[usize::from(shape.min(9))];
     let (a, b) = (turn(a), turn(b));
-    let found = DIRS.iter().position(|&(x, y, r)| r == rise && if rise { (x, y) == (a, b) } else { (x == a && y == b) || (x == b && y == a) });
+    let found = DIRS.iter().position(|&(x, y, r)| {
+        r == rise
+            && if rise {
+                (x, y) == (a, b)
+            } else {
+                (x == a && y == b) || (x == b && y == a)
+            }
+    });
     found.map_or(shape, |i| i as u8)
 }

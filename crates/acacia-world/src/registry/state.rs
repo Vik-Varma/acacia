@@ -97,7 +97,8 @@ impl BlockState {
     }
 
     pub fn is_liquid(&self) -> bool {
-        self.flags.intersects(BlockFlags(BlockFlags::WATER.0 | BlockFlags::LAVA.0))
+        self.flags
+            .intersects(BlockFlags(BlockFlags::WATER.0 | BlockFlags::LAVA.0))
     }
 
     pub fn is_water(&self) -> bool {
@@ -123,7 +124,11 @@ impl BlockState {
 
     /// Multiplier on jump power (Boar: honey 0.6).
     pub fn jump_factor(&self) -> f32 {
-        if self.flags.contains(BlockFlags::HONEY) { 0.6 } else { 1.0 }
+        if self.flags.contains(BlockFlags::HONEY) {
+            0.6
+        } else {
+            1.0
+        }
     }
 
     /// Stuck-speed multiplier applied to movement while inside the block (Boar `entityInside`).

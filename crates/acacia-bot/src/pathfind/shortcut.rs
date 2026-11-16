@@ -60,7 +60,10 @@ impl ShortcutCtl {
             return true;
         }
         let (past, aside) = self.past(b, origin);
-        b.on_ground && (b.pos[1] - self.feet).abs() < LAND_EPS && (0.0..self.overshoot).contains(&past) && aside < 0.5
+        b.on_ground
+            && (b.pos[1] - self.feet).abs() < LAND_EPS
+            && (0.0..self.overshoot).contains(&past)
+            && aside < 0.5
     }
 
     /// How far `b` is past the target's centre along the line from `origin`, and off that line.
@@ -79,7 +82,10 @@ impl Controller for ShortcutCtl {
         if self.arrived(b, origin) {
             return Phase::Done;
         }
-        if self.t >= self.max || b.pos[1] < self.feet - DROP || (b.on_ground && (b.pos[1] - self.feet).abs() > LAND_EPS) {
+        if self.t >= self.max
+            || b.pos[1] < self.feet - DROP
+            || (b.on_ground && (b.pos[1] - self.feet).abs() > LAND_EPS)
+        {
             return Phase::Failed;
         }
         self.t += 1;
@@ -88,7 +94,11 @@ impl Controller for ShortcutCtl {
         // Re-aimed only while still turning onto it, and never once past a target it may overshoot (that turned round).
         let past = self.overshoot > 0.0 && self.past(b, origin).0 >= 0.0;
         let heading = match self.heading {
-            Some(h) if ((b.yaw - h + 180.0).rem_euclid(360.0) - 180.0).abs() < HELD_AIM_DEG || past => h,
+            Some(h)
+                if ((b.yaw - h + 180.0).rem_euclid(360.0) - 180.0).abs() < HELD_AIM_DEG || past =>
+            {
+                h
+            }
             _ => *self.heading.insert(yaw_to(b, to)),
         };
         c.yaw = self.aim.turn(b.yaw, heading);
@@ -104,14 +114,26 @@ impl Controller for ShortcutCtl {
 
 /// Flat ground at the level of `level`: no work, water or macro leap.
 fn flat(n: &PathNode, level: f32) -> bool {
-    matches!(n.kind, MoveKind::Walk | MoveKind::Run | MoveKind::Hop) && n.work.is_empty() && !n.wet && (n.feet - level).abs() < LAND_EPS
+    matches!(n.kind, MoveKind::Walk | MoveKind::Run | MoveKind::Hop)
+        && n.work.is_empty()
+        && !n.wet
+        && (n.feet - level).abs() < LAND_EPS
 }
 
 /// The shortcut from the live state to a node after `path[index]`: its controller, predicted bodies and the
 /// index it lands on. Only taken when faster than following the nodes between; looked for within `spend`.
 /// `ends_at_goal`: the path's last node is the goal, where a shortcut stops.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn find<S: StepIn<W>, W: SimWorld + ?Sized>(path: &[PathNode], index: usize, live: &S, w: &W, aim: Aim, ends_at_goal: bool, hazards: Option<&Hazards>, spend: &mut Spend) -> Option<(ShortcutCtl, Vec<Body>, usize)> {
+pub(super) fn find<S: StepIn<W>, W: SimWorld + ?Sized>(
+    path: &[PathNode],
+    index: usize,
+    live: &S,
+    w: &W,
+    aim: Aim,
+    ends_at_goal: bool,
+    hazards: Option<&Hazards>,
+    spend: &mut Spend,
+) -> Option<(ShortcutCtl, Vec<Body>, usize)> {
     let body = live.body();
     let level = body.pos[1];
     if !body.on_ground || !path.get(index).is_some_and(|n| flat(n, level)) {
@@ -119,38 +141,63 @@ pub(super) fn find<S: StepIn<W>, W: SimWorld + ?Sized>(path: &[PathNode], index:
     }
     let reach = path[index..].iter().take_while(|n| flat(n, level)).count();
     let avoid = |p: BlockPos| w.hazard(p);
-    let held = Controls { yaw: body.yaw, ..Controls::default() };
+    let held = Controls {
+        yaw: body.yaw,
+        ..Controls::default()
+    };
     let drag = S::envelope().ground_drag;
     let coast = drag / (1.0 - drag);
     let mut solver = Solver::new(w, &avoid, &|_| false, aim.profile, false, held);
     solver.budget = spend.left();
     // The span's last node first: a fixed step would stop short of it, and the rest is walked.
     let last = Some(reach - 1).filter(|&k| (2..=AHEAD[0]).contains(&k) && !AHEAD.contains(&k));
-    let found = last.into_iter().chain(AHEAD).filter(|&k| k < reach).find_map(|k| {
-        let j = index + k;
-        let (along, planned) = planned(live, &path[index..=j]);
-        // By distance, not node count: a hop node spans four blocks.
-        let max = (4.0 * along) as u16 + 20;
-        let best = STYLES
-            .iter()
-            .filter_map(|&(jump, stop_jump)| {
-                // Only well inside the flat span, so the follower carries on to nodes still ahead: past a leap's
-                // takeoff, the goal, or the span's last nodes it would have to come back.
-                // Macro moves after it were planned from the target itself: a landing past it would start them elsewhere.
-                let walked_on = k + OVERSHOOT_AHEAD < reach && path[j + 1..=j + OVERSHOOT_AHEAD].iter().all(|n| n.mac.is_none());
-                let overshoot = if walked_on { OVERSHOOT } else { 0.0 };
-                let ctl = ShortcutCtl { target: path[j].pos, feet: path[j].feet, jump, stop_jump, aim, max, t: 0, heading: None, origin: None, overshoot, stop: aim.profile.eased_stop() && ends_at_goal && j + 1 == path.len(), coast };
-                if !solver.affords(u64::from(max)) {
-                    return None;
-                }
-                let (bodies, _, clean) = solver.run(live, &mut { ctl }, false);
-                let centred = !aim.profile.centred_shortcuts() || bodies.iter().all(|b| !b.on_ground || over_floor(w, b));
-                (clean && centred).then_some((ctl, bodies))
-            })
-            .min_by_key(|(_, b)| b.len());
-        let wary = |b: &[Body]| hazards.is_none_or(|h| no_nearer(h, b, &path[index..=j]));
-        best.filter(|(_, b)| ((b.len() - 1) as f32) < planned && wary(b)).map(|(ctl, bodies)| (ctl, bodies, j))
-    });
+    let found = last
+        .into_iter()
+        .chain(AHEAD)
+        .filter(|&k| k < reach)
+        .find_map(|k| {
+            let j = index + k;
+            let (along, planned) = planned(live, &path[index..=j]);
+            // By distance, not node count: a hop node spans four blocks.
+            let max = (4.0 * along) as u16 + 20;
+            let best = STYLES
+                .iter()
+                .filter_map(|&(jump, stop_jump)| {
+                    // Only well inside the flat span, so the follower carries on to nodes still ahead: past a leap's
+                    // takeoff, the goal, or the span's last nodes it would have to come back.
+                    // Macro moves after it were planned from the target itself: a landing past it would start them elsewhere.
+                    let walked_on = k + OVERSHOOT_AHEAD < reach
+                        && path[j + 1..=j + OVERSHOOT_AHEAD]
+                            .iter()
+                            .all(|n| n.mac.is_none());
+                    let overshoot = if walked_on { OVERSHOOT } else { 0.0 };
+                    let ctl = ShortcutCtl {
+                        target: path[j].pos,
+                        feet: path[j].feet,
+                        jump,
+                        stop_jump,
+                        aim,
+                        max,
+                        t: 0,
+                        heading: None,
+                        origin: None,
+                        overshoot,
+                        stop: aim.profile.eased_stop() && ends_at_goal && j + 1 == path.len(),
+                        coast,
+                    };
+                    if !solver.affords(u64::from(max)) {
+                        return None;
+                    }
+                    let (bodies, _, clean) = solver.run(live, &mut { ctl }, false);
+                    let centred = !aim.profile.centred_shortcuts()
+                        || bodies.iter().all(|b| !b.on_ground || over_floor(w, b));
+                    (clean && centred).then_some((ctl, bodies))
+                })
+                .min_by_key(|(_, b)| b.len());
+            let wary = |b: &[Body]| hazards.is_none_or(|h| no_nearer(h, b, &path[index..=j]));
+            best.filter(|(_, b)| ((b.len() - 1) as f32) < planned && wary(b))
+                .map(|(ctl, bodies)| (ctl, bodies, j))
+        });
     spend.charge(&solver);
     found
 }
@@ -160,9 +207,14 @@ const HAZARD_SLACK: f32 = 1.0;
 
 /// The bodies pass no nearer the entities than the planned `nodes`: no cell a solid one fills, no more hazard score.
 fn no_nearer(h: &Hazards, bodies: &[Body], nodes: &[PathNode]) -> bool {
-    let mut cells: Vec<BlockPos> = bodies.iter().map(|b| b.pos.map(|v| v.floor() as i32)).collect();
+    let mut cells: Vec<BlockPos> = bodies
+        .iter()
+        .map(|b| b.pos.map(|v| v.floor() as i32))
+        .collect();
     cells.dedup();
-    let closed = cells.iter().any(|&[x, y, z]| h.closed([x, y, z]) || h.closed([x, y + 1, z]));
+    let closed = cells
+        .iter()
+        .any(|&[x, y, z]| h.closed([x, y, z]) || h.closed([x, y + 1, z]));
     let planned: f32 = nodes.iter().map(|n| h.cost(n.pos)).sum();
     !closed && cells.iter().map(|&c| h.cost(c)).sum::<f32>() <= planned + HAZARD_SLACK
 }
@@ -179,12 +231,23 @@ fn planned<S: Sim>(live: &S, nodes: &[PathNode]) -> (f32, f32) {
     let (b, cost_heuristic) = (live.body(), S::envelope().cost_heuristic);
     let mut at = [b.pos[0], b.pos[2]];
     let standing = b.vel[0].hypot(b.vel[2]) < RUNNING;
-    let (mut len, mut ticks) = (0.0, if standing && nodes[0].mac.is_none() { MACRO_STARTUP } else { 0.0 });
+    let (mut len, mut ticks) = (
+        0.0,
+        if standing && nodes[0].mac.is_none() {
+            MACRO_STARTUP
+        } else {
+            0.0
+        },
+    );
     for n in nodes {
         let c = centre(n.pos);
         let d = (c[0] - at[0]).hypot(c[1] - at[1]);
         len += d;
-        ticks += if n.mac.is_some() { n.cost } else { d * cost_heuristic };
+        ticks += if n.mac.is_some() {
+            n.cost
+        } else {
+            d * cost_heuristic
+        };
         at = c;
     }
     (len, ticks)

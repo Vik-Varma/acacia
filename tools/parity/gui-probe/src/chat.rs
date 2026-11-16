@@ -5,7 +5,9 @@ use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
 
-use acacia_ui::java::chat::{Chat, ChatAction, ChatLines, ChatOptions, ChatScreen, Completion, Key, Tag};
+use acacia_ui::java::chat::{
+    Chat, ChatAction, ChatLines, ChatOptions, ChatScreen, Completion, Key, Tag,
+};
 use acacia_ui::java::command::Tree;
 use acacia_ui::java::gui::{Gui, GuiDraw};
 use acacia_ui::java::mth::as8;
@@ -39,7 +41,13 @@ fn chat_from_case(c: &Value, assets: &Assets, background: &str, lang: Lang) -> C
             Some("modified") => Some(Tag::modified(m["original"].as_str().unwrap_or_default())),
             _ => None,
         };
-        chat.add(font, Text::from_json(&m["text"], lang), tag, int(m, "at"), false);
+        chat.add(
+            font,
+            Text::from_json(&m["text"], lang),
+            tag,
+            int(m, "at"),
+            false,
+        );
     }
     chat
 }
@@ -62,7 +70,11 @@ fn int(c: &Value, k: &str) -> i32 {
 }
 
 fn strings(v: &Value) -> Vec<String> {
-    v.as_array().into_iter().flatten().filter_map(|s| s.as_str().map(str::to_owned)).collect()
+    v.as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|s| s.as_str().map(str::to_owned))
+        .collect()
 }
 
 /// A key by name after `shift+` and `ctrl+` modifiers.
@@ -101,21 +113,45 @@ pub fn replay_screen(c: &Value, assets: &Assets, state: &mut Map<String, Value>)
     let (w, h) = (int(c, "width"), int(c, "height"));
     let history = strings(&c["history"]);
     let lang = crate::kit::lang(assets);
-    let mut completion = Completion::new(strings(&c["players"]), Arc::new(Tree::from_json(&c["commands"])), &lang);
+    let mut completion = Completion::new(
+        strings(&c["players"]),
+        Arc::new(Tree::from_json(&c["commands"])),
+        &lang,
+    );
     completion.auto_suggest = c["autoSuggest"].as_bool().unwrap_or(true);
-    let mut chat = c.get("messages").map(|_| chat_from_case(c, assets, "opacity", &lang));
-    let mut screen = ChatScreen::new(m, c["initial"].as_str().unwrap_or(""), history.len(), completion, w, h);
+    let mut chat = c
+        .get("messages")
+        .map(|_| chat_from_case(c, assets, "opacity", &lang));
+    let mut screen = ChatScreen::new(
+        m,
+        c["initial"].as_str().unwrap_or(""),
+        history.len(),
+        completion,
+        w,
+        h,
+    );
     if let (Some(chat), Some(n)) = (chat.as_mut(), c["scroll"].as_i64()) {
         chat.scroll_chat(n as i32, true);
     }
-    let mouse = (c["mouse"][0].as_i64().unwrap_or(0) as i32, c["mouse"][1].as_i64().unwrap_or(0) as i32);
+    let mouse = (
+        c["mouse"][0].as_i64().unwrap_or(0) as i32,
+        c["mouse"][1].as_i64().unwrap_or(0) as i32,
+    );
     for a in c["actions"].as_array().into_iter().flatten() {
         match a["type"].as_str().unwrap_or_default() {
             "scroll" => {
                 screen.scroll(mouse, a["amount"].as_f64().unwrap_or(0.0), false);
             }
-            "type" => a["text"].as_str().unwrap_or_default().chars().for_each(|ch| screen.char_typed(m, ch)),
-            "click" => screen.click(m, a["x"].as_f64().unwrap_or(0.0), a["y"].as_f64().unwrap_or(0.0)),
+            "type" => a["text"]
+                .as_str()
+                .unwrap_or_default()
+                .chars()
+                .for_each(|ch| screen.char_typed(m, ch)),
+            "click" => screen.click(
+                m,
+                a["x"].as_f64().unwrap_or(0.0),
+                a["y"].as_f64().unwrap_or(0.0),
+            ),
             "key" => {
                 let (k, shift, ctrl) = key(a["key"].as_str().unwrap_or_default());
                 if screen.key(m, &history, k, shift, ctrl) == ChatAction::Close {
@@ -127,13 +163,35 @@ pub fn replay_screen(c: &Value, assets: &Assets, state: &mut Map<String, Value>)
         }
     }
     // Options.getBackgroundColor(Integer.MIN_VALUE).
-    let background = if c["chatOnly"].as_bool().unwrap_or(true) { 0x8000_0000 } else { as8(c["opacity"].as_f64().unwrap_or(0.0) as f32) << 24 };
+    let background = if c["chatOnly"].as_bool().unwrap_or(true) {
+        0x8000_0000
+    } else {
+        as8(c["opacity"].as_f64().unwrap_or(0.0) as f32) << 24
+    };
     let mut gui = Gui::new(w, h);
     // No level or player facts: only plain items' tooltips are compared.
     let game = Game::default();
-    let details = Details { lang: &lang, advanced: c["advanced"].as_bool().unwrap_or(false), creative: false, game: &game, player: None, key: None };
-    let lines = chat.as_ref().map(|chat| ChatLines { chat, ticks: int(c, "now"), details: &details });
-    screen.extract(&mut gui, m, mouse, c["blink"].as_u64().unwrap_or(0), background, lines);
+    let details = Details {
+        lang: &lang,
+        advanced: c["advanced"].as_bool().unwrap_or(false),
+        creative: false,
+        game: &game,
+        player: None,
+        key: None,
+    };
+    let lines = chat.as_ref().map(|chat| ChatLines {
+        chat,
+        ticks: int(c, "now"),
+        details: &details,
+    });
+    screen.extract(
+        &mut gui,
+        m,
+        mouse,
+        c["blink"].as_u64().unwrap_or(0),
+        background,
+        lines,
+    );
     let input = &screen.input;
     state.insert("value".into(), json!(input.value()));
     state.insert("cursor".into(), json!(input.cursor));

@@ -17,7 +17,17 @@ pub enum Tint {
     Fixed([u8; 3]),
 }
 
-const GRASS: &[&str] = &["short_grass", "tall_grass", "fern", "large_fern", "tallgrass", "double_plant", "reeds", "sugar_cane", "bush"];
+const GRASS: &[&str] = &[
+    "short_grass",
+    "tall_grass",
+    "fern",
+    "large_fern",
+    "tallgrass",
+    "double_plant",
+    "reeds",
+    "sugar_cane",
+    "bush",
+];
 const UNTINTED_LEAVES: &[&str] = &["cherry", "azalea", "pale_oak"];
 
 impl Tint {
@@ -52,12 +62,21 @@ pub fn faces(name: &str) -> [Tint; 6] {
     match name {
         "water" | "flowing_water" => all(Tint::Water),
         // Sides only tint where their overlay alpha says (see Material::Overlay); the bottom is dirt.
-        "grass_block" | "grass" => [Tint::Grass, Tint::Grass, Tint::Grass, Tint::None, Tint::Grass, Tint::Grass],
+        "grass_block" | "grass" => [
+            Tint::Grass,
+            Tint::Grass,
+            Tint::Grass,
+            Tint::None,
+            Tint::Grass,
+            Tint::Grass,
+        ],
         n if GRASS.contains(&n) => all(Tint::Grass),
         "vine" => all(Tint::Foliage),
         "birch_leaves" => all(Tint::Birch),
         "spruce_leaves" => all(Tint::Spruce),
-        n if n.ends_with("leaves") && !UNTINTED_LEAVES.iter().any(|u| n.contains(u)) => all(Tint::Foliage),
+        n if n.ends_with("leaves") && !UNTINTED_LEAVES.iter().any(|u| n.contains(u)) => {
+            all(Tint::Foliage)
+        }
         _ => all(Tint::None),
     }
 }

@@ -21,24 +21,53 @@ const RECIPES: i32 = 2000;
 pub fn replay(c: &Value, assets: &Assets, _state: &mut Map<String, Value>) -> Vec<GuiDraw> {
     let lang = kit::lang(assets);
     let game = kit::game(c);
-    let env = Env { font: assets.font.as_ref(), lang: &lang, advanced: kit::bool(c, "advanced"), game: &game, op: kit::bool(c, "op") };
+    let env = Env {
+        font: assets.font.as_ref(),
+        lang: &lang,
+        advanced: kit::bool(c, "advanced"),
+        game: &game,
+        op: kit::bool(c, "op"),
+    };
     let (width, height) = (kit::int(c, "width", 0), kit::int(c, "height", 0));
     let inventory = Text::translate("container.inventory", &[], &lang);
     let mut screen: Box<dyn Screen> = match c["kind"].as_str().unwrap_or_default() {
         "merchant" => {
-            let mut s = Merchant::new(width, height, kit::title(c, "entity.minecraft.villager", &lang), inventory);
+            let mut s = Merchant::new(
+                width,
+                height,
+                kit::title(c, "entity.minecraft.villager", &lang),
+                inventory,
+            );
             fill(c, &mut s.base);
             s.offers = offers(c);
-            (s.level, s.xp, s.future_xp) = (kit::int(c, "level", 0), kit::int(c, "xp", 0), kit::int(&c["menu"], "futureXp", 0));
+            (s.level, s.xp, s.future_xp) = (
+                kit::int(c, "level", 0),
+                kit::int(c, "xp", 0),
+                kit::int(&c["menu"], "futureXp", 0),
+            );
             (s.show_progress_bar, s.can_restock) = (kit::bool(c, "bar"), kit::bool(c, "restock"));
-            (s.shop_item, s.scroll_off) = (kit::int(c, "shop", 0) as usize, kit::int(c, "scroll", 0) as usize);
+            (s.shop_item, s.scroll_off) = (
+                kit::int(c, "shop", 0) as usize,
+                kit::int(c, "scroll", 0) as usize,
+            );
             Box::new(s)
         }
         "stonecutter" => {
-            let mut s = Stonecutter::new(width, height, kit::title(c, "container.stonecutter", &lang), inventory);
+            let mut s = Stonecutter::new(
+                width,
+                height,
+                kit::title(c, "container.stonecutter", &lang),
+                inventory,
+            );
             fill(c, &mut s.base);
-            let icons: Vec<ItemStack> = (0..kit::int(&c["menu"], "recipes", 0)).filter_map(|i| kit::item(c, RECIPES + i)).collect();
-            s.recipes = icons.iter().enumerate().map(|(i, icon)| (icon.clone(), RECIPES + first_equal(&icons, i) as i32)).collect();
+            let icons: Vec<ItemStack> = (0..kit::int(&c["menu"], "recipes", 0))
+                .filter_map(|i| kit::item(c, RECIPES + i))
+                .collect();
+            s.recipes = icons
+                .iter()
+                .enumerate()
+                .map(|(i, icon)| (icon.clone(), RECIPES + first_equal(&icons, i) as i32))
+                .collect();
             s.selected = kit::int(&c["menu"], "selected", -1);
             s.container_changed();
             for dy in scrolls(c) {
@@ -47,10 +76,20 @@ pub fn replay(c: &Value, assets: &Assets, _state: &mut Map<String, Value>) -> Ve
             Box::new(s)
         }
         "loom" => {
-            let mut s = Loom::new(width, height, kit::title(c, "container.loom", &lang), inventory);
+            let mut s = Loom::new(
+                width,
+                height,
+                kit::title(c, "container.loom", &lang),
+                inventory,
+            );
             fill(c, &mut s.base);
             let patterns = c["menu"]["patterns"].as_array().into_iter().flatten();
-            s.patterns = patterns.map(|p| Pattern { translation_key: str(&p[0]), sprite: str(&p[1]) }).collect();
+            s.patterns = patterns
+                .map(|p| Pattern {
+                    translation_key: str(&p[0]),
+                    sprite: str(&p[1]),
+                })
+                .collect();
             s.selected = kit::int(&c["menu"], "selected", -1);
             s.container_changed();
             for dy in scrolls(c) {
@@ -62,7 +101,13 @@ pub fn replay(c: &Value, assets: &Assets, _state: &mut Map<String, Value>) -> Ve
         _ => return Vec::new(),
     };
     let mut gui = Gui::new(width, height);
-    frame(screen.as_mut(), &mut gui, &env, kit::mouse(c), kit::float(c, "partial", 0.0));
+    frame(
+        screen.as_mut(),
+        &mut gui,
+        &env,
+        kit::mouse(c),
+        kit::float(c, "partial", 0.0),
+    );
     gui.draws
 }
 
@@ -84,7 +129,12 @@ fn first_equal(stacks: &[ItemStack], i: usize) -> usize {
 }
 
 fn scrolls(c: &Value) -> Vec<f64> {
-    c["scrolls"].as_array().into_iter().flatten().filter_map(Value::as_f64).collect()
+    c["scrolls"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_f64)
+        .collect()
 }
 
 /// The case's `MerchantOffer.CODEC` offers over their resolved stacks.

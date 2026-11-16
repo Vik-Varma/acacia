@@ -5,9 +5,9 @@ use std::time::{Duration, Instant};
 
 use acacia_auth::{PingRegion, QosBeacon};
 
-use crate::socks5::Socks5Proxy;
-use crate::transport::{resolve, Transport};
 use crate::ConnectError;
+use crate::socks5::Socks5Proxy;
+use crate::transport::{Transport, resolve};
 
 const PORT: u16 = 3075;
 const PAYLOAD_LEN: usize = 10;
@@ -17,7 +17,10 @@ const TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Pings every beacon once (through `proxy` when given, so latencies match the bot's egress) and
 /// returns each region's round trip in `beacons` order. Regions that never answer are left out.
-pub async fn measure_ping_regions(beacons: &[QosBeacon], proxy: Option<&Socks5Proxy>) -> Result<Vec<PingRegion>, ConnectError> {
+pub async fn measure_ping_regions(
+    beacons: &[QosBeacon],
+    proxy: Option<&Socks5Proxy>,
+) -> Result<Vec<PingRegion>, ConnectError> {
     let mut targets = Vec::with_capacity(beacons.len());
     for (i, b) in beacons.iter().enumerate() {
         match resolve(&format!("{}:{PORT}", b.host)).await {
@@ -25,7 +28,9 @@ pub async fn measure_ping_regions(beacons: &[QosBeacon], proxy: Option<&Socks5Pr
             Err(e) => tracing::debug!(host = %b.host, "QoS beacon unresolved: {e}"),
         }
     }
-    let Some(&(_, first)) = targets.first() else { return Ok(vec![]) };
+    let Some(&(_, first)) = targets.first() else {
+        return Ok(vec![]);
+    };
     let transport = Transport::bind(first, proxy).await?;
 
     let mut sent_at: Vec<Option<Instant>> = vec![None; beacons.len()];
@@ -47,7 +52,10 @@ pub async fn measure_ping_regions(beacons: &[QosBeacon], proxy: Option<&Socks5Pr
                 None => deadline = Some(Instant::now() + TIMEOUT),
             }
         }
-        let pending = sent_at.iter().zip(&rtts).any(|(s, r)| s.is_some() && r.is_none());
+        let pending = sent_at
+            .iter()
+            .zip(&rtts)
+            .any(|(s, r)| s.is_some() && r.is_none());
         if deadline.is_some_and(|d| !pending || Instant::now() >= d) {
             break;
         }
@@ -67,7 +75,12 @@ pub async fn measure_ping_regions(beacons: &[QosBeacon], proxy: Option<&Socks5Pr
     Ok(beacons
         .iter()
         .zip(rtts)
-        .filter_map(|(b, rtt)| Some(PingRegion { latency_ms: rtt?.as_millis() as u32, region: b.region.clone() }))
+        .filter_map(|(b, rtt)| {
+            Some(PingRegion {
+                latency_ms: rtt?.as_millis() as u32,
+                region: b.region.clone(),
+            })
+        })
         .collect())
 }
 
@@ -79,7 +92,8 @@ fn ping_payload(index: usize) -> [u8; PAYLOAD_LEN] {
 
 /// The beacon index an echo answers, if `data` is one.
 fn echo_index(data: &[u8]) -> Option<usize> {
-    (data.len() == PAYLOAD_LEN && data[..2] == [0, 0] && data[2] > 0).then(|| usize::from(data[2]) - 1)
+    (data.len() == PAYLOAD_LEN && data[..2] == [0, 0] && data[2] > 0)
+        .then(|| usize::from(data[2]) - 1)
 }
 
 #[cfg(test)]

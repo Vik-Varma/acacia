@@ -1,13 +1,13 @@
 //! The outbound stream: each shard buffers its bots' records and flushes them as one JSON batch per wake-up.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use acacia_api::{batch_json, Out};
+use acacia_api::{Out, batch_json};
 use parking_lot::Mutex;
-use tokio::sync::mpsc::{self, error::TrySendError};
 use tokio::sync::Notify;
+use tokio::sync::mpsc::{self, error::TrySendError};
 use tokio::time::Instant;
 
 /// The consuming end of the host's stream: each item is a JSON array of [`Out`] records.
@@ -137,17 +137,44 @@ mod tests {
     #[tokio::test]
     async fn done_flushes_at_once_after_its_events() {
         let (tx, mut out) = channel(4);
-        let flusher = Flusher { buf: ShardBuf::new(), tx, every: Duration::from_secs(5), max_held: 16 };
+        let flusher = Flusher {
+            buf: ShardBuf::new(),
+            tx,
+            every: Duration::from_secs(5),
+            max_held: 16,
+        };
         let buf = flusher.buf.clone();
         tokio::spawn(flusher.run());
         let bot = BotId("b".into());
-        buf.push(Out::Event { bot: bot.clone(), seq: 1, event: Event::Spawn });
-        buf.push(Out::Done { bot: Some(bot.clone()), call: CallId(1), result: CallResult::Ok(Value::Null) });
-        let batch = tokio::time::timeout(Duration::from_secs(1), out.recv()).await.expect("no wait for the interval");
+        buf.push(Out::Event {
+            bot: bot.clone(),
+            seq: 1,
+            event: Event::Spawn,
+        });
+        buf.push(Out::Done {
+            bot: Some(bot.clone()),
+            call: CallId(1),
+            result: CallResult::Ok(Value::Null),
+        });
+        let batch = tokio::time::timeout(Duration::from_secs(1), out.recv())
+            .await
+            .expect("no wait for the interval");
         let records: Vec<Out> = serde_json::from_str(&batch.unwrap()).unwrap();
-        assert!(matches!(records.as_slice(), [Out::Event { .. }, Out::Done { .. }]), "{records:?}");
+        assert!(
+            matches!(records.as_slice(), [Out::Event { .. }, Out::Done { .. }]),
+            "{records:?}"
+        );
 
-        buf.push(Out::Event { bot, seq: 2, event: Event::Spawn });
-        assert!(tokio::time::timeout(Duration::from_millis(300), out.recv()).await.is_err(), "events still wait");
+        buf.push(Out::Event {
+            bot,
+            seq: 2,
+            event: Event::Spawn,
+        });
+        assert!(
+            tokio::time::timeout(Duration::from_millis(300), out.recv())
+                .await
+                .is_err(),
+            "events still wait"
+        );
     }
 }

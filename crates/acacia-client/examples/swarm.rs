@@ -50,6 +50,17 @@ async fn main() {
         }
     }
     spawns.sort();
-    let pct = |p: usize| spawns.get((spawns.len() * p / 100).min(spawns.len().saturating_sub(1))).copied().unwrap_or_default();
-    println!("{} ok, {failures} failed | spawn p50 {:?} p95 {:?} max {:?}", spawns.len(), pct(50), pct(95), spawns.last().copied().unwrap_or_default());
+    let pct = |p: usize| {
+        spawns
+            .get((spawns.len() * p / 100).min(spawns.len().saturating_sub(1)))
+            .copied()
+            .unwrap_or_default()
+    };
+    println!(
+        "{} ok, {failures} failed | spawn p50 {:?} p95 {:?} max {:?}",
+        spawns.len(),
+        pct(50),
+        pct(95),
+        spawns.last().copied().unwrap_or_default()
+    );
 }

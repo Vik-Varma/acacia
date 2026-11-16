@@ -36,7 +36,12 @@ fn cap(n: usize, r: &[u8]) -> usize {
     n.min(r.len())
 }
 
-fn read_payload<F: Flavor>(r: &mut &[u8], tag: u8, depth: usize, lossy: &mut bool) -> Result<Value> {
+fn read_payload<F: Flavor>(
+    r: &mut &[u8],
+    tag: u8,
+    depth: usize,
+    lossy: &mut bool,
+) -> Result<Value> {
     if depth > MAX_DEPTH {
         return Err(Error::TooDeep(MAX_DEPTH));
     }

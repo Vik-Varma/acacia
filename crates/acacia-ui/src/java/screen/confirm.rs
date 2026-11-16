@@ -2,10 +2,10 @@
 //! wrapped message and a yes/no row stacked and centred.
 
 use super::{Env, Escape, Screen, arena_children, menu_background, render_all};
-use crate::java::widget::input::{Action, Child, Fired};
 use crate::java::text::{Style, Text};
 use crate::java::widget::Ctx;
 use crate::java::widget::button::Button;
+use crate::java::widget::input::{Action, Child, Fired};
 use crate::java::widget::layout::{Arena, Elem, Linear, align_in_rect};
 use crate::java::widget::text::{MultiLineText, MultiLineTextWidget, StringWidget};
 
@@ -63,8 +63,21 @@ impl ConfirmScreen {
         if let Elem::Layout(l) = &mut root {
             l.arrange(&mut widgets);
         }
-        align_in_rect(&mut root, &mut widgets, 0, 0, env.width, env.height, 0.5, 0.5);
-        ConfirmScreen { env, death_background: false, widgets }
+        align_in_rect(
+            &mut root,
+            &mut widgets,
+            0,
+            0,
+            env.width,
+            env.height,
+            0.5,
+            0.5,
+        );
+        ConfirmScreen {
+            env,
+            death_background: false,
+            widgets,
+        }
     }
 }
 
@@ -88,7 +101,10 @@ impl Screen for ConfirmScreen {
     /// `ConfirmScreen.keyPressed`: no, once the delay is over (the buttons are on).
     fn escape(&self) -> Escape {
         match self.widgets.last() {
-            Some(no) if no.base().active => Escape::Fire(Fired { id: NO.into(), action: Action::Press }),
+            Some(no) if no.base().active => Escape::Fire(Fired {
+                id: NO.into(),
+                action: Action::Press,
+            }),
             _ => Escape::Ignore,
         }
     }

@@ -48,20 +48,40 @@ impl<'a> Display<'a> {
     }
 
     pub fn hides_tooltip(&self) -> bool {
-        self.0.and_then(|d| d.get("hide_tooltip")).and_then(Value::as_bool).unwrap_or(false)
+        self.0
+            .and_then(|d| d.get("hide_tooltip"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
     }
 
     /// `shows(type)` for a component id without its namespace.
     pub fn shows(&self, component: &str) -> bool {
-        let hidden = self.0.and_then(|d| d.get("hidden_components")).and_then(Value::as_array);
+        let hidden = self
+            .0
+            .and_then(|d| d.get("hidden_components"))
+            .and_then(Value::as_array);
         let full = format!("minecraft:{component}");
-        !self.hides_tooltip() && !hidden.into_iter().flatten().any(|h| h.as_str() == Some(&full))
+        !self.hides_tooltip()
+            && !hidden
+                .into_iter()
+                .flatten()
+                .any(|h| h.as_str() == Some(&full))
     }
 }
 
 /// `getTooltipLines(context, player, flag)` without registry facts or a player.
 pub fn lines(stack: &ItemStack, cx: &Context) -> Vec<Text> {
-    tooltip_lines(stack, &Details { lang: cx.lang, advanced: cx.advanced, creative: cx.creative, game: &NO_FACTS, player: None, key: None })
+    tooltip_lines(
+        stack,
+        &Details {
+            lang: cx.lang,
+            advanced: cx.advanced,
+            creative: cx.creative,
+            game: &NO_FACTS,
+            player: None,
+            key: None,
+        },
+    )
 }
 
 /// `getTooltipLines(context, player, flag)`.
@@ -90,7 +110,10 @@ pub fn add_details(stack: &ItemStack, display: &Display, d: &Details, out: &mut 
         }
     }
     attributes::lines(stack, display, d, out);
-    for (component, key, color) in [("intangible_projectile", "item.intangible", GRAY), ("unbreakable", "item.unbreakable", BLUE)] {
+    for (component, key, color) in [
+        ("intangible_projectile", "item.intangible", GRAY),
+        ("unbreakable", "item.unbreakable", BLUE),
+    ] {
         if stack.has(component) && display.shows(component) {
             out.push(d.tr(key, &[]).with_color(color));
         }
@@ -102,10 +125,17 @@ pub fn add_details(stack: &ItemStack, display: &Display, d: &Details, out: &mut 
             add(stack, v, d, out);
         }
     }
-    if matches!(stack.id.as_str(), "minecraft:spawner" | "minecraft:trial_spawner") && display.shows("block_entity_data") {
+    if matches!(
+        stack.id.as_str(),
+        "minecraft:spawner" | "minecraft:trial_spawner"
+    ) && display.shows("block_entity_data")
+    {
         details::spawner(stack.get("block_entity_data"), d, out);
     }
-    for (component, header) in [("can_break", "item.canBreak"), ("can_place_on", "item.canPlace")] {
+    for (component, header) in [
+        ("can_break", "item.canBreak"),
+        ("can_place_on", "item.canPlace"),
+    ] {
         if let Some(v) = stack.get(component)
             && display.shows(component)
         {
@@ -118,12 +148,19 @@ pub fn add_details(stack: &ItemStack, display: &Display, d: &Details, out: &mut 
         // isDamaged: a damageable (max_damage, not unbreakable) stack's damage, clamped to the max.
         let max = stack.int("max_damage", 0);
         let damage = stack.int("damage", 0).clamp(0, max.max(0));
-        if damage > 0 && stack.has("max_damage") && !stack.has("unbreakable") && display.shows("damage") {
+        if damage > 0
+            && stack.has("max_damage")
+            && !stack.has("unbreakable")
+            && display.shows("damage")
+        {
             out.push(d.tr("item.durability", &[num(max - damage), num(max)]));
         }
         out.push(Text::literal(stack.id.clone()).with_color(DARK_GRAY));
         if stack.size > 0 {
-            out.push(d.tr("item.components", &[num(stack.size)]).with_color(DARK_GRAY));
+            out.push(
+                d.tr("item.components", &[num(stack.size)])
+                    .with_color(DARK_GRAY),
+            );
         }
     }
     if d.player.is_some() && !d.game.item_enabled(&stack.id) {
@@ -142,7 +179,9 @@ const PROVIDERS: [(&str, Provider); 21] = [
     ("instrument", contents::instrument),
     ("map_id", details::map_id),
     ("bees", details::bees),
-    ("container_loot", |_, _, d, out| out.push(d.tr("item.container.loot_table.unknown", &[]))),
+    ("container_loot", |_, _, d, out| {
+        out.push(d.tr("item.container.loot_table.unknown", &[]))
+    }),
     ("container", contents::container),
     ("banner_patterns", contents::banner_patterns),
     ("pot_decorations", contents::pot_decorations),
@@ -163,8 +202,12 @@ const PROVIDERS: [(&str, Provider); 21] = [
 
 /// Those after the unit components.
 const LATE_PROVIDERS: [(&str, Provider); 6] = [
-    ("sign_text_front", |_, v, d, out| details::sign_text(v, "sign.front_text", d, out)),
-    ("sign_text_back", |_, v, d, out| details::sign_text(v, "sign.back_text", d, out)),
+    ("sign_text_front", |_, v, d, out| {
+        details::sign_text(v, "sign.front_text", d, out)
+    }),
+    ("sign_text_back", |_, v, d, out| {
+        details::sign_text(v, "sign.back_text", d, out)
+    }),
     ("ominous_bottle_amplifier", effects::ominous_bottle),
     ("suspicious_stew_effects", effects::suspicious_stew),
     ("block_state", details::block_state),
@@ -177,19 +220,38 @@ fn op_warning(stack: &ItemStack, d: &Details) -> bool {
     if !d.player.is_some_and(|p| p.op) {
         return false;
     }
-    let block_item = d.game.entry("item", &stack.id).and_then(|i| i.get("blockItem")).and_then(Value::as_bool).unwrap_or(false);
+    let block_item = d
+        .game
+        .entry("item", &stack.id)
+        .and_then(|i| i.get("blockItem"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let (component, table) = match () {
         _ if stack.id.ends_with("_spawn_egg") => ("entity_data", "entity_type"),
         _ if block_item => ("block_entity_data", "block_entity_type"),
         _ => return false,
     };
-    let Some(id) = stack.get(component).and_then(|v| v.get("id")).and_then(Value::as_str) else { return false };
-    d.game.entry(table, id).and_then(|e| e.get("op")).and_then(Value::as_bool).unwrap_or(false)
+    let Some(id) = stack
+        .get(component)
+        .and_then(|v| v.get("id"))
+        .and_then(Value::as_str)
+    else {
+        return false;
+    };
+    d.game
+        .entry(table, id)
+        .and_then(|e| e.get("op"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
 }
 
 fn push_op_warning(out: &mut Vec<Text>, d: &Details) {
     let red = formatting("red");
-    out.push(d.tr("item.op_warning.line1", &[]).with_style(&red).with_style(&formatting("bold")));
+    out.push(
+        d.tr("item.op_warning.line1", &[])
+            .with_style(&red)
+            .with_style(&formatting("bold")),
+    );
     out.push(d.tr("item.op_warning.line2", &[]).with_style(&red));
     out.push(d.tr("item.op_warning.line3", &[]).with_style(&red));
 }

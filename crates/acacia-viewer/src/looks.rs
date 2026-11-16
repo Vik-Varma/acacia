@@ -20,15 +20,28 @@ impl Looks {
         let bedrock = match baked("bedrock") {
             Some(pack) => pack,
             None => {
-                let (baked, report) = LookPack::bake_bedrock(&Pack::load(&Pack::default_dir())?, Look::BEDROCK);
-                let (untextured, missing) = (report.blocks_without_textures.len(), report.missing_images.len());
-                tracing::info!(textures = baked.atlas.layers.len(), animated = baked.atlas.animations.len(), untextured, missing, "baked the Bedrock look");
+                let (baked, report) =
+                    LookPack::bake_bedrock(&Pack::load(&Pack::default_dir())?, Look::BEDROCK);
+                let (untextured, missing) = (
+                    report.blocks_without_textures.len(),
+                    report.missing_images.len(),
+                );
+                tracing::info!(
+                    textures = baked.atlas.layers.len(),
+                    animated = baked.atlas.animations.len(),
+                    untextured,
+                    missing,
+                    "baked the Bedrock look"
+                );
                 tracing::debug!(untextured = ?report.blocks_without_textures, missing = ?report.missing_images);
                 baked
             }
         };
         let java = baked("java").unwrap_or_else(|| bedrock.clone().with_look(Look::JAVA));
-        Ok(Looks { bedrock: Arc::new(bedrock), java: Arc::new(java) })
+        Ok(Looks {
+            bedrock: Arc::new(bedrock),
+            java: Arc::new(java),
+        })
     }
 
     pub fn get(&self, choice: LookChoice) -> &Arc<LookPack> {

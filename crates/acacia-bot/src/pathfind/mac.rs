@@ -36,7 +36,12 @@ impl Macro {
 }
 
 impl Controller for Macro {
-    fn step(&mut self, b: &Body, peek: &mut dyn FnMut(&Controls) -> Body, c: &mut Controls) -> Phase {
+    fn step(
+        &mut self,
+        b: &Body,
+        peek: &mut dyn FnMut(&Controls) -> Body,
+        c: &mut Controls,
+    ) -> Phase {
         match self {
             Macro::Leap(l) => l.step(b, peek, c),
             Macro::Run(r) => r.step(b, peek, c),

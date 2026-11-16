@@ -21,7 +21,10 @@ type Factory = Box<dyn Fn(&Session) -> Box<dyn Interceptor> + Send + Sync>;
 pub(crate) enum Target {
     Address(SocketAddr),
     /// Asked of Realms for each join: it answers with an address or a signaling target.
-    Realm { auth: Arc<AuthClient>, id: i64 },
+    Realm {
+        auth: Arc<AuthClient>,
+        id: i64,
+    },
 }
 
 /// What every player's relay is built from.
@@ -36,9 +39,18 @@ pub(crate) struct Setup {
 impl Setup {
     /// The relay for a new player, with fresh interceptors and the capture's next session number.
     /// `wires` are the game's and the server's.
-    pub fn relay(&self, wires: (Wire, Wire), key: SigningKey, credentials: Option<LoginCredentials>, session: &Session) -> Relay {
+    pub fn relay(
+        &self,
+        wires: (Wire, Wire),
+        key: SigningKey,
+        credentials: Option<LoginCredentials>,
+        session: &Session,
+    ) -> Relay {
         let chain = Chain::new(self.factories.iter().map(|f| f(session)).collect());
-        let log = self.rec.clone().map(|rec| SessionLog::new(rec, self.sessions.fetch_add(1, Ordering::Relaxed)));
+        let log = self
+            .rec
+            .clone()
+            .map(|rec| SessionLog::new(rec, self.sessions.fetch_add(1, Ordering::Relaxed)));
         Relay::new(wires, key, credentials, log, chain)
     }
 
@@ -91,7 +103,13 @@ impl Proxy {
             transport: Transport::RakNet,
             account: None,
             trace_datagrams: false,
-            setup: Setup { target: Target::Address(server), rec: None, follow_transfers: true, sessions: AtomicU32::new(0), factories: Vec::new() },
+            setup: Setup {
+                target: Target::Address(server),
+                rec: None,
+                follow_transfers: true,
+                sessions: AtomicU32::new(0),
+                factories: Vec::new(),
+            },
         }
     }
 
@@ -144,8 +162,13 @@ impl Proxy {
     }
 
     /// Adds an interceptor, made fresh for each player, after those added before it.
-    pub fn intercept<I: Interceptor>(mut self, factory: impl Fn(&Session) -> I + Send + Sync + 'static) -> Self {
-        self.setup.factories.push(Box::new(move |s| Box::new(factory(s))));
+    pub fn intercept<I: Interceptor>(
+        mut self,
+        factory: impl Fn(&Session) -> I + Send + Sync + 'static,
+    ) -> Self {
+        self.setup
+            .factories
+            .push(Box::new(move |s| Box::new(factory(s))));
         self
     }
 
@@ -156,25 +179,45 @@ impl Proxy {
                     (Some(rec), true) => Some(record::lock(rec).datagram_log()?),
                     _ => None,
                 };
-                Listener::RakNet { socket: UdpSocket::bind(self.listen).await?, account, trace }
+                Listener::RakNet {
+                    socket: UdpSocket::bind(self.listen).await?,
+                    account,
+                    trace,
+                }
             }
             (Transport::NetherNet(_), _) if self.setup.address().is_none() => {
-                let why = "a realm is reached with the game joining the proxy over RakNet, not NetherNet";
+                let why =
+                    "a realm is reached with the game joining the proxy over RakNet, not NetherNet";
                 return Err(io::Error::new(io::ErrorKind::InvalidInput, why));
             }
-            (Transport::NetherNet(key), Some(account)) => Listener::NetherNet { tcp: TcpListener::bind(self.listen).await?, account, key },
+            (Transport::NetherNet(key), Some(account)) => Listener::NetherNet {
+                tcp: TcpListener::bind(self.listen).await?,
+                account,
+                key,
+            },
             (Transport::NetherNet(_), None) => {
                 let why = "NetherNet needs an online account: BDS refuses NetherNet offers without a MultiplayerToken";
                 return Err(io::Error::new(io::ErrorKind::InvalidInput, why));
             }
         };
-        Ok(BoundProxy { listener, setup: self.setup })
+        Ok(BoundProxy {
+            listener,
+            setup: self.setup,
+        })
     }
 }
 
 enum Listener {
-    RakNet { socket: UdpSocket, account: Option<Account>, trace: Option<DatagramLog> },
-    NetherNet { tcp: TcpListener, account: Account, key: SigningKey },
+    RakNet {
+        socket: UdpSocket,
+        account: Option<Account>,
+        trace: Option<DatagramLog>,
+    },
+    NetherNet {
+        tcp: TcpListener,
+        account: Account,
+        key: SigningKey,
+    },
 }
 
 /// A [`Proxy`] holding its socket, so the address is known before players join.
@@ -194,8 +237,22 @@ impl BoundProxy {
     /// Serves players until an I/O error on the listening socket.
     pub async fn run(self) -> io::Result<()> {
         match self.listener {
-            Listener::RakNet { socket, account, trace } => raknet::run(socket, self.setup, account, trace).await,
-            Listener::NetherNet { tcp, account, key } => nethernet::run(tcp, nethernet::Host { setup: self.setup, account, key }).await,
+            Listener::RakNet {
+                socket,
+                account,
+                trace,
+            } => raknet::run(socket, self.setup, account, trace).await,
+            Listener::NetherNet { tcp, account, key } => {
+                nethernet::run(
+                    tcp,
+                    nethernet::Host {
+                        setup: self.setup,
+                        account,
+                        key,
+                    },
+                )
+                .await
+            }
         }
     }
 }

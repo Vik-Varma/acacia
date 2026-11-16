@@ -3,7 +3,9 @@
 
 use bytes::{BufMut, BytesMut};
 
-pub use acacia_nbt::{Flavor, LittleEndian, List, Nbt, Network, Raw, Str, Value, root_string, write};
+pub use acacia_nbt::{
+    Flavor, List, LittleEndian, Nbt, Network, Raw, Str, Value, root_string, write,
+};
 
 use crate::codec::Result;
 use crate::strict::{Leniency, note};

@@ -56,7 +56,10 @@ impl Deferred {
     }
 
     fn with_seed(rng: u64) -> Self {
-        Self { queue: VecDeque::new(), rng }
+        Self {
+            queue: VecDeque::new(),
+            rng,
+        }
     }
 
     pub fn push(&mut self, now: Instant, range: (u64, u64), packet: Bytes) {
@@ -71,7 +74,9 @@ impl Deferred {
     }
 
     pub fn pop_due(&mut self, now: Instant) -> Option<Bytes> {
-        (self.next_due()? <= now).then(|| self.queue.pop_front().map(|(_, p)| p)).flatten()
+        (self.next_due()? <= now)
+            .then(|| self.queue.pop_front().map(|(_, p)| p))
+            .flatten()
     }
 }
 
@@ -89,9 +94,16 @@ mod tests {
         assert!((650..=2800).contains(&(due.as_millis() as u64)), "{due:?}");
         assert_eq!(d.pop_due(t0 + Duration::from_millis(600)), None);
         let late = t0 + Duration::from_secs(3);
-        assert!(d.queue[1].0 >= d.queue[0].0 + Duration::from_millis(30), "the second pauses after the first");
+        assert!(
+            d.queue[1].0 >= d.queue[0].0 + Duration::from_millis(30),
+            "the second pauses after the first"
+        );
         assert_eq!(d.pop_due(late).as_deref(), Some(&b"slow"[..]));
-        assert_eq!(d.pop_due(late).as_deref(), Some(&b"fast"[..]), "a quicker reply never overtakes");
+        assert_eq!(
+            d.pop_due(late).as_deref(),
+            Some(&b"fast"[..]),
+            "a quicker reply never overtakes"
+        );
         assert_eq!(d.pop_due(late), None);
     }
 }

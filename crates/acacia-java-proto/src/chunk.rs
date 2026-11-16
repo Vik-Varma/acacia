@@ -54,7 +54,13 @@ impl Section {
 
     pub fn count_where(&self, pred: impl Fn(u32) -> bool) -> usize {
         match &self.blocks {
-            Values::Single(v) => if pred(*v) { BLOCKS } else { 0 },
+            Values::Single(v) => {
+                if pred(*v) {
+                    BLOCKS
+                } else {
+                    0
+                }
+            }
             Values::Each(all) => all.iter().filter(|v| pred(**v)).count(),
         }
     }
@@ -62,7 +68,11 @@ impl Section {
 
 /// Bits a value occupies in storage for the `bits` the server sent; the linear palette for blocks is always 4 wide.
 fn storage_bits(bits: u32, entries: usize) -> u32 {
-    if entries == BLOCKS && (1..=4).contains(&bits) { 4 } else { bits }
+    if entries == BLOCKS && (1..=4).contains(&bits) {
+        4
+    } else {
+        bits
+    }
 }
 
 fn read_container(input: &mut &[u8], entries: usize, palette_max: u32) -> Result<Values, Error> {
@@ -136,7 +146,10 @@ mod tests {
         single(&mut buf, 7);
         single(&mut buf, 3);
         let s = &read_sections(&buf).unwrap()[0];
-        assert_eq!((s.non_empty, s.blocks.get(4095), s.biomes.get(0)), (4096, 7, 3));
+        assert_eq!(
+            (s.non_empty, s.blocks.get(4095), s.biomes.get(0)),
+            (4096, 7, 3)
+        );
     }
 
     #[test]
@@ -153,7 +166,10 @@ mod tests {
         }
         single(&mut buf, 0);
         let s = &read_sections(&buf).unwrap()[0];
-        assert_eq!((s.blocks.get(11), s.blocks.get(12), s.blocks.get(13)), (9, 300, 9));
+        assert_eq!(
+            (s.blocks.get(11), s.blocks.get(12), s.blocks.get(13)),
+            (9, 300, 9)
+        );
     }
 
     #[test]

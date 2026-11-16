@@ -11,13 +11,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 use acacia_client::auth::login::Skin;
 use acacia_client::auth::{Account, AuthClient, AuthConfig, FileTokenCache};
 use acacia_client::proto::packets::{PlayerList, PlayerSkin};
-use acacia_client::proto::types::{PersonaPieceType, PlayerRecordContent, Skin as WireSkin, SkinArmSize};
+use acacia_client::proto::types::{
+    PersonaPieceType, PlayerRecordContent, Skin as WireSkin, SkinArmSize,
+};
 use acacia_client::{Client, Event};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use serde_json::json;
 use styled::styled;
 
@@ -46,7 +48,10 @@ impl Harvest {
             return Ok(());
         };
         if let Some(name) = skin.unreadable_piece_type() {
-            *self.rejected.entry(format!("piece type {name:?} is not one BDS reads")).or_default() += 1;
+            *self
+                .rejected
+                .entry(format!("piece type {name:?} is not one BDS reads"))
+                .or_default() += 1;
             return Ok(());
         }
         let entry = self.looks.entry(look.clone()).or_default();
@@ -54,19 +59,31 @@ impl Harvest {
         entry.persona_ids.insert(skin.skin_id.clone());
         if entry.players == 1 {
             skin.personalise("0000000000000000");
-            std::fs::write(self.out.join(format!("{look}.json")), serde_json::to_vec_pretty(&skin)?)?;
+            std::fs::write(
+                self.out.join(format!("{look}.json")),
+                serde_json::to_vec_pretty(&skin)?,
+            )?;
             println!("new look {look} ({} pieces)", skin.persona_pieces.len());
         }
         Ok(())
     }
 
     fn finish(self) -> Result<()> {
-        let mut summary = format!("{} skins seen, {} not a default character\n", self.seen, self.rejected.values().sum::<usize>());
+        let mut summary = format!(
+            "{} skins seen, {} not a default character\n",
+            self.seen,
+            self.rejected.values().sum::<usize>()
+        );
         for (s, n) in &self.rejected {
             summary += &format!("rejected x{n}: {s}\n");
         }
         for (look, l) in &self.looks {
-            summary += &format!("{look}: {} players, {} distinct skin ids {:?}\n", l.players, l.persona_ids.len(), l.persona_ids);
+            summary += &format!(
+                "{look}: {} players, {} distinct skin ids {:?}\n",
+                l.players,
+                l.persona_ids.len(),
+                l.persona_ids
+            );
         }
         print!("{summary}");
         Ok(std::fs::write(self.out.join("summary.txt"), summary)?)
@@ -75,7 +92,9 @@ impl Harvest {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
     let args: Vec<String> = std::env::args().skip(1).collect();
     if let [flag, capture, out] = &args[..]
         && flag == "--capture"
@@ -83,9 +102,15 @@ async fn main() -> Result<()> {
         return from_capture(capture, harvest(out)?);
     }
     let [server, account, secs, ..] = &args[..] else {
-        return Err("usage: <server> @account <seconds> [out dir] | --capture <mitm.jsonl> <out dir>".into());
+        return Err(
+            "usage: <server> @account <seconds> [out dir] | --capture <mitm.jsonl> <out dir>"
+                .into(),
+        );
     };
-    let mut harvest = harvest(args.get(3).map_or(".testserver/skins-harvest", String::as_str))?;
+    let mut harvest = harvest(
+        args.get(3)
+            .map_or(".testserver/skins-harvest", String::as_str),
+    )?;
 
     let auth = Account::new(
         Arc::new(AuthClient::new(AuthConfig::default())?),
@@ -93,7 +118,10 @@ async fn main() -> Result<()> {
         account.trim_start_matches('@'),
     );
     let (key, credentials) = auth.login_credentials().await?;
-    let mut client = Client::builder(server).online(credentials, key).connect().await?;
+    let mut client = Client::builder(server)
+        .online(credentials, key)
+        .connect()
+        .await?;
     println!("spawned; collecting for {secs} s");
 
     let deadline = tokio::time::sleep(Duration::from_secs(secs.parse()?));
@@ -128,7 +156,12 @@ async fn main() -> Result<()> {
 
 fn harvest(out: &str) -> Result<Harvest> {
     std::fs::create_dir_all(out)?;
-    Ok(Harvest { out: out.into(), looks: BTreeMap::new(), seen: 0, rejected: BTreeMap::new() })
+    Ok(Harvest {
+        out: out.into(),
+        looks: BTreeMap::new(),
+        seen: 0,
+        rejected: BTreeMap::new(),
+    })
 }
 
 /// The game's own in-session skin changes (`PlayerSkin`, game to server) from an acacia-mitm capture.
@@ -139,7 +172,10 @@ fn from_capture(path: &str, mut harvest: Harvest) -> Result<()> {
             continue;
         }
         let hex = v["raw"].as_str().unwrap_or_default();
-        let raw: Vec<u8> = (0..hex.len()).step_by(2).map(|i| u8::from_str_radix(&hex[i..i + 2], 16)).collect::<std::result::Result<_, _>>()?;
+        let raw: Vec<u8> = (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16))
+            .collect::<std::result::Result<_, _>>()?;
         harvest.add(&PlayerSkin::read(&mut &raw[..])?.skin)?;
     }
     harvest.finish()
@@ -152,39 +188,58 @@ fn default_character(w: &WireSkin) -> Option<(String, Skin)> {
         && w.cape_id.is_empty()
         && !w.geometry_data.is_empty()
         && !w.personal_pieces.is_empty()
-        && w.personal_pieces.iter().all(|p| p.is_default_piece && p.product_id.is_empty());
+        && w.personal_pieces
+            .iter()
+            .all(|p| p.is_default_piece && p.product_id.is_empty());
     if !default {
         return None;
     }
     // The wire carries colours byte-reversed relative to Login's #AARRGGBB.
     let colour = |c: i32| format!("#{:x}", (c as u32).swap_bytes());
-    let pieces: Vec<_> = w.personal_pieces.iter().map(|p| {
-        json!({
-            "IsDefault": true,
-            "PackId": p.pack_id.to_string(),
-            "PieceId": p.piece_id,
-            "PieceType": piece_type_name(p.piece_type),
-            "ProductId": "",
+    let pieces: Vec<_> = w
+        .personal_pieces
+        .iter()
+        .map(|p| {
+            json!({
+                "IsDefault": true,
+                "PackId": p.pack_id.to_string(),
+                "PieceId": p.piece_id,
+                "PieceType": piece_type_name(p.piece_type),
+                "ProductId": "",
+            })
         })
-    }).collect();
+        .collect();
     let tints: Vec<_> = w.piece_tint_colors.iter().map(|t| {
         json!({"Colors": t.colors.map(colour), "PieceType": format!("persona_{}", t.piece_type)})
     }).collect();
-    let mut key: Vec<String> = pieces.iter().map(|p| p["PieceId"].as_str().unwrap_or_default().to_owned()).collect();
+    let mut key: Vec<String> = pieces
+        .iter()
+        .map(|p| p["PieceId"].as_str().unwrap_or_default().to_owned())
+        .collect();
     key.sort();
     key.push(colour(w.skin_color));
     key.push(serde_json::to_string(&tints).ok()?);
     let look = format!("{:016x}", fnv(key.join("|").as_bytes()));
     let skin = Skin {
-        animated_image_data: w.animations.iter().map(|a| json!({
-            "AnimationExpression": a.expression_type,
-            "Frames": a.animation_frames as u32,
-            "Image": STANDARD.encode(&a.skin_image.data),
-            "ImageHeight": a.skin_image.height,
-            "ImageWidth": a.skin_image.width,
-            "Type": a.animation_type,
-        })).collect(),
-        arm_size: match w.arm_size { SkinArmSize::Slim => "slim", _ => "wide" }.into(),
+        animated_image_data: w
+            .animations
+            .iter()
+            .map(|a| {
+                json!({
+                    "AnimationExpression": a.expression_type,
+                    "Frames": a.animation_frames as u32,
+                    "Image": STANDARD.encode(&a.skin_image.data),
+                    "ImageHeight": a.skin_image.height,
+                    "ImageWidth": a.skin_image.width,
+                    "Type": a.animation_type,
+                })
+            })
+            .collect(),
+        arm_size: match w.arm_size {
+            SkinArmSize::Slim => "slim",
+            _ => "wide",
+        }
+        .into(),
         cape_data: String::new(),
         cape_id: String::new(),
         cape_image_height: 0,
@@ -211,12 +266,26 @@ fn default_character(w: &WireSkin) -> Option<(String, Skin)> {
 
 /// Why a skin was rejected, without anything identifying.
 fn shape(w: &WireSkin) -> String {
-    let defaults = w.personal_pieces.iter().filter(|p| p.is_default_piece).count();
+    let defaults = w
+        .personal_pieces
+        .iter()
+        .filter(|p| p.is_default_piece)
+        .count();
     format!(
         "persona={} premium={} cape={} anims={} geometry={}B {}x{} pieces={} default={} id_shape={}",
-        w.persona, w.premium, !w.cape_id.is_empty(), w.animations.len(), w.geometry_data.len(),
-        w.skin_data.width, w.skin_data.height, w.personal_pieces.len(), defaults,
-        w.skin_id.chars().map(|c| if c.is_ascii_hexdigit() { 'x' } else { c }).collect::<String>(),
+        w.persona,
+        w.premium,
+        !w.cape_id.is_empty(),
+        w.animations.len(),
+        w.geometry_data.len(),
+        w.skin_data.width,
+        w.skin_data.height,
+        w.personal_pieces.len(),
+        defaults,
+        w.skin_id
+            .chars()
+            .map(|c| if c.is_ascii_hexdigit() { 'x' } else { c })
+            .collect::<String>(),
     )
 }
 
@@ -229,15 +298,20 @@ fn piece_type_name(piece_type: PersonaPieceType) -> String {
 }
 
 fn snake(camel: &str) -> String {
-    camel.chars().enumerate().fold(String::new(), |mut s, (i, c)| {
-        if c.is_uppercase() && i > 0 {
-            s.push('_');
-        }
-        s.push(c.to_ascii_lowercase());
-        s
-    })
+    camel
+        .chars()
+        .enumerate()
+        .fold(String::new(), |mut s, (i, c)| {
+            if c.is_uppercase() && i > 0 {
+                s.push('_');
+            }
+            s.push(c.to_ascii_lowercase());
+            s
+        })
 }
 
 fn fnv(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, &b| (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3))
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, &b| {
+        (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3)
+    })
 }

@@ -34,7 +34,12 @@ impl Device {
         id[8] = (id[8] & 0x3f) | 0x80;
         let random = i64::from_le_bytes(digest[16..24].try_into().expect("8 bytes"));
         let (model, memory_tier) = PHONES[usize::from(digest[24]) % PHONES.len()];
-        Self { device_id: hex::encode(id), client_random_id: random & i64::MAX, model, memory_tier }
+        Self {
+            device_id: hex::encode(id),
+            client_random_id: random & i64::MAX,
+            model,
+            memory_tier,
+        }
     }
 }
 
@@ -44,13 +49,29 @@ mod tests {
 
     #[test]
     fn stable_per_account_and_distinct_between_accounts() {
-        let (a, again, b) = (Device::for_account("Steve"), Device::for_account("Steve"), Device::for_account("Alex"));
-        assert_eq!((a.device_id.as_str(), a.client_random_id), (again.device_id.as_str(), again.client_random_id));
+        let (a, again, b) = (
+            Device::for_account("Steve"),
+            Device::for_account("Steve"),
+            Device::for_account("Alex"),
+        );
+        assert_eq!(
+            (a.device_id.as_str(), a.client_random_id),
+            (again.device_id.as_str(), again.client_random_id)
+        );
         assert_ne!(a.device_id, b.device_id);
         assert_eq!(a.device_id.len(), 32);
-        assert!(a.device_id.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+        assert!(
+            a.device_id
+                .chars()
+                .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+        );
         assert_eq!(&a.device_id[12..13], "4", "UUIDv4 version nibble");
         assert!(a.client_random_id >= 0);
-        assert!(a.model.split(' ').next().is_some_and(|m| m.chars().all(|c| c.is_ascii_uppercase())));
+        assert!(
+            a.model
+                .split(' ')
+                .next()
+                .is_some_and(|m| m.chars().all(|c| c.is_ascii_uppercase()))
+        );
     }
 }

@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use acacia_auth::Account;
-use acacia_nethernet::{http, Connection, Identity};
+use acacia_nethernet::{Connection, Identity, http};
 use p384::ecdsa::SigningKey;
 use rand_core::{OsRng, RngCore};
 use serde_json::json;
@@ -68,25 +68,38 @@ fn err(e: impl std::fmt::Display) -> String {
 
 /// One signaling request. A join then runs its link on this task until the player leaves.
 async fn serve(mut tcp: TcpStream, peer: SocketAddr, host: &Host) -> Result<(), String> {
-    let raw = timeout(SIGNALING_TIMEOUT, read_http(&mut tcp, |r| http::is_tls(r) || http::request_complete(r)))
-        .await
-        .map_err(|_| "request timed out")?
-        .map_err(err)?;
+    let raw = timeout(
+        SIGNALING_TIMEOUT,
+        read_http(&mut tcp, |r| http::is_tls(r) || http::request_complete(r)),
+    )
+    .await
+    .map_err(|_| "request timed out")?
+    .map_err(err)?;
     if http::is_tls(&raw) {
         return tcp.write_all(&http::TLS_REFUSAL).await.map_err(err);
     }
     let req = http::parse_request(&raw).map_err(err)?;
-    let is_join = req.path.strip_prefix("/v1/join/").is_some_and(|id| id.parse::<u64>().is_ok());
+    let is_join = req
+        .path
+        .strip_prefix("/v1/join/")
+        .is_some_and(|id| id.parse::<u64>().is_ok());
     match req.method {
-        "GET" if req.path == acacia_nethernet::PROBE_PATH => tcp.write_all(&http::response(200, "application/json", "")).await.map_err(err),
+        "GET" if req.path == acacia_nethernet::PROBE_PATH => tcp
+            .write_all(&http::response(200, "application/json", ""))
+            .await
+            .map_err(err),
         "POST" if is_join => {
             let local = tcp.local_addr().map_err(err)?;
             if local.ip().is_loopback() {
-                eprintln!("the game joined on a loopback address; its WebRTC may not reach it. Use this machine's LAN IP");
+                eprintln!(
+                    "the game joined on a loopback address; its WebRTC may not reach it. Use this machine's LAN IP"
+                );
             }
             match join(&String::from_utf8_lossy(req.body), local, peer, host).await {
                 Ok((answer, link)) => {
-                    tcp.write_all(&http::response(200, "application/sdp", &answer)).await.map_err(err)?;
+                    tcp.write_all(&http::response(200, "application/sdp", &answer))
+                        .await
+                        .map_err(err)?;
                     drop(tcp);
                     link.run().await;
                     Ok(())
@@ -97,43 +110,99 @@ async fn serve(mut tcp: TcpStream, peer: SocketAddr, host: &Host) -> Result<(), 
                 }
             }
         }
-        _ => tcp.write_all(&http::response(404, "text/plain", "")).await.map_err(err),
+        _ => tcp
+            .write_all(&http::response(404, "text/plain", ""))
+            .await
+            .map_err(err),
     }
 }
 
 /// Dials the server for a game (signaling from `peer`) whose offer reached us on `local`, then
 /// answers the game.
-async fn join(offer: &str, local: SocketAddr, peer: SocketAddr, host: &Host) -> Result<(String, Link), String> {
+async fn join(
+    offer: &str,
+    local: SocketAddr,
+    peer: SocketAddr,
+    host: &Host,
+) -> Result<(String, Link), String> {
     let key = SigningKey::random(&mut OsRng);
     let credentials = host.account.credentials(&key).await.map_err(err)?;
-    let token = credentials.multiplayer_token.clone().ok_or("the account has no MultiplayerToken")?;
-    let server = host.setup.address().expect("bind refuses NetherNet without a server address");
-    let (up, up_udp) = timeout(SIGNALING_TIMEOUT, dial(server, &Identity::multiplayer(key.clone(), token)))
+    let token = credentials
+        .multiplayer_token
+        .clone()
+        .ok_or("the account has no MultiplayerToken")?;
+    let server = host
+        .setup
+        .address()
+        .expect("bind refuses NetherNet without a server address");
+    let (up, up_udp) = timeout(
+        SIGNALING_TIMEOUT,
+        dial(server, &Identity::multiplayer(key.clone(), token)),
+    )
+    .await
+    .map_err(|_| "server signaling timed out")??;
+    let game_udp = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))
         .await
-        .map_err(|_| "server signaling timed out")??;
-    let game_udp = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await.map_err(err)?;
+        .map_err(err)?;
     let game_addr = SocketAddr::new(local.ip(), game_udp.local_addr().map_err(err)?.port());
-    let (game, answer) = Connection::answer(offer, game_addr, &host.key, Instant::now()).map_err(err)?;
-    println!("NetherNet player joining: game side {game_addr}, server side {:?}", up.host_candidate());
+    let (game, answer) =
+        Connection::answer(offer, game_addr, &host.key, Instant::now()).map_err(err)?;
+    println!(
+        "NetherNet player joining: game side {game_addr}, server side {:?}",
+        up.host_candidate()
+    );
     let (inject_tx, injections) = mpsc::unbounded_channel();
-    let session = Session { game: peer, proxy: local, injector: Injector::new(peer, inject_tx) };
-    let relay = host.setup.relay((Wire::NetherNet, Wire::NetherNet), key, Some(credentials), &session);
+    let session = Session {
+        game: peer,
+        proxy: local,
+        injector: Injector::new(peer, inject_tx),
+    };
+    let relay = host.setup.relay(
+        (Wire::NetherNet, Wire::NetherNet),
+        key,
+        Some(credentials),
+        &session,
+    );
     relay.note(json!({ "event": "connected", "transport": "nethernet" }));
-    Ok((answer, Link { game, game_udp, up, up_udp, relay, injections }))
+    Ok((
+        answer,
+        Link {
+            game,
+            game_udp,
+            up,
+            up_udp,
+            relay,
+            injections,
+        },
+    ))
 }
 
 /// Posts our offer to the server and accepts its answer; ICE and DTLS follow in the link.
 async fn dial(server: SocketAddr, identity: &Identity) -> Result<(Connection, UdpSocket), String> {
-    let udp = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await.map_err(err)?;
+    let udp = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))
+        .await
+        .map_err(err)?;
     // BDS answers only with LAN candidates, so advertise the address the OS routes to it from.
     let route = std::net::UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).map_err(err)?;
     route.connect(server).map_err(err)?;
-    let local = SocketAddr::new(route.local_addr().map_err(err)?.ip(), udp.local_addr().map_err(err)?.port());
+    let local = SocketAddr::new(
+        route.local_addr().map_err(err)?.ip(),
+        udp.local_addr().map_err(err)?.port(),
+    );
     let (mut conn, offer) = Connection::offer(local, identity, Instant::now()).map_err(err)?;
     let mut tcp = TcpStream::connect(server).await.map_err(err)?;
-    tcp.write_all(&http::offer_request(&server.to_string(), OsRng.next_u64(), &offer)).await.map_err(err)?;
-    let raw = read_http(&mut tcp, http::response_complete).await.map_err(err)?;
-    conn.accept_answer(&http::answer_sdp(&raw).map_err(err)?, Instant::now()).map_err(err)?;
+    tcp.write_all(&http::offer_request(
+        &server.to_string(),
+        OsRng.next_u64(),
+        &offer,
+    ))
+    .await
+    .map_err(err)?;
+    let raw = read_http(&mut tcp, http::response_complete)
+        .await
+        .map_err(err)?;
+    conn.accept_answer(&http::answer_sdp(&raw).map_err(err)?, Instant::now())
+        .map_err(err)?;
     Ok((conn, udp))
 }
 

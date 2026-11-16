@@ -68,12 +68,19 @@ impl RenderState {
     /// From a harness case: every key not starting with `@` (those steer the harness).
     pub fn from_json(case: &serde_json::Value) -> RenderState {
         let mut state = RenderState::default();
-        for (name, value) in case.as_object().into_iter().flatten().filter(|(k, _)| !k.starts_with('@')) {
+        for (name, value) in case
+            .as_object()
+            .into_iter()
+            .flatten()
+            .filter(|(k, _)| !k.starts_with('@'))
+        {
             let field = match value {
                 serde_json::Value::Bool(b) => Field::Flag(*b),
                 serde_json::Value::Number(n) => Field::Num(n.as_f64().unwrap_or(0.0) as f32),
                 serde_json::Value::String(s) => Field::Text(s.clone()),
-                serde_json::Value::Array(a) => Field::Nums(a.iter().filter_map(serde_json::Value::as_f64).collect()),
+                serde_json::Value::Array(a) => {
+                    Field::Nums(a.iter().filter_map(serde_json::Value::as_f64).collect())
+                }
                 _ => continue,
             };
             state.set(name.trim_start_matches('?'), field);
@@ -107,7 +114,11 @@ impl RenderState {
     }
     /// `ageScale`: 1 unless set (a baby's is 0.5).
     pub fn age_scale(&self) -> f32 {
-        if self.has("ageScale") { self.num("ageScale") } else { 1.0 }
+        if self.has("ageScale") {
+            self.num("ageScale")
+        } else {
+            1.0
+        }
     }
 }
 
@@ -119,7 +130,15 @@ mod tests {
     fn reads_a_harness_case() {
         let case = serde_json::json!({"walkAnimationPos": 3.5, "isBaby": true, "armPose": "CROSSED", "@rootYaw": 90.0, "?eatTick": 4});
         let state = RenderState::from_json(&case);
-        assert_eq!((state.walk_pos(), state.baby(), state.text("armPose"), state.num("eatTick")), (3.5, true, Some("CROSSED"), 4.0));
+        assert_eq!(
+            (
+                state.walk_pos(),
+                state.baby(),
+                state.text("armPose"),
+                state.num("eatTick")
+            ),
+            (3.5, true, Some("CROSSED"), 4.0)
+        );
         assert!(!state.has("@rootYaw"));
         assert_eq!(state.age_scale(), 1.0);
     }

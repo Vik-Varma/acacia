@@ -35,7 +35,14 @@ async fn mock_proxy(require_auth: bool) -> Socks5Proxy {
         tcp.read_exact(&mut req).await.unwrap();
         let relay = UdpSocket::bind("127.0.0.1:0").await.unwrap();
         let mut reply = vec![5, 0, 0];
-        put_addr(&mut reply, (std::net::Ipv4Addr::UNSPECIFIED, relay.local_addr().unwrap().port()).into());
+        put_addr(
+            &mut reply,
+            (
+                std::net::Ipv4Addr::UNSPECIFIED,
+                relay.local_addr().unwrap().port(),
+            )
+                .into(),
+        );
         tcp.write_all(&reply).await.unwrap();
 
         let mut buf = [0u8; 2048];
@@ -50,7 +57,10 @@ async fn mock_proxy(require_auth: bool) -> Socks5Proxy {
                 relay.send_to(&out, c).await.unwrap();
             } else {
                 client = Some(from);
-                let target = SocketAddr::new(std::net::Ipv4Addr::new(buf[4], buf[5], buf[6], buf[7]).into(), u16::from_be_bytes([buf[8], buf[9]]));
+                let target = SocketAddr::new(
+                    std::net::Ipv4Addr::new(buf[4], buf[5], buf[6], buf[7]).into(),
+                    u16::from_be_bytes([buf[8], buf[9]]),
+                );
                 relay.send_to(&buf[10..n], target).await.unwrap();
             }
         }
@@ -124,6 +134,9 @@ async fn connect_tunnels_tcp() {
 #[tokio::test]
 async fn wrong_credentials_are_rejected() {
     let proxy = mock_proxy(true).await.login("bot", "wrong");
-    let err = Socks5Udp::associate(&proxy, "127.0.0.1:1".parse().unwrap()).await.err().unwrap();
+    let err = Socks5Udp::associate(&proxy, "127.0.0.1:1".parse().unwrap())
+        .await
+        .err()
+        .unwrap();
     assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
 }

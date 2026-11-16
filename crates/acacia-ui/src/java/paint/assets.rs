@@ -19,15 +19,27 @@ pub struct Images {
 
 /// `atlases/gui.json`'s `directory` sources; `gui/sprites` alone when it can't be read.
 fn gui_sources(root: &Path) -> Vec<(String, String)> {
-    let json: serde_json::Value = std::fs::read_to_string(root.join("atlases/gui.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    let json: serde_json::Value = std::fs::read_to_string(root.join("atlases/gui.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
     let sources: Vec<(String, String)> = json["sources"]
         .as_array()
         .into_iter()
         .flatten()
         .filter(|s| s["type"].as_str().is_some_and(|t| t.ends_with("directory")))
-        .filter_map(|s| Some((s["prefix"].as_str().unwrap_or("").to_owned(), s["source"].as_str()?.to_owned())))
+        .filter_map(|s| {
+            Some((
+                s["prefix"].as_str().unwrap_or("").to_owned(),
+                s["source"].as_str()?.to_owned(),
+            ))
+        })
         .collect();
-    if sources.is_empty() { vec![(String::new(), "gui/sprites".into())] } else { sources }
+    if sources.is_empty() {
+        vec![(String::new(), "gui/sprites".into())]
+    } else {
+        sources
+    }
 }
 
 /// `minecraft:hud/heart/full` → `hud/heart/full`.
@@ -37,7 +49,11 @@ fn path(id: &str) -> &str {
 
 impl Images {
     pub fn new(root: &Path) -> Images {
-        Images { root: root.to_owned(), sources: gui_sources(root), scaling: HashMap::new() }
+        Images {
+            root: root.to_owned(),
+            sources: gui_sources(root),
+            scaling: HashMap::new(),
+        }
     }
 
     /// The GUI sprite `id`'s file without `.png`: the last source holding it wins, as later
@@ -45,7 +61,11 @@ impl Images {
     pub fn sprite_file(&self, id: &str) -> Option<PathBuf> {
         let id = path(id);
         self.sources.iter().rev().find_map(|(prefix, source)| {
-            let base = self.root.join("textures").join(source).join(id.strip_prefix(prefix.as_str())?);
+            let base = self
+                .root
+                .join("textures")
+                .join(source)
+                .join(id.strip_prefix(prefix.as_str())?);
             base.with_extension("png").is_file().then_some(base)
         })
     }
@@ -57,12 +77,22 @@ impl Images {
             return Some((atlas.get(&name)?, (*cached)?));
         }
         let Some(base) = self.sprite_file(id) else {
-            let missing = (id == MISSING).then(|| (atlas.add(&name, &missing_image()), Scaling::Stretch));
+            let missing =
+                (id == MISSING).then(|| (atlas.add(&name, &missing_image()), Scaling::Stretch));
             self.scaling.insert(id.to_owned(), missing.map(|m| m.1));
             return missing;
         };
-        let meta: serde_json::Value = std::fs::read_to_string(base.with_extension("png.mcmeta")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
-        let image = png(&base.with_extension("png")).map(|i| if meta.get("animation").is_some() { first_frame(i) } else { i });
+        let meta: serde_json::Value = std::fs::read_to_string(base.with_extension("png.mcmeta"))
+            .ok()
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_default();
+        let image = png(&base.with_extension("png")).map(|i| {
+            if meta.get("animation").is_some() {
+                first_frame(i)
+            } else {
+                i
+            }
+        });
         let found = image.map(|i| (atlas.add(&name, &i), Scaling::from_mcmeta(&meta)));
         self.scaling.insert(id.to_owned(), found.map(|f| f.1));
         found
@@ -96,13 +126,23 @@ pub const MISSING: &str = "missingno";
 
 /// `MissingTextureAtlasSprite.generateMissingImage`: 8 × 8 black and magenta squares.
 fn missing_image() -> image::RgbaImage {
-    image::RgbaImage::from_fn(16, 16, |x, y| if (x < 8) ^ (y < 8) { image::Rgba([248, 0, 248, 255]) } else { image::Rgba([0, 0, 0, 255]) })
+    image::RgbaImage::from_fn(16, 16, |x, y| {
+        if (x < 8) ^ (y < 8) {
+            image::Rgba([248, 0, 248, 255])
+        } else {
+            image::Rgba([0, 0, 0, 255])
+        }
+    })
 }
 
 /// An animated sprite's strip cut to its first square frame.
 fn first_frame(image: image::RgbaImage) -> image::RgbaImage {
     let (w, h) = image.dimensions();
-    if h > w && h % w == 0 { image::imageops::crop_imm(&image, 0, 0, w, w).to_image() } else { image }
+    if h > w && h % w == 0 {
+        image::imageops::crop_imm(&image, 0, 0, w, w).to_image()
+    } else {
+        image
+    }
 }
 
 #[cfg(test)]
@@ -123,8 +163,14 @@ mod tests {
         file("textures/mob_effect/speed.png", "");
         file("textures/gui/sprites/hud/hotbar.png", "");
         let images = Images::new(&root);
-        assert_eq!(images.sprite_file("minecraft:mob_effect/speed"), Some(root.join("textures/mob_effect/speed")));
-        assert_eq!(images.sprite_file("hud/hotbar"), Some(root.join("textures/gui/sprites/hud/hotbar")));
+        assert_eq!(
+            images.sprite_file("minecraft:mob_effect/speed"),
+            Some(root.join("textures/mob_effect/speed"))
+        );
+        assert_eq!(
+            images.sprite_file("hud/hotbar"),
+            Some(root.join("textures/gui/sprites/hud/hotbar"))
+        );
         assert_eq!(images.sprite_file("mob_effect/haste"), None);
         std::fs::remove_dir_all(&root).ok();
     }

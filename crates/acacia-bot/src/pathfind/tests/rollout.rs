@@ -12,7 +12,12 @@ const SYNTH_TOLERANCE: f32 = 1.0 / 512.0;
 fn course() -> Grid {
     let g = Grid::floor(-30, 40);
     g.fill([6, 1, -3], [6, 1, 3], "stone");
-    g.fill_state([10, 1, -3], [10, 1, 3], "smooth_stone_slab", "minecraft:vertical_half=bottom");
+    g.fill_state(
+        [10, 1, -3],
+        [10, 1, 3],
+        "smooth_stone_slab",
+        "minecraft:vertical_half=bottom",
+    );
     g.fill([-8, 1, -8], [-8, 3, 8], "stone");
     g.fill([3, 0, 5], [4, 0, 6], "air");
     g
@@ -21,7 +26,10 @@ fn course() -> Grid {
 /// Controls for tick `t`: a forward tap and double tap, a sprint, bunny hops while turning, sneaking,
 /// strafing, a key sprint into a wall, walking back and a standing jump.
 fn script(t: u32) -> Controls {
-    let mut c = Controls { yaw: -90.0, ..Controls::default() };
+    let mut c = Controls {
+        yaw: -90.0,
+        ..Controls::default()
+    };
     match t {
         5..7 | 9..50 => c.forward = 1.0,
         50..80 => {
@@ -58,7 +66,10 @@ fn forks_step_bit_exact_with_the_live_simulation() {
         }
     }
     let end = m.position().unwrap();
-    assert!(end[0].abs() + end[2].abs() > 5.0, "the script moved: {end:?}");
+    assert!(
+        end[0].abs() + end[2].abs() > 5.0,
+        "the script moved: {end:?}"
+    );
 }
 
 #[test]
@@ -72,15 +83,26 @@ fn synthesized_momentum_tracks_the_real_state() {
         if t % 4 == 0 {
             let mut real = m.fork().unwrap();
             let p = real.st.pos;
-            let at = [p[0].floor() as i32, (p[1] + 1e-3).floor() as i32, p[2].floor() as i32];
+            let at = [
+                p[0].floor() as i32,
+                (p[1] + 1e-3).floor() as i32,
+                p[2].floor() as i32,
+            ];
             let mut synth = real.clone();
             synth.st = Momentum::snap(&real.motion(), at).synth(at, &real).st;
             for k in 0..30 {
                 real.step(&script(t + k), &terrain);
                 synth.step(&script(t + k), &terrain);
-                let err = (0..3).map(|i| (real.st.pos[i] - synth.st.pos[i]).abs()).fold(0.0, f32::max);
+                let err = (0..3)
+                    .map(|i| (real.st.pos[i] - synth.st.pos[i]).abs())
+                    .fold(0.0, f32::max);
                 worst = worst.max(err);
-                assert!(err <= SYNTH_TOLERANCE, "snap at {t}, tick {k}: off by {err}; real {:?}, synth {:?}", real.st.pos, synth.st.pos);
+                assert!(
+                    err <= SYNTH_TOLERANCE,
+                    "snap at {t}, tick {k}: off by {err}; real {:?}, synth {:?}",
+                    real.st.pos,
+                    synth.st.pos
+                );
             }
         }
         m.controls = script(t);

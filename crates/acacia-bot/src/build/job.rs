@@ -30,7 +30,13 @@ fn default_scaffold() -> Vec<acacia_world::neutral::Item> {
 
 impl BuildJob {
     pub fn new(structure: impl Into<PathBuf>, at: Transform) -> Self {
-        Self { structure: structure.into(), at, stations: Vec::new(), fill_only: false, scaffold: default_scaffold() }
+        Self {
+            structure: structure.into(),
+            at,
+            stations: Vec::new(),
+            fill_only: false,
+            scaffold: default_scaffold(),
+        }
     }
 
     pub fn to_json(&self) -> String {

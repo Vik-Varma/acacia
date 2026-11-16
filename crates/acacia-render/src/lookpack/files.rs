@@ -46,24 +46,42 @@ struct AnimationEntry {
 
 impl LookPack {
     pub fn save(&self, dir: &Path) -> Result<(), Error> {
-        let io = |path: &Path| { let path = path.display().to_string(); move |source| Error::Io { path, source } };
+        let io = |path: &Path| {
+            let path = path.display().to_string();
+            move |source| Error::Io { path, source }
+        };
         std::fs::create_dir_all(dir).map_err(io(dir))?;
         let animations = &self.atlas.animations;
         let file = PackFile {
             version: VERSION,
             look: self.look,
             states: self.states.iter().map(|(k, v)| (k.clone(), *v)).collect(),
-            animations: animations.iter().map(|a| AnimationEntry { layer: a.layer, frames: a.frames.len(), ticks_per_frame: a.ticks_per_frame, blend: a.blend }).collect(),
+            animations: animations
+                .iter()
+                .map(|a| AnimationEntry {
+                    layer: a.layer,
+                    frames: a.frames.len(),
+                    ticks_per_frame: a.ticks_per_frame,
+                    blend: a.blend,
+                })
+                .collect(),
             light_shapes: self.light_shapes.clone(),
         };
         let json = dir.join("pack.json");
-        std::fs::write(&json, serde_json::to_vec(&file).expect("a pack serializes")).map_err(io(&json))?;
+        std::fs::write(&json, serde_json::to_vec(&file).expect("a pack serializes"))
+            .map_err(io(&json))?;
         let blocks = dir.join("blocks.bin");
         let mut deflated = DeflateEncoder::new(Vec::new(), Compression::default());
-        deflated.write_all(&postcard::to_stdvec(&self.blocks).expect("blocks serialize")).expect("a vector takes bytes");
-        std::fs::write(&blocks, deflated.finish().expect("a vector takes bytes")).map_err(io(&blocks))?;
+        deflated
+            .write_all(&postcard::to_stdvec(&self.blocks).expect("blocks serialize"))
+            .expect("a vector takes bytes");
+        std::fs::write(&blocks, deflated.finish().expect("a vector takes bytes"))
+            .map_err(io(&blocks))?;
         write_strip(&dir.join("textures.png"), self.atlas.layers.iter())?;
-        write_strip(&dir.join("frames.png"), animations.iter().flat_map(|a| &a.frames))?;
+        write_strip(
+            &dir.join("frames.png"),
+            animations.iter().flat_map(|a| &a.frames),
+        )?;
         if self.files == dir {
             return Ok(());
         }
@@ -83,49 +101,110 @@ impl LookPack {
     pub fn load(dir: &Path) -> Result<LookPack, Error> {
         let json = dir.join("pack.json");
         let path = json.display().to_string();
-        let bad = |reason: String| Error::LookPack { path: path.clone(), reason };
-        let text = std::fs::read(&json).map_err(|source| Error::Io { path: path.clone(), source })?;
-        let value: serde_json::Value = serde_json::from_slice(&text).map_err(|source| Error::Json { path: path.clone(), source })?;
+        let bad = |reason: String| Error::LookPack {
+            path: path.clone(),
+            reason,
+        };
+        let text = std::fs::read(&json).map_err(|source| Error::Io {
+            path: path.clone(),
+            source,
+        })?;
+        let value: serde_json::Value =
+            serde_json::from_slice(&text).map_err(|source| Error::Json {
+                path: path.clone(),
+                source,
+            })?;
         let version = value.get("version").and_then(serde_json::Value::as_u64);
         if version != Some(VERSION) {
-            return Err(bad(format!("look pack version {version:?}, this build reads {VERSION}")));
+            return Err(bad(format!(
+                "look pack version {version:?}, this build reads {VERSION}"
+            )));
         }
-        let file: PackFile = serde_json::from_value(value).map_err(|source| Error::Json { path: path.clone(), source })?;
+        let file: PackFile = serde_json::from_value(value).map_err(|source| Error::Json {
+            path: path.clone(),
+            source,
+        })?;
         let blocks = read_blocks(&dir.join("blocks.bin"))?;
         if let Some(index) = file.states.values().find(|&&i| i as usize >= blocks.len()) {
-            return Err(bad(format!("state points at block {index} of {}", blocks.len())));
+            return Err(bad(format!(
+                "state points at block {index} of {}",
+                blocks.len()
+            )));
         }
         let layers = read_strip(&dir.join("textures.png"))?;
-        let mut frames = if file.animations.is_empty() { Vec::new() } else { read_strip(&dir.join("frames.png"))? }.into_iter();
+        let mut frames = if file.animations.is_empty() {
+            Vec::new()
+        } else {
+            read_strip(&dir.join("frames.png"))?
+        }
+        .into_iter();
         let mut animations = Vec::new();
         for a in &file.animations {
             let frames: Vec<Texture> = frames.by_ref().take(a.frames).collect();
             if frames.len() != a.frames || frames.is_empty() {
                 return Err(bad(format!("frames.png is short for layer {}", a.layer)));
             }
-            animations.push(Animation { layer: a.layer, frames, ticks_per_frame: a.ticks_per_frame.max(1), blend: a.blend });
+            animations.push(Animation {
+                layer: a.layer,
+                frames,
+                ticks_per_frame: a.ticks_per_frame.max(1),
+                blend: a.blend,
+            });
         }
         let states = file.states.into_iter().collect();
         let atlas = Atlas { layers, animations };
-        Ok(LookPack { look: file.look, blocks, states, distinct: Default::default(), atlas, light_shapes: file.light_shapes, files: dir.to_owned() })
+        Ok(LookPack {
+            look: file.look,
+            blocks,
+            states,
+            distinct: Default::default(),
+            atlas,
+            light_shapes: file.light_shapes,
+            files: dir.to_owned(),
+        })
     }
 }
 
 fn read_blocks(path: &Path) -> Result<Vec<RenderBlock>, Error> {
     let shown = path.display().to_string();
-    let file = std::fs::read(path).map_err(|source| Error::Io { path: shown.clone(), source })?;
+    let file = std::fs::read(path).map_err(|source| Error::Io {
+        path: shown.clone(),
+        source,
+    })?;
     let mut bytes = Vec::new();
-    let inflated = DeflateDecoder::new(&file[..]).read_to_end(&mut bytes).map_err(|e| e.to_string());
-    inflated.and_then(|_| postcard::from_bytes(&bytes).map_err(|e| e.to_string())).map_err(|reason| Error::LookPack { path: shown, reason })
+    let inflated = DeflateDecoder::new(&file[..])
+        .read_to_end(&mut bytes)
+        .map_err(|e| e.to_string());
+    inflated
+        .and_then(|_| postcard::from_bytes(&bytes).map_err(|e| e.to_string()))
+        .map_err(|reason| Error::LookPack {
+            path: shown,
+            reason,
+        })
 }
 
 /// What [`LookPack::files`] holds, copied beside the baked data.
 const LOOSE: [&str; 20] = [
-    "textures/misc/enchanted_item_glint.png", "textures/misc/enchanted_actor_glint.png",
-    "entity", "models", "render_controllers", "animations", "animation_controllers",
-    "textures/entity", "textures/environment", "textures/colormap", "biomes_client.json",
-    "textures/items", "textures/item_texture.json", "attachables", "textures/models/armor",
-    "textures/ui", "textures/gui", "texts/en_US.lang", "fogs", "textures/particle",
+    "textures/misc/enchanted_item_glint.png",
+    "textures/misc/enchanted_actor_glint.png",
+    "entity",
+    "models",
+    "render_controllers",
+    "animations",
+    "animation_controllers",
+    "textures/entity",
+    "textures/environment",
+    "textures/colormap",
+    "biomes_client.json",
+    "textures/items",
+    "textures/item_texture.json",
+    "attachables",
+    "textures/models/armor",
+    "textures/ui",
+    "textures/gui",
+    "texts/en_US.lang",
+    "fogs",
+    "textures/particle",
 ];
 
 /// Copies a file or a directory's files; a source that does not exist is skipped.
@@ -146,7 +225,10 @@ fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
 
 fn image_error(path: &Path) -> impl Fn(image::ImageError) -> Error {
     let path = path.display().to_string();
-    move |source| Error::Image { path: path.clone(), source }
+    move |source| Error::Image {
+        path: path.clone(),
+        source,
+    }
 }
 
 /// Nothing is written for no textures: an image cannot be empty.
@@ -156,17 +238,30 @@ fn write_strip<'a>(path: &Path, textures: impl Iterator<Item = &'a Texture>) -> 
         return Ok(());
     }
     let height = (bytes.len() / TEXEL_BYTES) as u32 * TEXTURE_SIZE;
-    image::save_buffer(path, &bytes, TEXTURE_SIZE, height, image::ColorType::Rgba8).map_err(image_error(path))
+    image::save_buffer(path, &bytes, TEXTURE_SIZE, height, image::ColorType::Rgba8)
+        .map_err(image_error(path))
 }
 
 fn read_strip(path: &Path) -> Result<Vec<Texture>, Error> {
     let image = image::open(path).map_err(image_error(path))?.into_rgba8();
     if image.width() != TEXTURE_SIZE || image.height() % TEXTURE_SIZE != 0 {
-        let reason = format!("{}x{} is not a strip of {TEXTURE_SIZE}x{TEXTURE_SIZE} textures", image.width(), image.height());
-        return Err(Error::LookPack { path: path.display().to_string(), reason });
+        let reason = format!(
+            "{}x{} is not a strip of {TEXTURE_SIZE}x{TEXTURE_SIZE} textures",
+            image.width(),
+            image.height()
+        );
+        return Err(Error::LookPack {
+            path: path.display().to_string(),
+            reason,
+        });
     }
     let (textures, _) = image.as_raw().as_chunks::<TEXEL_BYTES>();
-    Ok(textures.iter().map(|rgba| Texture { rgba: Box::new(*rgba) }).collect())
+    Ok(textures
+        .iter()
+        .map(|rgba| Texture {
+            rgba: Box::new(*rgba),
+        })
+        .collect())
 }
 
 #[cfg(test)]
@@ -175,24 +270,40 @@ mod tests {
     use crate::blocks::BlockTable;
 
     fn grey(v: u8) -> Texture {
-        Texture { rgba: Box::new([v; TEXEL_BYTES]) }
+        Texture {
+            rgba: Box::new([v; TEXEL_BYTES]),
+        }
     }
 
     fn sample(name: &str) -> LookPack {
-        let animation = Animation { layer: 1, frames: vec![grey(10), grey(20)], ticks_per_frame: 3, blend: false };
+        let animation = Animation {
+            layer: 1,
+            frames: vec![grey(10), grey(20)],
+            ticks_per_frame: 3,
+            blend: false,
+        };
         LookPack {
             look: Look::BEDROCK,
             blocks: vec![BlockTable::cube(0), BlockTable::cube(1)],
-            states: [("minecraft:air".to_owned(), 0), ("minecraft:oak_log[pillar_axis=y]".to_owned(), 1)].into_iter().collect(),
+            states: [
+                ("minecraft:air".to_owned(), 0),
+                ("minecraft:oak_log[pillar_axis=y]".to_owned(), 1),
+            ]
+            .into_iter()
+            .collect(),
             distinct: Default::default(),
-            atlas: Atlas { layers: vec![Texture::missing(), grey(10)], animations: vec![animation] },
+            atlas: Atlas {
+                layers: vec![Texture::missing(), grey(10)],
+                animations: vec![animation],
+            },
             light_shapes: vec![[[1, 2, 3, u64::MAX]; 6]],
             files: temp(&format!("{name}-loose")),
         }
     }
 
     fn temp(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("acacia-lookpack-{}-{name}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("acacia-lookpack-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
     }
@@ -204,14 +315,33 @@ mod tests {
         std::fs::write(pack.files.join("textures/colormap/grass.png"), b"loose").unwrap();
         pack.save(&dir).unwrap();
         let loaded = LookPack::load(&dir).unwrap();
-        assert_eq!(std::fs::read(loaded.files().join("textures/colormap/grass.png")).unwrap(), b"loose");
+        assert_eq!(
+            std::fs::read(loaded.files().join("textures/colormap/grass.png")).unwrap(),
+            b"loose"
+        );
         std::fs::remove_dir_all(&pack.files).unwrap();
         std::fs::remove_dir_all(&dir).unwrap();
-        assert_eq!((loaded.look, &loaded.blocks, &loaded.states), (pack.look, &pack.blocks, &pack.states));
-        let texels = |atlas: &Atlas| atlas.layers.iter().map(|t| t.rgba.to_vec()).collect::<Vec<_>>();
+        assert_eq!(
+            (loaded.look, &loaded.blocks, &loaded.states),
+            (pack.look, &pack.blocks, &pack.states)
+        );
+        let texels = |atlas: &Atlas| {
+            atlas
+                .layers
+                .iter()
+                .map(|t| t.rgba.to_vec())
+                .collect::<Vec<_>>()
+        };
         assert_eq!(texels(&loaded.atlas), texels(&pack.atlas));
         let animation = &loaded.atlas.animations[0];
-        assert_eq!((animation.layer, animation.at(0).rgba[0], animation.at(3).rgba[0]), (1, 10, 20));
+        assert_eq!(
+            (
+                animation.layer,
+                animation.at(0).rgba[0],
+                animation.at(3).rgba[0]
+            ),
+            (1, 10, 20)
+        );
     }
 
     #[test]
@@ -219,7 +349,11 @@ mod tests {
         let dir = temp("version");
         sample("version").save(&dir).unwrap();
         let json = dir.join("pack.json");
-        let text = std::fs::read_to_string(&json).unwrap().replacen(&format!("\"version\":{VERSION}"), "\"version\":0", 1);
+        let text = std::fs::read_to_string(&json).unwrap().replacen(
+            &format!("\"version\":{VERSION}"),
+            "\"version\":0",
+            1,
+        );
         std::fs::write(&json, text).unwrap();
         let error = LookPack::load(&dir).err().expect("refused").to_string();
         std::fs::remove_dir_all(&dir).unwrap();

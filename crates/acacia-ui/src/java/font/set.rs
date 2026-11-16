@@ -25,7 +25,13 @@ pub struct Filter {
 
 impl Filter {
     pub fn parse(v: &serde_json::Value) -> Result<Filter, String> {
-        let Some(map) = v.as_object() else { return if v.is_null() { Ok(Filter::default()) } else { Err("filter is not an object".into()) } };
+        let Some(map) = v.as_object() else {
+            return if v.is_null() {
+                Ok(Filter::default())
+            } else {
+                Err("filter is not an object".into())
+            };
+        };
         let mut f = Filter::default();
         for (k, v) in map {
             let v = v.as_bool().ok_or("filter value is not a boolean")?;
@@ -44,7 +50,10 @@ impl Filter {
 
     /// `merge`: `other`'s values, overridden by this one's.
     pub fn merge(&self, other: &Filter) -> Filter {
-        Filter { uniform: self.uniform.or(other.uniform), jp: self.jp.or(other.jp) }
+        Filter {
+            uniform: self.uniform.or(other.uniform),
+            jp: self.jp.or(other.jp),
+        }
     }
 }
 
@@ -70,14 +79,25 @@ fn fishy(g: &Glyph) -> bool {
 
 impl FontSet {
     pub fn new(all: Vec<Conditional>, options: FontOptions) -> FontSet {
-        let mut set = FontSet { all, active: Vec::new(), by_width: HashMap::new(), missing: special(GlyphTexture::Missing), white: special(GlyphTexture::White) };
+        let mut set = FontSet {
+            all,
+            active: Vec::new(),
+            by_width: HashMap::new(),
+            missing: special(GlyphTexture::Missing),
+            white: special(GlyphTexture::White),
+        };
         set.reload(options);
         set
     }
 
     /// `reload(options)` / `selectProviders`.
     pub fn reload(&mut self, options: FontOptions) {
-        let selected: Vec<&Arc<Provider>> = self.all.iter().filter(|c| c.filter.apply(options)).map(|c| &c.provider).collect();
+        let selected: Vec<&Arc<Provider>> = self
+            .all
+            .iter()
+            .filter(|c| c.filter.apply(options))
+            .map(|c| &c.provider)
+            .collect();
         let mut supported = IntSet::default();
         for p in &selected {
             supported.add_all(p.supported());
@@ -86,12 +106,24 @@ impl FontSet {
         self.by_width.clear();
         for c in supported.iter() {
             let c = c as u32;
-            if let Some((i, g)) = selected.iter().enumerate().find_map(|(i, p)| p.glyph(c).map(|g| (i, g))) {
+            if let Some((i, g)) = selected
+                .iter()
+                .enumerate()
+                .find_map(|(i, p)| p.glyph(c).map(|g| (i, g)))
+            {
                 used[i] = true;
-                self.by_width.entry(ceil(g.advance(false))).or_default().push(c);
+                self.by_width
+                    .entry(ceil(g.advance(false)))
+                    .or_default()
+                    .push(c);
             }
         }
-        self.active = selected.iter().zip(used).filter(|(_, u)| *u).map(|(p, _)| Arc::clone(p)).collect();
+        self.active = selected
+            .iter()
+            .zip(used)
+            .filter(|(_, u)| *u)
+            .map(|(p, _)| Arc::clone(p))
+            .collect();
     }
 
     /// `Source(filterFishy).getGlyph(c)`.
@@ -115,7 +147,10 @@ impl FontSet {
     /// `random` when there is none.
     pub fn random_glyph(&self, random: &mut JavaRandom, width: i32) -> Glyph {
         match self.by_width.get(&width).filter(|l| !l.is_empty()) {
-            Some(list) => self.glyph(list[random.next_int_bound(list.len() as i32) as usize], true),
+            Some(list) => self.glyph(
+                list[random.next_int_bound(list.len() as i32) as usize],
+                true,
+            ),
             None => self.missing.clone(),
         }
     }

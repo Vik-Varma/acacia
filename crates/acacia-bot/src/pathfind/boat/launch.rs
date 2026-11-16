@@ -41,25 +41,44 @@ impl Bot {
             }
         }
         let Some(slot) = self.hotbar_boat() else {
-            let seen: Vec<_> = self.state.entities.iter().map(|e| (e.kind.clone(), e.feet())).collect();
+            let seen: Vec<_> = self
+                .state
+                .entities
+                .iter()
+                .map(|e| (e.kind.clone(), e.feet()))
+                .collect();
             tracing::debug!(?seen, eye = ?self.eye_position(), "no boat to board");
-            return Err(ActionError::NotPossible("no boat in reach or in the hotbar".into()));
+            return Err(ActionError::NotPossible(
+                "no boat in reach or in the hotbar".into(),
+            ));
         };
         if usize::from(self.state.inventory.selected_hotbar_slot) != slot {
             self.select_hotbar(slot as u8)?;
             let delay = self.human.between(HOTBAR_SWITCH);
             self.pause(delay).await?;
         }
-        let water = self.launch_water(toward).ok_or_else(|| ActionError::NotPossible("no open water beside the bot to launch a boat on".into()))?;
+        let water = self.launch_water(toward).ok_or_else(|| {
+            ActionError::NotPossible("no open water beside the bot to launch a boat on".into())
+        })?;
         let before: Vec<u64> = self.boats().map(|(id, _)| id).collect();
         self.place_block(water, Face::Up).await?;
-        let near = Vec3f { x: water[0] as f32 + 0.5, y: water[1] as f32 + 1.0, z: water[2] as f32 + 0.5 };
-        let placed = move |bot: &Bot, _: &_| bot.boats().find(|(id, e)| !before.contains(id) && e.distance_sq(&near) < 9.0).map(|(id, _)| id);
+        let near = Vec3f {
+            x: water[0] as f32 + 0.5,
+            y: water[1] as f32 + 1.0,
+            z: water[2] as f32 + 0.5,
+        };
+        let placed = move |bot: &Bot, _: &_| {
+            bot.boats()
+                .find(|(id, e)| !before.contains(id) && e.distance_sq(&near) < 9.0)
+                .map(|(id, _)| id)
+        };
         let id = match self.wait_until(SHOW_TIMEOUT, placed).await {
             Err(ActionError::Timeout) => {
                 let seen: Vec<_> = self.boats().map(|(id, e)| (id, e.feet())).collect();
                 tracing::debug!(?water, ?seen, held = ?self.state.inventory.held(), "no placed boat");
-                return Err(ActionError::Rejected(format!("no boat appeared on the water at {water:?}")));
+                return Err(ActionError::Rejected(format!(
+                    "no boat appeared on the water at {water:?}"
+                )));
             }
             other => other?,
         };
@@ -81,22 +100,43 @@ impl Bot {
             self.pause(gap).await?;
         }
         if self.state.entities.get(id).is_some() {
-            return Err(ActionError::Rejected(format!("the boat did not break after {MAX_HITS} hits")));
+            return Err(ActionError::Rejected(format!(
+                "the boat did not break after {MAX_HITS} hits"
+            )));
         }
         let dropped = move |bot: &Bot, _: &_| bot.drops().find(|d| !before.contains(d));
         let drop = match self.wait_until(SHOW_TIMEOUT, dropped).await {
             Err(ActionError::Timeout) => {
-                let items: Vec<_> = self.state.entities.iter().filter(|e| e.kind == ITEM_KIND).map(|e| (e.runtime_id, e.feet())).collect();
+                let items: Vec<_> = self
+                    .state
+                    .entities
+                    .iter()
+                    .filter(|e| e.kind == ITEM_KIND)
+                    .map(|e| (e.runtime_id, e.feet()))
+                    .collect();
                 tracing::debug!(?items, "no boat drop");
-                return Err(ActionError::Rejected("the broken boat dropped nothing in sight".into()));
+                return Err(ActionError::Rejected(
+                    "the broken boat dropped nothing in sight".into(),
+                ));
             }
             other => other?,
         };
         let back = move |bot: &Bot, _: &_| (bot.boats_held() > held).then_some(());
         for _ in 0..PICKUP_TRIES {
-            let Some(f) = self.state.entities.get(drop).map(|e| e.feet()) else { break };
+            let Some(f) = self.state.entities.get(drop).map(|e| e.feet()) else {
+                break;
+            };
             tracing::debug!(drop, feet = ?f, bot = ?self.backend.movement().and_then(|m| m.position()), "walking to the boat's drop");
-            if let Err(e) = self.goto_with(Goal::Near([f.x.floor() as i32, f.y.floor() as i32, f.z.floor() as i32], 1.0), GotoOpts::default()).await {
+            if let Err(e) = self
+                .goto_with(
+                    Goal::Near(
+                        [f.x.floor() as i32, f.y.floor() as i32, f.z.floor() as i32],
+                        1.0,
+                    ),
+                    GotoOpts::default(),
+                )
+                .await
+            {
                 tracing::debug!(error = %e, "walk to the boat's drop");
             }
             if self.wait_until(PICKUP_WAIT, back).await.is_ok() {
@@ -109,7 +149,9 @@ impl Bot {
         }
         let left = self.state.entities.get(drop).map(|e| e.feet());
         tracing::debug!(drop, ?left, bot = ?self.backend.movement().and_then(|m| m.position()), "boat drop not picked up");
-        Err(ActionError::Rejected(format!("the boat's drop was not picked up (left at {left:?})")))
+        Err(ActionError::Rejected(format!(
+            "the boat's drop was not picked up (left at {left:?})"
+        )))
     }
 
     /// What a boat leg could board now: a carried boat, and the empty boats in sight. Nothing without the entity
@@ -118,41 +160,107 @@ impl Bot {
         if !self.state.tracks_entities() {
             return BoatSource::default();
         }
-        let riders: Vec<i64> = self.state.riding.vehicle.iter().map(|v| v.unique_id).collect();
-        let seen = self.boats().filter(|(_, e)| !riders.contains(&e.unique_id)).map(|(_, e)| [e.position.x, e.position.y, e.position.z]).collect();
-        BoatSource { carried: self.hotbar_boat().is_some(), seen }
+        let riders: Vec<i64> = self
+            .state
+            .riding
+            .vehicle
+            .iter()
+            .map(|v| v.unique_id)
+            .collect();
+        let seen = self
+            .boats()
+            .filter(|(_, e)| !riders.contains(&e.unique_id))
+            .map(|(_, e)| [e.position.x, e.position.y, e.position.z])
+            .collect();
+        BoatSource {
+            carried: self.hotbar_boat().is_some(),
+            seen,
+        }
     }
 
     /// Boat items in the inventory.
     fn boats_held(&self) -> u32 {
-        self.state.inventory.iter().filter(|(.., s)| self.is_boat(s)).map(|(.., s)| u32::from(s.count)).sum()
+        self.state
+            .inventory
+            .iter()
+            .filter(|(.., s)| self.is_boat(s))
+            .map(|(.., s)| u32::from(s.count))
+            .sum()
     }
 
     fn is_boat(&self, s: &crate::state::ItemStack) -> bool {
-        self.state.items.name(s.network_id).is_some_and(|n| n.ends_with("boat"))
+        self.state
+            .items
+            .name(s.network_id)
+            .is_some_and(|n| n.ends_with("boat"))
     }
 
     fn boats(&self) -> impl Iterator<Item = (u64, &crate::state::Entity)> {
-        self.state.entities.iter().filter(|e| BOAT_KINDS.contains(&e.kind.as_str())).map(|e| (e.runtime_id, e))
+        self.state
+            .entities
+            .iter()
+            .filter(|e| BOAT_KINDS.contains(&e.kind.as_str()))
+            .map(|e| (e.runtime_id, e))
     }
 
     fn drops(&self) -> impl Iterator<Item = u64> + '_ {
-        self.state.entities.iter().filter(move |e| e.kind == ITEM_KIND && e.item.as_ref().is_some_and(|s| self.is_boat(s))).map(|e| e.runtime_id)
+        self.state
+            .entities
+            .iter()
+            .filter(move |e| {
+                e.kind == ITEM_KIND && e.item.as_ref().is_some_and(|s| self.is_boat(s))
+            })
+            .map(|e| e.runtime_id)
     }
 
     fn boat_in_reach(&self) -> Option<u64> {
         let eye = self.eye_position();
-        let eye = Vec3f { x: eye[0], y: eye[1], z: eye[2] };
-        let riders: Vec<i64> = self.state.riding.vehicle.iter().map(|v| v.unique_id).collect();
-        self.boats().filter(|(_, e)| !riders.contains(&e.unique_id) && e.distance_sq(&eye) <= FIND_REACH * FIND_REACH).min_by(|a, b| a.1.distance_sq(&eye).total_cmp(&b.1.distance_sq(&eye))).map(|(id, _)| id)
+        let eye = Vec3f {
+            x: eye[0],
+            y: eye[1],
+            z: eye[2],
+        };
+        let riders: Vec<i64> = self
+            .state
+            .riding
+            .vehicle
+            .iter()
+            .map(|v| v.unique_id)
+            .collect();
+        self.boats()
+            .filter(|(_, e)| {
+                !riders.contains(&e.unique_id) && e.distance_sq(&eye) <= FIND_REACH * FIND_REACH
+            })
+            .min_by(|a, b| a.1.distance_sq(&eye).total_cmp(&b.1.distance_sq(&eye)))
+            .map(|(id, _)| id)
     }
 
     fn hotbar_boat(&self) -> Option<usize> {
-        let hotbar = self.state.inventory.main.iter().take(usize::from(Inventory::HOTBAR_SLOTS));
-        let name = |s: &crate::state::ItemStack| self.state.items.name(s.network_id).unwrap_or_default().to_owned();
-        let boats: Vec<(usize, String)> = hotbar.enumerate().filter(|(_, s)| !s.is_empty()).map(|(i, s)| (i, name(s))).filter(|(_, n)| n.ends_with("boat")).collect();
+        let hotbar = self
+            .state
+            .inventory
+            .main
+            .iter()
+            .take(usize::from(Inventory::HOTBAR_SLOTS));
+        let name = |s: &crate::state::ItemStack| {
+            self.state
+                .items
+                .name(s.network_id)
+                .unwrap_or_default()
+                .to_owned()
+        };
+        let boats: Vec<(usize, String)> = hotbar
+            .enumerate()
+            .filter(|(_, s)| !s.is_empty())
+            .map(|(i, s)| (i, name(s)))
+            .filter(|(_, n)| n.ends_with("boat"))
+            .collect();
         // A plain boat before a chest boat: the chest boat's cargo is not handled.
-        boats.iter().find(|(_, n)| !n.ends_with("chest_boat")).or(boats.first()).map(|(i, _)| *i)
+        boats
+            .iter()
+            .find(|(_, n)| !n.ends_with("chest_boat"))
+            .or(boats.first())
+            .map(|(i, _)| *i)
     }
 
     /// The still-water cell a block below the feet, with room for a boat that clears the bot, nearest the bot
@@ -170,11 +278,15 @@ impl Bot {
             for z in fz - PLACE_REACH..=fz + PLACE_REACH {
                 let (cx, cz) = (x as f32 + 0.5, z as f32 + 0.5);
                 // BDS refuses a boat whose box overlaps an entity, the placing player included.
-                let clears_bot = (cx - feet[0]).abs() >= PLAYER_CLEAR || (cz - feet[2]).abs() >= PLAYER_CLEAR;
+                let clears_bot =
+                    (cx - feet[0]).abs() >= PLAYER_CLEAR || (cz - feet[2]).abs() >= PLAYER_CLEAR;
                 if !clears_bot || !grid.clear(cx, cz, 0.0) {
                     continue;
                 }
-                let key = ((cx - feet[0]).hypot(cz - feet[2]), ((toward[0] - x) as f32).hypot((toward[2] - z) as f32));
+                let key = (
+                    (cx - feet[0]).hypot(cz - feet[2]),
+                    ((toward[0] - x) as f32).hypot((toward[2] - z) as f32),
+                );
                 if best.is_none_or(|(b, _)| key < b) {
                     best = Some((key, [x, y, z]));
                 }

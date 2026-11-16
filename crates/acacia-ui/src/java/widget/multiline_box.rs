@@ -23,7 +23,14 @@ impl MultiLineEditBox {
     /// `MultiLineEditBox.builder()...build(font, w, h, narration)` with the builder's defaults.
     pub fn new(m: &dyn Metrics, x: i32, y: i32, w: i32, h: i32) -> MultiLineEditBox {
         let field = MultilineField::new(m, w - INNER_PADDING * 2);
-        MultiLineEditBox { area: TextArea::new(x, y, w, h, 4.0), field, text_color: 0xFFE0_E0E0, cursor_color: 0xFFD0_D0D0, shadow: true, focused_time: 0 }
+        MultiLineEditBox {
+            area: TextArea::new(x, y, w, h, 4.0),
+            field,
+            text_color: 0xFFE0_E0E0,
+            cursor_color: 0xFFD0_D0D0,
+            shadow: true,
+            focused_time: 0,
+        }
     }
 
     fn inner_height(&self) -> i32 {
@@ -86,7 +93,10 @@ impl MultiLineEditBox {
     /// `onClick` (single) and `onDrag`: the cursor to the mouse.
     pub fn click(&mut self, m: &dyn Metrics, x: f64, y: f64, shift: bool, drag: bool) {
         let a = &self.area;
-        let (px, py) = (x - f64::from(a.base.x + INNER_PADDING), y - f64::from(a.base.y + INNER_PADDING) + a.scroll);
+        let (px, py) = (
+            x - f64::from(a.base.x + INNER_PADDING),
+            y - f64::from(a.base.y + INNER_PADDING) + a.scroll,
+        );
         self.field.selecting = drag || shift;
         self.field.seek_point(m, px, py);
         self.scroll_to_cursor();
@@ -108,7 +118,10 @@ impl MultiLineEditBox {
         let (left, mut top) = (a.inner_left(), a.inner_top());
         let (mut cursor_x, mut cursor_y) = (0, 0);
         let mut drawn = false;
-        let text = |ctx: &mut Ctx, s: &str, x: i32, y: i32| ctx.gui.text(Text::literal(s), x, y, self.text_color, self.shadow);
+        let text = |ctx: &mut Ctx, s: &str, x: i32, y: i32| {
+            ctx.gui
+                .text(Text::literal(s), x, y, self.text_color, self.shadow)
+        };
         for &(b, e) in f.lines() {
             let visible = a.within(top, top + 9);
             if !drawn && (needs || show_cursor) && insert && f.cursor >= b && f.cursor <= e {
@@ -119,7 +132,13 @@ impl MultiLineEditBox {
                     text(ctx, before, left, top);
                     text(ctx, &value[f.cursor..e], cursor_x, top);
                     if show_cursor {
-                        ctx.gui.fill(cursor_x, cursor_y - 1, cursor_x + 1, cursor_y + 10, self.cursor_color);
+                        ctx.gui.fill(
+                            cursor_x,
+                            cursor_y - 1,
+                            cursor_x + 1,
+                            cursor_y + 10,
+                            self.cursor_color,
+                        );
                     }
                 }
                 drawn = true;
@@ -136,7 +155,13 @@ impl MultiLineEditBox {
             top += 9;
         }
         if show_cursor && !insert && a.within(cursor_y, cursor_y + 9) {
-            ctx.gui.text(Text::literal("_"), cursor_x, cursor_y, self.cursor_color, self.shadow);
+            ctx.gui.text(
+                Text::literal("_"),
+                cursor_x,
+                cursor_y,
+                self.cursor_color,
+                self.shadow,
+            );
         }
         if f.has_selection() {
             let (sb, se) = f.selected();
@@ -151,8 +176,13 @@ impl MultiLineEditBox {
                 }
                 if a.within(top, top + 9) {
                     let begin = width_str(m, &value[b..sb.max(b)]);
-                    let end = if se > e { a.base.w - INNER_PADDING } else { width_str(m, &value[b..se]) };
-                    ctx.gui.highlight(left + begin, top, left + end, top + 9, true);
+                    let end = if se > e {
+                        a.base.w - INNER_PADDING
+                    } else {
+                        width_str(m, &value[b..se])
+                    };
+                    ctx.gui
+                        .highlight(left + begin, top, left + end, top + 9, true);
                 }
                 top += 9;
             }
@@ -170,14 +200,22 @@ impl Widget for MultiLineEditBox {
     fn extract(&mut self, ctx: &mut Ctx, _hovered: bool) {
         let inner = self.inner_height();
         let this = &*self;
-        this.area.extract(ctx, inner, |ctx| this.contents(ctx), |ctx| {
-            if let Some(limit) = this.field.char_limit {
-                let b = &this.area.base;
-                let count = Text::literal(this.field.value.chars().count().to_string());
-                let t = ctx.tr_args("gui.multiLineEditBox.character_limit", &[count, Text::literal(limit.to_string())]);
-                let x = b.x + b.w - ctx.width(&t);
-                ctx.gui.text(t, x, b.y + b.h + 4, 0xFFA0_A0A0, true);
-            }
-        });
+        this.area.extract(
+            ctx,
+            inner,
+            |ctx| this.contents(ctx),
+            |ctx| {
+                if let Some(limit) = this.field.char_limit {
+                    let b = &this.area.base;
+                    let count = Text::literal(this.field.value.chars().count().to_string());
+                    let t = ctx.tr_args(
+                        "gui.multiLineEditBox.character_limit",
+                        &[count, Text::literal(limit.to_string())],
+                    );
+                    let x = b.x + b.w - ctx.width(&t);
+                    ctx.gui.text(t, x, b.y + b.h + 4, 0xFFA0_A0A0, true);
+                }
+            },
+        );
     }
 }

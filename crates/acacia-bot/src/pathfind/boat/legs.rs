@@ -9,13 +9,13 @@ use std::f32::consts::SQRT_2;
 use acacia_physics::BlockPos;
 
 use super::grid::{WaterGrid, water_level};
+use crate::movement::Envelope;
 use crate::pathfind::goal::Goal;
 use crate::pathfind::moves::{Edge, MoveKind};
 use crate::pathfind::node::{Entry, Momentum};
 use crate::pathfind::profile::MovementProfile;
 use crate::pathfind::terrain::{Blocks, Spot, SpotKind, Terrain};
 use crate::pathfind::work::{Step, Work};
-use crate::movement::Envelope;
 
 /// The fastest a boat goes (cruise 0.378 blocks a tick) over the most the heuristic's octile distance overstates a
 /// straight line (8.24% at 22.5°): the heuristic stays admissible over water at this many ticks a block.
@@ -70,7 +70,12 @@ pub(crate) struct BoatLegs {
 
 impl BoatLegs {
     /// `None` with nothing to board.
-    pub fn new(goal: &Goal, env: &'static Envelope, profile: MovementProfile, source: &BoatSource) -> Option<Self> {
+    pub fn new(
+        goal: &Goal,
+        env: &'static Envelope,
+        profile: MovementProfile,
+        source: &BoatSource,
+    ) -> Option<Self> {
         source.any().then(|| Self {
             goal: goal.clone(),
             env,
@@ -83,7 +88,14 @@ impl BoatLegs {
 
     /// The boat leg from bank cell `p`, if any: on dry ground beside water a boat floats on. A run into `p` counts
     /// too: the follower stops there for the leg's work.
-    pub fn edges<B: Blocks>(&self, t: &Terrain<B>, p: BlockPos, from: Spot, entry: Entry, out: &mut Vec<Edge>) {
+    pub fn edges<B: Blocks>(
+        &self,
+        t: &Terrain<B>,
+        p: BlockPos,
+        from: Spot,
+        entry: Entry,
+        out: &mut Vec<Edge>,
+    ) {
         if entry == Entry::Air || from.kind != SpotKind::Stand || from.wet || from.made != 0 {
             return;
         }
@@ -92,7 +104,9 @@ impl BoatLegs {
         let i = usize::from(self.human);
         let mut best: Option<(f32, BlockPos, Spot)> = None;
         for w in self.launches(&grid, p) {
-            let Some((dist, landing, spot)) = self.leg(t, w, y) else { continue };
+            let Some((dist, landing, spot)) = self.leg(t, w, y) else {
+                continue;
+            };
             let cost = OVERHEAD[i] + dist * TICKS_PER_BLOCK[i];
             if dist >= MIN_LEG && best.is_none_or(|(c, ..)| cost < c) {
                 best = Some((cost, landing, spot));
@@ -101,19 +115,43 @@ impl BoatLegs {
         if let Some((cost, pos, spot)) = best {
             let mut work = Work::default();
             work.push(Step::Boat);
-            out.push(Edge { pos, spot, kind: MoveKind::Boat, cost, work, entry: Entry::Rest, mom: Momentum::rest(spot.feet, pos), mac: None });
+            out.push(Edge {
+                pos,
+                spot,
+                kind: MoveKind::Boat,
+                cost,
+                work,
+                entry: Entry::Rest,
+                mom: Momentum::rest(spot.feet, pos),
+                mac: None,
+            });
         }
     }
 
     /// Water cells (x, z) a boat is boarded on from `p`: placed from the hotbar, else a seen boat's.
-    fn launches<B: Blocks>(&self, grid: &WaterGrid<'_, Terrain<'_, B>>, p: BlockPos) -> Vec<[i32; 2]> {
+    fn launches<B: Blocks>(
+        &self,
+        grid: &WaterGrid<'_, Terrain<'_, B>>,
+        p: BlockPos,
+    ) -> Vec<[i32; 2]> {
         if self.source.carried {
             let clear = |w: &[i32; 2]| grid.clear(w[0] as f32 + 0.5, w[1] as f32 + 0.5, 0.0);
-            return LAUNCH.iter().map(|(dx, dz)| [p[0] + dx, p[2] + dz]).filter(clear).collect();
+            return LAUNCH
+                .iter()
+                .map(|(dx, dz)| [p[0] + dx, p[2] + dz])
+                .filter(clear)
+                .collect();
         }
         let centre = [p[0] as f32 + 0.5, p[2] as f32 + 0.5];
-        self.source.seen.iter().filter(|b| water_level(b[1]) == grid.y && (b[0] - centre[0]).hypot(b[2] - centre[1]) <= BOARD_REACH)
-            .map(|b| [b[0].floor() as i32, b[2].floor() as i32]).collect()
+        self.source
+            .seen
+            .iter()
+            .filter(|b| {
+                water_level(b[1]) == grid.y
+                    && (b[0] - centre[0]).hypot(b[2] - centre[1]) <= BOARD_REACH
+            })
+            .map(|b| [b[0].floor() as i32, b[2].floor() as i32])
+            .collect()
     }
 
     /// (water distance, landing, its spot) from water cell `w` at level `y`.
@@ -155,18 +193,30 @@ impl BoatLegs {
                 if grid.floats(bank[0], bank[2]) {
                     continue;
                 }
-                let Some(spot) = t.spot(bank).filter(|s| s.kind == SpotKind::Stand && !s.wet && s.feet == bank[1] as f32) else { continue };
+                let Some(spot) = t
+                    .spot(bank)
+                    .filter(|s| s.kind == SpotKind::Stand && !s.wet && s.feet == bank[1] as f32)
+                else {
+                    continue;
+                };
                 let score = self.goal.heuristic(bank, self.env);
                 if landing.is_none_or(|(s, ..)| score < s) {
                     landing = Some((score, bank, spot, (x, z)));
                 }
             }
         }
-        let dist = landing.map(|(.., from)| distances(&seen, from)).unwrap_or_default();
+        let dist = landing
+            .map(|(.., from)| distances(&seen, from))
+            .unwrap_or_default();
         let mut bodies = self.bodies.borrow_mut();
         let i = bodies.len();
-        bodies.push(Body { landing: landing.map(|(_, b, s, _)| (b, s)), dist });
-        self.of.borrow_mut().extend(cells.into_iter().map(|(x, z)| ([x, y, z], i)));
+        bodies.push(Body {
+            landing: landing.map(|(_, b, s, _)| (b, s)),
+            dist,
+        });
+        self.of
+            .borrow_mut()
+            .extend(cells.into_iter().map(|(x, z)| ([x, y, z], i)));
         Some(i)
     }
 }
@@ -183,7 +233,10 @@ fn distances(cells: &HashSet<(i32, i32)>, from: (i32, i32)) -> HashMap<(i32, i32
             for dz in -1..=1 {
                 let n = (x + dx, z + dz);
                 let diagonal = dx != 0 && dz != 0;
-                if (dx, dz) == (0, 0) || !cells.contains(&n) || (diagonal && !(cells.contains(&(x + dx, z)) && cells.contains(&(x, z + dz)))) {
+                if (dx, dz) == (0, 0)
+                    || !cells.contains(&n)
+                    || (diagonal && !(cells.contains(&(x + dx, z)) && cells.contains(&(x, z + dz))))
+                {
                     continue;
                 }
                 let nd = d + if diagonal { SQRT_2 } else { 1.0 };

@@ -9,16 +9,24 @@ const KERNEL: [f64; 7] = [0.0, 1.0, 4.0, 6.0, 4.0, 1.0, 0.0];
 
 /// Each biome around `position` (blocks) once, with its summed weight, in the order first
 /// sampled; zero weights are kept. `biome_at` takes a cell's coordinates (block / 4).
-pub fn gaussian_weights<B: PartialEq + Copy>(position: [f64; 3], mut biome_at: impl FnMut(i32, i32, i32) -> B) -> Vec<(B, f64)> {
+pub fn gaussian_weights<B: PartialEq + Copy>(
+    position: [f64; 3],
+    mut biome_at: impl FnMut(i32, i32, i32) -> B,
+) -> Vec<(B, f64)> {
     let p = position.map(|c| c * 0.25 - 0.5);
     let cell = p.map(|c| c.floor() as i32);
     let relative: [f64; 3] = std::array::from_fn(|i| p[i] - f64::from(cell[i]));
-    let weight = |axis: usize, i: usize| KERNEL[i + 1] + relative[axis] * (KERNEL[i] - KERNEL[i + 1]);
+    let weight =
+        |axis: usize, i: usize| KERNEL[i + 1] + relative[axis] * (KERNEL[i] - KERNEL[i + 1]);
     let mut weights: Vec<(B, f64)> = Vec::new();
     for z in 0..6 {
         for x in 0..6 {
             for y in 0..6 {
-                let biome = biome_at(cell[0] - 2 + x as i32, cell[1] - 2 + y as i32, cell[2] - 2 + z as i32);
+                let biome = biome_at(
+                    cell[0] - 2 + x as i32,
+                    cell[1] - 2 + y as i32,
+                    cell[2] - 2 + z as i32,
+                );
                 let w = weight(0, x) * weight(1, y) * weight(2, z);
                 match weights.iter_mut().find(|(b, _)| *b == biome) {
                     Some((_, total)) => *total += w,

@@ -92,7 +92,9 @@ impl Bot {
         match request {
             Immediate::Chat(message) => _ = self.chat(&message),
             Immediate::Command(command) => _ = self.command(&command),
-            Immediate::Send(packet) => _ = self.backend.bedrock().map(|b| b.client.send_raw(packet)),
+            Immediate::Send(packet) => {
+                _ = self.backend.bedrock().map(|b| b.client.send_raw(packet))
+            }
             Immediate::SetEvents(events) => self.set_events(events),
             Immediate::Cancel => self.cancel_handle().cancel(),
             Immediate::Snapshot(reply) => _ = reply.send(self.snapshot()),

@@ -63,7 +63,14 @@ pub struct Env<'a> {
 impl Env<'_> {
     /// `getTooltipLines`' context for `stack`, with the local player.
     pub fn details<'s>(&'s self, stack: &ItemStack, creative: bool) -> Details<'s> {
-        Details { lang: self.lang, advanced: self.advanced, creative, game: self.game, player: Some(self.game.player(self.op)), key: stack.key }
+        Details {
+            lang: self.lang,
+            advanced: self.advanced,
+            creative,
+            game: self.game,
+            player: Some(self.game.player(self.op)),
+            key: stack.key,
+        }
     }
 }
 
@@ -92,7 +99,14 @@ pub struct Base {
 
 impl Base {
     /// The constructor and `init`: centred, labels at their defaults.
-    pub fn new(width: i32, height: i32, image: [i32; 2], title: Text, inventory_title: Text, slots: Vec<Slot>) -> Base {
+    pub fn new(
+        width: i32,
+        height: i32,
+        image: [i32; 2],
+        title: Text,
+        inventory_title: Text,
+        slots: Vec<Slot>,
+    ) -> Base {
         Base {
             width,
             height,
@@ -115,7 +129,12 @@ impl Base {
 
     /// `recalculateQuickCraftRemaining`.
     pub fn recalculate_quick_craft(&mut self) {
-        let (Some(carried), Some(quick)) = (self.carried.clone().filter(|s| !s.is_empty()), self.quick.as_mut()) else { return };
+        let (Some(carried), Some(quick)) = (
+            self.carried.clone().filter(|s| !s.is_empty()),
+            self.quick.as_mut(),
+        ) else {
+            return;
+        };
         if quick.kind == 2 {
             quick.remainder = carried.max_stack_size();
             return;
@@ -123,9 +142,14 @@ impl Base {
         quick.remainder = carried.count;
         for &i in &quick.slots {
             let slot = &self.slots[i];
-            let carry = slot.item.as_ref().filter(|s| !s.is_empty()).map_or(0, |s| s.count);
+            let carry = slot
+                .item
+                .as_ref()
+                .filter(|s| !s.is_empty())
+                .map_or(0, |s| s.count);
             let max = slot.max_stack.min(carried.max_stack_size());
-            let count = (quick_craft_count(quick.slots.len(), quick.kind, &carried) + carry).min(max);
+            let count =
+                (quick_craft_count(quick.slots.len(), quick.kind, &carried) + carry).min(max);
             quick.remainder -= count - carry;
         }
     }
@@ -147,8 +171,20 @@ pub trait Screen {
     /// `extractLabels`, under the window's origin.
     fn labels(&mut self, gui: &mut Gui, _env: &Env, _mouse: [i32; 2]) {
         let b = self.base();
-        gui.text(b.title.clone(), b.title_label[0], b.title_label[1], LABEL, false);
-        gui.text(b.inventory_title.clone(), b.inventory_label[0], b.inventory_label[1], LABEL, false);
+        gui.text(
+            b.title.clone(),
+            b.title_label[0],
+            b.title_label[1],
+            LABEL,
+            false,
+        );
+        gui.text(
+            b.inventory_title.clone(),
+            b.inventory_label[0],
+            b.inventory_label[1],
+            LABEL,
+            false,
+        );
     }
 
     /// `extractSlots`.
@@ -169,7 +205,10 @@ pub trait Screen {
     fn clicked_outside(&self, mouse: [f64; 2]) -> bool {
         let b = self.base();
         let (x, y) = (mouse[0], mouse[1]);
-        x < f64::from(b.left) || y < f64::from(b.top) || x >= f64::from(b.left + b.image_width) || y >= f64::from(b.top + b.image_height)
+        x < f64::from(b.left)
+            || y < f64::from(b.top)
+            || x >= f64::from(b.left + b.image_width)
+            || y >= f64::from(b.top + b.image_height)
     }
 
     /// `isHovering(left, top, w, h, x, y)` in window coordinates.
@@ -224,11 +263,20 @@ pub fn frame(s: &mut dyn Screen, gui: &mut Gui, env: &Env, mouse: [i32; 2], part
 
 /// `getHoveredSlot`.
 pub fn hovered_slot<S: Screen + ?Sized>(s: &S, mouse: [i32; 2]) -> Option<usize> {
-    s.base().slots.iter().position(|slot| slot.active && s.hovering(slot.x, slot.y, 16, 16, mouse))
+    s.base()
+        .slots
+        .iter()
+        .position(|slot| slot.active && s.hovering(slot.x, slot.y, 16, 16, mouse))
 }
 
 /// `extractContents`.
-pub fn contents<S: Screen + ?Sized>(s: &mut S, gui: &mut Gui, env: &Env, mouse: [i32; 2], partial: f32) {
+pub fn contents<S: Screen + ?Sized>(
+    s: &mut S,
+    gui: &mut Gui,
+    env: &Env,
+    mouse: [i32; 2],
+    partial: f32,
+) {
     s.widgets(gui, env, mouse, partial);
     let (left, top) = (s.base().left, s.base().top);
     gui.push(vec![super::gui::PoseOp::Translate(left as f32, top as f32)]);
@@ -269,7 +317,13 @@ pub fn carried(b: &Base, gui: &mut Gui, mouse: [i32; 2]) {
 /// `extractTooltip`: the hovered stack's tooltip unless a stack is carried.
 pub fn hovered_tooltip<S: Screen + ?Sized>(s: &mut S, env: &Env, mouse: [i32; 2]) {
     let b = s.base();
-    let Some(stack) = b.hovered.and_then(|i| b.slots[i].item.as_ref()).filter(|s| !s.is_empty()) else { return };
+    let Some(stack) = b
+        .hovered
+        .and_then(|i| b.slots[i].item.as_ref())
+        .filter(|s| !s.is_empty())
+    else {
+        return;
+    };
     // TODO: showTooltipWithItemInHand (a bundle's tooltip shows over a carried stack).
     if b.carried().is_some() {
         return;
@@ -280,16 +334,44 @@ pub fn hovered_tooltip<S: Screen + ?Sized>(s: &mut S, env: &Env, mouse: [i32; 2]
 
 /// `setTooltipForNextFrame(font, stack, x, y)`: the stack's tooltip lines with its image second,
 /// its style, a gap after the name (`tooltip::bundle::stack_tooltip` over the screen's lines).
-pub fn item_tooltip<S: Screen + ?Sized>(s: &S, stack: &ItemStack, env: &Env, mouse: [i32; 2]) -> Tooltip {
-    let mut lines: Vec<Line> = s.tooltip_lines(stack, env).into_iter().map(Line::Text).collect();
-    if let Some(image) = super::tooltip::bundle::image(stack, &Display::of(stack), env.font, env.lang, env.game) {
+pub fn item_tooltip<S: Screen + ?Sized>(
+    s: &S,
+    stack: &ItemStack,
+    env: &Env,
+    mouse: [i32; 2],
+) -> Tooltip {
+    let mut lines: Vec<Line> = s
+        .tooltip_lines(stack, env)
+        .into_iter()
+        .map(Line::Text)
+        .collect();
+    if let Some(image) =
+        super::tooltip::bundle::image(stack, &Display::of(stack), env.font, env.lang, env.game)
+    {
         lines.insert(lines.len().min(1), image);
     }
-    let style = stack.get("tooltip_style").and_then(|v| v.as_str()).map(str::to_owned);
-    Tooltip { lines, x: mouse[0], y: mouse[1], positioner: Positioner::Default, style, extra_space: true }
+    let style = stack
+        .get("tooltip_style")
+        .and_then(|v| v.as_str())
+        .map(str::to_owned);
+    Tooltip {
+        lines,
+        x: mouse[0],
+        y: mouse[1],
+        positioner: Positioner::Default,
+        style,
+        extra_space: true,
+    }
 }
 
 /// `setTooltipForNextFrame(component, x, y)`: one plain line.
 pub fn text_tooltip(text: Text, mouse: [i32; 2]) -> Tooltip {
-    Tooltip { lines: vec![Line::Text(text)], x: mouse[0], y: mouse[1], positioner: Positioner::Default, style: None, extra_space: false }
+    Tooltip {
+        lines: vec![Line::Text(text)],
+        x: mouse[0],
+        y: mouse[1],
+        positioner: Positioner::Default,
+        style: None,
+        extra_space: false,
+    }
 }

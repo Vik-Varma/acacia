@@ -18,11 +18,20 @@ fn bedrock_names_and_data() {
     assert_eq!(Item::from_bedrock("minecraft:bed", 14), Some(Item::RedBed));
     assert_eq!(Item::from_bedrock("minecraft:bed", 0), Some(Item::WhiteBed));
     assert_eq!(Item::RedBed.bedrock(), ("minecraft:bed", 14));
-    assert_eq!(Item::from_bedrock("minecraft:banner", 1), Some(Item::RedBanner));
+    assert_eq!(
+        Item::from_bedrock("minecraft:banner", 1),
+        Some(Item::RedBanner)
+    );
     // Pre-flattening data on a flattened item is ignored.
-    assert_eq!(Item::from_bedrock("minecraft:acacia_planks", 4), Some(Item::AcaciaPlanks));
+    assert_eq!(
+        Item::from_bedrock("minecraft:acacia_planks", 4),
+        Some(Item::AcaciaPlanks)
+    );
     assert_eq!(Item::AcaciaPlanks.bedrock(), ("minecraft:acacia_planks", 0));
-    assert_eq!(Item::from_bedrock("minecraft:filled_map", 0), Some(Item::FilledMap));
+    assert_eq!(
+        Item::from_bedrock("minecraft:filled_map", 0),
+        Some(Item::FilledMap)
+    );
     assert_eq!(Item::from_bedrock("minecraft:no_such_item", 0), None);
 }
 

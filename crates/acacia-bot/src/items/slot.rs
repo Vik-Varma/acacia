@@ -1,4 +1,6 @@
-use acacia_client::proto::types::{ContainerSlotType, FullContainerName, StackRequestSlotInfo, WindowType};
+use acacia_client::proto::types::{
+    ContainerSlotType, FullContainerName, StackRequestSlotInfo, WindowType,
+};
 
 use super::ui;
 use crate::state::{Container, GameState, Inventory, ItemStack};
@@ -55,7 +57,13 @@ impl SlotRef {
             SlotRef::Offhand => Some(&mut inv.offhand),
             SlotRef::Cursor => Some(&mut inv.ui[0]),
             SlotRef::Ui(i) => ui::slot_type(i).and_then(|_| inv.ui.get_mut(usize::from(i))),
-            SlotRef::Container(i) => state.containers.open.as_mut().filter(|c| !is_own_screen(c))?.slots.get_mut(usize::from(i)),
+            SlotRef::Container(i) => state
+                .containers
+                .open
+                .as_mut()
+                .filter(|c| !is_own_screen(c))?
+                .slots
+                .get_mut(usize::from(i)),
         }
     }
 }
@@ -67,7 +75,8 @@ pub(crate) fn open_container(state: &GameState) -> Option<&Container> {
 
 /// The own inventory screen: BDS opens it as the next window id (not 0) with type `Inventory`.
 pub(crate) fn is_own_screen(container: &Container) -> bool {
-    Inventory::is_player_window(container.window_id) || container.window_type == WindowType::Inventory
+    Inventory::is_player_window(container.window_id)
+        || container.window_type == WindowType::Inventory
 }
 
 /// How a slot is named on the wire for the current screen. See [`SlotRef::wire`].
@@ -102,7 +111,10 @@ impl BlockKind {
 impl Screen {
     pub fn of(state: &GameState, block: BlockKind) -> Self {
         let open = open_container(state);
-        Screen { window_type: open.map_or(WindowType::Inventory, |c| c.window_type), block }
+        Screen {
+            window_type: open.map_or(WindowType::Inventory, |c| c.window_type),
+            block,
+        }
     }
 }
 
@@ -126,14 +138,35 @@ impl SlotRef {
     }
 
     /// The request's view of this slot: container name, slot and the id of the stack it holds.
-    pub(crate) fn slot_info(self, screen: &Screen, auto: bool, stack: &ItemStack) -> StackRequestSlotInfo {
-        let stack_id = if stack.is_empty() { 0 } else { stack.stack_network_id.unwrap_or(0) };
+    pub(crate) fn slot_info(
+        self,
+        screen: &Screen,
+        auto: bool,
+        stack: &ItemStack,
+    ) -> StackRequestSlotInfo {
+        let stack_id = if stack.is_empty() {
+            0
+        } else {
+            stack.stack_network_id.unwrap_or(0)
+        };
         self.slot_info_with_id(screen, auto, stack_id)
     }
 
-    pub(crate) fn slot_info_with_id(self, screen: &Screen, auto: bool, stack_id: i32) -> StackRequestSlotInfo {
+    pub(crate) fn slot_info_with_id(
+        self,
+        screen: &Screen,
+        auto: bool,
+        stack_id: i32,
+    ) -> StackRequestSlotInfo {
         let (kind, slot) = self.wire(screen, auto);
-        StackRequestSlotInfo { slot_type: FullContainerName { container_id: kind, dynamic_container_id: None }, slot, stack_id }
+        StackRequestSlotInfo {
+            slot_type: FullContainerName {
+                container_id: kind,
+                dynamic_container_id: None,
+            },
+            slot,
+            stack_id,
+        }
     }
 }
 

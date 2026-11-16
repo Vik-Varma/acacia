@@ -16,8 +16,8 @@ const SPACE_ADVANCE: f32 = 4.0;
 
 /// The 16 colours of `§0` to `§f`.
 pub const COLOURS: [u32; 16] = [
-    0x000000, 0x0000AA, 0x00AA00, 0x00AAAA, 0xAA0000, 0xAA00AA, 0xFFAA00, 0xAAAAAA,
-    0x555555, 0x5555FF, 0x55FF55, 0x55FFFF, 0xFF5555, 0xFF55FF, 0xFFFF55, 0xFFFFFF,
+    0x000000, 0x0000AA, 0x00AA00, 0x00AAAA, 0xAA0000, 0xAA00AA, 0xFFAA00, 0xAAAAAA, 0x555555,
+    0x5555FF, 0x55FF55, 0x55FFFF, 0xFF5555, 0xFF55FF, 0xFFFF55, 0xFFFFFF,
 ];
 
 #[derive(Debug, Clone, Copy)]
@@ -44,9 +44,18 @@ impl Font {
         for (row, chars) in rows.iter().enumerate() {
             for (col, c) in chars.chars().enumerate().filter(|&(_, c)| c != '\0') {
                 let (x0, y0) = (col as u32 * cell, row as u32 * cell);
-                let ink = (0..cell).rev().find(|&x| (0..cell).any(|y| image.get_pixel(x0 + x, y0 + y).0[3] > 0)).map_or(0, |x| x + 1);
+                let ink = (0..cell)
+                    .rev()
+                    .find(|&x| (0..cell).any(|y| image.get_pixel(x0 + x, y0 + y).0[3] > 0))
+                    .map_or(0, |x| x + 1);
                 let width = ink as f32 * GLYPH_HEIGHT / cell as f32;
-                glyphs.insert(c, Glyph { cell: [x0, y0], width });
+                glyphs.insert(
+                    c,
+                    Glyph {
+                        cell: [x0, y0],
+                        width,
+                    },
+                );
             }
         }
         Font { page, cell, glyphs }
@@ -54,7 +63,17 @@ impl Font {
 
     /// The rows of a page indexed by code point (Bedrock's `default8.png`: cell n is U+00nn).
     pub fn code_page_rows() -> Vec<String> {
-        (0..16).map(|row| (0..16).map(|col| char::from_u32(row * 16 + col).filter(|c| !c.is_control()).unwrap_or('\0')).collect()).collect()
+        (0..16)
+            .map(|row| {
+                (0..16)
+                    .map(|col| {
+                        char::from_u32(row * 16 + col)
+                            .filter(|c| !c.is_control())
+                            .unwrap_or('\0')
+                    })
+                    .collect()
+            })
+            .collect()
     }
 
     fn advance(&self, c: char, bold: bool) -> f32 {
@@ -67,7 +86,9 @@ impl Font {
 
     /// Width of `text` in GUI pixels, formatting codes left out.
     pub fn width(&self, text: &str) -> f32 {
-        styled(text, 0xFFFFFF).map(|(c, s)| self.advance(c, s.bold)).sum()
+        styled(text, 0xFFFFFF)
+            .map(|(c, s)| self.advance(c, s.bold))
+            .sum()
     }
 
     /// `text` broken at spaces into lines at most `width` wide (a longer word stands alone); each
@@ -76,12 +97,18 @@ impl Font {
         let mut lines = Vec::new();
         let mut line = String::new();
         for word in text.split(' ') {
-            let candidate = if line.is_empty() { word.to_owned() } else { format!("{line} {word}") };
+            let candidate = if line.is_empty() {
+                word.to_owned()
+            } else {
+                format!("{line} {word}")
+            };
             if self.width(&candidate) <= width || line.is_empty() {
                 line = candidate;
                 continue;
             }
-            let carried = last_colour(&line).map(|c| format!("§{c}")).unwrap_or_default();
+            let carried = last_colour(&line)
+                .map(|c| format!("§{c}"))
+                .unwrap_or_default();
             lines.push(std::mem::replace(&mut line, format!("{carried}{word}")));
         }
         lines.push(line);
@@ -91,7 +118,16 @@ impl Font {
     /// Draws `text` with its top-left at (`x`, `y`) GUI pixels in `colour` (`0xRRGGBB`), `alpha`
     /// 0 to 1. Returns the width drawn.
     #[allow(clippy::too_many_arguments)]
-    pub fn draw(&self, list: &mut DrawList, text: &str, x: f32, y: f32, colour: u32, alpha: f32, shadow: bool) -> f32 {
+    pub fn draw(
+        &self,
+        list: &mut DrawList,
+        text: &str,
+        x: f32,
+        y: f32,
+        colour: u32,
+        alpha: f32,
+        shadow: bool,
+    ) -> f32 {
         if shadow {
             self.draw_pass(list, text, x + 1.0, y + 1.0, colour, alpha, true);
         }
@@ -99,17 +135,51 @@ impl Font {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn draw_pass(&self, list: &mut DrawList, text: &str, x: f32, y: f32, colour: u32, alpha: f32, shadow: bool) -> f32 {
+    fn draw_pass(
+        &self,
+        list: &mut DrawList,
+        text: &str,
+        x: f32,
+        y: f32,
+        colour: u32,
+        alpha: f32,
+        shadow: bool,
+    ) -> f32 {
         let mut pen = x;
         let a = (alpha.clamp(0.0, 1.0) * 255.0) as u8;
         for (c, style) in styled(text, colour) {
-            let rgb = if shadow { darken(style.colour) } else { style.colour };
+            let rgb = if shadow {
+                darken(style.colour)
+            } else {
+                style.colour
+            };
             let tint = [(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8, a];
-            if let Some(g) = (c != ' ').then(|| self.glyphs.get(&c).or_else(|| self.glyphs.get(&'?'))).flatten() {
-                let sprite = Sprite { x: self.page.x + g.cell[0], y: self.page.y + g.cell[1], width: self.cell, height: self.cell };
+            if let Some(g) = (c != ' ')
+                .then(|| self.glyphs.get(&c).or_else(|| self.glyphs.get(&'?')))
+                .flatten()
+            {
+                let sprite = Sprite {
+                    x: self.page.x + g.cell[0],
+                    y: self.page.y + g.cell[1],
+                    width: self.cell,
+                    height: self.cell,
+                };
                 let scale = GLYPH_HEIGHT / self.cell as f32;
-                for dx in if style.bold { &[0.0, 1.0][..] } else { &[0.0][..] } {
-                    list.sprite_stretched(sprite, [pen + dx, y, pen + dx + self.cell as f32 * scale, y + GLYPH_HEIGHT], tint);
+                for dx in if style.bold {
+                    &[0.0, 1.0][..]
+                } else {
+                    &[0.0][..]
+                } {
+                    list.sprite_stretched(
+                        sprite,
+                        [
+                            pen + dx,
+                            y,
+                            pen + dx + self.cell as f32 * scale,
+                            y + GLYPH_HEIGHT,
+                        ],
+                        tint,
+                    );
                 }
             }
             pen += self.advance(c, style.bold);
@@ -146,7 +216,10 @@ struct Style {
 
 /// Each drawn character with its style; `§x` codes are consumed.
 fn styled(text: &str, base: u32) -> impl Iterator<Item = (char, Style)> + '_ {
-    let mut style = Style { colour: base, bold: false };
+    let mut style = Style {
+        colour: base,
+        bold: false,
+    };
     let mut chars = text.chars();
     std::iter::from_fn(move || {
         loop {
@@ -155,9 +228,19 @@ fn styled(text: &str, base: u32) -> impl Iterator<Item = (char, Style)> + '_ {
                 return Some((c, style));
             }
             match chars.next()?.to_ascii_lowercase() {
-                d @ ('0'..='9' | 'a'..='f') => style = Style { colour: COLOURS[d.to_digit(16)? as usize], bold: false },
+                d @ ('0'..='9' | 'a'..='f') => {
+                    style = Style {
+                        colour: COLOURS[d.to_digit(16)? as usize],
+                        bold: false,
+                    }
+                }
                 'l' => style.bold = true,
-                'r' => style = Style { colour: base, bold: false },
+                'r' => {
+                    style = Style {
+                        colour: base,
+                        bold: false,
+                    }
+                }
                 _ => {}
             }
         }
@@ -176,7 +259,16 @@ mod tests {
                 image.put_pixel(col * 8 + x, 3, image::Rgba([255; 4]));
             }
         }
-        Font::from_grid(&image, Sprite { x: 0, y: 0, width: 128, height: 128 }, &["\0Ai"])
+        Font::from_grid(
+            &image,
+            Sprite {
+                x: 0,
+                y: 0,
+                width: 128,
+                height: 128,
+            },
+            &["\0Ai"],
+        )
     }
 
     #[test]
@@ -184,7 +276,11 @@ mod tests {
         let f = font();
         assert_eq!(f.width("Ai"), 6.0 + 2.0);
         assert_eq!(f.width("A A"), 6.0 + 4.0 + 6.0);
-        assert_eq!(f.width("§cA§li"), 6.0 + 3.0, "codes take no room, bold one more");
+        assert_eq!(
+            f.width("§cA§li"),
+            6.0 + 3.0,
+            "codes take no room, bold one more"
+        );
     }
 
     #[test]
@@ -193,7 +289,11 @@ mod tests {
         // "A" is 6 wide, a space 4: "AA AA" is 12 + 4 + 12.
         assert_eq!(f.wrap("AA AA AA", 30.0), ["AA AA", "AA"]);
         assert_eq!(f.wrap("§aAA AA", 20.0), ["§aAA", "§aAA"]);
-        assert_eq!(f.wrap("AAAAAAAA", 10.0), ["AAAAAAAA"], "a long word stands alone");
+        assert_eq!(
+            f.wrap("AAAAAAAA", 10.0),
+            ["AAAAAAAA"],
+            "a long word stands alone"
+        );
     }
 
     #[test]
@@ -202,7 +302,15 @@ mod tests {
         let mut list = DrawList::new(1.0);
         f.draw(&mut list, "A§aA", 0.0, 0.0, 0xFFFFFF, 1.0, true);
         let colours: Vec<[u8; 4]> = list.quads.iter().map(|q| q.color).collect();
-        assert_eq!(colours, [[63, 63, 63, 255], [21, 63, 21, 255], [255, 255, 255, 255], [85, 255, 85, 255]]);
+        assert_eq!(
+            colours,
+            [
+                [63, 63, 63, 255],
+                [21, 63, 21, 255],
+                [255, 255, 255, 255],
+                [85, 255, 85, 255]
+            ]
+        );
         assert_eq!(list.quads[2].rect, [0.0, 0.0, 8.0, 8.0]);
         assert_eq!(list.quads[3].rect[0], 6.0);
     }

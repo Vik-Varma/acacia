@@ -38,11 +38,16 @@ impl Endpoint {
             "wildcard" => wildcard_match(&self.host, host),
             _ => false,
         };
-        self.relying_party.as_deref().is_some_and(|rp| !rp.is_empty())
+        self.relying_party
+            .as_deref()
+            .is_some_and(|rp| !rp.is_empty())
             && self.protocol == scheme
             && host_ok
             && self.port.is_none_or(|p| p == 443 && scheme == "https")
-            && self.path.as_deref().is_none_or(|p| p.is_empty() || p == path)
+            && self
+                .path
+                .as_deref()
+                .is_none_or(|p| p.is_empty() || p == path)
     }
 }
 
@@ -50,7 +55,9 @@ impl Endpoint {
 fn wildcard_match(pattern: &str, host: &str) -> bool {
     let mut parts = pattern.split('*');
     let first = parts.next().unwrap_or("");
-    let Some(mut rest) = host.strip_prefix(first) else { return false };
+    let Some(mut rest) = host.strip_prefix(first) else {
+        return false;
+    };
     let parts: Vec<&str> = parts.collect();
     for (i, part) in parts.iter().enumerate() {
         if i == parts.len() - 1 {
@@ -132,9 +139,18 @@ mod tests {
             {"Protocol":"http","Host":"*.xboxlive.com","HostType":"wildcard"}]}"#,
         )
         .unwrap();
-        assert_eq!(t.relying_party("sisu.xboxlive.com", "/").as_deref(), Some("http://xboxlive.com"));
-        assert_eq!(t.relying_party("20ca2.playfabapi.com", "/x").as_deref(), Some("rp://exact/"));
-        assert_eq!(t.relying_party("abc.playfabapi.com", "/x").as_deref(), Some("rp://wild/"));
+        assert_eq!(
+            t.relying_party("sisu.xboxlive.com", "/").as_deref(),
+            Some("http://xboxlive.com")
+        );
+        assert_eq!(
+            t.relying_party("20ca2.playfabapi.com", "/x").as_deref(),
+            Some("rp://exact/")
+        );
+        assert_eq!(
+            t.relying_party("abc.playfabapi.com", "/x").as_deref(),
+            Some("rp://wild/")
+        );
         assert_eq!(t.relying_party("example.com", "/"), None);
         let (mp, pf) = resolve(&[TitleData::default(), t], "20ca2.playfabapi.com");
         assert_eq!(mp, "https://multiplayer.minecraft.net/");

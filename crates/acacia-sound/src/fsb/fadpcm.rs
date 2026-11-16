@@ -7,7 +7,16 @@ pub const FRAME_BYTES: usize = 0x8c;
 pub const FRAME_SAMPLES: usize = (FRAME_BYTES - 0xc) * 2;
 
 /// XA/PSX coefs << 6, as FMOD tweaks them; indices 5..7 are zero.
-const COEFS: [[i32; 2]; 8] = [[0, 0], [60, 0], [122, 60], [115, 52], [98, 55], [0, 0], [0, 0], [0, 0]];
+const COEFS: [[i32; 2]; 8] = [
+    [0, 0],
+    [60, 0],
+    [122, 60],
+    [115, 52],
+    [98, 55],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+];
 
 /// Decodes `num_samples` interleaved frames of `channels` channels from `data`. Missing data decodes
 /// as silence, as vgmstream's zero-filled frame buffer does.
@@ -63,7 +72,10 @@ mod tests {
 
     #[test]
     fn zero_frame_is_silent() {
-        assert_eq!(decode(&[0; FRAME_BYTES], 1, FRAME_SAMPLES), vec![0; FRAME_SAMPLES]);
+        assert_eq!(
+            decode(&[0; FRAME_BYTES], 1, FRAME_SAMPLES),
+            vec![0; FRAME_SAMPLES]
+        );
     }
 
     #[test]

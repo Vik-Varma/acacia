@@ -30,7 +30,13 @@ impl Link {
                 break why;
             }
             let now = Instant::now();
-            let deadline = self.game.poll_timeout().into_iter().chain(self.up.poll_timeout()).min().unwrap_or(now + Duration::from_secs(1));
+            let deadline = self
+                .game
+                .poll_timeout()
+                .into_iter()
+                .chain(self.up.poll_timeout())
+                .min()
+                .unwrap_or(now + Duration::from_secs(1));
             // Receive errors are Windows' ICMP port-unreachable resets; the peers' ICE copes.
             tokio::select! {
                 r = self.game_udp.recv_from(&mut game_buf) => if let Ok((n, from)) = r {

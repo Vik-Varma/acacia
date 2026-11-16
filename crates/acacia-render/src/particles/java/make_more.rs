@@ -4,10 +4,10 @@
 use glam::DVec3;
 
 use super::Engine;
-use super::behaviour::{Behaviour, Options};
-use super::particle::{Glow, Particle, Size};
 use super::JavaRandom;
+use super::behaviour::{Behaviour, Options};
 use super::mth::mth_sin;
+use super::particle::{Glow, Particle, Size};
 use super::types::Type;
 
 fn f(v: f32) -> f64 {
@@ -73,7 +73,11 @@ impl Engine {
     }
 
     pub(super) fn heart(r: &mut JavaRandom, ty: Type, p: DVec3) -> Particle {
-        let at = if ty == Type::AngryVillager { p + DVec3::new(0.0, 0.5, 0.0) } else { p };
+        let at = if ty == Type::AngryVillager {
+            p + DVec3::new(0.0, 0.5, 0.0)
+        } else {
+            p
+        };
         let mut q = Particle::moving(r, ty, at, DVec3::ZERO);
         q.speed_up_when_y_blocked = true;
         q.friction = 0.86;
@@ -110,7 +114,11 @@ impl Engine {
         let mut q = Particle::at(r, Type::Poof, p);
         q.gravity = -0.1;
         q.friction = 0.9;
-        q.velocity = DVec3::new(v.x + f((r.next_float() * 2.0 - 1.0) * 0.05), v.y + f((r.next_float() * 2.0 - 1.0) * 0.05), v.z + f((r.next_float() * 2.0 - 1.0) * 0.05));
+        q.velocity = DVec3::new(
+            v.x + f((r.next_float() * 2.0 - 1.0) * 0.05),
+            v.y + f((r.next_float() * 2.0 - 1.0) * 0.05),
+            v.z + f((r.next_float() * 2.0 - 1.0) * 0.05),
+        );
         let col = r.next_float() * 0.3 + 0.7;
         q.set_color(col, col, col);
         q.size = 0.1 * (r.next_float() * r.next_float() * 6.0 + 1.0);
@@ -161,7 +169,9 @@ impl Engine {
         q.velocity *= f(0.01);
         q.velocity.y += 0.2;
         let color = v.x as f32;
-        let channel = |offset: f32| (mth_sin(f((color + offset) * std::f64::consts::TAU as f32)) * 0.65 + 0.35).max(0.0);
+        let channel = |offset: f32| {
+            (mth_sin(f((color + offset) * std::f64::consts::TAU as f32)) * 0.65 + 0.35).max(0.0)
+        };
         q.set_color(channel(0.0), channel(0.333_333_34), channel(0.666_666_7));
         q.size *= 1.5;
         q.lifetime = 6;
@@ -180,11 +190,19 @@ impl Engine {
         q.lifetime = (base as f32 * o.scale).max(1.0) as i32;
         let factor = r.next_float() * 0.4 + 0.6;
         let mut randomize = |c: f32| (r.next_float() * 0.2 + 0.8) * c * factor;
-        let from = [randomize(o.color[0]), randomize(o.color[1]), randomize(o.color[2])];
+        let from = [
+            randomize(o.color[0]),
+            randomize(o.color[1]),
+            randomize(o.color[2]),
+        ];
         q.size_curve = Size::GrowIn;
         q.animated = true;
         if o.ty == Type::DustColorTransition {
-            let to = [randomize(o.to_color[0]), randomize(o.to_color[1]), randomize(o.to_color[2])];
+            let to = [
+                randomize(o.to_color[0]),
+                randomize(o.to_color[1]),
+                randomize(o.to_color[2]),
+            ];
             q.behaviour = Behaviour::Transition { from, to };
         } else {
             q.set_color(from[0], from[1], from[2]);
@@ -206,12 +224,24 @@ impl Engine {
         if totem {
             q.friction = 0.6;
             if r.next_int(4) == 0 {
-                q.set_color(0.6 + r.next_float() * 0.2, 0.6 + r.next_float() * 0.3, r.next_float() * 0.2);
+                q.set_color(
+                    0.6 + r.next_float() * 0.2,
+                    0.6 + r.next_float() * 0.3,
+                    r.next_float() * 0.2,
+                );
             } else {
-                q.set_color(0.1 + r.next_float() * 0.2, 0.4 + r.next_float() * 0.3, r.next_float() * 0.2);
+                q.set_color(
+                    0.1 + r.next_float() * 0.2,
+                    0.4 + r.next_float() * 0.3,
+                    r.next_float() * 0.2,
+                );
             }
         } else {
-            fade = Some([0xF2 as f32 / 255.0, 0xDE as f32 / 255.0, 0xC9 as f32 / 255.0]);
+            fade = Some([
+                0xF2 as f32 / 255.0,
+                0xDE as f32 / 255.0,
+                0xC9 as f32 / 255.0,
+            ]);
             q.free_move = true;
         }
         q.glow = Glow::FullBright;
@@ -223,8 +253,11 @@ impl Engine {
     /// `FallingLeavesParticle`.
     pub(super) fn leaves(r: &mut JavaRandom, o: &Options, p: DVec3) -> Particle {
         let ty = o.ty;
-        let (fall, side, swirl, flow, scale, start) =
-            if ty == Type::CherryLeaves { (0.25f32, 2.0f32, false, true, 1.0f32, 0.0f32) } else { (0.07, 10.0, true, false, 2.0, 0.021) };
+        let (fall, side, swirl, flow, scale, start) = if ty == Type::CherryLeaves {
+            (0.25f32, 2.0f32, false, true, 1.0f32, 0.0f32)
+        } else {
+            (0.07, 10.0, true, false, 2.0, 0.021)
+        };
         let mut q = Particle::at(r, ty, p);
         let rot_speed = (if r.next_boolean() { -30.0f32 } else { 30.0 }).to_radians();
         let spin = (if r.next_boolean() { -5.0f32 } else { 5.0 }).to_radians();
@@ -236,12 +269,23 @@ impl Engine {
         q.friction = 1.0;
         q.velocity.y = -f(start);
         let pr = r.next_float();
-        let flow_scale = [f(pr * 60.0).to_radians().cos() * f(side), f(pr * 60.0).to_radians().sin() * f(side)];
+        let flow_scale = [
+            f(pr * 60.0).to_radians().cos() * f(side),
+            f(pr * 60.0).to_radians().sin() * f(side),
+        ];
         let swirl_period = f(1000.0 + pr * 3000.0).to_radians();
         if ty == Type::TintedLeaves {
             q.set_color(o.color[0], o.color[1], o.color[2]);
         }
-        q.behaviour = Behaviour::Leaves { rot_speed, spin, wind: side, swirl, flow, flow_scale, swirl_period };
+        q.behaviour = Behaviour::Leaves {
+            rot_speed,
+            spin,
+            wind: side,
+            swirl,
+            flow,
+            flow_scale,
+            swirl_period,
+        };
         q
     }
 

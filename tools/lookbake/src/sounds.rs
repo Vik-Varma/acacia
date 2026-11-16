@@ -18,16 +18,29 @@ const LEFT_OUT: [&str; 3] = ["music/", "records/", "ambient/"];
 /// Downloads what is missing into `out/sounds`; returns how many files the look has.
 pub fn fetch(out: &Path) -> Result<usize, Error> {
     let package = jar::version_package()?;
-    let index_url = package["assetIndex"]["url"].as_str().ok_or("version has no asset index")?;
+    let index_url = package["assetIndex"]["url"]
+        .as_str()
+        .ok_or("version has no asset index")?;
     let index: Value = serde_json::from_slice(&get(index_url)?)?;
-    let objects = index["objects"].as_object().ok_or("asset index has no objects")?;
+    let objects = index["objects"]
+        .as_object()
+        .ok_or("asset index has no objects")?;
     // The Bedrock pack ships no music either: `LOOKBAKE_MUSIC=1` fetches Java's (some 500 MB).
     let left_out = &LEFT_OUT[usize::from(std::env::var_os("LOOKBAKE_MUSIC").is_some())..];
     let mut count = 0;
     for (key, object) in objects {
-        let Some(path) = key.strip_prefix(PREFIX).filter(|p| p.ends_with(".ogg") && !left_out.iter().any(|l| p.starts_with(l))) else { continue };
-        let hash = object["hash"].as_str().ok_or_else(|| format!("{key} has no hash"))?;
-        pinned(&out.join("sounds").join(path), hash, || get(&format!("{OBJECTS}/{}/{hash}", &hash[..2])))?;
+        let Some(path) = key
+            .strip_prefix(PREFIX)
+            .filter(|p| p.ends_with(".ogg") && !left_out.iter().any(|l| p.starts_with(l)))
+        else {
+            continue;
+        };
+        let hash = object["hash"]
+            .as_str()
+            .ok_or_else(|| format!("{key} has no hash"))?;
+        pinned(&out.join("sounds").join(path), hash, || {
+            get(&format!("{OBJECTS}/{}/{hash}", &hash[..2]))
+        })?;
         count += 1;
     }
     Ok(count)

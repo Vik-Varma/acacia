@@ -1,7 +1,7 @@
 //! JSON frames of the two signaling-service flavours (docs/research/nethernet-signaling.md §2c-2d).
 
 use rand_core::{OsRng, RngCore};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::Signal;
 
@@ -19,10 +19,16 @@ pub(super) const LEGACY_CREDENTIALS: u64 = 2;
 /// What one received frame means.
 #[derive(Debug, PartialEq)]
 pub(super) enum Inbound {
-    Signal { from: String, signal: Signal },
+    Signal {
+        from: String,
+        signal: Signal,
+    },
     Credentials(Value),
     /// A JSON-RPC response to our request `id`.
-    Response { id: String, result: Result<Value, String> },
+    Response {
+        id: String,
+        result: Result<Value, String>,
+    },
     /// A server error report (legacy `Type 0` with a body).
     ServerError(String),
     /// A JSON-RPC request the server wants answered with `result: null`. The id is echoed as
@@ -37,7 +43,14 @@ pub(super) fn uuid() -> String {
     b[6] = (b[6] & 0x0f) | 0x40;
     b[8] = (b[8] & 0x3f) | 0x80;
     let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
-    format!("{}-{}-{}-{}-{}", &h[..8], &h[8..12], &h[12..16], &h[16..20], &h[20..])
+    format!(
+        "{}-{}-{}-{}-{}",
+        &h[..8],
+        &h[8..12],
+        &h[12..16],
+        &h[16..20],
+        &h[20..]
+    )
 }
 
 pub(super) fn rpc_request(id: &str, method: &str, params: Value) -> String {
@@ -55,13 +68,20 @@ pub(super) fn rpc_signal(id: &str, to: &str, own_network_id: u64, signal: &Signa
         "method": METHOD_WEBRTC,
         "params": {"netherNetId": own_network_id.to_string(), "message": signal.to_string()},
     });
-    rpc_request(id, METHOD_SEND, json!({"toPlayerId": to, "messageId": uuid(), "message": inner.to_string()}))
+    rpc_request(
+        id,
+        METHOD_SEND,
+        json!({"toPlayerId": to, "messageId": uuid(), "message": inner.to_string()}),
+    )
 }
 
 /// Legacy `To` is a JSON number when the id is numeric.
 pub(super) fn legacy_signal(to: &str, signal: &Signal) -> String {
-    let to = to.parse::<u64>().map_or_else(|_| Value::from(to), Value::from);
-    json!({"Type": LEGACY_SIGNAL, "To": to, "Message": signal.to_string(), "MessageId": uuid()}).to_string()
+    let to = to
+        .parse::<u64>()
+        .map_or_else(|_| Value::from(to), Value::from);
+    json!({"Type": LEGACY_SIGNAL, "To": to, "Message": signal.to_string(), "MessageId": uuid()})
+        .to_string()
 }
 
 pub(super) fn legacy_ping() -> String {
@@ -70,8 +90,14 @@ pub(super) fn legacy_ping() -> String {
 
 /// Everything one frame carries (a JSON-RPC receive may batch several signals).
 pub(super) fn decode(text: &str) -> Vec<Inbound> {
-    let Ok(v) = serde_json::from_str::<Value>(text) else { return vec![] };
-    if v.get("jsonrpc").is_some() { decode_rpc(&v) } else { vec![decode_legacy(&v)] }
+    let Ok(v) = serde_json::from_str::<Value>(text) else {
+        return vec![];
+    };
+    if v.get("jsonrpc").is_some() {
+        decode_rpc(&v)
+    } else {
+        vec![decode_legacy(&v)]
+    }
 }
 
 fn decode_legacy(v: &Value) -> Inbound {
@@ -90,13 +116,18 @@ fn decode_rpc(v: &Value) -> Vec<Inbound> {
     let raw_id = v.get("id").filter(|id| !id.is_null()).cloned();
     let id = id_string(v.get("id"));
     let mut out = match (v.get("method").and_then(Value::as_str), v.get("params")) {
-        (Some(METHOD_RECEIVE), Some(Value::Array(items))) => items.iter().map(rpc_receive_item).collect(),
+        (Some(METHOD_RECEIVE), Some(Value::Array(items))) => {
+            items.iter().map(rpc_receive_item).collect()
+        }
         (Some(METHOD_RECEIVE), Some(item)) => vec![rpc_receive_item(item)],
         (Some(_), _) => vec![],
         (None, _) => {
             let Some(id) = id else { return vec![] };
             let result = match v.get("error") {
-                Some(e) if !e.is_null() => Err(e.get("message").and_then(Value::as_str).map_or_else(|| e.to_string(), str::to_owned)),
+                Some(e) if !e.is_null() => Err(e
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .map_or_else(|| e.to_string(), str::to_owned)),
                 _ => Ok(v.get("result").cloned().unwrap_or(Value::Null)),
             };
             return vec![Inbound::Response { id, result }];
@@ -108,12 +139,19 @@ fn decode_rpc(v: &Value) -> Vec<Inbound> {
 
 fn rpc_receive_item(item: &Value) -> Inbound {
     let from = id_string(item.get("From").or_else(|| item.get("from")));
-    let message = item.get("Message").or_else(|| item.get("message")).and_then(Value::as_str).unwrap_or_default();
+    let message = item
+        .get("Message")
+        .or_else(|| item.get("message"))
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     // The message is a nested Signaling_WebRtc_v1_0 call, or bare signal text.
     match serde_json::from_str::<Value>(message) {
         Ok(inner) if inner.is_object() => {
             let params = inner.get("params").unwrap_or(&Value::Null);
-            let text = params.get("message").and_then(Value::as_str).unwrap_or_default();
+            let text = params
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
             signal_from(from.or_else(|| id_string(params.get("netherNetId"))), text)
         }
         _ => signal_from(from, message),

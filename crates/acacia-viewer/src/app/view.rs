@@ -36,17 +36,31 @@ impl App {
                         }
                         // Straight to the player: an unattended window never grabs the mouse.
                         Step::Use(true) if self.holds_book() => self.open_book(),
-                        Step::Use(pressed) => self.play.button(winit::event::MouseButton::Right, pressed),
+                        Step::Use(pressed) => {
+                            self.play.button(winit::event::MouseButton::Right, pressed)
+                        }
                     }
                 }
-                self.play.frame(&mut self.camera, world.as_deref(), self.table.as_deref(), &entities, now);
+                self.play.frame(
+                    &mut self.camera,
+                    world.as_deref(),
+                    self.table.as_deref(),
+                    &entities,
+                    now,
+                );
                 if self.auto_attack && self.play.target.is_some() && !self.play.attacking() {
                     self.play.button(winit::event::MouseButton::Left, true);
                 }
                 let mining = self.play.me.as_ref().and_then(|m| m.mining);
                 self.play.target.as_ref().map(|t| {
-                    let crack = mining.filter(|(block, _)| *block == t.block).map(|(_, progress)| (progress * 10.0).clamp(0.0, 9.0) as u8);
-                    Outline { block: t.block, boxes: t.boxes.clone(), crack }
+                    let crack = mining
+                        .filter(|(block, _)| *block == t.block)
+                        .map(|(_, progress)| (progress * 10.0).clamp(0.0, 9.0) as u8);
+                    Outline {
+                        block: t.block,
+                        boxes: t.boxes.clone(),
+                        crack,
+                    }
                 })
             }
         }
@@ -68,12 +82,19 @@ impl App {
                 let relative = (tag.anchor - DVec3::Y * LINE - self.camera.position).as_vec3();
                 let distance = relative.length();
                 let clip = view_proj * relative.extend(1.0);
-                if clip.w <= 0.1 || tag.feet.distance_squared(self.camera.position) >= tag.reach * tag.reach {
+                if clip.w <= 0.1
+                    || tag.feet.distance_squared(self.camera.position) >= tag.reach * tag.reach
+                {
                     return None;
                 }
                 let (x, y) = (clip.x / clip.w, clip.y / clip.w);
                 let size = 0.025 * pixels_per_block / distance / scale;
-                Some(Tag { text: text.to_owned(), x: (x + 1.0) / 2.0 * gui[0], y: (1.0 - y) / 2.0 * gui[1], scale: size })
+                Some(Tag {
+                    text: text.to_owned(),
+                    x: (x + 1.0) / 2.0 * gui[0],
+                    y: (1.0 - y) / 2.0 * gui[1],
+                    scale: size,
+                })
             })
             .collect()
     }
@@ -86,7 +107,9 @@ impl App {
         }
         let [main, off] = self.play.held_first_person().map(|stack| stack.cloned());
         let swing = self.play.swing(now);
-        let using = main.as_ref().and_then(|stack| using(&stack.name, self.play.item_use_secs(now)? * 20.0));
+        let using = main
+            .as_ref()
+            .and_then(|stack| using(&stack.name, self.play.item_use_secs(now)? * 20.0));
         let off_shield = off.as_ref().is_some_and(|stack| stack.name == SHIELD);
         let sneaking = self.play.sneaking();
         let mut out = Vec::new();
@@ -97,19 +120,56 @@ impl App {
         for (left, stack) in [(false, main), (true, off)] {
             let Some(stack) = stack else { continue };
             let root = self.looks.get(self.settings.look).files();
-            if let Some(sheet) = stack.map.as_ref().and_then(|picture| crate::held_map::sheet(root, picture)) {
-                let hold = if alone && !left { map::Hold::Both } else { map::Hold::One { left } };
+            if let Some(sheet) = stack
+                .map
+                .as_ref()
+                .and_then(|picture| crate::held_map::sheet(root, picture))
+            {
+                let hold = if alone && !left {
+                    map::Hold::Both
+                } else {
+                    map::Hold::One { left }
+                };
                 out.extend(self.entities.map_arms(&self.camera, hold));
                 out.push(map::first_person(&sheet, &self.camera, hold));
                 continue;
             }
-            let Some(model) = self.entities.item(&ItemKey { name: stack.name.clone(), aux: stack.aux, block: stack.block, dye: stack.dye, banner: stack.banner.clone(), trim: stack.trim.clone() }, stack.enchanted) else { continue };
-            let display = hand::Display::held(&model, &stack.name, true, left, sneaking && (left || !off_shield));
+            let Some(model) = self.entities.item(
+                &ItemKey {
+                    name: stack.name.clone(),
+                    aux: stack.aux,
+                    block: stack.block,
+                    dye: stack.dye,
+                    banner: stack.banner.clone(),
+                    trim: stack.trim.clone(),
+                },
+                stack.enchanted,
+            ) else {
+                continue;
+            };
+            let display = hand::Display::held(
+                &model,
+                &stack.name,
+                true,
+                left,
+                sneaking && (left || !off_shield),
+            );
             let crossbow = (stack.name == CROSSBOW).then_some(false);
             let hold = if left {
-                first_person::Hold { left, crossbow, ..Default::default() }
+                first_person::Hold {
+                    left,
+                    crossbow,
+                    ..Default::default()
+                }
             } else {
-                first_person::Hold { main_hand: true, attack: swing, swinging: swing > 0.0, using, crossbow, ..Default::default() }
+                first_person::Hold {
+                    main_hand: true,
+                    attack: swing,
+                    swinging: swing > 0.0,
+                    using,
+                    crossbow,
+                    ..Default::default()
+                }
             };
             out.push(hand::first_person(&model, display, &self.camera, &hold));
         }
@@ -129,6 +189,10 @@ fn using(name: &str, held: f32) -> Option<first_person::Using> {
         CROSSBOW => return Some(first_person::Using::Crossbow { held, charge: 25.0 }),
         _ => {}
     }
-    let duration = acacia_bot::survival::use_ticks(acacia_world::neutral::Item::from_name(name)?)? as f32;
-    Some(first_person::Using::Eat { held: held % duration, duration })
+    let duration =
+        acacia_bot::survival::use_ticks(acacia_world::neutral::Item::from_name(name)?)? as f32;
+    Some(first_person::Using::Eat {
+        held: held % duration,
+        duration,
+    })
 }

@@ -4,15 +4,16 @@
 
 use std::fmt;
 
-use base64::Engine;
 use acacia_auth::LoginCredentials;
 use acacia_auth::jwt;
 use acacia_auth::login::{
-    OfflineIdentity, build_connection_request, build_offline_connection_request_for, offline_identity, split_connection_request,
+    OfflineIdentity, build_connection_request, build_offline_connection_request_for,
+    offline_identity, split_connection_request,
 };
 use acacia_proto::packets::Login;
 use acacia_proto::{Packet, codec};
 use acacia_session::server::read_login;
+use base64::Engine;
 use bytes::{Bytes, BytesMut};
 use p384::ecdsa::SigningKey;
 use serde::de::{IgnoredAny, MapAccess, Visitor};
@@ -34,26 +35,50 @@ pub struct GameLogin {
 }
 
 /// `credentials` (bound to `key`) log in online; without them the login is offline.
-pub fn read(body: &[u8], key: &SigningKey, credentials: Option<&LoginCredentials>) -> Result<GameLogin, String> {
+pub fn read(
+    body: &[u8],
+    key: &SigningKey,
+    credentials: Option<&LoginCredentials>,
+) -> Result<GameLogin, String> {
     let (protocol, request, game_key) = read_login(body).map_err(|e| e.to_string())?;
-    let (envelope, client_jwt) = split_connection_request(request).ok_or("malformed connection request")?;
+    let (envelope, client_jwt) =
+        split_connection_request(request).ok_or("malformed connection request")?;
     let client_jwt = std::str::from_utf8(client_jwt).map_err(|e| e.to_string())?;
     let client = jwt::decode(client_jwt).map_err(|e| e.to_string())?;
     let outer: Value = serde_json::from_slice(envelope).map_err(|e| e.to_string())?;
 
-    let token_claims = outer["Token"].as_str().and_then(|t| jwt::decode(t).ok()).map(|t| t.claims);
-    let chain_extra = chain(&outer).iter().filter_map(|j| jwt::decode(j).ok()).find_map(|j| j.claims.get("extraData").cloned());
+    let token_claims = outer["Token"]
+        .as_str()
+        .and_then(|t| jwt::decode(t).ok())
+        .map(|t| t.claims);
+    let chain_extra = chain(&outer)
+        .iter()
+        .filter_map(|j| jwt::decode(j).ok())
+        .find_map(|j| j.claims.get("extraData").cloned());
     let claim = |token_key: &str, chain_key: &str| {
         let from_token = token_claims.as_ref().and_then(|c| c[token_key].as_str());
-        from_token.or_else(|| chain_extra.as_ref().and_then(|e| e[chain_key].as_str())).filter(|s| !s.is_empty()).map(str::to_owned)
+        from_token
+            .or_else(|| chain_extra.as_ref().and_then(|e| e[chain_key].as_str()))
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
     };
-    let name = claim("xname", "displayName").or_else(|| client.claims["ThirdPartyName"].as_str().map(str::to_owned)).ok_or("no player name")?;
+    let name = claim("xname", "displayName")
+        .or_else(|| client.claims["ThirdPartyName"].as_str().map(str::to_owned))
+        .ok_or("no player name")?;
     let xuid = claim("xid", "XUID").unwrap_or_default();
     let uuid = claim("leguuid", "identity").unwrap_or_else(|| offline_identity(&name));
 
     let request = match credentials {
         Some(creds) => build_connection_request(creds, key, &client.claims),
-        None => build_offline_connection_request_for(&OfflineIdentity { name: &name, xuid: &xuid, uuid: &uuid }, key, &client.claims),
+        None => build_offline_connection_request_for(
+            &OfflineIdentity {
+                name: &name,
+                xuid: &xuid,
+                uuid: &uuid,
+            },
+            key,
+            &client.claims,
+        ),
     };
     let mut upstream = BytesMut::with_capacity(request.len() + 16);
     codec::write_varint(&mut upstream, Login::ID);
@@ -70,23 +95,45 @@ pub fn read(body: &[u8], key: &SigningKey, credentials: Option<&LoginCredentials
         "client_data": describe(client_jwt, &[]),
         "client_data_values": trimmed(&client.claims),
     });
-    Ok(GameLogin { upstream: upstream.freeze(), game_key, summary, player: Player { name, xuid, uuid, client_data: client.claims } })
+    Ok(GameLogin {
+        upstream: upstream.freeze(),
+        game_key,
+        summary,
+        player: Player {
+            name,
+            xuid,
+            uuid,
+            client_data: client.claims,
+        },
+    })
 }
 
 /// The legacy `Certificate` chain, if the envelope has one.
 fn chain(outer: &Value) -> Vec<String> {
-    let cert = outer["Certificate"].as_str().and_then(|c| serde_json::from_str::<Value>(c).ok());
-    cert.and_then(|c| serde_json::from_value(c["chain"].clone()).ok()).unwrap_or_default()
+    let cert = outer["Certificate"]
+        .as_str()
+        .and_then(|c| serde_json::from_str::<Value>(c).ok());
+    cert.and_then(|c| serde_json::from_value(c["chain"].clone()).ok())
+        .unwrap_or_default()
 }
 
 /// A JWT's header verbatim, its claim names in order, and only the `keep` claim values (searched one level deep).
 fn describe(token: &str, keep: &[&str]) -> Value {
     let parts: Vec<&str> = token.split('.').collect();
-    let Ok(decoded) = jwt::decode(token) else { return json!({ "malformed": true }) };
-    let claims_json = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(parts[1]).unwrap_or_default();
+    let Ok(decoded) = jwt::decode(token) else {
+        return json!({ "malformed": true });
+    };
+    let claims_json = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(parts[1])
+        .unwrap_or_default();
     let mut kept = serde_json::Map::new();
     for &k in keep {
-        let nested = decoded.claims.as_object().into_iter().flat_map(|m| m.values()).find_map(|v| v.get(k));
+        let nested = decoded
+            .claims
+            .as_object()
+            .into_iter()
+            .flat_map(|m| m.values())
+            .find_map(|v| v.get(k));
         if let Some(v) = decoded.claims.get(k).or(nested) {
             kept.insert(k.to_owned(), v.clone());
         }
@@ -103,7 +150,9 @@ pub fn trimmed(v: &Value) -> Value {
     match v {
         Value::Object(m) => Value::Object(m.iter().map(|(k, v)| (k.clone(), trimmed(v))).collect()),
         Value::Array(a) => Value::Array(a.iter().map(trimmed).collect()),
-        Value::String(s) if s.len() > MAX_LOGGED_STRING => Value::String(format!("<{} chars>", s.len())),
+        Value::String(s) if s.len() > MAX_LOGGED_STRING => {
+            Value::String(format!("<{} chars>", s.len()))
+        }
         other => other.clone(),
     }
 }
@@ -134,7 +183,10 @@ mod tests {
 
     #[test]
     fn key_order_keeps_the_original_order() {
-        assert_eq!(key_order(br#"{"b":1,"a":{"z":2},"c":[3]}"#), ["b", "a", "c"]);
+        assert_eq!(
+            key_order(br#"{"b":1,"a":{"z":2},"c":[3]}"#),
+            ["b", "a", "c"]
+        );
     }
 
     #[test]

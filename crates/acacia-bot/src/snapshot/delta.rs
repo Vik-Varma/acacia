@@ -51,8 +51,16 @@ pub struct EntityDelta {
 
 impl EntityDelta {
     fn full(list: &Arc<EntityList>) -> Self {
-        let added = (0..list.slot_capacity()).filter_map(|s| list.index_of_slot(s)).collect();
-        EntityDelta { list: list.clone(), full: true, removed: Vec::new(), added, moved: Vec::new() }
+        let added = (0..list.slot_capacity())
+            .filter_map(|s| list.index_of_slot(s))
+            .collect();
+        EntityDelta {
+            list: list.clone(),
+            full: true,
+            removed: Vec::new(),
+            added,
+            moved: Vec::new(),
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -75,7 +83,9 @@ impl ChangeLog {
         }
         self.items += changes.len();
         self.entries.push_back((version, changes));
-        while self.entries.len() > 1 && (self.entries.len() > MAX_VERSIONS || self.items > MAX_ITEMS) {
+        while self.entries.len() > 1
+            && (self.entries.len() > MAX_VERSIONS || self.items > MAX_ITEMS)
+        {
             let (version, dropped) = self.entries.pop_front().expect("more than one entry");
             self.items -= dropped.len();
             self.floor = version;
@@ -107,20 +117,34 @@ impl ChangeLog {
                 }
                 *f &= !(ADDED | MOVED);
             }
-            changes.added.iter().for_each(|&s| flags[s as usize] |= ADDED);
-            changes.moved.iter().for_each(|&s| flags[s as usize] |= MOVED);
+            changes
+                .added
+                .iter()
+                .for_each(|&s| flags[s as usize] |= ADDED);
+            changes
+                .moved
+                .iter()
+                .for_each(|&s| flags[s as usize] |= MOVED);
         }
         removed.sort_unstable_by_key(|(slot, _)| *slot);
         let (mut added, mut moved) = (Vec::new(), Vec::new());
         for (slot, f) in flags.iter().enumerate() {
-            let Some(i) = list.index_of_slot(slot as u32) else { continue };
+            let Some(i) = list.index_of_slot(slot as u32) else {
+                continue;
+            };
             if f & ADDED != 0 {
                 added.push(i);
             } else if f & MOVED != 0 {
                 moved.push(i);
             }
         }
-        EntityDelta { list: list.clone(), full: false, removed, added, moved }
+        EntityDelta {
+            list: list.clone(),
+            full: false,
+            removed,
+            added,
+            moved,
+        }
     }
 }
 

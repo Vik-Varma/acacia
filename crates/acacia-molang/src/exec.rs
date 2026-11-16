@@ -57,7 +57,11 @@ impl Machine<'_> {
                 }
                 Value::ZERO
             }
-            Node::ForEach { variable, array, body } => {
+            Node::ForEach {
+                variable,
+                array,
+                body,
+            } => {
                 let array = self.value(array);
                 let mut index = 0;
                 // Read by position each pass: the body may assign over the variable holding the array.
@@ -110,8 +114,13 @@ impl Machine<'_> {
     }
 
     fn item(&self, array: Value, index: usize) -> Option<Value> {
-        let Value::Array(list) = array else { return None };
-        self.store(list).members(list).get(index).map(|(_, item)| *item)
+        let Value::Array(list) = array else {
+            return None;
+        };
+        self.store(list)
+            .members(list)
+            .get(index)
+            .map(|(_, item)| *item)
     }
 
     /// The store a struct or an array lives in.
@@ -127,7 +136,9 @@ impl Machine<'_> {
         match &self.vars {
             Vars::Own(store) => store.get(slot, path),
             // Its structs live in a store this evaluation cannot name, so they are copied out.
-            Vars::Other(store) => store.get(slot, path).map(|value| self.temps.import(value, Some(store))),
+            Vars::Other(store) => store
+                .get(slot, path)
+                .map(|value| self.temps.import(value, Some(store))),
         }
     }
 
@@ -169,20 +180,27 @@ impl Machine<'_> {
     /// they live in this evaluation's stores.
     fn assign_other(&self, entity: Value, target: u32, value: Value) -> Value {
         let value = storable(value);
-        let (Value::Entity(entity), Node::Var { slot, path }) = (entity, self.program.nodes[target as usize]) else { return value };
+        let (Value::Entity(entity), Node::Var { slot, path }) =
+            (entity, self.program.nodes[target as usize])
+        else {
+            return value;
+        };
         let path = self.program.list(path);
         let mut members = [Symbol::EMPTY; 8];
         if value.storage().is_none() && path.len() <= members.len() {
             for (member, &id) in members.iter_mut().zip(path) {
                 *member = Symbol(id);
             }
-            self.host.assign(entity, Variable(slot), &members[..path.len()], value);
+            self.host
+                .assign(entity, Variable(slot), &members[..path.len()], value);
         }
         value
     }
 
     pub(crate) fn arrow(&mut self, entity: u32, of: u32) -> Option<Value> {
-        let Value::Entity(entity) = self.value(entity) else { return None };
+        let Value::Entity(entity) = self.value(entity) else {
+            return None;
+        };
         let (host, variables) = self.host.entity(entity)?;
         let mut other = Machine {
             program: self.program,

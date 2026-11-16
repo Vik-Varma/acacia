@@ -66,12 +66,18 @@ struct Cost {
 
 /// A directory written by acacia-client's `capture` example: one received packet per `.bin`, in name order.
 fn packet_files(dir: &Path) -> Result<Vec<RawPacket>, String> {
-    let mut paths: Vec<_> = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?.filter_map(|e| Some(e.ok()?.path())).collect();
+    let mut paths: Vec<_> = std::fs::read_dir(dir)
+        .map_err(|e| format!("{}: {e}", dir.display()))?
+        .filter_map(|e| Some(e.ok()?.path()))
+        .collect();
     paths.sort();
     paths
         .iter()
         .filter(|p| p.extension().is_some_and(|x| x == "bin"))
-        .map(|p| RawPacket::parse(std::fs::read(p).map_err(|e| e.to_string())?.into()).map_err(|e| format!("{}: {e}", p.display())))
+        .map(|p| {
+            RawPacket::parse(std::fs::read(p).map_err(|e| e.to_string())?.into())
+                .map_err(|e| format!("{}: {e}", p.display()))
+        })
         .collect()
 }
 
@@ -84,7 +90,12 @@ fn received(capture: Option<&str>) -> Result<Vec<RawPacket>, String> {
             .packets
             .into_iter()
             .filter(|p| !p.from_client)
-            .map(|p| RawPacket { id: p.id, sender_subclient: 0, target_subclient: 0, body: p.body.into() })
+            .map(|p| RawPacket {
+                id: p.id,
+                sender_subclient: 0,
+                target_subclient: 0,
+                body: p.body.into(),
+            })
             .collect(),
         None => Script::bds_spawn()
             .steps
@@ -123,8 +134,15 @@ fn table(raws: &[RawPacket]) {
     let mut rows: Vec<_> = costs.into_iter().collect();
     rows.sort_by_key(|(_, c)| std::cmp::Reverse(c.nanos));
     let total: u64 = rows.iter().map(|(_, c)| c.nanos).sum();
-    println!("{} packets: {:.2} ms", raws.len(), total as f64 / ROUNDS as f64 / 1e6);
-    println!("{:<30} {:>6} {:>9} {:>9} {:>7} {:>9} {:>11}", "packet", "count", "bytes", "µs", "MB/s", "allocs", "alloc bytes");
+    println!(
+        "{} packets: {:.2} ms",
+        raws.len(),
+        total as f64 / ROUNDS as f64 / 1e6
+    );
+    println!(
+        "{:<30} {:>6} {:>9} {:>9} {:>7} {:>9} {:>11}",
+        "packet", "count", "bytes", "µs", "MB/s", "allocs", "alloc bytes"
+    );
     for (name, c) in rows.iter().take(14) {
         println!(
             "{:<30} {:>6} {:>9} {:>9.1} {:>7.0} {:>9} {:>11}",
@@ -141,21 +159,31 @@ fn table(raws: &[RawPacket]) {
 
 fn main() -> Result<(), String> {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
-    let capture = (args.first().map(String::as_str) == Some("--capture")).then(|| args.drain(..2.min(args.len())).nth(1)).flatten();
+    let capture = (args.first().map(String::as_str) == Some("--capture"))
+        .then(|| args.drain(..2.min(args.len())).nth(1))
+        .flatten();
     let raws = received(capture.as_deref())?;
     let Some(name) = args.first() else {
         COUNTING.store(true, Relaxed);
         table(&raws);
         return Ok(());
     };
-    let seconds = args.get(1).map_or(Ok(5.0), |s| s.parse::<f64>()).map_err(|e| e.to_string())?;
-    let chosen: Vec<&RawPacket> = raws.iter().filter(|r| name == "all" || packet_name(r.id) == Some(name.as_str())).collect();
+    let seconds = args
+        .get(1)
+        .map_or(Ok(5.0), |s| s.parse::<f64>())
+        .map_err(|e| e.to_string())?;
+    let chosen: Vec<&RawPacket> = raws
+        .iter()
+        .filter(|r| name == "all" || packet_name(r.id) == Some(name.as_str()))
+        .collect();
     if chosen.is_empty() {
         return Err(format!("no {name} was received"));
     }
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs_f64(seconds) {
-        chosen.iter().for_each(|raw| drop(black_box(strict::check(raw))));
+        chosen
+            .iter()
+            .for_each(|raw| drop(black_box(strict::check(raw))));
     }
     Ok(())
 }

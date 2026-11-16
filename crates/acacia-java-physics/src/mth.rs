@@ -5,7 +5,11 @@ pub const DEG_TO_RAD: f32 = std::f64::consts::PI as f32 / 180.0;
 
 fn table() -> &'static [f32] {
     static TABLE: OnceLock<Vec<f32>> = OnceLock::new();
-    TABLE.get_or_init(|| (0..65536).map(|i| (i as f64 / SIN_SCALE).sin() as f32).collect())
+    TABLE.get_or_init(|| {
+        (0..65536)
+            .map(|i| (i as f64 / SIN_SCALE).sin() as f32)
+            .collect()
+    })
 }
 
 pub fn sin(radians: f64) -> f32 {
@@ -38,7 +42,11 @@ pub fn horizontal_sqr(v: [f64; 3]) -> f64 {
 
 pub fn normalize(v: [f64; 3]) -> [f64; 3] {
     let length = length_sqr(v).sqrt();
-    if length < 1.0E-5_f32 as f64 { [0.0; 3] } else { v.map(|c| c / length) }
+    if length < 1.0E-5_f32 as f64 {
+        [0.0; 3]
+    } else {
+        v.map(|c| c / length)
+    }
 }
 
 /// `Mth.wrapDegrees`: into [-180, 180).
@@ -59,5 +67,9 @@ pub fn look_vector(pitch: f32, yaw: f32) -> [f64; 3] {
     let y = -yaw * DEG_TO_RAD;
     let (y_cos, y_sin) = (cos(y as f64), sin(y as f64));
     let (x_cos, x_sin) = (cos(x as f64), sin(x as f64));
-    [(y_sin * x_cos) as f64, -x_sin as f64, (y_cos * x_cos) as f64]
+    [
+        (y_sin * x_cos) as f64,
+        -x_sin as f64,
+        (y_cos * x_cos) as f64,
+    ]
 }

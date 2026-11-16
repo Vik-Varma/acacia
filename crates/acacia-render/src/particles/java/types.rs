@@ -25,7 +25,16 @@ macro_rules! types {
     };
 }
 
-const GENERIC_DOWN: [&str; 8] = ["generic_7", "generic_6", "generic_5", "generic_4", "generic_3", "generic_2", "generic_1", "generic_0"];
+const GENERIC_DOWN: [&str; 8] = [
+    "generic_7",
+    "generic_6",
+    "generic_5",
+    "generic_4",
+    "generic_3",
+    "generic_2",
+    "generic_1",
+    "generic_0",
+];
 
 types! {
     Smoke = "smoke" ["generic_7", "generic_6", "generic_5", "generic_4", "generic_3", "generic_2", "generic_1", "generic_0"],
@@ -93,7 +102,14 @@ types! {
 impl Type {
     /// `ParticleType.getOverrideLimiter`: spawned however far from the camera.
     pub fn override_limiter(self) -> bool {
-        matches!(self, Type::ExplosionEmitter | Type::Explosion | Type::Poof | Type::CampfireCosySmoke | Type::CampfireSignalSmoke)
+        matches!(
+            self,
+            Type::ExplosionEmitter
+                | Type::Explosion
+                | Type::Poof
+                | Type::CampfireCosySmoke
+                | Type::CampfireSignalSmoke
+        )
     }
 }
 
@@ -112,7 +128,20 @@ pub fn all_sprites() -> Vec<&'static str> {
 
 #[test]
 fn names_round_trip() {
-    assert!(Type::ALL.iter().all(|&t| Type::from_name(t.name()) == Some(t)));
-    assert_eq!(Type::from_name("minecraft:campfire_cosy_smoke"), Some(Type::CampfireCosySmoke));
-    assert_eq!(all_sprites().iter().filter(|s| s.starts_with("generic")).count(), 8);
+    assert!(
+        Type::ALL
+            .iter()
+            .all(|&t| Type::from_name(t.name()) == Some(t))
+    );
+    assert_eq!(
+        Type::from_name("minecraft:campfire_cosy_smoke"),
+        Some(Type::CampfireCosySmoke)
+    );
+    assert_eq!(
+        all_sprites()
+            .iter()
+            .filter(|s| s.starts_with("generic"))
+            .count(),
+        8
+    );
 }

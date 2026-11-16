@@ -4,7 +4,10 @@
 
 /// Items whose model tints by their potion contents.
 pub fn holds_potion(item: &str) -> bool {
-    matches!(item.trim_start_matches("minecraft:"), "potion" | "splash_potion" | "lingering_potion" | "tipped_arrow" | "arrow")
+    matches!(
+        item.trim_start_matches("minecraft:"),
+        "potion" | "splash_potion" | "lingering_potion" | "tipped_arrow" | "arrow"
+    )
 }
 
 /// Bedrock potion ids by aux, as Java potions; `None` where Java has no such potion (decay).
@@ -61,8 +64,15 @@ const BEDROCK: [Option<&str>; 47] = [
 /// The Java potion (`minecraft:swiftness`) a Bedrock potion item's `aux` holds. A tipped arrow's
 /// aux is the potion's plus one (0 is a plain arrow).
 pub fn java_potion(item: &str, aux: u32) -> Option<String> {
-    let index = if item.trim_start_matches("minecraft:") == "arrow" { aux.checked_sub(1)? } else { aux };
-    Some(format!("minecraft:{}", BEDROCK.get(index as usize).copied().flatten()?))
+    let index = if item.trim_start_matches("minecraft:") == "arrow" {
+        aux.checked_sub(1)?
+    } else {
+        aux
+    };
+    Some(format!(
+        "minecraft:{}",
+        BEDROCK.get(index as usize).copied().flatten()?
+    ))
 }
 
 /// `PotionContents.BASE_POTION_COLOR`: no potion, or one without effects.
@@ -70,7 +80,10 @@ pub const BASE: u32 = 0xFF38_5DC6;
 
 /// The ARGB a potion tints with, by Java potion; [`BASE`] for any other.
 pub fn color(potion: &str) -> u32 {
-    COLORS.iter().find(|(id, _)| *id == potion.trim_start_matches("minecraft:")).map_or(BASE, |&(_, argb)| argb)
+    COLORS
+        .iter()
+        .find(|(id, _)| *id == potion.trim_start_matches("minecraft:"))
+        .map_or(BASE, |&(_, argb)| argb)
 }
 
 /// `getColorOptional` of each potion's effects (`MobEffects`' colours, weighted by amplifier).

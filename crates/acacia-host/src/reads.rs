@@ -3,12 +3,12 @@
 //! `*_version` read so a transport can skip converting what it already holds.
 
 use acacia_api::{
-    ApiError, Block, BlockAtCursorParams, BlockAtCursorResult, BlockPos, BotId, ColdSnapshot, EntityList, ErrorCode,
-    FindBlocksParams, FindBlocksResult, HotSnapshot, ItemTable,
+    ApiError, Block, BlockAtCursorParams, BlockAtCursorResult, BlockPos, BotId, ColdSnapshot,
+    EntityList, ErrorCode, FindBlocksParams, FindBlocksResult, HotSnapshot, ItemTable,
 };
 use acacia_bot::snapshot::SnapshotReader;
 
-use crate::{convert, EntityDelta, Host};
+use crate::{EntityDelta, Host, convert};
 
 impl Host {
     /// The bot's state as of its last tick.
@@ -53,16 +53,25 @@ impl Host {
     }
 
     /// `bot.findBlocks` without a call (`params.bot` is ignored).
-    pub fn find_blocks(&self, bot: &BotId, params: &FindBlocksParams) -> Result<FindBlocksResult, ApiError> {
+    pub fn find_blocks(
+        &self,
+        bot: &BotId,
+        params: &FindBlocksParams,
+    ) -> Result<FindBlocksResult, ApiError> {
         convert::find_blocks(&self.known(bot)?, params)
     }
 
     /// `bot.blockAtCursor` without a call (`params.bot` is ignored).
-    pub fn block_at_cursor(&self, bot: &BotId, params: &BlockAtCursorParams) -> Result<BlockAtCursorResult, ApiError> {
+    pub fn block_at_cursor(
+        &self,
+        bot: &BotId,
+        params: &BlockAtCursorParams,
+    ) -> Result<BlockAtCursorResult, ApiError> {
         convert::block_at_cursor(&self.known(bot)?, params)
     }
 
     fn known(&self, bot: &BotId) -> Result<SnapshotReader, ApiError> {
-        self.reader(bot).ok_or_else(|| ApiError::new(ErrorCode::UnknownBot, format!("no bot {}", bot.0)))
+        self.reader(bot)
+            .ok_or_else(|| ApiError::new(ErrorCode::UnknownBot, format!("no bot {}", bot.0)))
     }
 }

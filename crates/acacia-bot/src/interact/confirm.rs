@@ -65,13 +65,30 @@ pub(crate) struct Confirm {
 
 impl Confirm {
     /// `before`: the cell's runtime id as sent; `timeout`: ticks to wait for each try.
-    pub(crate) fn new(expect: Expect, before: Option<u32>, now: u64, timeout: u64, max_tries: u32) -> Self {
-        Self { expect, before, deadline: now + timeout, tries: 1, max_tries, predicted: false, echo_seen: false }
+    pub(crate) fn new(
+        expect: Expect,
+        before: Option<u32>,
+        now: u64,
+        timeout: u64,
+        max_tries: u32,
+    ) -> Self {
+        Self {
+            expect,
+            before,
+            deadline: now + timeout,
+            tries: 1,
+            max_tries,
+            predicted: false,
+            echo_seen: false,
+        }
     }
 
     /// The cell shows the bot's own prediction until the server's echo replaces it.
     pub(crate) fn predicted(self) -> Self {
-        Self { predicted: true, ..self }
+        Self {
+            predicted: true,
+            ..self
+        }
     }
 
     pub(crate) fn tries(&self) -> u32 {
@@ -84,9 +101,16 @@ impl Confirm {
     }
 
     /// The cell as of tick `now`; `echoed`: an `UpdateBlock` for it arrived since the last check.
-    pub(crate) fn check(&mut self, now: u64, cell: Option<(u32, &BlockState)>, echoed: bool) -> Verdict {
+    pub(crate) fn check(
+        &mut self,
+        now: u64,
+        cell: Option<(u32, &BlockState)>,
+        echoed: bool,
+    ) -> Verdict {
         self.echo_seen |= echoed;
-        let Some((id, state)) = cell else { return Verdict::Failed("the cell is no longer loaded".into()) };
+        let Some((id, state)) = cell else {
+            return Verdict::Failed("the cell is no longer loaded".into());
+        };
         let ours = self.predicted && !self.echo_seen;
         if self.expect.met(id, state) && !ours {
             return Verdict::Done;
@@ -98,7 +122,10 @@ impl Confirm {
         }
         match (unchanged, self.tries < self.max_tries) {
             (true, true) => Verdict::Retry,
-            (true, false) => Verdict::Failed(format!("the server showed no change after {} tries", self.tries)),
+            (true, false) => Verdict::Failed(format!(
+                "the server showed no change after {} tries",
+                self.tries
+            )),
             (false, _) => Verdict::Failed(format!("the cell became {}", state.name)),
         }
     }
@@ -112,7 +139,11 @@ impl Confirm {
 }
 
 /// The stack to put back after a refused placement: ours, unless the server has set the slot since.
-pub(crate) fn unpredict(now: &ItemStack, predicted: &ItemStack, before: &ItemStack) -> Option<ItemStack> {
+pub(crate) fn unpredict(
+    now: &ItemStack,
+    predicted: &ItemStack,
+    before: &ItemStack,
+) -> Option<ItemStack> {
     (now == predicted && predicted != before).then(|| before.clone())
 }
 
@@ -120,20 +151,45 @@ pub(crate) fn unpredict(now: &ItemStack, predicted: &ItemStack, before: &ItemSta
 /// placements from one stack in flight, [`unpredict`]'s exact match never held, the count fell behind the
 /// server's, and a slot read empty that the server still filled (live: moves into it refused, status 50).
 /// `None`: the slot now holds something else; the server's own update decides it.
-pub(crate) fn give_back(now: &ItemStack, predicted: &ItemStack, before: &ItemStack) -> Option<ItemStack> {
-    let consumed = before.count.checked_sub(if predicted.is_empty() { 0 } else { predicted.count }).filter(|c| *c > 0)?;
+pub(crate) fn give_back(
+    now: &ItemStack,
+    predicted: &ItemStack,
+    before: &ItemStack,
+) -> Option<ItemStack> {
+    let consumed = before
+        .count
+        .checked_sub(if predicted.is_empty() {
+            0
+        } else {
+            predicted.count
+        })
+        .filter(|c| *c > 0)?;
     if now.is_empty() {
-        return Some(ItemStack { count: consumed, ..before.clone() });
+        return Some(ItemStack {
+            count: consumed,
+            ..before.clone()
+        });
     }
-    (now.network_id == before.network_id && now.stack_network_id == before.stack_network_id).then(|| ItemStack { count: now.count + consumed, ..now.clone() })
+    (now.network_id == before.network_id && now.stack_network_id == before.stack_network_id).then(
+        || ItemStack {
+            count: now.count + consumed,
+            ..now.clone()
+        },
+    )
 }
 
 /// A server block update for layer 0 of `at`, in any of the packets the world tracker applies.
 fn is_update_at(p: &RawPacket, at: &BlockCoordinates) -> bool {
     match p.id {
-        UpdateBlock::ID => p.decode::<UpdateBlock>().is_ok_and(|u| u.position == *at && u.layer == 0),
-        UpdateBlockSynced::ID => p.decode::<UpdateBlockSynced>().is_ok_and(|u| u.position == *at && u.layer == 0),
-        UpdateSubchunkBlocks::ID => p.decode::<UpdateSubchunkBlocks>().is_ok_and(|u| u.blocks.iter().any(|b| b.position == *at)),
+        UpdateBlock::ID => p
+            .decode::<UpdateBlock>()
+            .is_ok_and(|u| u.position == *at && u.layer == 0),
+        UpdateBlockSynced::ID => p
+            .decode::<UpdateBlockSynced>()
+            .is_ok_and(|u| u.position == *at && u.layer == 0),
+        UpdateSubchunkBlocks::ID => p
+            .decode::<UpdateSubchunkBlocks>()
+            .is_ok_and(|u| u.blocks.iter().any(|b| b.position == *at)),
         _ => false,
     }
 }
@@ -171,13 +227,28 @@ impl Bot {
     /// Starts confirming an action on `pos` sent this tick.
     pub(crate) fn confirmation(&self, pos: BlockPos, expect: Expect, max_tries: u32) -> Confirm {
         let before = self.block_at(pos).map(|(id, _)| id);
-        let confirm = Confirm::new(expect, before, self.governor.now(), self.governor.timeout_ticks(), max_tries);
+        let confirm = Confirm::new(
+            expect,
+            before,
+            self.governor.now(),
+            self.governor.timeout_ticks(),
+            max_tries,
+        );
         // Java predicts every action's block; only the server's answer settles it.
-        if self.backend.bedrock().is_none() { confirm.predicted() } else { confirm }
+        if self.backend.bedrock().is_none() {
+            confirm.predicted()
+        } else {
+            confirm
+        }
     }
 
     /// Lets ticks pass until `c` decides. A first try's echo feeds the governor's round-trip estimate.
-    pub(crate) async fn await_confirm(&mut self, pos: BlockPos, c: &mut Confirm, sent_at: Instant) -> Result<Verdict, ActionError> {
+    pub(crate) async fn await_confirm(
+        &mut self,
+        pos: BlockPos,
+        c: &mut Confirm,
+        sent_at: Instant,
+    ) -> Result<Verdict, ActionError> {
         let at = block_coordinates(pos);
         let t = Instant::now();
         loop {
@@ -192,13 +263,27 @@ impl Bot {
                 self.governor.sample(sent_at.elapsed());
             }
             if verdict != Verdict::Wait {
-                self.act_timing.add(crate::act_timing::Phase::Echo, t.elapsed());
+                self.act_timing
+                    .add(crate::act_timing::Phase::Echo, t.elapsed());
                 if verdict == Verdict::Retry {
                     self.act_timing.retry();
                 }
-                let held = self.state.items.name(self.state.inventory.held().network_id).unwrap_or("-");
+                let held = self
+                    .state
+                    .items
+                    .name(self.state.inventory.held().network_id)
+                    .unwrap_or("-");
                 let cell = self.block_at(pos).map_or("unloaded", |(_, s)| s.name);
-                tracing::debug!(?pos, ?verdict, tries = c.tries(), echoed, ms = t.elapsed().as_millis() as u64, held, cell, "action confirmation");
+                tracing::debug!(
+                    ?pos,
+                    ?verdict,
+                    tries = c.tries(),
+                    echoed,
+                    ms = t.elapsed().as_millis() as u64,
+                    held,
+                    cell,
+                    "action confirmation"
+                );
                 return Ok(verdict);
             }
         }
@@ -210,7 +295,8 @@ impl Bot {
         while !self.governor.may_send() {
             self.next_tick(|_, _| false).await?;
         }
-        self.act_timing.add(crate::act_timing::Phase::Admit, t.elapsed());
+        self.act_timing
+            .add(crate::act_timing::Phase::Admit, t.elapsed());
         self.governor.sent(false);
         Ok(self.claim(Held::Slot))
     }

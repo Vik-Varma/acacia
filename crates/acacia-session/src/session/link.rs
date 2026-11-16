@@ -14,13 +14,18 @@ pub enum LinkConfig {
 /// What carries game messages: RakNet datagrams, or whole messages handed over by the driver.
 pub(super) enum Link {
     RakNet(Box<raknet::Client>),
-    Message { inbound: VecDeque<raknet::Event>, outbound: VecDeque<Bytes> },
+    Message {
+        inbound: VecDeque<raknet::Event>,
+        outbound: VecDeque<Bytes>,
+    },
 }
 
 impl Link {
     pub fn new(cfg: LinkConfig, server: SocketAddr, now: Instant) -> Self {
         match cfg {
-            LinkConfig::RakNet(cfg) => Self::RakNet(Box::new(raknet::Client::new(cfg, server, now))),
+            LinkConfig::RakNet(cfg) => {
+                Self::RakNet(Box::new(raknet::Client::new(cfg, server, now)))
+            }
             LinkConfig::Message => Self::Message {
                 inbound: VecDeque::from([raknet::Event::Connected { mtu: 0 }]),
                 outbound: VecDeque::new(),

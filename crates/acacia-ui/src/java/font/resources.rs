@@ -25,7 +25,12 @@ pub fn split_id(id: &str) -> (&str, &str) {
 impl Resources {
     /// A namespace directory alone.
     pub fn dir(namespace: &str, dir: impl Into<PathBuf>) -> Resources {
-        Resources { layers: vec![Layer::Namespace { namespace: namespace.to_owned(), dir: dir.into() }] }
+        Resources {
+            layers: vec![Layer::Namespace {
+                namespace: namespace.to_owned(),
+                dir: dir.into(),
+            }],
+        }
     }
 
     /// The game's resources: `index` (an asset index root holding `indexes/` and `objects/`, when it
@@ -35,13 +40,18 @@ impl Resources {
         if let Some(layer) = index.and_then(|(root, id)| Layer::index(root, id)) {
             layers.push(layer);
         }
-        layers.push(Layer::Namespace { namespace: "minecraft".into(), dir: assets.to_owned() });
+        layers.push(Layer::Namespace {
+            namespace: "minecraft".into(),
+            dir: assets.to_owned(),
+        });
         Resources { layers }
     }
 
     pub fn read(&self, id: &str) -> Option<Vec<u8>> {
         let (ns, path) = split_id(id);
-        self.layers.iter().find_map(|layer| std::fs::read(layer.path(ns, path)?).ok())
+        self.layers
+            .iter()
+            .find_map(|layer| std::fs::read(layer.path(ns, path)?).ok())
     }
 
     /// Every `<ns>:<prefix>/...<suffix>` id, sorted.
@@ -49,11 +59,21 @@ impl Resources {
         let mut out = std::collections::BTreeSet::new();
         for layer in &self.layers {
             match layer {
-                Layer::Namespace { namespace, dir } => walk(&dir.join(prefix), &format!("{namespace}:{prefix}/"), suffix, &mut out),
+                Layer::Namespace { namespace, dir } => walk(
+                    &dir.join(prefix),
+                    &format!("{namespace}:{prefix}/"),
+                    suffix,
+                    &mut out,
+                ),
                 Layer::Index(objects) => {
                     for key in objects.keys() {
-                        let Some((ns, path)) = key.split_once('/') else { continue };
-                        if path.starts_with(prefix) && path[prefix.len()..].starts_with('/') && path.ends_with(suffix) {
+                        let Some((ns, path)) = key.split_once('/') else {
+                            continue;
+                        };
+                        if path.starts_with(prefix)
+                            && path[prefix.len()..].starts_with('/')
+                            && path.ends_with(suffix)
+                        {
                             out.insert(format!("{ns}:{path}"));
                         }
                     }
@@ -67,10 +87,15 @@ impl Resources {
 impl Layer {
     /// An asset index's objects, `None` without its index file.
     pub fn index(root: &Path, id: &str) -> Option<Layer> {
-        let index: serde_json::Value = serde_json::from_slice(&std::fs::read(root.join(format!("indexes/{id}.json"))).ok()?).ok()?;
+        let index: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.join(format!("indexes/{id}.json"))).ok()?)
+                .ok()?;
         let objects = index["objects"].as_object()?.iter().filter_map(|(key, o)| {
             let hash = o["hash"].as_str().filter(|h| h.len() > 2)?;
-            Some((key.clone(), root.join("objects").join(&hash[..2]).join(hash)))
+            Some((
+                key.clone(),
+                root.join("objects").join(&hash[..2]).join(hash),
+            ))
         });
         Some(Layer::Index(objects.collect()))
     }

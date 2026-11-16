@@ -10,11 +10,21 @@ use crate::cadence::{seed, splitmix};
 /// check what a server does rather than how a player looks shorten them (sapling's tools/remote-test.sh).
 fn human_scale() -> f64 {
     static SCALE: OnceLock<f64> = OnceLock::new();
-    *SCALE.get_or_init(|| std::env::var("ACACIA_HUMAN_SCALE").ok().and_then(|v| v.parse().ok()).filter(|s: &f64| s.is_finite() && *s >= 0.0).unwrap_or(1.0))
+    *SCALE.get_or_init(|| {
+        std::env::var("ACACIA_HUMAN_SCALE")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|s: &f64| s.is_finite() && *s >= 0.0)
+            .unwrap_or(1.0)
+    })
 }
 
 fn scaled(d: Duration) -> Duration {
-    if human_scale() == 1.0 { d } else { d.mul_f64(human_scale()) }
+    if human_scale() == 1.0 {
+        d
+    } else {
+        d.mul_f64(human_scale())
+    }
 }
 
 /// (min, max) in ms, uniform.
@@ -145,7 +155,9 @@ impl Human {
 
     /// Time to read `chars` characters of text, fill in `inputs` fields and decide.
     pub(crate) fn reading(&mut self, chars: usize, inputs: usize) -> Duration {
-        let extra = Duration::from_millis(FORM_READ_PER_CHAR_MS * chars as u64 + FORM_READ_PER_INPUT_MS * inputs as u64);
+        let extra = Duration::from_millis(
+            FORM_READ_PER_CHAR_MS * chars as u64 + FORM_READ_PER_INPUT_MS * inputs as u64,
+        );
         scaled((self.draw(FORM_READ_BASE) + extra).min(Duration::from_millis(FORM_READ_MAX_MS)))
     }
 
@@ -179,6 +191,8 @@ mod tests {
         }
         assert!(h.reading(10_000, 3) <= Duration::from_millis(FORM_READ_MAX_MS));
         assert!(h.reading(0, 0) >= Duration::from_millis(FORM_READ_BASE.0));
-        assert!(h.reading(0, 4) >= Duration::from_millis(FORM_READ_BASE.0 + 4 * FORM_READ_PER_INPUT_MS));
+        assert!(
+            h.reading(0, 4) >= Duration::from_millis(FORM_READ_BASE.0 + 4 * FORM_READ_PER_INPUT_MS)
+        );
     }
 }

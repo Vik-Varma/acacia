@@ -18,7 +18,11 @@ pub fn draw(list: &mut DrawList, theme: &Theme, left: &[String], right: &[String
             let y = 2.0 + i as f32 * LINE_HEIGHT;
             let w = font.width(line);
             let x = if side { width - 2.0 - w } else { 2.0 };
-            list.fill(white, [x - 1.0, y - 1.0, x + w + 1.0, y + LINE_HEIGHT - 1.0], BACKGROUND);
+            list.fill(
+                white,
+                [x - 1.0, y - 1.0, x + w + 1.0, y + LINE_HEIGHT - 1.0],
+                BACKGROUND,
+            );
             font.draw(list, line, x, y, TEXT, 1.0, false);
         }
     }

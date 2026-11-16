@@ -11,15 +11,27 @@ pub enum Driven {
 
 impl Driven {
     pub fn boat(&self) -> Option<&Boat> {
-        if let Driven::Boat(b) = self { Some(b) } else { None }
+        if let Driven::Boat(b) = self {
+            Some(b)
+        } else {
+            None
+        }
     }
 
     pub fn mount(&self) -> Option<&Mount> {
-        if let Driven::Mount(m) = self { Some(m) } else { None }
+        if let Driven::Mount(m) = self {
+            Some(m)
+        } else {
+            None
+        }
     }
 
     pub(crate) fn mount_mut(&mut self) -> Option<&mut Mount> {
-        if let Driven::Mount(m) = self { Some(m) } else { None }
+        if let Driven::Mount(m) = self {
+            Some(m)
+        } else {
+            None
+        }
     }
 
     /// Position, yaw and pitch.
@@ -75,6 +87,15 @@ impl Driven {
     /// `ServerboundMoveVehiclePacket.fromEntity`.
     pub(crate) fn vehicle_move(&self) -> MoveVehicle {
         let ([x, y, z], y_rot, x_rot) = self.pose();
-        MoveVehicle { pose: VehiclePose { x, y, z, y_rot, x_rot }, on_ground: self.on_ground() }
+        MoveVehicle {
+            pose: VehiclePose {
+                x,
+                y,
+                z,
+                y_rot,
+                x_rot,
+            },
+            on_ground: self.on_ground(),
+        }
     }
 }

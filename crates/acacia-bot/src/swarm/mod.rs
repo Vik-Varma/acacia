@@ -54,7 +54,9 @@ impl<S> Drop for Inner<S> {
 
 impl<S> Clone for Swarm<S> {
     fn clone(&self) -> Self {
-        Self { inner: self.inner.clone() }
+        Self {
+            inner: self.inner.clone(),
+        }
     }
 }
 
@@ -80,10 +82,19 @@ impl<S: Send + 'static> Swarm<S> {
             return Err(AddError::Draining);
         }
         let id = spec.id.clone();
-        let placed = ctx.registry.insert(&id, &spec.target, self.inner.shard_count, self.inner.shard_fill);
+        let placed = ctx.registry.insert(
+            &id,
+            &spec.target,
+            self.inner.shard_count,
+            self.inner.shard_fill,
+        );
         let (shard, cancel) = placed.ok_or_else(|| AddError::Duplicate(id.clone()))?;
         let job = (self.inner.spawn)(spec, cancel);
-        let shards = self.inner.shards.lock().expect("swarm shards lock poisoned");
+        let shards = self
+            .inner
+            .shards
+            .lock()
+            .expect("swarm shards lock poisoned");
         if !shards.get(shard).is_some_and(|s| s.submit(id.clone(), job)) {
             ctx.registry.removed(&id, None);
             return Err(AddError::ShutDown);
@@ -107,7 +118,11 @@ impl<S: Send + 'static> Swarm<S> {
 
     pub fn snapshot(&self) -> Snapshot {
         let (bots, shard_load) = self.inner.ctx.registry.snapshot(self.inner.shard_count);
-        Snapshot { bots, shard_load, draining: self.inner.ctx.draining.load(Ordering::Relaxed) }
+        Snapshot {
+            bots,
+            shard_load,
+            draining: self.inner.ctx.draining.load(Ordering::Relaxed),
+        }
     }
 
     pub fn events(&self) -> broadcast::Receiver<SwarmEvent> {
@@ -125,7 +140,13 @@ impl<S: Send + 'static> Swarm<S> {
         self.drain();
         // Taken before cancelling: a racing add() either submitted already (and is cancelled
         // below) or finds no shards.
-        let shards = std::mem::take(&mut *self.inner.shards.lock().expect("swarm shards lock poisoned"));
+        let shards = std::mem::take(
+            &mut *self
+                .inner
+                .shards
+                .lock()
+                .expect("swarm shards lock poisoned"),
+        );
         self.inner.ctx.registry.cancel_all();
         for shard in shards {
             shard.stop().await;

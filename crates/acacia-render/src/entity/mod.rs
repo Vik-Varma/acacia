@@ -5,9 +5,9 @@
 mod animation;
 mod armor;
 pub mod bake;
+pub(crate) mod block_models;
 pub mod boat;
 pub mod cape;
-pub(crate) mod block_models;
 mod controller;
 pub mod geometry;
 pub mod java;
@@ -27,8 +27,8 @@ use crate::assets::image_file;
 pub use bake::{Mesh, Vertex};
 use controller::{Controller, Definition};
 pub use layer::{Blend, Fade, Layer};
-use molang::{Loading, Scope};
 pub use molang::Value;
+use molang::{Loading, Scope};
 pub use pose::{BonePose, Pose};
 pub use skin::{Skin, SkinSource};
 
@@ -42,11 +42,15 @@ pub struct Model {
     pub mesh: Mesh,
 }
 
-const PLAYER_GEOMETRIES: [&str; 3] = ["geometry.humanoid.custom", "geometry.humanoid.customSlim", "geometry.humanoid"];
+const PLAYER_GEOMETRIES: [&str; 3] = [
+    "geometry.humanoid.custom",
+    "geometry.humanoid.customSlim",
+    "geometry.humanoid",
+];
 /// sRGB dye colours by the `color` data value, white first.
 pub(crate) const DYES: [u32; 16] = [
-    0xF9FFFE, 0xF9801D, 0xC74EBD, 0x3AB3DA, 0xFED83D, 0x80C71F, 0xF38BAA, 0x474F52, 0x9D9D97, 0x169C9C, 0x8932B8, 0x3C44AA, 0x835432, 0x5E7C16,
-    0xB02E26, 0x1D1D21,
+    0xF9FFFE, 0xF9801D, 0xC74EBD, 0x3AB3DA, 0xFED83D, 0x80C71F, 0xF38BAA, 0x474F52, 0x9D9D97,
+    0x169C9C, 0x8932B8, 0x3C44AA, 0x835432, 0x5E7C16, 0xB02E26, 0x1D1D21,
 ];
 
 fn dye(index: f32) -> [f32; 3] {
@@ -121,46 +125,89 @@ impl EntityModels {
         let mut built_in = |&(name, value): &(&str, f32)| {
             let mut path = name.split('.');
             let variable = out.compiler.variable(path.next().unwrap_or_default());
-            (variable, path.map(|member| out.compiler.symbol(member)).collect(), value)
+            (
+                variable,
+                path.map(|member| out.compiler.symbol(member)).collect(),
+                value,
+            )
         };
         out.built_in = pose::BUILT_IN.iter().map(&mut built_in).collect();
         let mut texture_sizes = HashMap::new();
         for d in out.kinds.values() {
-            let texture = d.textures.get("default").or_else(|| d.textures.values().min());
-            let Some((w, h)) = texture.and_then(|t| image::image_dimensions(image_file(root, t)?).ok()) else { continue };
-            texture_sizes.extend(d.geometry.values().map(|g| (g.as_str(), [w as f32, h as f32])));
+            let texture = d
+                .textures
+                .get("default")
+                .or_else(|| d.textures.values().min());
+            let Some((w, h)) =
+                texture.and_then(|t| image::image_dimensions(image_file(root, t)?).ok())
+            else {
+                continue;
+            };
+            texture_sizes.extend(
+                d.geometry
+                    .values()
+                    .map(|g| (g.as_str(), [w as f32, h as f32])),
+            );
         }
         let armor = armor::pieces(root);
         for piece in &armor {
-            if let Some((w, h)) = image_file(root, &piece.texture).and_then(|f| image::image_dimensions(f).ok()) {
+            if let Some((w, h)) =
+                image_file(root, &piece.texture).and_then(|f| image::image_dimensions(f).ok())
+            {
                 texture_sizes.insert(piece.geometry.as_str(), [w as f32, h as f32]);
             }
         }
         let geometries = geometry::load_all(root, &texture_sizes);
         let worn = armor.iter().map(|p| p.geometry.as_str());
-        let masks = geometries.keys().map(String::as_str).filter(|id| id.ends_with(boat::MASK));
-        let used = out.kinds.values().flat_map(|d| d.geometry.values()).map(String::as_str).chain(PLAYER_GEOMETRIES).chain(worn).chain(masks);
+        let masks = geometries
+            .keys()
+            .map(String::as_str)
+            .filter(|id| id.ends_with(boat::MASK));
+        let used = out
+            .kinds
+            .values()
+            .flat_map(|d| d.geometry.values())
+            .map(String::as_str)
+            .chain(PLAYER_GEOMETRIES)
+            .chain(worn)
+            .chain(masks);
         for id in used {
-            if let Some(geometry) = geometries.get(id).filter(|_| !out.by_geometry.contains_key(id)) {
-                out.by_geometry.insert(id.to_owned(), out.models.len() as ModelId);
-                out.models.push(Model { mesh: bake::bake(geometry) });
+            if let Some(geometry) = geometries
+                .get(id)
+                .filter(|_| !out.by_geometry.contains_key(id))
+            {
+                out.by_geometry
+                    .insert(id.to_owned(), out.models.len() as ModelId);
+                out.models.push(Model {
+                    mesh: bake::bake(geometry),
+                });
             }
         }
         for (id, mesh) in block_models::meshes(&geometries) {
-            out.by_geometry.insert(id.to_owned(), out.models.len() as ModelId);
+            out.by_geometry
+                .insert(id.to_owned(), out.models.len() as ModelId);
             out.models.push(Model { mesh });
         }
         let block_textures = block_models::textures(root);
         let armor_textures = armor.iter().map(|p| &p.texture);
-        for path in out.kinds.values().flat_map(|d| d.textures.values()).chain(&block_textures).chain(armor_textures) {
+        for path in out
+            .kinds
+            .values()
+            .flat_map(|d| d.textures.values())
+            .chain(&block_textures)
+            .chain(armor_textures)
+        {
             // A baked look keeps its block images in an atlas: block models take the base pack's.
-            let found = image_file(root, path).or_else(|| image_file(&crate::assets::Pack::default_dir(), path));
+            let found = image_file(root, path)
+                .or_else(|| image_file(&crate::assets::Pack::default_dir(), path));
             if let Some(file) = found.filter(|_| !out.texture_ids.contains_key(path)) {
-                out.texture_ids.insert(path.clone(), out.textures.len() as TextureId);
+                out.texture_ids
+                    .insert(path.clone(), out.textures.len() as TextureId);
                 out.textures.push(file);
             }
         }
-        let (models, textures, texture_ids) = (&mut out.models, &mut out.textures, &mut out.texture_ids);
+        let (models, textures, texture_ids) =
+            (&mut out.models, &mut out.textures, &mut out.texture_ids);
         let mut model = |mesh| {
             models.push(Model { mesh });
             (models.len() - 1) as ModelId
@@ -173,7 +220,11 @@ impl EntityModels {
             }))
         };
         out.java = java::library::Library::load(root, &mut model, &mut texture);
-        let steve = out.kinds.get("minecraft:player").and_then(|d| out.texture_ids.get(d.textures.get("default")?)).copied();
+        let steve = out
+            .kinds
+            .get("minecraft:player")
+            .and_then(|d| out.texture_ids.get(d.textures.get("default")?))
+            .copied();
         let player = |geometry: &str| -> Option<Arc<[Layer]>> {
             let model = *out.by_geometry.get(geometry)?;
             Some([Layer::plain(model, steve.unwrap_or(NO_TEXTURE))].into())
@@ -181,14 +232,26 @@ impl EntityModels {
         out.armor = armor
             .iter()
             .filter_map(|p| {
-                let layer = Layer::plain(*out.by_geometry.get(&p.geometry)?, *out.texture_ids.get(&p.texture)?);
+                let layer = Layer::plain(
+                    *out.by_geometry.get(&p.geometry)?,
+                    *out.texture_ids.get(&p.texture)?,
+                );
                 Some((p.item.clone(), Arc::from([layer])))
             })
             .collect();
         let players = PLAYER_GEOMETRIES.map(player);
-        out.players = players.iter().all(Option::is_some).then(|| players.map(Option::unwrap));
+        out.players = players
+            .iter()
+            .all(Option::is_some)
+            .then(|| players.map(Option::unwrap));
         let animations = out.animations.animations.len();
-        tracing::info!(kinds = out.kinds.len(), models = out.models.len(), controllers = out.controllers.len(), animations, "entity models");
+        tracing::info!(
+            kinds = out.kinds.len(),
+            models = out.models.len(),
+            controllers = out.controllers.len(),
+            animations,
+            "entity models"
+        );
         out
     }
 
@@ -200,39 +263,74 @@ impl EntityModels {
     /// model its equipment layer, posed by [`EntityModels::pose`] on its own model
     /// ([`EntityModels::is_java`]); otherwise the pack's attachable, posed as its wearer. `dye` is
     /// the stack's, and its trim (Java models only).
-    pub fn armor(&self, kind: &str, query: &dyn Fn(&str) -> Value, item: &str, dye: Option<[u8; 3]>, trim: Option<&java::trims::Trim>) -> Option<Arc<[Layer]>> {
+    pub fn armor(
+        &self,
+        kind: &str,
+        query: &dyn Fn(&str) -> Value,
+        item: &str,
+        dye: Option<[u8; 3]>,
+        trim: Option<&java::trims::Trim>,
+    ) -> Option<Arc<[Layer]>> {
         if self.java.drawn(kind) {
             return self.java.armor(kind, query, item, dye, trim);
         }
         let layers = self.armor.get(item)?;
         Some(match dye {
-            Some(dye) => layers.iter().map(|l| Layer { dye: Some(dye), ..l.clone() }).collect(),
+            Some(dye) => layers
+                .iter()
+                .map(|l| Layer {
+                    dye: Some(dye),
+                    ..l.clone()
+                })
+                .collect(),
             None => layers.clone(),
         })
     }
 
     /// The body transform (model space to the entity's place, without its position) of a `kind`
     /// drawn by a Java model; `None` for Bedrock geometry. See [`java::library::Library::body`].
-    pub fn body(&self, kind: &str, query: &dyn Fn(&str) -> Value, yaw: f32, scale: f32, death_ticks: f32) -> Option<glam::Mat4> {
-        self.java.drawn(kind).then(|| self.java.body(kind, query, yaw, scale, death_ticks)).flatten()
+    pub fn body(
+        &self,
+        kind: &str,
+        query: &dyn Fn(&str) -> Value,
+        yaw: f32,
+        scale: f32,
+        death_ticks: f32,
+    ) -> Option<glam::Mat4> {
+        self.java
+            .drawn(kind)
+            .then(|| self.java.body(kind, query, yaw, scale, death_ticks))
+            .flatten()
     }
 
     /// The layers a Java-drawn `kind`'s gear adds over its body; none for Bedrock geometry. See
     /// [`java::library::Library::gear`].
-    pub fn gear(&self, kind: &str, query: &dyn Fn(&str) -> Value, body: Option<java::gear::Body>) -> Vec<Layer> {
+    pub fn gear(
+        &self,
+        kind: &str,
+        query: &dyn Fn(&str) -> Value,
+        body: Option<java::gear::Body>,
+    ) -> Vec<Layer> {
         self.java.gear(kind, query, body)
     }
 
     /// Whether `model` is a Java model, posed by its own `setupAnim`.
     pub fn is_java(&self, model: ModelId) -> bool {
-        self.models.get(model as usize).is_some_and(|m| m.mesh.java.is_some())
+        self.models
+            .get(model as usize)
+            .is_some_and(|m| m.mesh.java.is_some())
     }
 
     /// Splits an appearance into the body's layers and the Java second layers that run their own
     /// `setupAnim` (a stray's clothes start from other rest poses), each drawn as its own instance.
     pub fn split_posed_apart(&self, layers: &[Layer]) -> (Arc<[Layer]>, Vec<Layer>) {
-        let Some(body) = layers.first().map(|l| l.model) else { return (layers.into(), Vec::new()) };
-        let (apart, together): (Vec<Layer>, Vec<Layer>) = layers.iter().cloned().partition(|l| self.java.posed_apart(body, l.model));
+        let Some(body) = layers.first().map(|l| l.model) else {
+            return (layers.into(), Vec::new());
+        };
+        let (apart, together): (Vec<Layer>, Vec<Layer>) = layers
+            .iter()
+            .cloned()
+            .partition(|l| self.java.posed_apart(body, l.model));
         (together.into(), apart)
     }
 
@@ -252,7 +350,11 @@ impl EntityModels {
     /// What to draw for an entity of `kind` and the scale its definition asks for. `query`
     /// answers Molang queries about the entity by name (`is_baby`, `variant`); see
     /// [`molang::Scope::query`].
-    pub fn appearance(&self, kind: &str, query: &dyn Fn(&str) -> Value) -> Option<(Arc<[Layer]>, f32)> {
+    pub fn appearance(
+        &self,
+        kind: &str,
+        query: &dyn Fn(&str) -> Value,
+    ) -> Option<(Arc<[Layer]>, f32)> {
         if let Some(java) = self.java.appearance(kind, query) {
             return Some(java);
         }
@@ -267,7 +369,9 @@ impl EntityModels {
             if condition.as_ref().is_some_and(|c| !scope.truthy(c)) {
                 continue;
             }
-            let Some(controller) = self.controllers.get(id) else { continue };
+            let Some(controller) = self.controllers.get(id) else {
+                continue;
+            };
             layers.extend(self.layer(definition, controller, &mut scope));
         }
         if layers.is_empty() {
@@ -277,23 +381,47 @@ impl EntityModels {
         (!layers.is_empty()).then(|| (layers.into(), scale))
     }
 
-    fn layer(&self, definition: &Definition, controller: &Controller, scope: &mut Scope) -> Option<Layer> {
+    fn layer(
+        &self,
+        definition: &Definition,
+        controller: &Controller,
+        scope: &mut Scope,
+    ) -> Option<Layer> {
         // `texture.default` to what the definition's `default` texture names.
-        let named = |resource: Option<&str>, table: &HashMap<String, String>| table.get(resource?.split_once('.')?.1).cloned();
-        let model = *self.by_geometry.get(&named(scope.resource(&controller.geometry), &definition.geometry)?)?;
-        let material = controller.material.as_ref().and_then(|m| named(scope.resource(m), &definition.materials)).unwrap_or_default();
+        let named = |resource: Option<&str>, table: &HashMap<String, String>| {
+            table.get(resource?.split_once('.')?.1).cloned()
+        };
+        let model = *self.by_geometry.get(&named(
+            scope.resource(&controller.geometry),
+            &definition.geometry,
+        )?)?;
+        let material = controller
+            .material
+            .as_ref()
+            .and_then(|m| named(scope.resource(m), &definition.materials))
+            .unwrap_or_default();
         let blend = Blend::of(&material)?;
         let mut textures = [NO_TEXTURE; 3];
         for (slot, texture) in textures.iter_mut().zip(&controller.textures) {
             let path = named(scope.resource(texture), &definition.textures);
-            *slot = path.and_then(|p| self.texture_ids.get(&p).copied()).unwrap_or(NO_TEXTURE);
+            *slot = path
+                .and_then(|p| self.texture_ids.get(&p).copied())
+                .unwrap_or(NO_TEXTURE);
         }
-        let rules: Vec<(&str, bool)> = controller.part_visibility.iter().map(|(bone, v)| (bone.as_str(), scope.truthy(v))).collect();
+        let rules: Vec<(&str, bool)> = controller
+            .part_visibility
+            .iter()
+            .map(|(bone, v)| (bone.as_str(), scope.truthy(v)))
+            .collect();
         let bones = &self.models[model as usize].mesh.bones;
         let mut hidden = [0u32; 4];
         let mut shown = bones.len();
         for (index, bone) in bones.iter().enumerate() {
-            let visible = rules.iter().rev().find(|(pattern, _)| controller::matches(pattern, bone)).is_none_or(|&(_, v)| v);
+            let visible = rules
+                .iter()
+                .rev()
+                .find(|(pattern, _)| controller::matches(pattern, bone))
+                .is_none_or(|&(_, v)| v);
             if !visible {
                 shown -= 1;
                 // The last index is shared by every bone past it: see `bake::MAX_BONES`.
@@ -303,12 +431,25 @@ impl EntityModels {
             }
         }
         let tint = (material == "sheep").then(|| dye((scope.query)("color").num()));
-        (textures[0] != NO_TEXTURE && shown > 0).then_some(Layer { model, textures, tint, dye: None, hidden, blend, fade: layer::Fade::Full })
+        (textures[0] != NO_TEXTURE && shown > 0).then_some(Layer {
+            model,
+            textures,
+            tint,
+            dye: None,
+            hidden,
+            blend,
+            fade: layer::Fade::Full,
+        })
     }
 
     /// The default geometry in the default texture, for kinds whose controllers yield nothing.
     fn plain(&self, definition: &Definition) -> Option<Layer> {
-        let pick = |table: &HashMap<String, String>| table.get("default").or_else(|| table.values().min()).cloned();
+        let pick = |table: &HashMap<String, String>| {
+            table
+                .get("default")
+                .or_else(|| table.values().min())
+                .cloned()
+        };
         let model = *self.by_geometry.get(&pick(&definition.geometry)?)?;
         let texture = *self.texture_ids.get(&pick(&definition.textures)?)?;
         Some(Layer::plain(model, texture))
@@ -316,7 +457,10 @@ impl EntityModels {
 
     /// The one layer of a block model ([`crate::blocks::model`]), if its geometry and texture loaded.
     pub fn block_layers(&self, geometry: &str, texture: &str) -> Option<Arc<[Layer]>> {
-        let (model, texture) = (*self.by_geometry.get(geometry)?, *self.texture_ids.get(texture)?);
+        let (model, texture) = (
+            *self.by_geometry.get(geometry)?,
+            *self.texture_ids.get(texture)?,
+        );
         Some([Layer::plain(model, texture)].into())
     }
 

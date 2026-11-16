@@ -16,7 +16,13 @@ fn liquid_gravity(swimming: bool, water: bool) -> f32 {
 }
 
 impl<W: WorldView + ?Sized> Sim<'_, W> {
-    pub(crate) fn simulate_liquid_travel(&self, st: &mut PlayerState, kind: LiquidKind, touching: bool, can_sink: bool) -> bool {
+    pub(crate) fn simulate_liquid_travel(
+        &self,
+        st: &mut PlayerState,
+        kind: LiquidKind,
+        touching: bool,
+        can_sink: bool,
+    ) -> bool {
         let initial_y = st.pos[1];
         let water = kind == LiquidKind::Water;
         let stopped_swimming = st.swam_before_input && !st.swimming;
@@ -41,7 +47,11 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
             st.set_vel(v);
         }
 
-        let mut speed = if st.lava_movement_speed == 0.0 { DEFAULT_LAVA_MOVEMENT_SPEED } else { st.lava_movement_speed };
+        let mut speed = if st.lava_movement_speed == 0.0 {
+            DEFAULT_LAVA_MOVEMENT_SPEED
+        } else {
+            st.lava_movement_speed
+        };
         let mut swim_multiplier = DEFAULT_SWIM_SPEED_MULTIPLIER;
         if water {
             speed = if st.underwater_movement_speed == 0.0 {
@@ -61,7 +71,11 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
                     depth_strider *= 0.5;
                 }
                 // On the tick a swim stops the server's sprint, which we end with it, is still on.
-                let boost = if stopped_swimming && !st.sprinting { SPRINT_SPEED_MULTIPLIER } else { 1.0 };
+                let boost = if stopped_swimming && !st.sprinting {
+                    SPRINT_SPEED_MULTIPLIER
+                } else {
+                    1.0
+                };
                 speed += (st.movement_speed * boost - speed) * (depth_strider / 3.0);
             }
         }
@@ -91,8 +105,16 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
             old_vel = [0.0; 3];
         }
         // Slime under liquid bounces too (BDS; bedsim lands on air).
-        let under = st.supporting_block.map_or(BlockPhysics::AIR, |sp| self.w.block(sp));
-        set_post_collision_motion(st, old_vel, old_on_ground, &under, liquid_gravity(st.swimming, water));
+        let under = st
+            .supporting_block
+            .map_or(BlockPhysics::AIR, |sp| self.w.block(sp));
+        set_post_collision_motion(
+            st,
+            old_vel,
+            old_on_ground,
+            &under,
+            liquid_gravity(st.swimming, water),
+        );
         if !stuck {
             st.mov = st.vel;
             // The edge stop keeps the velocity as on land, see README.
@@ -107,10 +129,15 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
         if water {
             // BDS's water drag reads the sprint flag alone: a swim whose sprint was cancelled drags heavily. On
             // the tick a swim stops, the flag we clear with it is still set there.
-            let mut drag = if st.sprinting || stopped_swimming { 0.9 } else { WATER_DRAG };
+            let mut drag = if st.sprinting || stopped_swimming {
+                0.9
+            } else {
+                WATER_DRAG
+            };
             // The drag halves Depth Strider by the ground state after the move (BDS: a landing tick already
             // drags at the full level); the speed above by the one before it.
-            let strider = (st.equipment.depth_strider as f32).clamp(0.0, 3.0) * if st.on_ground { 1.0 } else { 0.5 };
+            let strider = (st.equipment.depth_strider as f32).clamp(0.0, 3.0)
+                * if st.on_ground { 1.0 } else { 0.5 };
             if strider > 0.0 && swim_multiplier <= 1.0 {
                 drag += (DEFAULT_GROUND_DRAG - drag) * (strider / 3.0);
             }
@@ -128,7 +155,9 @@ impl<W: WorldView + ?Sized> Sim<'_, W> {
         }
 
         if st.collide_x || st.collide_z {
-            let raised_box = st.bounding_box().translate([v[0], v[1] + 0.6 + initial_y - st.pos[1], v[2]]);
+            let raised_box =
+                st.bounding_box()
+                    .translate([v[0], v[1] + 0.6 + initial_y - st.pos[1], v[2]]);
             if !self.loaded(&raised_box) {
                 return false;
             }

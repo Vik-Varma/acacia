@@ -1,12 +1,12 @@
 use std::time::Duration;
 
-use acacia_auth::{session_nonce, Account, AuthClient, FriendWorld, SessionRef};
+use acacia_auth::{Account, AuthClient, FriendWorld, SessionRef, session_nonce};
 use acacia_session::proto::PROTOCOL_VERSION;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 
-use super::presence;
 use super::FriendJoin;
+use super::presence;
 use crate::realm::signaling_host;
 use crate::{Client, ClientBuilder, ConnectError, SignalingTarget, Socks5Proxy};
 
@@ -36,7 +36,9 @@ pub async fn friend_builder(
 ) -> Result<ClientBuilder, FriendJoinError> {
     let (key, credentials) = account.login_credentials().await?;
     let join = join_friend_world(auth, account, world, &credentials.xuid, proxy).await?;
-    Ok(Client::builder(join.target.peer.clone()).online(credentials, key).friend(join))
+    Ok(Client::builder(join.target.peer.clone())
+        .online(credentials, key)
+        .friend(join))
 }
 
 /// Joins `world`'s Xbox session as `xuid` (the account's), waits for the host's nonce and picks the
@@ -49,7 +51,9 @@ pub async fn join_friend_world(
     proxy: Option<&Socks5Proxy>,
 ) -> Result<FriendJoin, FriendJoinError> {
     if world.protocol != 0 && world.protocol != PROTOCOL_VERSION {
-        return Err(FriendJoinError::ProtocolMismatch { host: world.protocol });
+        return Err(FriendJoinError::ProtocolMismatch {
+            host: world.protocol,
+        });
     }
     let token = account.service_token().await?.authorization_header;
     let host = signaling_host(auth).await?;
@@ -63,11 +67,20 @@ pub async fn join_friend_world(
         Some(nonce) => Some(nonce),
         None => await_nonce(account, &world.session, xuid, &mut presence.changes).await,
     };
-    Ok(FriendJoin { target, nonce, session: presence.close })
+    Ok(FriendJoin {
+        target,
+        nonce,
+        session: presence.close,
+    })
 }
 
 /// Re-reads the session on each RTA tap until the host publishes our nonce; None on timeout.
-async fn await_nonce(account: &Account, session: &SessionRef, xuid: &str, changes: &mut mpsc::UnboundedReceiver<()>) -> Option<String> {
+async fn await_nonce(
+    account: &Account,
+    session: &SessionRef,
+    xuid: &str,
+    changes: &mut mpsc::UnboundedReceiver<()>,
+) -> Option<String> {
     let deadline = Instant::now() + NONCE_TIMEOUT;
     loop {
         let tapped = tokio::time::timeout_at(deadline, changes.recv()).await;

@@ -15,33 +15,74 @@ pub const SIGN: &str = "geometry.acacia.sign";
 pub const WALL_SIGN: &str = "geometry.acacia.wall_sign";
 /// Hanging signs: under a block by two chains, by chains meeting in the middle (`attached_bit`),
 /// and under a wall's bracket.
-pub const HANGING_SIGNS: [&str; 3] = ["geometry.acacia.hanging_sign", "geometry.acacia.hanging_sign.attached", "geometry.acacia.hanging_sign.wall"];
+pub const HANGING_SIGNS: [&str; 3] = [
+    "geometry.acacia.hanging_sign",
+    "geometry.acacia.hanging_sign.attached",
+    "geometry.acacia.hanging_sign.wall",
+];
 pub const BED: &str = "geometry.acacia.bed";
 /// Floor and wall geometry per head shape.
 pub const MOB_HEAD: [&str; 2] = ["geometry.acacia.mob_head", "geometry.acacia.mob_head.wall"];
-pub const PLAYER_HEAD: [&str; 2] = ["geometry.acacia.player_head", "geometry.acacia.player_head.wall"];
-pub const DRAGON_HEAD: [&str; 2] = ["geometry.acacia.dragon_head", "geometry.acacia.dragon_head.wall"];
+pub const PLAYER_HEAD: [&str; 2] = [
+    "geometry.acacia.player_head",
+    "geometry.acacia.player_head.wall",
+];
+pub const DRAGON_HEAD: [&str; 2] = [
+    "geometry.acacia.dragon_head",
+    "geometry.acacia.dragon_head.wall",
+];
 /// Java's `PiglinHeadModel`: the pack has no geometry for it.
-pub const PIGLIN_HEAD: [&str; 2] = ["geometry.acacia.piglin_head", "geometry.acacia.piglin_head.wall"];
+pub const PIGLIN_HEAD: [&str; 2] = [
+    "geometry.acacia.piglin_head",
+    "geometry.acacia.piglin_head.wall",
+];
 /// Standing and on a wall.
 pub const BANNERS: [&str; 2] = ["geometry.acacia.banner", "geometry.acacia.banner.wall"];
 /// An item frame's back plate and the wooden border drawn with it: on a wall, on a floor and
 /// under a ceiling ([`FRAME_TILTS`]).
 pub const FRAME: [[&str; 2]; 3] = [
-    ["geometry.acacia.item_frame", "geometry.acacia.item_frame.border"],
-    ["geometry.acacia.item_frame.floor", "geometry.acacia.item_frame.border.floor"],
-    ["geometry.acacia.item_frame.ceiling", "geometry.acacia.item_frame.border.ceiling"],
+    [
+        "geometry.acacia.item_frame",
+        "geometry.acacia.item_frame.border",
+    ],
+    [
+        "geometry.acacia.item_frame.floor",
+        "geometry.acacia.item_frame.border.floor",
+    ],
+    [
+        "geometry.acacia.item_frame.ceiling",
+        "geometry.acacia.item_frame.border.ceiling",
+    ],
 ];
 /// Degrees each of [`FRAME`] is tipped back from the wall's about the block's middle.
 pub const FRAME_TILTS: [f32; 3] = [0.0, 90.0, -90.0];
 pub const FRAME_BORDER_TEXTURE: &str = "textures/blocks/planks_birch";
-pub const FRAME_TEXTURES: [&str; 2] = ["textures/blocks/itemframe_background", "textures/blocks/glow_item_frame"];
+pub const FRAME_TEXTURES: [&str; 2] = [
+    "textures/blocks/itemframe_background",
+    "textures/blocks/glow_item_frame",
+];
 /// What a banner draws until its texture is composed ([`crate::banner`]).
 pub const BANNER_TEXTURE: &str = "textures/entity/banner/banner_base";
 
 /// Bed textures by the `color` of the block entity, white first.
-const BED_COLORS: [&str; 16] =
-    ["white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray", "silver", "cyan", "purple", "blue", "brown", "green", "red", "black"];
+const BED_COLORS: [&str; 16] = [
+    "white",
+    "orange",
+    "magenta",
+    "light_blue",
+    "yellow",
+    "lime",
+    "pink",
+    "gray",
+    "silver",
+    "cyan",
+    "purple",
+    "blue",
+    "brown",
+    "green",
+    "red",
+    "black",
+];
 const RED: u8 = 14;
 /// A floor head without a turn faces north, as in Java; assumed for Bedrock's `Rotation`.
 const FLOOR_HEAD_YAW: f32 = 180.0;
@@ -99,16 +140,37 @@ impl BlockModel {
     /// `None` for the half of a bed or double chest that the other half draws.
     pub fn place(&self, pos: IVec3, data: Option<&BlockData>) -> Option<Placement> {
         let centre = pos.as_dvec3() + DVec3::new(0.5, 0.0, 0.5);
-        let mut placed = Placement { geometry: self.geometry, texture: self.texture.clone(), position: centre, yaw: self.yaw, banner: None, with: None };
+        let mut placed = Placement {
+            geometry: self.geometry,
+            texture: self.texture.clone(),
+            position: centre,
+            yaw: self.yaw,
+            banner: None,
+            with: None,
+        };
         match self.kind {
             Kind::BedFoot => return None,
-            Kind::Frame => placed.with = FRAME.iter().find(|pair| pair[0] == self.geometry).map(|pair| (pair[1], FRAME_BORDER_TEXTURE)),
-            Kind::Banner => placed.banner = Some(data.and_then(|d| d.banner.clone()).unwrap_or_default()),
+            Kind::Frame => {
+                placed.with = FRAME
+                    .iter()
+                    .find(|pair| pair[0] == self.geometry)
+                    .map(|pair| (pair[1], FRAME_BORDER_TEXTURE))
+            }
+            Kind::Banner => {
+                placed.banner = Some(data.and_then(|d| d.banner.clone()).unwrap_or_default())
+            }
             Kind::BedHead => {
                 let color = data.and_then(|d| d.color).unwrap_or(RED);
-                placed.texture = format!("textures/entity/bed/{}", BED_COLORS[usize::from(color) % BED_COLORS.len()]);
+                placed.texture = format!(
+                    "textures/entity/bed/{}",
+                    BED_COLORS[usize::from(color) % BED_COLORS.len()]
+                );
             }
-            Kind::FloorHead => placed.yaw = data.and_then(|d| d.rotation).map_or(self.yaw, |turn| turn + FLOOR_HEAD_YAW),
+            Kind::FloorHead => {
+                placed.yaw = data
+                    .and_then(|d| d.rotation)
+                    .map_or(self.yaw, |turn| turn + FLOOR_HEAD_YAW)
+            }
             Kind::Chest => {
                 if let Some(([x, z], lead)) = data.and_then(|d| d.pair) {
                     if !lead {
@@ -116,7 +178,9 @@ impl BlockModel {
                     }
                     placed.geometry = DOUBLE_CHEST;
                     placed.texture = double_texture(&self.texture);
-                    placed.position = (centre + DVec3::new(f64::from(x) + 0.5, centre.y, f64::from(z) + 0.5)) / 2.0;
+                    placed.position = (centre
+                        + DVec3::new(f64::from(x) + 0.5, centre.y, f64::from(z) + 0.5))
+                        / 2.0;
                 }
             }
             Kind::Sign | Kind::WallHead => {}
@@ -135,10 +199,26 @@ fn double_texture(single: &str) -> String {
 
 pub fn classify(state: &BlockState) -> Option<BlockModel> {
     let name = short_name(state.name);
-    let int = |key: &str| state.property(key).and_then(|v| v.parse::<u8>().ok()).unwrap_or(0);
-    let model = |kind, geometry, texture: String, yaw| Some(BlockModel { kind, geometry, texture, yaw });
+    let int = |key: &str| {
+        state
+            .property(key)
+            .and_then(|v| v.parse::<u8>().ok())
+            .unwrap_or(0)
+    };
+    let model = |kind, geometry, texture: String, yaw| {
+        Some(BlockModel {
+            kind,
+            geometry,
+            texture,
+            yaw,
+        })
+    };
     if name == "bed" {
-        let kind = if int("head_piece_bit") == 1 { Kind::BedHead } else { Kind::BedFoot };
+        let kind = if int("head_piece_bit") == 1 {
+            Kind::BedHead
+        } else {
+            Kind::BedFoot
+        };
         return model(kind, BED, String::new(), f32::from(int("direction")) * 90.0);
     }
     if let Some(texture) = chest_texture(name) {
@@ -148,28 +228,74 @@ pub fn classify(state: &BlockState) -> Option<BlockModel> {
             Some("east") => 270.0,
             _ => 0.0,
         };
-        return model(Kind::Chest, CHEST, format!("textures/entity/chest/{texture}"), yaw);
+        return model(
+            Kind::Chest,
+            CHEST,
+            format!("textures/entity/chest/{texture}"),
+            yaw,
+        );
     }
     if let Some(wood) = name.strip_suffix("standing_sign") {
-        return model(Kind::Sign, SIGN, sign_texture(wood), f32::from(int("ground_sign_direction")) * 22.5);
+        return model(
+            Kind::Sign,
+            SIGN,
+            sign_texture(wood),
+            f32::from(int("ground_sign_direction")) * 22.5,
+        );
     }
     if let Some(wood) = name.strip_suffix("wall_sign") {
-        return model(Kind::Sign, WALL_SIGN, sign_texture(wood), facing_yaw(int("facing_direction")));
+        return model(
+            Kind::Sign,
+            WALL_SIGN,
+            sign_texture(wood),
+            facing_yaw(int("facing_direction")),
+        );
     }
     if name.ends_with("hanging_sign") {
         let texture = format!("textures/entity/{name}");
         return match (int("hanging"), int("attached_bit")) {
-            (1, 1) => model(Kind::Sign, HANGING_SIGNS[1], texture, f32::from(int("ground_sign_direction")) * 22.5),
-            (hanging, _) => model(Kind::Sign, HANGING_SIGNS[usize::from(hanging == 0) * 2], texture, facing_yaw(int("facing_direction"))),
+            (1, 1) => model(
+                Kind::Sign,
+                HANGING_SIGNS[1],
+                texture,
+                f32::from(int("ground_sign_direction")) * 22.5,
+            ),
+            (hanging, _) => model(
+                Kind::Sign,
+                HANGING_SIGNS[usize::from(hanging == 0) * 2],
+                texture,
+                facing_yaw(int("facing_direction")),
+            ),
         };
     }
     match name {
-        "standing_banner" => return model(Kind::Banner, BANNERS[0], BANNER_TEXTURE.into(), f32::from(int("ground_sign_direction")) * 22.5),
-        "wall_banner" => return model(Kind::Banner, BANNERS[1], BANNER_TEXTURE.into(), facing_yaw(int("facing_direction"))),
+        "standing_banner" => {
+            return model(
+                Kind::Banner,
+                BANNERS[0],
+                BANNER_TEXTURE.into(),
+                f32::from(int("ground_sign_direction")) * 22.5,
+            );
+        }
+        "wall_banner" => {
+            return model(
+                Kind::Banner,
+                BANNERS[1],
+                BANNER_TEXTURE.into(),
+                facing_yaw(int("facing_direction")),
+            );
+        }
         "frame" | "glow_frame" => {
             // `facing_direction` 0 looks down from a ceiling, 1 up from a floor.
-            let (facing, texture) = (int("facing_direction"), FRAME_TEXTURES[usize::from(name == "glow_frame")]);
-            let (shape, yaw) = if facing >= 2 { (FRAME[0], facing_yaw(facing)) } else { (FRAME[2 - usize::from(facing)], 0.0) };
+            let (facing, texture) = (
+                int("facing_direction"),
+                FRAME_TEXTURES[usize::from(name == "glow_frame")],
+            );
+            let (shape, yaw) = if facing >= 2 {
+                (FRAME[0], facing_yaw(facing))
+            } else {
+                (FRAME[2 - usize::from(facing)], 0.0)
+            };
             return model(Kind::Frame, shape[0], texture.into(), yaw);
         }
         _ => {}
@@ -185,7 +311,11 @@ pub fn classify(state: &BlockState) -> Option<BlockModel> {
         _ => return None,
     };
     let facing = int("facing_direction");
-    let (kind, geometry, yaw) = if facing < 2 { (Kind::FloorHead, shape[0], FLOOR_HEAD_YAW) } else { (Kind::WallHead, shape[1], facing_yaw(facing)) };
+    let (kind, geometry, yaw) = if facing < 2 {
+        (Kind::FloorHead, shape[0], FLOOR_HEAD_YAW)
+    } else {
+        (Kind::WallHead, shape[1], facing_yaw(facing))
+    };
     model(kind, geometry, format!("textures/entity/{texture}"), yaw)
 }
 
@@ -207,7 +337,9 @@ fn chest_texture(name: &str) -> Option<String> {
         "trapped_chest" => Some("trapped".into()),
         "ender_chest" => Some("ender".into()),
         "copper_chest" => Some("copper_default".into()),
-        _ => name.strip_suffix("_copper_chest").map(|stage| format!("copper_{stage}")),
+        _ => name
+            .strip_suffix("_copper_chest")
+            .map(|stage| format!("copper_{stage}")),
     }
 }
 
@@ -230,25 +362,64 @@ mod tests {
     fn model(name: &str, props: &[&str]) -> Option<BlockModel> {
         let reg = acacia_world::BlockRegistry::vanilla();
         let mut states = (0..reg.len() as u32).filter_map(|id| reg.get(id));
-        let state = states.find(|s| short_name(s.name) == name && props.iter().all(|p| s.properties.contains(p)));
+        let state = states
+            .find(|s| short_name(s.name) == name && props.iter().all(|p| s.properties.contains(p)));
         classify(state.unwrap_or_else(|| panic!("no state {name} {props:?}")))
     }
 
     #[test]
     fn states_pick_geometry_texture_and_turn() {
         let chest = model("chest", &["cardinal_direction=west"]).unwrap();
-        assert_eq!((chest.geometry, chest.texture.as_str(), chest.yaw), (CHEST, "textures/entity/chest/normal", 90.0));
-        assert_eq!(model("waxed_exposed_copper_chest", &[]).unwrap().texture, "textures/entity/chest/copper_exposed");
+        assert_eq!(
+            (chest.geometry, chest.texture.as_str(), chest.yaw),
+            (CHEST, "textures/entity/chest/normal", 90.0)
+        );
+        assert_eq!(
+            model("waxed_exposed_copper_chest", &[]).unwrap().texture,
+            "textures/entity/chest/copper_exposed"
+        );
         let sign = model("darkoak_standing_sign", &["ground_sign_direction=4"]).unwrap();
-        assert_eq!((sign.geometry, sign.texture.as_str(), sign.yaw), (SIGN, "textures/entity/sign_darkoak", 90.0));
+        assert_eq!(
+            (sign.geometry, sign.texture.as_str(), sign.yaw),
+            (SIGN, "textures/entity/sign_darkoak", 90.0)
+        );
         let wall = model("cherry_wall_sign", &["facing_direction=2"]).unwrap();
-        assert_eq!((wall.geometry, wall.texture.as_str(), wall.yaw), (WALL_SIGN, "textures/entity/cherry_sign", 180.0));
-        assert_eq!(model("wall_sign", &[]).unwrap().texture, "textures/entity/sign");
-        assert_eq!(model("zombie_head", &["facing_direction=5"]).unwrap().geometry, MOB_HEAD[1]);
-        assert_eq!(model("player_head", &["facing_direction=1"]).unwrap().kind, Kind::FloorHead);
-        let hanging = model("oak_hanging_sign", &["hanging=1", "attached_bit=1", "ground_sign_direction=2"]).unwrap();
-        assert_eq!((hanging.geometry, hanging.texture.as_str(), hanging.yaw), (HANGING_SIGNS[1], "textures/entity/oak_hanging_sign", 45.0));
-        assert_eq!(model("dark_oak_hanging_sign", &["hanging=1", "attached_bit=0", "facing_direction=4"]).unwrap().geometry, HANGING_SIGNS[0]);
+        assert_eq!(
+            (wall.geometry, wall.texture.as_str(), wall.yaw),
+            (WALL_SIGN, "textures/entity/cherry_sign", 180.0)
+        );
+        assert_eq!(
+            model("wall_sign", &[]).unwrap().texture,
+            "textures/entity/sign"
+        );
+        assert_eq!(
+            model("zombie_head", &["facing_direction=5"])
+                .unwrap()
+                .geometry,
+            MOB_HEAD[1]
+        );
+        assert_eq!(
+            model("player_head", &["facing_direction=1"]).unwrap().kind,
+            Kind::FloorHead
+        );
+        let hanging = model(
+            "oak_hanging_sign",
+            &["hanging=1", "attached_bit=1", "ground_sign_direction=2"],
+        )
+        .unwrap();
+        assert_eq!(
+            (hanging.geometry, hanging.texture.as_str(), hanging.yaw),
+            (HANGING_SIGNS[1], "textures/entity/oak_hanging_sign", 45.0)
+        );
+        assert_eq!(
+            model(
+                "dark_oak_hanging_sign",
+                &["hanging=1", "attached_bit=0", "facing_direction=4"]
+            )
+            .unwrap()
+            .geometry,
+            HANGING_SIGNS[0]
+        );
         let bracket = model("cherry_hanging_sign", &["hanging=0", "facing_direction=5"]).unwrap();
         assert_eq!((bracket.geometry, bracket.yaw), (HANGING_SIGNS[2], 270.0));
     }
@@ -257,19 +428,53 @@ mod tests {
     fn block_entity_data_colours_beds_and_joins_chests() {
         let head = model("bed", &["head_piece_bit=1", "direction=2"]).unwrap();
         let at = IVec3::new(4, 64, -3);
-        assert_eq!(head.place(at, None).unwrap().texture, "textures/entity/bed/red");
-        let blue = BlockData { color: Some(11), ..Default::default() };
+        assert_eq!(
+            head.place(at, None).unwrap().texture,
+            "textures/entity/bed/red"
+        );
+        let blue = BlockData {
+            color: Some(11),
+            ..Default::default()
+        };
         let placed = head.place(at, Some(&blue)).unwrap();
-        assert_eq!((placed.texture.as_str(), placed.yaw, placed.position), ("textures/entity/bed/blue", 180.0, DVec3::new(4.5, 64.0, -2.5)));
-        assert_eq!(model("bed", &["head_piece_bit=0"]).unwrap().place(at, None), None);
+        assert_eq!(
+            (placed.texture.as_str(), placed.yaw, placed.position),
+            (
+                "textures/entity/bed/blue",
+                180.0,
+                DVec3::new(4.5, 64.0, -2.5)
+            )
+        );
+        assert_eq!(
+            model("bed", &["head_piece_bit=0"]).unwrap().place(at, None),
+            None
+        );
 
         let chest = model("trapped_chest", &[]).unwrap();
-        let lead = BlockData { pair: Some(([5, -3], true)), ..Default::default() };
+        let lead = BlockData {
+            pair: Some(([5, -3], true)),
+            ..Default::default()
+        };
         let double = chest.place(at, Some(&lead)).unwrap();
-        assert_eq!((double.geometry, double.texture.as_str()), (DOUBLE_CHEST, "textures/entity/chest/trapped_double"));
+        assert_eq!(
+            (double.geometry, double.texture.as_str()),
+            (DOUBLE_CHEST, "textures/entity/chest/trapped_double")
+        );
         assert_eq!(double.position, DVec3::new(5.0, 64.0, -2.5));
-        assert_eq!(chest.place(at, Some(&BlockData { pair: Some(([5, -3], false)), ..Default::default() })), None);
-        assert_eq!(double_texture("textures/entity/chest/normal"), "textures/entity/chest/double_normal");
+        assert_eq!(
+            chest.place(
+                at,
+                Some(&BlockData {
+                    pair: Some(([5, -3], false)),
+                    ..Default::default()
+                })
+            ),
+            None
+        );
+        assert_eq!(
+            double_texture("textures/entity/chest/normal"),
+            "textures/entity/chest/double_normal"
+        );
     }
 
     #[test]
@@ -277,10 +482,26 @@ mod tests {
         let standing = model("standing_banner", &["ground_sign_direction=6"]).unwrap();
         assert_eq!((standing.geometry, standing.yaw), (BANNERS[0], 135.0));
         let wall = model("wall_banner", &["facing_direction=4"]).unwrap();
-        assert_eq!((wall.geometry, wall.yaw, wall.texture.as_str()), (BANNERS[1], 90.0, BANNER_TEXTURE));
-        let red = Arc::new(Banner { base: 14, layers: vec![("border", 15)], ominous: false });
-        let data = BlockData { banner: Some(red.clone()), ..Default::default() };
-        assert_eq!(wall.place(IVec3::ZERO, Some(&data)).unwrap().banner, Some(red));
-        assert_eq!(wall.place(IVec3::ZERO, None).unwrap().banner, Some(Arc::default()));
+        assert_eq!(
+            (wall.geometry, wall.yaw, wall.texture.as_str()),
+            (BANNERS[1], 90.0, BANNER_TEXTURE)
+        );
+        let red = Arc::new(Banner {
+            base: 14,
+            layers: vec![("border", 15)],
+            ominous: false,
+        });
+        let data = BlockData {
+            banner: Some(red.clone()),
+            ..Default::default()
+        };
+        assert_eq!(
+            wall.place(IVec3::ZERO, Some(&data)).unwrap().banner,
+            Some(red)
+        );
+        assert_eq!(
+            wall.place(IVec3::ZERO, None).unwrap().banner,
+            Some(Arc::default())
+        );
     }
 }

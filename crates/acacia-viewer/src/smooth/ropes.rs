@@ -22,11 +22,18 @@ pub struct Tether {
 /// The rope `e` hangs from: a fishing hook's line to its owner, any other entity's lead to its
 /// holder (a mob, a player or a fence knot).
 pub fn tether(bot: &Bot, e: &Entity) -> Option<Tether> {
-    let (key, rope) = if e.kind == FISHING_HOOK_KIND { (Key::OwnerEid, Rope::FishingLine) } else { (Key::LeadHolderEid, Rope::Lead) };
+    let (key, rope) = if e.kind == FISHING_HOOK_KIND {
+        (Key::OwnerEid, Rope::FishingLine)
+    } else {
+        (Key::LeadHolderEid, Rope::Lead)
+    };
     let unique = e.metadata.entity(key)?;
     let state = bot.state();
     let own = (state.player.unique_entity_id == unique).then_some(state.player.runtime_entity_id);
-    Some(Tether { holder: own.or_else(|| Some(state.entities.by_unique(unique)?.runtime_id))?, rope })
+    Some(Tether {
+        holder: own.or_else(|| Some(state.entities.by_unique(unique)?.runtime_id))?,
+        rope,
+    })
 }
 
 /// Where the holder's hand is from its feet: to its right and ahead, in blocks (right, up, ahead).
@@ -51,23 +58,51 @@ impl Smoother {
     pub fn scene(&self, camera: &Camera) -> Vec<EntityInstance> {
         let mut out = self.instances(camera.position);
         let t = self.progress();
-        let shown = |(e, to): &(Tracked, Motion)| self.seated(e, self.blend(e.runtime_id, *to, t), t).map_or_else(|| self.blend(e.runtime_id, *to, t), |(m, _)| m);
-        for (e, tether) in self.to.iter().filter_map(|pair| Some((pair, pair.0.tether?))) {
-            let Some(holder) = self.to.iter().find(|(h, _)| h.runtime_id == tether.holder) else { continue };
+        let shown = |(e, to): &(Tracked, Motion)| {
+            self.seated(e, self.blend(e.runtime_id, *to, t), t)
+                .map_or_else(|| self.blend(e.runtime_id, *to, t), |(m, _)| m)
+        };
+        for (e, tether) in self
+            .to
+            .iter()
+            .filter_map(|pair| Some((pair, pair.0.tether?)))
+        {
+            let Some(holder) = self.to.iter().find(|(h, _)| h.runtime_id == tether.holder) else {
+                continue;
+            };
             let (end, held) = (shown(e), shown(holder));
-            let tie = e.0.hitbox.filter(|_| tether.rope == Rope::Lead).map_or(0.0, |(_, height)| height * TIE_HEIGHT);
-            let first_person = holder.0.own_eyes.is_some_and(|eyes| eyes.distance(camera.position) <= OWN_HEAD_RADIUS);
+            let tie =
+                e.0.hitbox
+                    .filter(|_| tether.rope == Rope::Lead)
+                    .map_or(0.0, |(_, height)| height * TIE_HEIGHT);
+            let first_person = holder
+                .0
+                .own_eyes
+                .is_some_and(|eyes| eyes.distance(camera.position) <= OWN_HEAD_RADIUS);
             let hand = if first_person {
-                camera.position + (camera.right() * OWN_HAND.x + Vec3::Y * OWN_HAND.y + camera.forward() * OWN_HAND.z).as_dvec3()
+                camera.position
+                    + (camera.right() * OWN_HAND.x
+                        + Vec3::Y * OWN_HAND.y
+                        + camera.forward() * OWN_HAND.z)
+                        .as_dvec3()
             } else if holder.0.kind == KNOT {
                 held.position
             } else {
                 let (sin, cos) = held.yaw.to_radians().sin_cos();
                 // Yaw 0 faces +z, and the right hand is then towards -x.
-                let (ahead, right, r) = (Vec3::new(-sin, 0.0, cos), Vec3::new(-cos, 0.0, -sin), reach(tether.rope));
+                let (ahead, right, r) = (
+                    Vec3::new(-sin, 0.0, cos),
+                    Vec3::new(-cos, 0.0, -sin),
+                    reach(tether.rope),
+                );
                 held.position + (right * r.x + Vec3::Y * r.y + ahead * r.z).as_dvec3()
             };
-            out.extend(rope::instances(tether.rope, end.position + DVec3::Y * f64::from(tie), hand, camera.position));
+            out.extend(rope::instances(
+                tether.rope,
+                end.position + DVec3::Y * f64::from(tie),
+                hand,
+                camera.position,
+            ));
         }
         out
     }

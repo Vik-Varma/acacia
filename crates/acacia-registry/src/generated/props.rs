@@ -148,145 +148,650 @@ pub enum PropId {
 }
 
 pub(crate) static PROPS: [PropInfo; 139] = [
-    PropInfo { key: "snowy", values: &["true", "false"] },
-    PropInfo { key: "axis", values: &["x", "y", "z"] },
-    PropInfo { key: "stage", values: &["0", "1"] },
-    PropInfo { key: "age", values: &["0", "1", "2", "3", "4"] },
-    PropInfo { key: "hanging", values: &["true", "false"] },
-    PropInfo { key: "waterlogged", values: &["true", "false"] },
-    PropInfo { key: "level", values: &["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"] },
-    PropInfo { key: "dusted", values: &["0", "1", "2", "3"] },
-    PropInfo { key: "distance", values: &["1", "2", "3", "4", "5", "6", "7"] },
-    PropInfo { key: "persistent", values: &["true", "false"] },
-    PropInfo { key: "facing", values: &["north", "east", "south", "west", "up", "down"] },
-    PropInfo { key: "triggered", values: &["true", "false"] },
-    PropInfo { key: "instrument", values: &["harp", "basedrum", "snare", "hat", "bass", "flute", "bell", "guitar", "chime", "xylophone", "iron_xylophone", "cow_bell", "didgeridoo", "bit", "banjo", "pling", "trumpet", "trumpet_exposed", "trumpet_oxidized", "trumpet_weathered", "zombie", "skeleton", "creeper", "dragon", "wither_skeleton", "piglin", "custom_head"] },
-    PropInfo { key: "note", values: &["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24"] },
-    PropInfo { key: "powered", values: &["true", "false"] },
-    PropInfo { key: "facing", values: &["north", "south", "west", "east"] },
-    PropInfo { key: "occupied", values: &["true", "false"] },
-    PropInfo { key: "part", values: &["head", "foot"] },
-    PropInfo { key: "shape", values: &["north_south", "east_west", "ascending_east", "ascending_west", "ascending_north", "ascending_south"] },
-    PropInfo { key: "extended", values: &["true", "false"] },
-    PropInfo { key: "half", values: &["upper", "lower"] },
-    PropInfo { key: "short", values: &["true", "false"] },
-    PropInfo { key: "type", values: &["normal", "sticky"] },
-    PropInfo { key: "half", values: &["top", "bottom"] },
-    PropInfo { key: "shape", values: &["straight", "inner_left", "inner_right", "outer_left", "outer_right"] },
-    PropInfo { key: "type", values: &["top", "bottom", "double"] },
-    PropInfo { key: "unstable", values: &["true", "false"] },
-    PropInfo { key: "slot_0_occupied", values: &["true", "false"] },
-    PropInfo { key: "slot_1_occupied", values: &["true", "false"] },
-    PropInfo { key: "slot_2_occupied", values: &["true", "false"] },
-    PropInfo { key: "slot_3_occupied", values: &["true", "false"] },
-    PropInfo { key: "slot_4_occupied", values: &["true", "false"] },
-    PropInfo { key: "slot_5_occupied", values: &["true", "false"] },
-    PropInfo { key: "side_chain", values: &["unconnected", "right", "center", "left"] },
-    PropInfo { key: "age", values: &["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"] },
-    PropInfo { key: "east", values: &["true", "false"] },
-    PropInfo { key: "north", values: &["true", "false"] },
-    PropInfo { key: "south", values: &["true", "false"] },
-    PropInfo { key: "up", values: &["true", "false"] },
-    PropInfo { key: "west", values: &["true", "false"] },
-    PropInfo { key: "creaking_heart_state", values: &["uprooted", "dormant", "awake"] },
-    PropInfo { key: "natural", values: &["true", "false"] },
-    PropInfo { key: "type", values: &["single", "left", "right"] },
-    PropInfo { key: "east", values: &["up", "side", "none"] },
-    PropInfo { key: "north", values: &["up", "side", "none"] },
-    PropInfo { key: "power", values: &["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"] },
-    PropInfo { key: "south", values: &["up", "side", "none"] },
-    PropInfo { key: "west", values: &["up", "side", "none"] },
-    PropInfo { key: "age", values: &["0", "1", "2", "3", "4", "5", "6", "7"] },
-    PropInfo { key: "moisture", values: &["0", "1", "2", "3", "4", "5", "6", "7"] },
-    PropInfo { key: "lit", values: &["true", "false"] },
-    PropInfo { key: "rotation", values: &["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"] },
-    PropInfo { key: "hinge", values: &["left", "right"] },
-    PropInfo { key: "open", values: &["true", "false"] },
-    PropInfo { key: "shape", values: &["north_south", "east_west", "ascending_east", "ascending_west", "ascending_north", "ascending_south", "south_east", "south_west", "north_west", "north_east"] },
-    PropInfo { key: "attached", values: &["true", "false"] },
-    PropInfo { key: "face", values: &["floor", "wall", "ceiling"] },
-    PropInfo { key: "layers", values: &["1", "2", "3", "4", "5", "6", "7", "8"] },
-    PropInfo { key: "has_record", values: &["true", "false"] },
-    PropInfo { key: "axis", values: &["x", "z"] },
-    PropInfo { key: "bites", values: &["0", "1", "2", "3", "4", "5", "6"] },
-    PropInfo { key: "delay", values: &["1", "2", "3", "4"] },
-    PropInfo { key: "locked", values: &["true", "false"] },
-    PropInfo { key: "down", values: &["true", "false"] },
-    PropInfo { key: "in_wall", values: &["true", "false"] },
-    PropInfo { key: "east", values: &["none", "low", "tall"] },
-    PropInfo { key: "north", values: &["none", "low", "tall"] },
-    PropInfo { key: "south", values: &["none", "low", "tall"] },
-    PropInfo { key: "west", values: &["none", "low", "tall"] },
-    PropInfo { key: "age", values: &["0", "1", "2", "3"] },
-    PropInfo { key: "has_bottle_0", values: &["true", "false"] },
-    PropInfo { key: "has_bottle_1", values: &["true", "false"] },
-    PropInfo { key: "has_bottle_2", values: &["true", "false"] },
-    PropInfo { key: "level", values: &["1", "2", "3"] },
-    PropInfo { key: "eye", values: &["true", "false"] },
-    PropInfo { key: "age", values: &["0", "1", "2"] },
-    PropInfo { key: "age", values: &["0", "1"] },
-    PropInfo { key: "disarmed", values: &["true", "false"] },
-    PropInfo { key: "conditional", values: &["true", "false"] },
-    PropInfo { key: "mode", values: &["compare", "subtract"] },
-    PropInfo { key: "inverted", values: &["true", "false"] },
-    PropInfo { key: "enabled", values: &["true", "false"] },
-    PropInfo { key: "facing", values: &["down", "north", "south", "west", "east"] },
-    PropInfo { key: "age", values: &["0", "1", "2", "3", "4", "5"] },
-    PropInfo { key: "age", values: &["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25"] },
-    PropInfo { key: "eggs", values: &["1", "2", "3", "4"] },
-    PropInfo { key: "hatch", values: &["0", "1", "2"] },
-    PropInfo { key: "hydration", values: &["0", "1", "2", "3"] },
-    PropInfo { key: "pickles", values: &["1", "2", "3", "4"] },
-    PropInfo { key: "leaves", values: &["none", "small", "large"] },
-    PropInfo { key: "drag", values: &["true", "false"] },
-    PropInfo { key: "bottom", values: &["true", "false"] },
-    PropInfo { key: "distance", values: &["0", "1", "2", "3", "4", "5", "6", "7"] },
-    PropInfo { key: "has_book", values: &["true", "false"] },
-    PropInfo { key: "attachment", values: &["floor", "ceiling", "single_wall", "double_wall"] },
-    PropInfo { key: "signal_fire", values: &["true", "false"] },
-    PropInfo { key: "mode", values: &["save", "load", "corner", "data"] },
-    PropInfo { key: "orientation", values: &["down_east", "down_north", "down_south", "down_west", "up_east", "up_north", "up_south", "up_west", "west_up", "east_up", "north_up", "south_up"] },
-    PropInfo { key: "mode", values: &["start", "log", "fail", "accept"] },
-    PropInfo { key: "level", values: &["0", "1", "2", "3", "4", "5", "6", "7", "8"] },
-    PropInfo { key: "honey_level", values: &["0", "1", "2", "3", "4", "5"] },
-    PropInfo { key: "charges", values: &["0", "1", "2", "3", "4"] },
-    PropInfo { key: "candles", values: &["1", "2", "3", "4"] },
-    PropInfo { key: "potent_sulfur_state", values: &["dry", "wet", "dormant", "erupting", "continuous"] },
-    PropInfo { key: "sculk_sensor_phase", values: &["inactive", "active", "cooldown"] },
-    PropInfo { key: "bloom", values: &["true", "false"] },
-    PropInfo { key: "can_summon", values: &["true", "false"] },
-    PropInfo { key: "shrieking", values: &["true", "false"] },
-    PropInfo { key: "copper_golem_pose", values: &["standing", "sitting", "running", "star"] },
-    PropInfo { key: "thickness", values: &["tip_merge", "tip", "frustum", "middle", "base"] },
-    PropInfo { key: "vertical_direction", values: &["up", "down"] },
-    PropInfo { key: "berries", values: &["true", "false"] },
-    PropInfo { key: "flower_amount", values: &["1", "2", "3", "4"] },
-    PropInfo { key: "segment_amount", values: &["1", "2", "3", "4"] },
-    PropInfo { key: "tilt", values: &["none", "unstable", "partial", "full"] },
-    PropInfo { key: "cracked", values: &["true", "false"] },
-    PropInfo { key: "crafting", values: &["true", "false"] },
-    PropInfo { key: "ominous", values: &["true", "false"] },
-    PropInfo { key: "trial_spawner_state", values: &["inactive", "waiting_for_players", "active", "waiting_for_reward_ejection", "ejecting_reward", "cooldown"] },
-    PropInfo { key: "vault_state", values: &["inactive", "active", "unlocking", "ejecting"] },
-    PropInfo { key: "tip", values: &["true", "false"] },
-    PropInfo { key: "wall_connection_type_east", values: &["none", "short", "tall"] },
-    PropInfo { key: "wall_connection_type_north", values: &["none", "short", "tall"] },
-    PropInfo { key: "wall_connection_type_south", values: &["none", "short", "tall"] },
-    PropInfo { key: "wall_connection_type_west", values: &["none", "short", "tall"] },
-    PropInfo { key: "wall_post_bit", values: &["1", "0"] },
-    PropInfo { key: "direction", values: &["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"] },
-    PropInfo { key: "torch_facing_direction", values: &["east", "north", "south", "top", "unknown", "west"] },
-    PropInfo { key: "direction", values: &["0", "1", "2", "3"] },
-    PropInfo { key: "minecraft:cardinal_direction", values: &["east", "north", "south", "west"] },
-    PropInfo { key: "pillar_axis", values: &["x", "y", "z"] },
-    PropInfo { key: "facing_direction", values: &["0", "1", "2", "3", "4", "5"] },
-    PropInfo { key: "item_frame_map_bit", values: &["1", "0"] },
-    PropInfo { key: "item_frame_photo_bit", values: &["1", "0"] },
-    PropInfo { key: "minecraft:connection_east", values: &["0", "1"] },
-    PropInfo { key: "minecraft:connection_north", values: &["0", "1"] },
-    PropInfo { key: "minecraft:connection_south", values: &["0", "1"] },
-    PropInfo { key: "minecraft:connection_west", values: &["0", "1"] },
-    PropInfo { key: "explode_bit", values: &["1", "0"] },
+    PropInfo {
+        key: "snowy",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "axis",
+        values: &["x", "y", "z"],
+    },
+    PropInfo {
+        key: "stage",
+        values: &["0", "1"],
+    },
+    PropInfo {
+        key: "age",
+        values: &["0", "1", "2", "3", "4"],
+    },
+    PropInfo {
+        key: "hanging",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "waterlogged",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "level",
+        values: &[
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+        ],
+    },
+    PropInfo {
+        key: "dusted",
+        values: &["0", "1", "2", "3"],
+    },
+    PropInfo {
+        key: "distance",
+        values: &["1", "2", "3", "4", "5", "6", "7"],
+    },
+    PropInfo {
+        key: "persistent",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "facing",
+        values: &["north", "east", "south", "west", "up", "down"],
+    },
+    PropInfo {
+        key: "triggered",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "instrument",
+        values: &[
+            "harp",
+            "basedrum",
+            "snare",
+            "hat",
+            "bass",
+            "flute",
+            "bell",
+            "guitar",
+            "chime",
+            "xylophone",
+            "iron_xylophone",
+            "cow_bell",
+            "didgeridoo",
+            "bit",
+            "banjo",
+            "pling",
+            "trumpet",
+            "trumpet_exposed",
+            "trumpet_oxidized",
+            "trumpet_weathered",
+            "zombie",
+            "skeleton",
+            "creeper",
+            "dragon",
+            "wither_skeleton",
+            "piglin",
+            "custom_head",
+        ],
+    },
+    PropInfo {
+        key: "note",
+        values: &[
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+            "16", "17", "18", "19", "20", "21", "22", "23", "24",
+        ],
+    },
+    PropInfo {
+        key: "powered",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "facing",
+        values: &["north", "south", "west", "east"],
+    },
+    PropInfo {
+        key: "occupied",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "part",
+        values: &["head", "foot"],
+    },
+    PropInfo {
+        key: "shape",
+        values: &[
+            "north_south",
+            "east_west",
+            "ascending_east",
+            "ascending_west",
+            "ascending_north",
+            "ascending_south",
+        ],
+    },
+    PropInfo {
+        key: "extended",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "half",
+        values: &["upper", "lower"],
+    },
+    PropInfo {
+        key: "short",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "type",
+        values: &["normal", "sticky"],
+    },
+    PropInfo {
+        key: "half",
+        values: &["top", "bottom"],
+    },
+    PropInfo {
+        key: "shape",
+        values: &[
+            "straight",
+            "inner_left",
+            "inner_right",
+            "outer_left",
+            "outer_right",
+        ],
+    },
+    PropInfo {
+        key: "type",
+        values: &["top", "bottom", "double"],
+    },
+    PropInfo {
+        key: "unstable",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "slot_0_occupied",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "slot_1_occupied",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "slot_2_occupied",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "slot_3_occupied",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "slot_4_occupied",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "slot_5_occupied",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "side_chain",
+        values: &["unconnected", "right", "center", "left"],
+    },
+    PropInfo {
+        key: "age",
+        values: &[
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+        ],
+    },
+    PropInfo {
+        key: "east",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "north",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "south",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "up",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "west",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "creaking_heart_state",
+        values: &["uprooted", "dormant", "awake"],
+    },
+    PropInfo {
+        key: "natural",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "type",
+        values: &["single", "left", "right"],
+    },
+    PropInfo {
+        key: "east",
+        values: &["up", "side", "none"],
+    },
+    PropInfo {
+        key: "north",
+        values: &["up", "side", "none"],
+    },
+    PropInfo {
+        key: "power",
+        values: &[
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+        ],
+    },
+    PropInfo {
+        key: "south",
+        values: &["up", "side", "none"],
+    },
+    PropInfo {
+        key: "west",
+        values: &["up", "side", "none"],
+    },
+    PropInfo {
+        key: "age",
+        values: &["0", "1", "2", "3", "4", "5", "6", "7"],
+    },
+    PropInfo {
+        key: "moisture",
+        values: &["0", "1", "2", "3", "4", "5", "6", "7"],
+    },
+    PropInfo {
+        key: "lit",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "rotation",
+        values: &[
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+        ],
+    },
+    PropInfo {
+        key: "hinge",
+        values: &["left", "right"],
+    },
+    PropInfo {
+        key: "open",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "shape",
+        values: &[
+            "north_south",
+            "east_west",
+            "ascending_east",
+            "ascending_west",
+            "ascending_north",
+            "ascending_south",
+            "south_east",
+            "south_west",
+            "north_west",
+            "north_east",
+        ],
+    },
+    PropInfo {
+        key: "attached",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "face",
+        values: &["floor", "wall", "ceiling"],
+    },
+    PropInfo {
+        key: "layers",
+        values: &["1", "2", "3", "4", "5", "6", "7", "8"],
+    },
+    PropInfo {
+        key: "has_record",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "axis",
+        values: &["x", "z"],
+    },
+    PropInfo {
+        key: "bites",
+        values: &["0", "1", "2", "3", "4", "5", "6"],
+    },
+    PropInfo {
+        key: "delay",
+        values: &["1", "2", "3", "4"],
+    },
+    PropInfo {
+        key: "locked",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "down",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "in_wall",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "east",
+        values: &["none", "low", "tall"],
+    },
+    PropInfo {
+        key: "north",
+        values: &["none", "low", "tall"],
+    },
+    PropInfo {
+        key: "south",
+        values: &["none", "low", "tall"],
+    },
+    PropInfo {
+        key: "west",
+        values: &["none", "low", "tall"],
+    },
+    PropInfo {
+        key: "age",
+        values: &["0", "1", "2", "3"],
+    },
+    PropInfo {
+        key: "has_bottle_0",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "has_bottle_1",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "has_bottle_2",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "level",
+        values: &["1", "2", "3"],
+    },
+    PropInfo {
+        key: "eye",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "age",
+        values: &["0", "1", "2"],
+    },
+    PropInfo {
+        key: "age",
+        values: &["0", "1"],
+    },
+    PropInfo {
+        key: "disarmed",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "conditional",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "mode",
+        values: &["compare", "subtract"],
+    },
+    PropInfo {
+        key: "inverted",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "enabled",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "facing",
+        values: &["down", "north", "south", "west", "east"],
+    },
+    PropInfo {
+        key: "age",
+        values: &["0", "1", "2", "3", "4", "5"],
+    },
+    PropInfo {
+        key: "age",
+        values: &[
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+            "16", "17", "18", "19", "20", "21", "22", "23", "24", "25",
+        ],
+    },
+    PropInfo {
+        key: "eggs",
+        values: &["1", "2", "3", "4"],
+    },
+    PropInfo {
+        key: "hatch",
+        values: &["0", "1", "2"],
+    },
+    PropInfo {
+        key: "hydration",
+        values: &["0", "1", "2", "3"],
+    },
+    PropInfo {
+        key: "pickles",
+        values: &["1", "2", "3", "4"],
+    },
+    PropInfo {
+        key: "leaves",
+        values: &["none", "small", "large"],
+    },
+    PropInfo {
+        key: "drag",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "bottom",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "distance",
+        values: &["0", "1", "2", "3", "4", "5", "6", "7"],
+    },
+    PropInfo {
+        key: "has_book",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "attachment",
+        values: &["floor", "ceiling", "single_wall", "double_wall"],
+    },
+    PropInfo {
+        key: "signal_fire",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "mode",
+        values: &["save", "load", "corner", "data"],
+    },
+    PropInfo {
+        key: "orientation",
+        values: &[
+            "down_east",
+            "down_north",
+            "down_south",
+            "down_west",
+            "up_east",
+            "up_north",
+            "up_south",
+            "up_west",
+            "west_up",
+            "east_up",
+            "north_up",
+            "south_up",
+        ],
+    },
+    PropInfo {
+        key: "mode",
+        values: &["start", "log", "fail", "accept"],
+    },
+    PropInfo {
+        key: "level",
+        values: &["0", "1", "2", "3", "4", "5", "6", "7", "8"],
+    },
+    PropInfo {
+        key: "honey_level",
+        values: &["0", "1", "2", "3", "4", "5"],
+    },
+    PropInfo {
+        key: "charges",
+        values: &["0", "1", "2", "3", "4"],
+    },
+    PropInfo {
+        key: "candles",
+        values: &["1", "2", "3", "4"],
+    },
+    PropInfo {
+        key: "potent_sulfur_state",
+        values: &["dry", "wet", "dormant", "erupting", "continuous"],
+    },
+    PropInfo {
+        key: "sculk_sensor_phase",
+        values: &["inactive", "active", "cooldown"],
+    },
+    PropInfo {
+        key: "bloom",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "can_summon",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "shrieking",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "copper_golem_pose",
+        values: &["standing", "sitting", "running", "star"],
+    },
+    PropInfo {
+        key: "thickness",
+        values: &["tip_merge", "tip", "frustum", "middle", "base"],
+    },
+    PropInfo {
+        key: "vertical_direction",
+        values: &["up", "down"],
+    },
+    PropInfo {
+        key: "berries",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "flower_amount",
+        values: &["1", "2", "3", "4"],
+    },
+    PropInfo {
+        key: "segment_amount",
+        values: &["1", "2", "3", "4"],
+    },
+    PropInfo {
+        key: "tilt",
+        values: &["none", "unstable", "partial", "full"],
+    },
+    PropInfo {
+        key: "cracked",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "crafting",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "ominous",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "trial_spawner_state",
+        values: &[
+            "inactive",
+            "waiting_for_players",
+            "active",
+            "waiting_for_reward_ejection",
+            "ejecting_reward",
+            "cooldown",
+        ],
+    },
+    PropInfo {
+        key: "vault_state",
+        values: &["inactive", "active", "unlocking", "ejecting"],
+    },
+    PropInfo {
+        key: "tip",
+        values: &["true", "false"],
+    },
+    PropInfo {
+        key: "wall_connection_type_east",
+        values: &["none", "short", "tall"],
+    },
+    PropInfo {
+        key: "wall_connection_type_north",
+        values: &["none", "short", "tall"],
+    },
+    PropInfo {
+        key: "wall_connection_type_south",
+        values: &["none", "short", "tall"],
+    },
+    PropInfo {
+        key: "wall_connection_type_west",
+        values: &["none", "short", "tall"],
+    },
+    PropInfo {
+        key: "wall_post_bit",
+        values: &["1", "0"],
+    },
+    PropInfo {
+        key: "direction",
+        values: &[
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+        ],
+    },
+    PropInfo {
+        key: "torch_facing_direction",
+        values: &["east", "north", "south", "top", "unknown", "west"],
+    },
+    PropInfo {
+        key: "direction",
+        values: &["0", "1", "2", "3"],
+    },
+    PropInfo {
+        key: "minecraft:cardinal_direction",
+        values: &["east", "north", "south", "west"],
+    },
+    PropInfo {
+        key: "pillar_axis",
+        values: &["x", "y", "z"],
+    },
+    PropInfo {
+        key: "facing_direction",
+        values: &["0", "1", "2", "3", "4", "5"],
+    },
+    PropInfo {
+        key: "item_frame_map_bit",
+        values: &["1", "0"],
+    },
+    PropInfo {
+        key: "item_frame_photo_bit",
+        values: &["1", "0"],
+    },
+    PropInfo {
+        key: "minecraft:connection_east",
+        values: &["0", "1"],
+    },
+    PropInfo {
+        key: "minecraft:connection_north",
+        values: &["0", "1"],
+    },
+    PropInfo {
+        key: "minecraft:connection_south",
+        values: &["0", "1"],
+    },
+    PropInfo {
+        key: "minecraft:connection_west",
+        values: &["0", "1"],
+    },
+    PropInfo {
+        key: "explode_bit",
+        values: &["1", "0"],
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -364,7 +869,14 @@ pub struct Facing;
 impl Property for Facing {
     type Value = value::Direction;
     const ID: PropId = PropId::Facing;
-    const VALUES: &'static [value::Direction] = &[value::Direction::North, value::Direction::East, value::Direction::South, value::Direction::West, value::Direction::Up, value::Direction::Down];
+    const VALUES: &'static [value::Direction] = &[
+        value::Direction::North,
+        value::Direction::East,
+        value::Direction::South,
+        value::Direction::West,
+        value::Direction::Up,
+        value::Direction::Down,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Triggered;
@@ -378,14 +890,44 @@ pub struct NoteblockInstrument;
 impl Property for NoteblockInstrument {
     type Value = value::NoteBlockInstrument;
     const ID: PropId = PropId::NoteblockInstrument;
-    const VALUES: &'static [value::NoteBlockInstrument] = &[value::NoteBlockInstrument::Harp, value::NoteBlockInstrument::Basedrum, value::NoteBlockInstrument::Snare, value::NoteBlockInstrument::Hat, value::NoteBlockInstrument::Bass, value::NoteBlockInstrument::Flute, value::NoteBlockInstrument::Bell, value::NoteBlockInstrument::Guitar, value::NoteBlockInstrument::Chime, value::NoteBlockInstrument::Xylophone, value::NoteBlockInstrument::IronXylophone, value::NoteBlockInstrument::CowBell, value::NoteBlockInstrument::Didgeridoo, value::NoteBlockInstrument::Bit, value::NoteBlockInstrument::Banjo, value::NoteBlockInstrument::Pling, value::NoteBlockInstrument::Trumpet, value::NoteBlockInstrument::TrumpetExposed, value::NoteBlockInstrument::TrumpetOxidized, value::NoteBlockInstrument::TrumpetWeathered, value::NoteBlockInstrument::Zombie, value::NoteBlockInstrument::Skeleton, value::NoteBlockInstrument::Creeper, value::NoteBlockInstrument::Dragon, value::NoteBlockInstrument::WitherSkeleton, value::NoteBlockInstrument::Piglin, value::NoteBlockInstrument::CustomHead];
+    const VALUES: &'static [value::NoteBlockInstrument] = &[
+        value::NoteBlockInstrument::Harp,
+        value::NoteBlockInstrument::Basedrum,
+        value::NoteBlockInstrument::Snare,
+        value::NoteBlockInstrument::Hat,
+        value::NoteBlockInstrument::Bass,
+        value::NoteBlockInstrument::Flute,
+        value::NoteBlockInstrument::Bell,
+        value::NoteBlockInstrument::Guitar,
+        value::NoteBlockInstrument::Chime,
+        value::NoteBlockInstrument::Xylophone,
+        value::NoteBlockInstrument::IronXylophone,
+        value::NoteBlockInstrument::CowBell,
+        value::NoteBlockInstrument::Didgeridoo,
+        value::NoteBlockInstrument::Bit,
+        value::NoteBlockInstrument::Banjo,
+        value::NoteBlockInstrument::Pling,
+        value::NoteBlockInstrument::Trumpet,
+        value::NoteBlockInstrument::TrumpetExposed,
+        value::NoteBlockInstrument::TrumpetOxidized,
+        value::NoteBlockInstrument::TrumpetWeathered,
+        value::NoteBlockInstrument::Zombie,
+        value::NoteBlockInstrument::Skeleton,
+        value::NoteBlockInstrument::Creeper,
+        value::NoteBlockInstrument::Dragon,
+        value::NoteBlockInstrument::WitherSkeleton,
+        value::NoteBlockInstrument::Piglin,
+        value::NoteBlockInstrument::CustomHead,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Note;
 impl Property for Note {
     type Value = u8;
     const ID: PropId = PropId::Note;
-    const VALUES: &'static [u8] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
+    const VALUES: &'static [u8] = &[
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Powered;
@@ -399,7 +941,12 @@ pub struct HorizontalFacing;
 impl Property for HorizontalFacing {
     type Value = value::Direction;
     const ID: PropId = PropId::HorizontalFacing;
-    const VALUES: &'static [value::Direction] = &[value::Direction::North, value::Direction::South, value::Direction::West, value::Direction::East];
+    const VALUES: &'static [value::Direction] = &[
+        value::Direction::North,
+        value::Direction::South,
+        value::Direction::West,
+        value::Direction::East,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Occupied;
@@ -420,7 +967,14 @@ pub struct RailShapeStraight;
 impl Property for RailShapeStraight {
     type Value = value::RailShape;
     const ID: PropId = PropId::RailShapeStraight;
-    const VALUES: &'static [value::RailShape] = &[value::RailShape::NorthSouth, value::RailShape::EastWest, value::RailShape::AscendingEast, value::RailShape::AscendingWest, value::RailShape::AscendingNorth, value::RailShape::AscendingSouth];
+    const VALUES: &'static [value::RailShape] = &[
+        value::RailShape::NorthSouth,
+        value::RailShape::EastWest,
+        value::RailShape::AscendingEast,
+        value::RailShape::AscendingWest,
+        value::RailShape::AscendingNorth,
+        value::RailShape::AscendingSouth,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Extended;
@@ -434,7 +988,8 @@ pub struct DoubleBlockHalf;
 impl Property for DoubleBlockHalf {
     type Value = value::DoubleBlockHalf;
     const ID: PropId = PropId::DoubleBlockHalf;
-    const VALUES: &'static [value::DoubleBlockHalf] = &[value::DoubleBlockHalf::Upper, value::DoubleBlockHalf::Lower];
+    const VALUES: &'static [value::DoubleBlockHalf] =
+        &[value::DoubleBlockHalf::Upper, value::DoubleBlockHalf::Lower];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Short;
@@ -448,7 +1003,8 @@ pub struct PistonType;
 impl Property for PistonType {
     type Value = value::PistonType;
     const ID: PropId = PropId::PistonType;
-    const VALUES: &'static [value::PistonType] = &[value::PistonType::Normal, value::PistonType::Sticky];
+    const VALUES: &'static [value::PistonType] =
+        &[value::PistonType::Normal, value::PistonType::Sticky];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Half;
@@ -462,14 +1018,24 @@ pub struct StairsShape;
 impl Property for StairsShape {
     type Value = value::StairsShape;
     const ID: PropId = PropId::StairsShape;
-    const VALUES: &'static [value::StairsShape] = &[value::StairsShape::Straight, value::StairsShape::InnerLeft, value::StairsShape::InnerRight, value::StairsShape::OuterLeft, value::StairsShape::OuterRight];
+    const VALUES: &'static [value::StairsShape] = &[
+        value::StairsShape::Straight,
+        value::StairsShape::InnerLeft,
+        value::StairsShape::InnerRight,
+        value::StairsShape::OuterLeft,
+        value::StairsShape::OuterRight,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SlabType;
 impl Property for SlabType {
     type Value = value::SlabType;
     const ID: PropId = PropId::SlabType;
-    const VALUES: &'static [value::SlabType] = &[value::SlabType::Top, value::SlabType::Bottom, value::SlabType::Double];
+    const VALUES: &'static [value::SlabType] = &[
+        value::SlabType::Top,
+        value::SlabType::Bottom,
+        value::SlabType::Double,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Unstable;
@@ -525,7 +1091,12 @@ pub struct SideChainPart;
 impl Property for SideChainPart {
     type Value = value::SideChainPart;
     const ID: PropId = PropId::SideChainPart;
-    const VALUES: &'static [value::SideChainPart] = &[value::SideChainPart::Unconnected, value::SideChainPart::Right, value::SideChainPart::Center, value::SideChainPart::Left];
+    const VALUES: &'static [value::SideChainPart] = &[
+        value::SideChainPart::Unconnected,
+        value::SideChainPart::Right,
+        value::SideChainPart::Center,
+        value::SideChainPart::Left,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Age15;
@@ -574,7 +1145,11 @@ pub struct CreakingHeartState;
 impl Property for CreakingHeartState {
     type Value = value::CreakingHeartState;
     const ID: PropId = PropId::CreakingHeartState;
-    const VALUES: &'static [value::CreakingHeartState] = &[value::CreakingHeartState::Uprooted, value::CreakingHeartState::Dormant, value::CreakingHeartState::Awake];
+    const VALUES: &'static [value::CreakingHeartState] = &[
+        value::CreakingHeartState::Uprooted,
+        value::CreakingHeartState::Dormant,
+        value::CreakingHeartState::Awake,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Natural;
@@ -588,21 +1163,33 @@ pub struct ChestType;
 impl Property for ChestType {
     type Value = value::ChestType;
     const ID: PropId = PropId::ChestType;
-    const VALUES: &'static [value::ChestType] = &[value::ChestType::Single, value::ChestType::Left, value::ChestType::Right];
+    const VALUES: &'static [value::ChestType] = &[
+        value::ChestType::Single,
+        value::ChestType::Left,
+        value::ChestType::Right,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EastRedstone;
 impl Property for EastRedstone {
     type Value = value::RedstoneSide;
     const ID: PropId = PropId::EastRedstone;
-    const VALUES: &'static [value::RedstoneSide] = &[value::RedstoneSide::Up, value::RedstoneSide::Side, value::RedstoneSide::None];
+    const VALUES: &'static [value::RedstoneSide] = &[
+        value::RedstoneSide::Up,
+        value::RedstoneSide::Side,
+        value::RedstoneSide::None,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NorthRedstone;
 impl Property for NorthRedstone {
     type Value = value::RedstoneSide;
     const ID: PropId = PropId::NorthRedstone;
-    const VALUES: &'static [value::RedstoneSide] = &[value::RedstoneSide::Up, value::RedstoneSide::Side, value::RedstoneSide::None];
+    const VALUES: &'static [value::RedstoneSide] = &[
+        value::RedstoneSide::Up,
+        value::RedstoneSide::Side,
+        value::RedstoneSide::None,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Power;
@@ -616,14 +1203,22 @@ pub struct SouthRedstone;
 impl Property for SouthRedstone {
     type Value = value::RedstoneSide;
     const ID: PropId = PropId::SouthRedstone;
-    const VALUES: &'static [value::RedstoneSide] = &[value::RedstoneSide::Up, value::RedstoneSide::Side, value::RedstoneSide::None];
+    const VALUES: &'static [value::RedstoneSide] = &[
+        value::RedstoneSide::Up,
+        value::RedstoneSide::Side,
+        value::RedstoneSide::None,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WestRedstone;
 impl Property for WestRedstone {
     type Value = value::RedstoneSide;
     const ID: PropId = PropId::WestRedstone;
-    const VALUES: &'static [value::RedstoneSide] = &[value::RedstoneSide::Up, value::RedstoneSide::Side, value::RedstoneSide::None];
+    const VALUES: &'static [value::RedstoneSide] = &[
+        value::RedstoneSide::Up,
+        value::RedstoneSide::Side,
+        value::RedstoneSide::None,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Age7;
@@ -658,7 +1253,8 @@ pub struct DoorHinge;
 impl Property for DoorHinge {
     type Value = value::DoorHingeSide;
     const ID: PropId = PropId::DoorHinge;
-    const VALUES: &'static [value::DoorHingeSide] = &[value::DoorHingeSide::Left, value::DoorHingeSide::Right];
+    const VALUES: &'static [value::DoorHingeSide] =
+        &[value::DoorHingeSide::Left, value::DoorHingeSide::Right];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Open;
@@ -672,7 +1268,18 @@ pub struct RailShape;
 impl Property for RailShape {
     type Value = value::RailShape;
     const ID: PropId = PropId::RailShape;
-    const VALUES: &'static [value::RailShape] = &[value::RailShape::NorthSouth, value::RailShape::EastWest, value::RailShape::AscendingEast, value::RailShape::AscendingWest, value::RailShape::AscendingNorth, value::RailShape::AscendingSouth, value::RailShape::SouthEast, value::RailShape::SouthWest, value::RailShape::NorthWest, value::RailShape::NorthEast];
+    const VALUES: &'static [value::RailShape] = &[
+        value::RailShape::NorthSouth,
+        value::RailShape::EastWest,
+        value::RailShape::AscendingEast,
+        value::RailShape::AscendingWest,
+        value::RailShape::AscendingNorth,
+        value::RailShape::AscendingSouth,
+        value::RailShape::SouthEast,
+        value::RailShape::SouthWest,
+        value::RailShape::NorthWest,
+        value::RailShape::NorthEast,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Attached;
@@ -686,7 +1293,11 @@ pub struct AttachFace;
 impl Property for AttachFace {
     type Value = value::AttachFace;
     const ID: PropId = PropId::AttachFace;
-    const VALUES: &'static [value::AttachFace] = &[value::AttachFace::Floor, value::AttachFace::Wall, value::AttachFace::Ceiling];
+    const VALUES: &'static [value::AttachFace] = &[
+        value::AttachFace::Floor,
+        value::AttachFace::Wall,
+        value::AttachFace::Ceiling,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Layers;
@@ -749,28 +1360,44 @@ pub struct EastWall;
 impl Property for EastWall {
     type Value = value::WallSide;
     const ID: PropId = PropId::EastWall;
-    const VALUES: &'static [value::WallSide] = &[value::WallSide::None, value::WallSide::Low, value::WallSide::Tall];
+    const VALUES: &'static [value::WallSide] = &[
+        value::WallSide::None,
+        value::WallSide::Low,
+        value::WallSide::Tall,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NorthWall;
 impl Property for NorthWall {
     type Value = value::WallSide;
     const ID: PropId = PropId::NorthWall;
-    const VALUES: &'static [value::WallSide] = &[value::WallSide::None, value::WallSide::Low, value::WallSide::Tall];
+    const VALUES: &'static [value::WallSide] = &[
+        value::WallSide::None,
+        value::WallSide::Low,
+        value::WallSide::Tall,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SouthWall;
 impl Property for SouthWall {
     type Value = value::WallSide;
     const ID: PropId = PropId::SouthWall;
-    const VALUES: &'static [value::WallSide] = &[value::WallSide::None, value::WallSide::Low, value::WallSide::Tall];
+    const VALUES: &'static [value::WallSide] = &[
+        value::WallSide::None,
+        value::WallSide::Low,
+        value::WallSide::Tall,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WestWall;
 impl Property for WestWall {
     type Value = value::WallSide;
     const ID: PropId = PropId::WestWall;
-    const VALUES: &'static [value::WallSide] = &[value::WallSide::None, value::WallSide::Low, value::WallSide::Tall];
+    const VALUES: &'static [value::WallSide] = &[
+        value::WallSide::None,
+        value::WallSide::Low,
+        value::WallSide::Tall,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Age3;
@@ -847,7 +1474,10 @@ pub struct ModeComparator;
 impl Property for ModeComparator {
     type Value = value::ComparatorMode;
     const ID: PropId = PropId::ModeComparator;
-    const VALUES: &'static [value::ComparatorMode] = &[value::ComparatorMode::Compare, value::ComparatorMode::Subtract];
+    const VALUES: &'static [value::ComparatorMode] = &[
+        value::ComparatorMode::Compare,
+        value::ComparatorMode::Subtract,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Inverted;
@@ -868,7 +1498,13 @@ pub struct FacingHopper;
 impl Property for FacingHopper {
     type Value = value::Direction;
     const ID: PropId = PropId::FacingHopper;
-    const VALUES: &'static [value::Direction] = &[value::Direction::Down, value::Direction::North, value::Direction::South, value::Direction::West, value::Direction::East];
+    const VALUES: &'static [value::Direction] = &[
+        value::Direction::Down,
+        value::Direction::North,
+        value::Direction::South,
+        value::Direction::West,
+        value::Direction::East,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Age5;
@@ -882,7 +1518,10 @@ pub struct Age25;
 impl Property for Age25 {
     type Value = u8;
     const ID: PropId = PropId::Age25;
-    const VALUES: &'static [u8] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25];
+    const VALUES: &'static [u8] = &[
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+        25,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Eggs;
@@ -917,7 +1556,11 @@ pub struct BambooLeaves;
 impl Property for BambooLeaves {
     type Value = value::BambooLeaves;
     const ID: PropId = PropId::BambooLeaves;
-    const VALUES: &'static [value::BambooLeaves] = &[value::BambooLeaves::None, value::BambooLeaves::Small, value::BambooLeaves::Large];
+    const VALUES: &'static [value::BambooLeaves] = &[
+        value::BambooLeaves::None,
+        value::BambooLeaves::Small,
+        value::BambooLeaves::Large,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Drag;
@@ -952,7 +1595,12 @@ pub struct BellAttachment;
 impl Property for BellAttachment {
     type Value = value::BellAttachType;
     const ID: PropId = PropId::BellAttachment;
-    const VALUES: &'static [value::BellAttachType] = &[value::BellAttachType::Floor, value::BellAttachType::Ceiling, value::BellAttachType::SingleWall, value::BellAttachType::DoubleWall];
+    const VALUES: &'static [value::BellAttachType] = &[
+        value::BellAttachType::Floor,
+        value::BellAttachType::Ceiling,
+        value::BellAttachType::SingleWall,
+        value::BellAttachType::DoubleWall,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SignalFire;
@@ -966,21 +1614,44 @@ pub struct StructureblockMode;
 impl Property for StructureblockMode {
     type Value = value::StructureMode;
     const ID: PropId = PropId::StructureblockMode;
-    const VALUES: &'static [value::StructureMode] = &[value::StructureMode::Save, value::StructureMode::Load, value::StructureMode::Corner, value::StructureMode::Data];
+    const VALUES: &'static [value::StructureMode] = &[
+        value::StructureMode::Save,
+        value::StructureMode::Load,
+        value::StructureMode::Corner,
+        value::StructureMode::Data,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Orientation;
 impl Property for Orientation {
     type Value = value::FrontAndTop;
     const ID: PropId = PropId::Orientation;
-    const VALUES: &'static [value::FrontAndTop] = &[value::FrontAndTop::DownEast, value::FrontAndTop::DownNorth, value::FrontAndTop::DownSouth, value::FrontAndTop::DownWest, value::FrontAndTop::UpEast, value::FrontAndTop::UpNorth, value::FrontAndTop::UpSouth, value::FrontAndTop::UpWest, value::FrontAndTop::WestUp, value::FrontAndTop::EastUp, value::FrontAndTop::NorthUp, value::FrontAndTop::SouthUp];
+    const VALUES: &'static [value::FrontAndTop] = &[
+        value::FrontAndTop::DownEast,
+        value::FrontAndTop::DownNorth,
+        value::FrontAndTop::DownSouth,
+        value::FrontAndTop::DownWest,
+        value::FrontAndTop::UpEast,
+        value::FrontAndTop::UpNorth,
+        value::FrontAndTop::UpSouth,
+        value::FrontAndTop::UpWest,
+        value::FrontAndTop::WestUp,
+        value::FrontAndTop::EastUp,
+        value::FrontAndTop::NorthUp,
+        value::FrontAndTop::SouthUp,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TestBlockMode;
 impl Property for TestBlockMode {
     type Value = value::TestBlockMode;
     const ID: PropId = PropId::TestBlockMode;
-    const VALUES: &'static [value::TestBlockMode] = &[value::TestBlockMode::Start, value::TestBlockMode::Log, value::TestBlockMode::Fail, value::TestBlockMode::Accept];
+    const VALUES: &'static [value::TestBlockMode] = &[
+        value::TestBlockMode::Start,
+        value::TestBlockMode::Log,
+        value::TestBlockMode::Fail,
+        value::TestBlockMode::Accept,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LevelComposter;
@@ -1015,14 +1686,24 @@ pub struct PotentSulfurState;
 impl Property for PotentSulfurState {
     type Value = value::PotentSulfurState;
     const ID: PropId = PropId::PotentSulfurState;
-    const VALUES: &'static [value::PotentSulfurState] = &[value::PotentSulfurState::Dry, value::PotentSulfurState::Wet, value::PotentSulfurState::Dormant, value::PotentSulfurState::Erupting, value::PotentSulfurState::Continuous];
+    const VALUES: &'static [value::PotentSulfurState] = &[
+        value::PotentSulfurState::Dry,
+        value::PotentSulfurState::Wet,
+        value::PotentSulfurState::Dormant,
+        value::PotentSulfurState::Erupting,
+        value::PotentSulfurState::Continuous,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SculkSensorPhase;
 impl Property for SculkSensorPhase {
     type Value = value::SculkSensorPhase;
     const ID: PropId = PropId::SculkSensorPhase;
-    const VALUES: &'static [value::SculkSensorPhase] = &[value::SculkSensorPhase::Inactive, value::SculkSensorPhase::Active, value::SculkSensorPhase::Cooldown];
+    const VALUES: &'static [value::SculkSensorPhase] = &[
+        value::SculkSensorPhase::Inactive,
+        value::SculkSensorPhase::Active,
+        value::SculkSensorPhase::Cooldown,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Bloom;
@@ -1050,14 +1731,25 @@ pub struct CopperGolemPose;
 impl Property for CopperGolemPose {
     type Value = value::Pose;
     const ID: PropId = PropId::CopperGolemPose;
-    const VALUES: &'static [value::Pose] = &[value::Pose::Standing, value::Pose::Sitting, value::Pose::Running, value::Pose::Star];
+    const VALUES: &'static [value::Pose] = &[
+        value::Pose::Standing,
+        value::Pose::Sitting,
+        value::Pose::Running,
+        value::Pose::Star,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SpeleothemThickness;
 impl Property for SpeleothemThickness {
     type Value = value::SpeleothemThickness;
     const ID: PropId = PropId::SpeleothemThickness;
-    const VALUES: &'static [value::SpeleothemThickness] = &[value::SpeleothemThickness::TipMerge, value::SpeleothemThickness::Tip, value::SpeleothemThickness::Frustum, value::SpeleothemThickness::Middle, value::SpeleothemThickness::Base];
+    const VALUES: &'static [value::SpeleothemThickness] = &[
+        value::SpeleothemThickness::TipMerge,
+        value::SpeleothemThickness::Tip,
+        value::SpeleothemThickness::Frustum,
+        value::SpeleothemThickness::Middle,
+        value::SpeleothemThickness::Base,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VerticalDirection;
@@ -1092,7 +1784,12 @@ pub struct Tilt;
 impl Property for Tilt {
     type Value = value::Tilt;
     const ID: PropId = PropId::Tilt;
-    const VALUES: &'static [value::Tilt] = &[value::Tilt::None, value::Tilt::Unstable, value::Tilt::Partial, value::Tilt::Full];
+    const VALUES: &'static [value::Tilt] = &[
+        value::Tilt::None,
+        value::Tilt::Unstable,
+        value::Tilt::Partial,
+        value::Tilt::Full,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Cracked;
@@ -1120,14 +1817,26 @@ pub struct TrialSpawnerState;
 impl Property for TrialSpawnerState {
     type Value = value::TrialSpawnerState;
     const ID: PropId = PropId::TrialSpawnerState;
-    const VALUES: &'static [value::TrialSpawnerState] = &[value::TrialSpawnerState::Inactive, value::TrialSpawnerState::WaitingForPlayers, value::TrialSpawnerState::Active, value::TrialSpawnerState::WaitingForRewardEjection, value::TrialSpawnerState::EjectingReward, value::TrialSpawnerState::Cooldown];
+    const VALUES: &'static [value::TrialSpawnerState] = &[
+        value::TrialSpawnerState::Inactive,
+        value::TrialSpawnerState::WaitingForPlayers,
+        value::TrialSpawnerState::Active,
+        value::TrialSpawnerState::WaitingForRewardEjection,
+        value::TrialSpawnerState::EjectingReward,
+        value::TrialSpawnerState::Cooldown,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VaultState;
 impl Property for VaultState {
     type Value = value::VaultState;
     const ID: PropId = PropId::VaultState;
-    const VALUES: &'static [value::VaultState] = &[value::VaultState::Inactive, value::VaultState::Active, value::VaultState::Unlocking, value::VaultState::Ejecting];
+    const VALUES: &'static [value::VaultState] = &[
+        value::VaultState::Inactive,
+        value::VaultState::Active,
+        value::VaultState::Unlocking,
+        value::VaultState::Ejecting,
+    ];
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Tip;

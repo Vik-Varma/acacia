@@ -28,7 +28,13 @@ impl Lerp {
         if self.remaining > 0 && (self.target, self.y_rot, self.x_rot) == (pos, yaw, pitch) {
             return;
         }
-        *self = Lerp { target: pos, y_rot: yaw, x_rot: pitch, remaining: STEPS, last: now };
+        *self = Lerp {
+            target: pos,
+            y_rot: yaw,
+            x_rot: pitch,
+            remaining: STEPS,
+            last: now,
+        };
     }
 
     /// `AbstractInterpolationHandler.interpolate`, from `commonTick`; `fits` says whether the vehicle fits at a spot.
@@ -59,14 +65,17 @@ impl Lerp {
 
 impl Boat {
     pub fn interpolate_to(&mut self, pos: [f64; 3], yaw: f32, pitch: f32) {
-        self.lerp.start((self.pos, self.yaw, self.pitch), (pos, yaw, pitch));
+        self.lerp
+            .start((self.pos, self.yaw, self.pitch), (pos, yaw, pitch));
     }
 
     pub(crate) fn interpolate(&mut self, world: &impl Blocks) {
         let mut pose = (self.pos, self.yaw, self.pitch);
         let colliders = self.colliders(world);
         let mut lerp = self.lerp.clone();
-        lerp.step(&mut pose, |at| colliders.no_collision(&Aabb::of_entity(at, WIDTH, HEIGHT)));
+        lerp.step(&mut pose, |at| {
+            colliders.no_collision(&Aabb::of_entity(at, WIDTH, HEIGHT))
+        });
         self.lerp = lerp;
         (self.pos, self.yaw, self.pitch) = pose;
     }

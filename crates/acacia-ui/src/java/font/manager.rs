@@ -28,7 +28,10 @@ pub fn load(resources: &Resources, warnings: &mut Warnings) -> BTreeMap<String, 
     for file in resources.list("font", ".json") {
         let (ns, path) = super::resources::split_id(&file);
         let id = format!("{ns}:{}", &path["font/".len()..path.len() - ".json".len()]);
-        let parsed = resources.read(&file).ok_or("unreadable".to_owned()).and_then(|b| definition(&b, resources));
+        let parsed = resources
+            .read(&file)
+            .ok_or("unreadable".to_owned())
+            .and_then(|b| definition(&b, resources));
         let list = parsed.unwrap_or_else(|e| {
             warnings.push(format!("unable to load font {id}: {e}"));
             Vec::new()
@@ -45,7 +48,10 @@ pub fn load(resources: &Resources, warnings: &mut Warnings) -> BTreeMap<String, 
     for id in ids {
         resolve(&id, &entries, &mut resolved, &mut Vec::new(), warnings);
     }
-    resolved.into_iter().filter_map(|(id, r)| Some((id, r?))).collect()
+    resolved
+        .into_iter()
+        .filter_map(|(id, r)| Some((id, r?)))
+        .collect()
 }
 
 /// A definition file's providers; any one that does not decode fails the file.
@@ -56,12 +62,18 @@ fn definition(bytes: &[u8], resources: &Resources) -> Result<Vec<Entry>, String>
     for p in list {
         let filter = Filter::parse(&p["filter"])?;
         out.push(match p["type"].as_str() {
-            Some("reference") => Entry::Reference(provider::qualify(p["id"].as_str().ok_or("reference without id")?), filter),
+            Some("reference") => Entry::Reference(
+                provider::qualify(p["id"].as_str().ok_or("reference without id")?),
+                filter,
+            ),
             Some("bitmap" | "space" | "unihex") => {
                 check(p)?;
                 Entry::Load(provider::load(p, resources).map(Arc::new), filter)
             }
-            Some("ttf") => Entry::Load(Err("ttf providers are not loaded (vanilla has none)".into()), filter),
+            Some("ttf") => Entry::Load(
+                Err("ttf providers are not loaded (vanilla has none)".into()),
+                filter,
+            ),
             other => return Err(format!("unknown provider type {other:?}")),
         });
     }
@@ -73,11 +85,18 @@ fn check(p: &Value) -> Result<(), String> {
     if p["type"] == "bitmap" {
         let rows = p["chars"].as_array().ok_or("no chars")?;
         let len = |r: &Value| r.as_str().map(|s| s.chars().count());
-        let first = rows.first().and_then(len).filter(|&n| n > 0).ok_or("expected to find data in codepoint grid")?;
+        let first = rows
+            .first()
+            .and_then(len)
+            .filter(|&n| n > 0)
+            .ok_or("expected to find data in codepoint grid")?;
         if rows.iter().any(|r| len(r) != Some(first)) {
             return Err("lines in codepoint grid have to be the same length".into());
         }
-        let (height, ascent) = (p.get("height").map_or(Some(8), Value::as_i64), p["ascent"].as_i64());
+        let (height, ascent) = (
+            p.get("height").map_or(Some(8), Value::as_i64),
+            p["ascent"].as_i64(),
+        );
         match (height, ascent) {
             (Some(h), Some(a)) if a <= h => {}
             _ => return Err("bad height or ascent".into()),
@@ -85,20 +104,35 @@ fn check(p: &Value) -> Result<(), String> {
     }
     if p["type"] == "unihex" {
         for o in p["size_overrides"].as_array().into_iter().flatten() {
-            let cp = |k: &str| o[k].as_str().filter(|s| s.chars().count() == 1).and_then(|s| s.chars().next());
+            let cp = |k: &str| {
+                o[k].as_str()
+                    .filter(|s| s.chars().count() == 1)
+                    .and_then(|s| s.chars().next())
+            };
             match (cp("from"), cp("to")) {
                 (Some(from), Some(to)) if from < to => {}
                 _ => return Err("invalid size override range".into()),
             }
         }
     }
-    if p["type"] == "space" && !p["advances"].as_object().is_some_and(|a| a.iter().all(|(k, v)| k.chars().count() == 1 && v.is_number())) {
+    if p["type"] == "space"
+        && !p["advances"].as_object().is_some_and(|a| {
+            a.iter()
+                .all(|(k, v)| k.chars().count() == 1 && v.is_number())
+        })
+    {
         return Err("bad advances".into());
     }
     Ok(())
 }
 
-fn resolve(id: &str, entries: &BTreeMap<String, Vec<Entry>>, done: &mut BTreeMap<String, Option<Vec<Conditional>>>, visiting: &mut Vec<String>, warnings: &mut Warnings) -> Option<Vec<Conditional>> {
+fn resolve(
+    id: &str,
+    entries: &BTreeMap<String, Vec<Entry>>,
+    done: &mut BTreeMap<String, Option<Vec<Conditional>>>,
+    visiting: &mut Vec<String>,
+    warnings: &mut Warnings,
+) -> Option<Vec<Conditional>> {
     if let Some(r) = done.get(id) {
         return r.clone();
     }
@@ -110,14 +144,24 @@ fn resolve(id: &str, entries: &BTreeMap<String, Vec<Entry>>, done: &mut BTreeMap
     let mut out = Some(Vec::new());
     for e in list {
         let part = match e {
-            Entry::Load(Ok(p), filter) => Some(vec![Conditional { provider: Arc::clone(p), filter: *filter }]),
+            Entry::Load(Ok(p), filter) => Some(vec![Conditional {
+                provider: Arc::clone(p),
+                filter: *filter,
+            }]),
             Entry::Load(Err(_), _) => None,
             Entry::Reference(target, filter) => {
                 let r = resolve(target, entries, done, visiting, warnings);
                 if r.is_none() {
                     warnings.push(format!("can't find font {target} referenced by {id}"));
                 }
-                r.map(|list| list.into_iter().map(|c| Conditional { filter: filter.merge(&c.filter), ..c }).collect())
+                r.map(|list| {
+                    list.into_iter()
+                        .map(|c| Conditional {
+                            filter: filter.merge(&c.filter),
+                            ..c
+                        })
+                        .collect()
+                })
             }
         };
         match (part, &mut out) {

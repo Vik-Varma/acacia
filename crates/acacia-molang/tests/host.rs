@@ -2,7 +2,10 @@
 
 use std::cell::Cell;
 
-use acacia_molang::{Arrays, Compiler, Context, Engine, Env, ErrorKind, Host, Query, Scratch, Structs, Symbol, Value, Variable, Variables};
+use acacia_molang::{
+    Arrays, Compiler, Context, Engine, Env, ErrorKind, Host, Query, Scratch, Structs, Symbol,
+    Value, Variable, Variables,
+};
 
 struct Owner;
 
@@ -29,7 +32,10 @@ impl Host for Game {
         match query {
             q if q == self.variant => Value::Num(4.0),
             q if q == self.property => Value::Str(self.warm),
-            q if q == self.bone_origin => structs.make(&[(self.xy[0], Value::Num(args.len() as f32)), (self.xy[1], Value::Num(7.0))]),
+            q if q == self.bone_origin => structs.make(&[
+                (self.xy[0], Value::Num(args.len() as f32)),
+                (self.xy[1], Value::Num(7.0)),
+            ]),
             q if q == self.nearby => structs.entities(&[9, 4, 9]),
             _ => Value::ZERO,
         }
@@ -48,7 +54,8 @@ impl Host for Game {
     }
 
     fn assign(&self, entity: u32, variable: Variable, path: &[Symbol], value: Value) {
-        self.assigned.set(Some((entity, variable, path.to_vec(), value)));
+        self.assigned
+            .set(Some((entity, variable, path.to_vec(), value)));
     }
 }
 
@@ -76,12 +83,25 @@ impl World {
             random: 0.5,
             assigned: Cell::new(None),
         };
-        World { compiler, game, variables: Variables::new(), scratch: Scratch::new() }
+        World {
+            compiler,
+            game,
+            variables: Variables::new(),
+            scratch: Scratch::new(),
+        }
     }
 
     fn run_with(&mut self, source: &str, arrays: &Arrays, this: f32) -> Value {
-        let program = self.compiler.compile_with(source, arrays).unwrap_or_else(|error| panic!("{source}: {error}"));
-        program.eval(&mut Env { host: &self.game, variables: &mut self.variables, scratch: &mut self.scratch, this })
+        let program = self
+            .compiler
+            .compile_with(source, arrays)
+            .unwrap_or_else(|error| panic!("{source}: {error}"));
+        program.eval(&mut Env {
+            host: &self.game,
+            variables: &mut self.variables,
+            scratch: &mut self.scratch,
+            this,
+        })
     }
 
     fn run(&mut self, source: &str) -> Value {
@@ -97,15 +117,27 @@ impl World {
 fn queries_answer_numbers_and_strings() {
     let mut world = World::new();
     assert_eq!(world.num("Query.Variant + 1"), 5.0);
-    assert_eq!(world.num("q.property('minecraft:climate_variant') == 'warm' ? 1 : 2"), 1.0);
-    assert_eq!(world.num("q.property('minecraft:climate_variant') == 'Warm' ? 1 : 2"), 2.0);
+    assert_eq!(
+        world.num("q.property('minecraft:climate_variant') == 'warm' ? 1 : 2"),
+        1.0
+    );
+    assert_eq!(
+        world.num("q.property('minecraft:climate_variant') == 'Warm' ? 1 : 2"),
+        2.0
+    );
 }
 
 #[test]
 fn undocumented_queries_are_rejected_unless_allowed() {
     let mut world = World::new();
-    let unknown = world.compiler.compile("q.never_heard_of(1, 2) + 1").unwrap_err();
-    assert_eq!(unknown.kind, ErrorKind::UnknownQuery("never_heard_of".to_owned()));
+    let unknown = world
+        .compiler
+        .compile("q.never_heard_of(1, 2) + 1")
+        .unwrap_err();
+    assert_eq!(
+        unknown.kind,
+        ErrorKind::UnknownQuery("never_heard_of".to_owned())
+    );
     // Dropped for packs above 1.20.40.
     assert!(world.compiler.compile("q.is_scenting").is_err());
     world.compiler.engine = Engine(1, 20, 40);
@@ -120,22 +152,48 @@ fn assigning_through_an_arrow_reaches_the_host() {
     world.run("c.owning_entity->v.Mood.level = 2 + 3;");
     let mood = world.compiler.variable("mood");
     let level = world.compiler.symbol("level");
-    assert_eq!(world.game.assigned.take(), Some((9, mood, vec![level], Value::Num(5.0))));
+    assert_eq!(
+        world.game.assigned.take(),
+        Some((9, mood, vec![level], Value::Num(5.0)))
+    );
     // Nothing to assign to: not an entity.
     world.run("v.nobody->v.mood = 1;");
     assert_eq!(world.game.assigned.take(), None);
-    assert_eq!(world.compiler.compile("c.owning_entity->q.variant = 1;").unwrap_err().kind, ErrorKind::NotAssignable);
+    assert_eq!(
+        world
+            .compiler
+            .compile("c.owning_entity->q.variant = 1;")
+            .unwrap_err()
+            .kind,
+        ErrorKind::NotAssignable
+    );
 }
 
 #[test]
 fn arrays_index_their_elements() {
     let mut world = World::new();
-    let arrays: Arrays = [("skins".to_owned(), vec!["Texture.white".to_owned(), "texture.black".to_owned(), "q.variant".to_owned()])].into();
+    let arrays: Arrays = [(
+        "skins".to_owned(),
+        vec![
+            "Texture.white".to_owned(),
+            "texture.black".to_owned(),
+            "q.variant".to_owned(),
+        ],
+    )]
+    .into();
     // Variant 4 of three wraps to the second.
-    let Value::Str(picked) = world.run_with("Array.skins[query.variant]", &arrays, 0.0) else { panic!("not a resource") };
+    let Value::Str(picked) = world.run_with("Array.skins[query.variant]", &arrays, 0.0) else {
+        panic!("not a resource")
+    };
     assert_eq!(world.compiler.text(picked), "texture.black");
-    assert_eq!(world.run_with("array.skins[2] * 2", &arrays, 0.0), Value::Num(8.0));
-    assert_eq!(world.run_with("array.skins[-1] == texture.white", &arrays, 0.0), Value::Num(1.0));
+    assert_eq!(
+        world.run_with("array.skins[2] * 2", &arrays, 0.0),
+        Value::Num(8.0)
+    );
+    assert_eq!(
+        world.run_with("array.skins[-1] == texture.white", &arrays, 0.0),
+        Value::Num(1.0)
+    );
     let missing = world.compiler.compile("array.skins[0]").unwrap_err();
     assert_eq!(missing.kind, ErrorKind::UnknownArray("skins".to_owned()));
 }
@@ -143,7 +201,10 @@ fn arrays_index_their_elements() {
 #[test]
 fn arrow_reads_the_other_entity() {
     let mut world = World::new();
-    assert_eq!(world.num("v.speed = 100; return c.owning_entity->v.speed * 2;"), 6.0);
+    assert_eq!(
+        world.num("v.speed = 100; return c.owning_entity->v.speed * 2;"),
+        6.0
+    );
     assert_eq!(world.num("-c.owning_entity->v.speed"), -3.0);
     assert_eq!(world.num("c.owning_entity->v.unset ?? 5"), 5.0);
     assert_eq!(world.num("c.nobody->v.speed"), 0.0);
@@ -153,12 +214,18 @@ fn arrow_reads_the_other_entity() {
 #[test]
 fn queries_return_structs() {
     let mut world = World::new();
-    assert_eq!(world.num("v.origin = q.bone_origin('leg', 2); return v.origin.x * 10 + v.origin.y;"), 27.0);
+    assert_eq!(
+        world.num("v.origin = q.bone_origin('leg', 2); return v.origin.x * 10 + v.origin.y;"),
+        27.0
+    );
     // The copy stays after the evaluation that made the struct.
     assert_eq!(world.num("v.origin.y"), 7.0);
     let origin = world.compiler.variable("origin");
     let held = world.variables.get(origin).unwrap();
-    assert_eq!(world.variables.member(held, world.game.xy[0]), Some(Value::Num(2.0)));
+    assert_eq!(
+        world.variables.member(held, world.game.xy[0]),
+        Some(Value::Num(2.0))
+    );
 
     // As vanilla's `query.spellcolor.r`.
     assert_eq!(world.num("Query.bone_origin.Y + q.bone_origin.x"), 7.0);
@@ -166,7 +233,10 @@ fn queries_return_structs() {
     assert_eq!(world.num("q.variant.x ?? 3"), 3.0);
 
     let returned = world.run("q.bone_origin");
-    assert_eq!(world.scratch.member(returned, world.game.xy[1]), Some(Value::Num(7.0)));
+    assert_eq!(
+        world.scratch.member(returned, world.game.xy[1]),
+        Some(Value::Num(7.0))
+    );
 }
 
 #[test]
@@ -179,9 +249,22 @@ fn for_each_walks_an_entity_array() {
     assert_eq!(world.num(stop), 2.0);
     // An array kept in a variable is still there for a later program.
     world.run("v.found = q.combine_entities(4);");
-    assert_eq!(world.num("v.n = 0; for_each(t.e, v.found, { v.n = v.n + 1; v.found = 0; }); return v.n;"), 1.0);
-    assert_eq!(world.num("v.n = 0; for_each(t.e, 5, { v.n = v.n + 1; }); return v.n;"), 0.0);
-    assert_eq!(world.compiler.compile("for_each(q.variant, v.found, { v.n = 1; });").unwrap_err().kind, ErrorKind::NotAssignable);
+    assert_eq!(
+        world.num("v.n = 0; for_each(t.e, v.found, { v.n = v.n + 1; v.found = 0; }); return v.n;"),
+        1.0
+    );
+    assert_eq!(
+        world.num("v.n = 0; for_each(t.e, 5, { v.n = v.n + 1; }); return v.n;"),
+        0.0
+    );
+    assert_eq!(
+        world
+            .compiler
+            .compile("for_each(q.variant, v.found, { v.n = 1; });")
+            .unwrap_err()
+            .kind,
+        ErrorKind::NotAssignable
+    );
 }
 
 #[test]
@@ -211,7 +294,10 @@ fn hosts_set_variables_and_members() {
 #[test]
 fn this_and_randomness_come_from_the_caller() {
     let mut world = World::new();
-    assert_eq!(world.run_with("this * 2", &Arrays::new(), 3.0), Value::Num(6.0));
+    assert_eq!(
+        world.run_with("this * 2", &Arrays::new(), 3.0),
+        Value::Num(6.0)
+    );
     assert_eq!(world.num("math.random(2, 4)"), 3.0);
     assert_eq!(world.num("math.die_roll(2, 1, 3)"), 4.0);
     world.game.random = 0.999;
@@ -223,7 +309,14 @@ fn this_and_randomness_come_from_the_caller() {
 #[test]
 fn a_script_split_over_lines_is_one_program() {
     let mut world = World::new();
-    let script = ["v.equipped = q.variant > 3;", "(v.equipped) ? {", "  t.raise = q.variant * 2;", "  v.raise = t.raise + 1;", "};"].join(" ");
+    let script = [
+        "v.equipped = q.variant > 3;",
+        "(v.equipped) ? {",
+        "  t.raise = q.variant * 2;",
+        "  v.raise = t.raise + 1;",
+        "};",
+    ]
+    .join(" ");
     world.run(&script);
     assert_eq!(world.num("v.raise"), 9.0);
 }
@@ -231,7 +324,10 @@ fn a_script_split_over_lines_is_one_program() {
 #[test]
 fn constants_are_recognised() {
     let mut compiler = Compiler::new();
-    assert_eq!(compiler.compile("-20.0").unwrap().as_constant(), Some(-20.0));
+    assert_eq!(
+        compiler.compile("-20.0").unwrap().as_constant(),
+        Some(-20.0)
+    );
     assert_eq!(compiler.compile("q.life_time").unwrap().as_constant(), None);
     assert_eq!(Compiler::constant(1.5).as_constant(), Some(1.5));
 }

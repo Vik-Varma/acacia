@@ -24,7 +24,11 @@ impl Keepalive {
     }
 }
 
-async fn run(mut socket: ws::Socket, mut signaling: SignalingSession, mut closed: oneshot::Receiver<()>) {
+async fn run(
+    mut socket: ws::Socket,
+    mut signaling: SignalingSession,
+    mut closed: oneshot::Receiver<()>,
+) {
     loop {
         // Signals after the join (late candidates, errors) have nothing left to act on.
         while signaling.poll_event().is_some() {}
@@ -46,10 +50,16 @@ async fn run(mut socket: ws::Socket, mut signaling: SignalingSession, mut closed
     }
 }
 
-pub(super) async fn flush(socket: &mut ws::Socket, signaling: &mut SignalingSession) -> Result<(), ConnectError> {
+pub(super) async fn flush(
+    socket: &mut ws::Socket,
+    signaling: &mut SignalingSession,
+) -> Result<(), ConnectError> {
     while let Some(text) = signaling.poll_text() {
         tracing::trace!(%text, "signaling out");
-        socket.send(Message::Text(text.into())).await.map_err(ws_error)?;
+        socket
+            .send(Message::Text(text.into()))
+            .await
+            .map_err(ws_error)?;
     }
     Ok(())
 }
@@ -61,7 +71,11 @@ pub(super) fn handle_frame(
     tracing::trace!(?frame, "signaling in");
     match frame {
         Some(Ok(Message::Text(text))) => signaling.handle_text(text.as_str()),
-        Some(Ok(Message::Close(close))) => return Err(ConnectError::Signaling(format!("WebSocket closed: {close:?}"))),
+        Some(Ok(Message::Close(close))) => {
+            return Err(ConnectError::Signaling(format!(
+                "WebSocket closed: {close:?}"
+            )));
+        }
         Some(Ok(_)) => {}
         Some(Err(e)) => return Err(ws_error(e)),
         None => return Err(ConnectError::Signaling("WebSocket closed".into())),

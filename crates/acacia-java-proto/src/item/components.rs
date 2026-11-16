@@ -1,9 +1,12 @@
 //! Every `DataComponents` type's network codec, skipped. Ids are `data_component_type` registry order.
 
-use super::codecs::{Skipped, boolean, bytes, consume_effect, filterable, float, holder, holder_set, list, mob_effect, optional, resolvable, sound, string, text, varint};
+use super::codecs::{
+    Skipped, boolean, bytes, consume_effect, filterable, float, holder, holder_set, list,
+    mob_effect, optional, resolvable, sound, string, text, varint,
+};
 use super::composites::{
-    attribute_modifier, block_predicate, blocks_attacks, custom_model_data, equippable, firework_explosion, item_template, kinetic_weapon, profile, tool,
-    two_varints,
+    attribute_modifier, block_predicate, blocks_attacks, custom_model_data, equippable,
+    firework_explosion, item_template, kinetic_weapon, profile, tool, two_varints,
 };
 use crate::{Error, nbt};
 
@@ -16,7 +19,20 @@ pub(super) fn skip(id: i32, input: &mut &[u8], depth: u32) -> Skipped {
     match id {
         0 => Err(Error::Invalid("synced component custom_data")),
         // A varint value, enum id or `holderRegistry` id: counts, rarity, dyes, map ids, and the mob variants.
-        1..=3 | 8 | 12 | 19 | 31 | 42..=44 | 46 | 48 | 50 | 65 | 75 | 88..=108 | 110..=117 | 121 => varint(input),
+        1..=3
+        | 8
+        | 12
+        | 19
+        | 31
+        | 42..=44
+        | 46
+        | 48
+        | 50
+        | 65
+        | 75
+        | 88..=108
+        | 110..=117
+        | 121 => varint(input),
         4 | 20 | 34 | 120 => Ok(()),
         5 => bytes::<6>(input),
         6 | 9 => text(input),

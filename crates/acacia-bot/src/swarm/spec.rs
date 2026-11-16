@@ -22,9 +22,13 @@ impl From<&str> for BotId {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Login {
-    Offline { name: String },
+    Offline {
+        name: String,
+    },
     /// Resolved by the node through its token cache, keyed by this account id.
-    Online { account: String },
+    Online {
+        account: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -54,7 +54,11 @@ impl Item {
     /// The item for a Bedrock name and data value; `None` for items only Bedrock has.
     pub fn from_bedrock(name: &str, data: i16) -> Option<Item> {
         let at = FROM_BEDROCK.partition_point(|(n, _, _)| *n < name);
-        FROM_BEDROCK[at..].iter().take_while(|(n, _, _)| *n == name).find(|(_, d, _)| *d == -1 || *d == data).map(|e| e.2)
+        FROM_BEDROCK[at..]
+            .iter()
+            .take_while(|(n, _, _)| *n == name)
+            .find(|(_, d, _)| *d == -1 || *d == data)
+            .map(|e| e.2)
     }
 
     /// Accepts Java's name, or a Bedrock name that needs no data value, with or without `minecraft:`.
@@ -65,7 +69,10 @@ impl Item {
         }
         let full = format!("minecraft:{path}");
         let at = FROM_BEDROCK.partition_point(|(n, _, _)| *n < full.as_str());
-        FROM_BEDROCK.get(at).filter(|(n, d, _)| *n == full && *d == -1).map(|e| e.2)
+        FROM_BEDROCK
+            .get(at)
+            .filter(|(n, d, _)| *n == full && *d == -1)
+            .map(|e| e.2)
     }
 }
 

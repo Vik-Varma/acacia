@@ -38,17 +38,33 @@ pub fn sprite(kind: Kind, at: DVec3, a: Vec3, rng: &mut Rng) -> Option<Sprite> {
     s.friction = 1.0;
     match kind {
         Kind::Flame | Kind::SoulFlame | Kind::SmallFlame => {
-            s.set = if kind == Kind::SoulFlame { Set::SoulFlame } else { Set::Flame };
+            s.set = if kind == Kind::SoulFlame {
+                Set::SoulFlame
+            } else {
+                Set::Flame
+            };
             let r = rng.f32();
             (s.size, s.grow, s.lifetime) = match kind {
-                Kind::SmallFlame => (0.5 * (0.1 + r * 0.1), Grow::Shrink(0.5 * 0.01 / 20.0), seconds(rng, 9.0, 11.5)),
-                _ => (0.1 + r * 0.1, Grow::Shrink(0.1 / 20.0), seconds(rng, 0.6, 2.0)),
+                Kind::SmallFlame => (
+                    0.5 * (0.1 + r * 0.1),
+                    Grow::Shrink(0.5 * 0.01 / 20.0),
+                    seconds(rng, 9.0, 11.5),
+                ),
+                _ => (
+                    0.1 + r * 0.1,
+                    Grow::Shrink(0.1 / 20.0),
+                    seconds(rng, 0.6, 2.0),
+                ),
             };
-            s.position += (Vec3::new(rng.f32(), rng.f32(), rng.f32()) * 2.0 - 1.0).as_dvec3() * 0.025;
+            s.position +=
+                (Vec3::new(rng.f32(), rng.f32(), rng.f32()) * 2.0 - 1.0).as_dvec3() * 0.025;
             (s.physics, s.light) = (false, Light::Full);
         }
         Kind::Smoke | Kind::LargeSmoke => {
-            s.velocity = launch(Vec3::new(rng.range(-0.1, 0.1), 1.0, rng.range(-0.1, 0.1)), 1.0) + a;
+            s.velocity = launch(
+                Vec3::new(rng.range(-0.1, 0.1), 1.0, rng.range(-0.1, 0.1)),
+                1.0,
+            ) + a;
             s.accel = per_tick(Vec3::Y * 0.4);
             s.size = if kind == Kind::LargeSmoke { 0.25 } else { 0.1 };
             s.lifetime = seconds(rng, 0.4, 1.4);
@@ -66,45 +82,87 @@ pub fn sprite(kind: Kind, at: DVec3, a: Vec3, rng: &mut Rng) -> Option<Sprite> {
         Kind::Crit | Kind::EnchantedHit => {
             let (r1, r2) = (rng.f32(), rng.f32());
             s.size = 0.1 + rng.f32() * 0.05;
-            s.velocity = if a == Vec3::ZERO { launch(Vec3::new(rng.range(-1.0, 1.0), rng.range(-1.0, 1.0), rng.range(-1.0, 1.0)), 2.0) } else { a };
-            s.lifetime = ((6.0 / (rng.range(0.0, 16.0) + 12.0)) * 20.0).round().max(1.0) as u32;
+            s.velocity = if a == Vec3::ZERO {
+                launch(
+                    Vec3::new(
+                        rng.range(-1.0, 1.0),
+                        rng.range(-1.0, 1.0),
+                        rng.range(-1.0, 1.0),
+                    ),
+                    2.0,
+                )
+            } else {
+                a
+            };
+            s.lifetime = ((6.0 / (rng.range(0.0, 16.0) + 12.0)) * 20.0)
+                .round()
+                .max(1.0) as u32;
             s.friction = drag(10.0);
             s.physics = false;
             if kind == Kind::Crit {
                 (s.set, s.frame, s.accel) = (Set::Crit, Frame::Age, per_tick(Vec3::Y * -10.0));
-                (s.color, s.fade) = ([r1 * 0.3 + 0.6, r2 * 0.3 + 0.6, r2 * 0.3 + 0.6, 1.0], Some([r1 * 0.3 + 0.6, 0.5, 0.3]));
+                (s.color, s.fade) = (
+                    [r1 * 0.3 + 0.6, r2 * 0.3 + 0.6, r2 * 0.3 + 0.6, 1.0],
+                    Some([r1 * 0.3 + 0.6, 0.5, 0.3]),
+                );
             } else {
                 (s.set, s.accel) = (Set::EnchantedHit, per_tick(Vec3::Y * -12.0));
-                (s.color, s.fade) = ([r1 * 0.3 + 0.6, r2 * 0.3 + 0.6, 0.8, 1.0], Some([0.5, 0.5, 0.8]));
+                (s.color, s.fade) = (
+                    [r1 * 0.3 + 0.6, r2 * 0.3 + 0.6, 0.8, 1.0],
+                    Some([0.5, 0.5, 0.8]),
+                );
             }
         }
         Kind::Explosion => {
             s.set = Set::Explosion;
             s.lifetime = seconds(rng, 0.3, 0.5);
             s.color = grey(rng.f32() * 0.6 + 0.4);
-            (s.size, s.frame, s.light, s.behaviour) = (1.0, Frame::Age, Light::Full, Behaviour::Still);
+            (s.size, s.frame, s.light, s.behaviour) =
+                (1.0, Frame::Age, Light::Full, Behaviour::Still);
         }
         Kind::ExplosionEmitter => (s.lifetime, s.behaviour) = (8, Behaviour::Seed),
         Kind::Poof => {
             let r1 = rng.f32();
-            let direction = if a == Vec3::ZERO { Vec3::Y } else { a.normalize() };
-            s.velocity = (direction * 10.0 + Vec3::new(rng.range(-1.0, 1.0), rng.range(-1.0, 1.0), rng.range(-1.0, 1.0))) / 20.0;
+            let direction = if a == Vec3::ZERO {
+                Vec3::Y
+            } else {
+                a.normalize()
+            };
+            s.velocity = (direction * 10.0
+                + Vec3::new(
+                    rng.range(-1.0, 1.0),
+                    rng.range(-1.0, 1.0),
+                    rng.range(-1.0, 1.0),
+                ))
+                / 20.0;
             s.size = r1 * rng.f32() * 0.6 + 0.1;
             s.lifetime = ((4.0 / rng.range(1.0, 5.0) + 0.1) * 20.0) as u32;
             s.color = grey(r1 * 0.3 + 0.7);
             (s.accel, s.friction, s.frame) = (per_tick(Vec3::Y * 2.0), drag(2.5), Frame::Backwards);
         }
         Kind::Heart | Kind::AngryVillager => {
-            s.set = if kind == Kind::Heart { Set::Heart } else { Set::Angry };
+            s.set = if kind == Kind::Heart {
+                Set::Heart
+            } else {
+                Set::Angry
+            };
             s.velocity = launch(Vec3::Y, 2.5);
-            s.size = if kind == Kind::Heart { 0.2 + rng.f32() * 0.1 } else { 0.14 };
+            s.size = if kind == Kind::Heart {
+                0.2 + rng.f32() * 0.1
+            } else {
+                0.14
+            };
             s.lifetime = seconds(rng, 0.2, 1.5);
             (s.friction, s.physics) = (drag(5.0), false);
         }
         Kind::HappyVillager => {
             s.set = Set::Happy;
             s.lifetime = seconds(rng, 1.0, 5.0);
-            s.accel = per_tick(Vec3::new(rng.range(-0.02, 0.02), rng.range(-0.02, 0.02), rng.range(-0.02, 0.02)));
+            s.accel = per_tick(Vec3::new(
+                rng.range(-0.02, 0.02),
+                rng.range(-0.02, 0.02),
+                rng.range(-0.02, 0.02),
+            ));
             (s.size, s.physics) = (0.14, false);
         }
         Kind::Splash | Kind::Rain => {
@@ -124,18 +182,34 @@ pub fn sprite(kind: Kind, at: DVec3, a: Vec3, rng: &mut Rng) -> Option<Sprite> {
             s.velocity = a * 0.2 + (Vec3::new(rng.f32(), rng.f32(), rng.f32()) * 2.0 - 1.0) * 0.001;
             s.size = (0.05 * rng.f32() + 0.1) * (rng.f32() * 0.9 + 0.2);
             s.lifetime = ((2.0 / ((rng.f32() * 0.8 + 0.2) * 5.0)) * 20.0) as u32;
-            (s.accel, s.friction, s.width, s.behaviour) = (per_tick(Vec3::Y * 0.8), drag(5.25), 0.02, Behaviour::Bubble);
+            (s.accel, s.friction, s.width, s.behaviour) =
+                (per_tick(Vec3::Y * 0.8), drag(5.25), 0.02, Behaviour::Bubble);
         }
         Kind::Lava => {
             s.set = Set::Lava;
-            s.velocity = launch(Vec3::new(rng.range(-0.1, 0.1), rng.range(0.1, 1.0), rng.range(-0.1, 0.1)), rng.range(5.0, 10.0));
-            s.accel = per_tick(Vec3::new(rng.f32() * 5.0 - 2.5, -15.0, rng.f32() * 5.0 - 2.5));
+            s.velocity = launch(
+                Vec3::new(
+                    rng.range(-0.1, 0.1),
+                    rng.range(0.1, 1.0),
+                    rng.range(-0.1, 0.1),
+                ),
+                rng.range(5.0, 10.0),
+            );
+            s.accel = per_tick(Vec3::new(
+                rng.f32() * 5.0 - 2.5,
+                -15.0,
+                rng.f32() * 5.0 - 2.5,
+            ));
             s.size = rng.f32() * 0.15 + 0.025;
             s.lifetime = seconds(rng, 0.5, 2.0);
             (s.grow, s.light, s.behaviour) = (Grow::Lava, Light::Full, Behaviour::Lava);
         }
         Kind::Dust(c) => {
-            s.velocity = Vec3::new(rng.range(-0.4, 0.4), rng.range(-0.1, 0.1), rng.range(-0.4, 0.4)) / 20.0;
+            s.velocity = Vec3::new(
+                rng.range(-0.4, 0.4),
+                rng.range(-0.1, 0.1),
+                rng.range(-0.4, 0.4),
+            ) / 20.0;
             let shade = (rng.f32() * 0.2 + 0.8) * (rng.f32() * 0.4 + 0.6);
             s.size = rng.f32() * 0.075 + 0.075;
             s.lifetime = ((2.0 / rng.range(1.0, 5.0)) * 20.0) as u32;
@@ -157,26 +231,44 @@ pub fn sprite(kind: Kind, at: DVec3, a: Vec3, rng: &mut Rng) -> Option<Sprite> {
             s.color = [k, k * 0.3, k * 0.9, 1.0];
             // Sinks a block over its life: the Java formula from a block lower, standing still.
             let start = at - DVec3::Y;
-            (s.physics, s.grow, s.light, s.behaviour) = (false, Grow::Portal, Light::Full, Behaviour::Portal { start });
+            (s.physics, s.grow, s.light, s.behaviour) = (
+                false,
+                Grow::Portal,
+                Light::Full,
+                Behaviour::Portal { start },
+            );
         }
         Kind::DrippingWater | Kind::DrippingLava => {
             let lava = kind == Kind::DrippingLava;
             s.set = Set::DripHang;
             s.position.y += 0.1;
             s.color = if lava { [1.0; 4] } else { WATER };
-            let next = if lava { Kind::FallingLava } else { Kind::FallingWater };
+            let next = if lava {
+                Kind::FallingLava
+            } else {
+                Kind::FallingWater
+            };
             (s.size, s.lifetime, s.width) = (0.15, 40, 0.02);
-            s.behaviour = Behaviour::Hang { next, cooling: lava };
+            s.behaviour = Behaviour::Hang {
+                next,
+                cooling: lava,
+            };
             s.light = if lava { Light::Full } else { Light::World };
         }
         Kind::FallingWater | Kind::FallingLava | Kind::LandingLava => {
             let lava = kind != Kind::FallingWater;
             s.set = Set::DripFall;
-            s.color = if lava { [1.0, 0.8 / 2.8, 0.2 / 2.4, 1.0] } else { WATER };
+            s.color = if lava {
+                [1.0, 0.8 / 2.8, 0.2 / 2.4, 1.0]
+            } else {
+                WATER
+            };
             s.accel = per_tick(Vec3::Y * -19.6);
             (s.size, s.lifetime, s.width) = (0.15, 60, 0.02);
             if kind != Kind::LandingLava {
-                s.behaviour = Behaviour::Fall { land: if lava { Kind::LandingLava } else { Kind::Rain } };
+                s.behaviour = Behaviour::Fall {
+                    land: if lava { Kind::LandingLava } else { Kind::Rain },
+                };
             }
             s.light = if lava { Light::Full } else { Light::World };
         }
@@ -187,6 +279,11 @@ pub fn sprite(kind: Kind, at: DVec3, a: Vec3, rng: &mut Rng) -> Option<Sprite> {
 
 /// A note's colour by pitch, 0 to 1, as Java's `NoteParticle` picks it.
 fn note_color(pitch: f32) -> [f32; 4] {
-    let channel = |offset: f32| ((pitch + offset) * std::f32::consts::TAU).sin().mul_add(0.65, 0.35).max(0.0);
+    let channel = |offset: f32| {
+        ((pitch + offset) * std::f32::consts::TAU)
+            .sin()
+            .mul_add(0.65, 0.35)
+            .max(0.0)
+    };
     [channel(0.0), channel(1.0 / 3.0), channel(2.0 / 3.0), 1.0]
 }

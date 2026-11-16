@@ -55,7 +55,10 @@ mod tests {
     #[test]
     fn sticks_take_two_planks_of_any_wood() {
         let stick = crafting().iter().find(|r| r.id == "stick").unwrap();
-        assert_eq!((stick.shape, stick.result, stick.count), (Some((1, 2)), Item::Stick, 4));
+        assert_eq!(
+            (stick.shape, stick.result, stick.count),
+            (Some((1, 2)), Item::Stick, 4)
+        );
         assert!(stick.inputs.iter().all(|c| c.accepts(Item::BirchPlanks)));
         let torch = crafting().iter().find(|r| r.id == "torch").unwrap();
         assert!(torch.inputs[0].accepts(Item::Charcoal) && !torch.inputs[0].accepts(Item::Stick));

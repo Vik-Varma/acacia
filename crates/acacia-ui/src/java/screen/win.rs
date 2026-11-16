@@ -37,7 +37,12 @@ impl Lines {
             let mut line = line.replace("PLAYERNAME", player);
             while let Some(pos) = line.find(OBFUSCATE_TOKEN) {
                 let n = random.next_int_bound(4) as usize + 3;
-                line = format!("{}§f§k{}{}", &line[..pos], &"XXXXXXXX"[..n], &line[pos + OBFUSCATE_TOKEN.len()..]);
+                line = format!(
+                    "{}§f§k{}{}",
+                    &line[..pos],
+                    &"XXXXXXXX"[..n],
+                    &line[pos + OBFUSCATE_TOKEN.len()..]
+                );
             }
             for l in split(ctx.font, &Text::literal(line), 256) {
                 self.add(l, false);
@@ -55,7 +60,10 @@ impl Lines {
         let s = |v: &Value| v.as_str().unwrap_or_default().to_owned();
         for section in json.as_array().into_iter().flatten() {
             self.add(heading(), true);
-            self.add(Text::styled(s(&section["section"]), &Style::color(YELLOW)), true);
+            self.add(
+                Text::styled(s(&section["section"]), &Style::color(YELLOW)),
+                true,
+            );
             self.add(heading(), true);
             self.empty();
             self.empty();
@@ -69,7 +77,12 @@ impl Lines {
                 for title in discipline["titles"].as_array().into_iter().flatten() {
                     self.add(Text::styled(s(&title["title"]), &Style::color(GRAY)), false);
                     for name in title["names"].as_array().into_iter().flatten() {
-                        self.add(Text::literal("           ").append(s(name)).with_style(&Style::color(WHITE)), false);
+                        self.add(
+                            Text::literal("           ")
+                                .append(s(name))
+                                .with_style(&Style::color(WHITE)),
+                            false,
+                        );
                     }
                     self.empty();
                     self.empty();
@@ -106,12 +119,23 @@ pub struct WinScreen {
 pub fn scroll_speed(poem: bool, speedup: bool, modifiers: usize, reverse: bool) -> f32 {
     let base = if poem { 0.5 } else { 0.75 };
     let direction = if reverse { -1.0 } else { 1.0 };
-    if speedup { base * (5.0 + modifiers as f32 * 15.0) * direction } else { base * direction }
+    if speedup {
+        base * (5.0 + modifiers as f32 * 15.0) * direction
+    } else {
+        base * direction
+    }
 }
 
 impl WinScreen {
     pub fn new(env: Env, poem: bool, lines: Lines) -> WinScreen {
-        WinScreen { env, poem, lines, scroll: 0.0, speed: scroll_speed(poem, false, 0, false), partial: 0.0 }
+        WinScreen {
+            env,
+            poem,
+            lines,
+            scroll: 0.0,
+            speed: scroll_speed(poem, false, 0, false),
+            partial: 0.0,
+        }
     }
 
     /// `tick`: whether the roll is over (the owner then respawns or closes it).
@@ -124,26 +148,60 @@ impl Screen for WinScreen {
     fn background(&mut self, ctx: &mut Ctx) {
         let (w, h) = (self.env.width, self.env.height);
         if self.poem {
-            ctx.gui.draws.push(GuiDraw::Picture(Picture::EndPortal { rect: [0, 0, w, h] }));
+            ctx.gui
+                .draws
+                .push(GuiDraw::Picture(Picture::EndPortal { rect: [0, 0, w, h] }));
             return;
         }
         if !self.env.in_world {
             panorama(&self.env, ctx);
         }
         blurred(&self.env, ctx);
-        blit(ctx, "gui/menu_background", Blend::Textured, [0, 0, w, h], [0.0, self.scroll * 0.5], [w, h], [32, 32]);
+        blit(
+            ctx,
+            "gui/menu_background",
+            Blend::Textured,
+            [0, 0, w, h],
+            [0.0, self.scroll * 0.5],
+            [w, h],
+            [32, 32],
+        );
     }
 
     fn foreground(&mut self, ctx: &mut Ctx) {
         let (w, h) = (self.env.width, self.env.height);
-        blit(ctx, "misc/credits_vignette", Blend::Vignette, [0, 0, w, h], [0.0, 0.0], [w, h], [w, h]);
+        blit(
+            ctx,
+            "misc/credits_vignette",
+            Blend::Vignette,
+            [0, 0, w, h],
+            [0.0, 0.0],
+            [w, h],
+            [w, h],
+        );
         self.scroll = (self.scroll + self.partial * self.speed).max(0.0);
         let (logo_x, logo_y) = (w / 2 - 128, h + 50);
         let y_offs = -self.scroll;
         ctx.push(vec![PoseOp::Translate(0.0, y_offs)]);
         ctx.gui.next_stratum();
-        blit(ctx, "gui/title/minecraft", Blend::Textured, [logo_x, logo_y, 256, 44], [0.0, 0.0], [256, 44], [256, 64]);
-        blit(ctx, "gui/title/edition", Blend::Textured, [w / 2 - 64, logo_y + 44 - 7, 128, 14], [0.0, 0.0], [128, 14], [128, 16]);
+        blit(
+            ctx,
+            "gui/title/minecraft",
+            Blend::Textured,
+            [logo_x, logo_y, 256, 44],
+            [0.0, 0.0],
+            [256, 44],
+            [256, 64],
+        );
+        blit(
+            ctx,
+            "gui/title/edition",
+            Blend::Textured,
+            [w / 2 - 64, logo_y + 44 - 7, 128, 14],
+            [0.0, 0.0],
+            [128, 14],
+            [128, 16],
+        );
         let mut y = logo_y + 100;
         let count = self.lines.0.len();
         for (i, (line, centered)) in self.lines.0.iter().enumerate() {
@@ -152,7 +210,10 @@ impl Screen for WinScreen {
                 if diff < 0.0 {
                     // Java translates the pushed pose again: the same floats as one push of both.
                     ctx.pop();
-                    ctx.push(vec![PoseOp::Translate(0.0, y_offs), PoseOp::Translate(0.0, -diff)]);
+                    ctx.push(vec![
+                        PoseOp::Translate(0.0, y_offs),
+                        PoseOp::Translate(0.0, -diff),
+                    ]);
                 }
             }
             if y as f32 + y_offs + 12.0 + 8.0 > 0.0 && (y as f32 + y_offs) < h as f32 {

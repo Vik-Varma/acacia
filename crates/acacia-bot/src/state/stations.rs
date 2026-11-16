@@ -77,7 +77,11 @@ pub struct Stations {
 }
 
 impl Stations {
-    pub const PACKETS: &'static [u32] = &[PlayerEnchantOptions::ID, UpdateTrade::ID, ContainerClose::ID];
+    pub const PACKETS: &'static [u32] = &[
+        PlayerEnchantOptions::ID,
+        UpdateTrade::ID,
+        ContainerClose::ID,
+    ];
 
     pub fn apply(&mut self, packet: &RawPacket) -> Result<(), DecodeError> {
         match packet.id {
@@ -112,8 +116,19 @@ impl Stations {
 }
 
 fn enchant_option(o: acacia_client::proto::types::EnchantOption) -> EnchantOption {
-    let enchants = o.equip_enchants.iter().chain(&o.held_enchants).chain(&o.self_enchants).map(|e| (e.id, e.level)).collect();
-    EnchantOption { cost: o.cost, enchants, name: o.name, recipe_network_id: o.option_id }
+    let enchants = o
+        .equip_enchants
+        .iter()
+        .chain(&o.held_enchants)
+        .chain(&o.self_enchants)
+        .map(|e| (e.id, e.level))
+        .collect();
+    EnchantOption {
+        cost: o.cost,
+        enchants,
+        name: o.name,
+        recipe_network_id: o.option_id,
+    }
 }
 
 fn trade_offer(offer: &Value) -> TradeOffer {
@@ -125,7 +140,10 @@ fn trade_offer(offer: &Value) -> TradeOffer {
     };
     // buyCountA/B carry the price after demand and discounts; the item counts are the base price.
     let payment = |item: &str, count: &str| {
-        let mut payment = offer.get(item).map(trade_item).filter(|i| !i.name.is_empty() && i.name != "minecraft:air" && i.count > 0)?;
+        let mut payment = offer
+            .get(item)
+            .map(trade_item)
+            .filter(|i| !i.name.is_empty() && i.name != "minecraft:air" && i.count > 0)?;
         if int(count) > 0 {
             payment.count = int(count) as u16;
         }
@@ -157,7 +175,11 @@ fn trade_item(item: &Value) -> TradeItem {
         Some(Value::Short(d)) => *d,
         _ => 0,
     };
-    TradeItem { name, count, metadata }
+    TradeItem {
+        name,
+        count,
+        metadata,
+    }
 }
 
 #[cfg(test)]

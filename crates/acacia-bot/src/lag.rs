@@ -25,7 +25,13 @@ pub struct Lag {
 impl Lag {
     /// A plain one-way delay.
     pub fn fixed(delay: Duration) -> Self {
-        Self { delay, jitter: Duration::ZERO, loss: 0.0, spike: Duration::ZERO, seed: 1 }
+        Self {
+            delay,
+            jitter: Duration::ZERO,
+            loss: 0.0,
+            spike: Duration::ZERO,
+            seed: 1,
+        }
     }
 }
 
@@ -37,7 +43,11 @@ pub(crate) struct LagLine {
 
 impl LagLine {
     pub(crate) fn new(lag: Lag) -> Self {
-        Self { lag, queue: VecDeque::new(), rng: lag.seed }
+        Self {
+            lag,
+            queue: VecDeque::new(),
+            rng: lag.seed,
+        }
     }
 
     fn unit(&mut self) -> f32 {

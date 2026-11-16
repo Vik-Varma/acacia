@@ -1,8 +1,8 @@
 use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::compression::{decompress_batch, Algorithm, NONE_ID};
-use crate::crypto::Encryption;
 use crate::Error;
+use crate::compression::{Algorithm, NONE_ID, decompress_batch};
+use crate::crypto::Encryption;
 
 pub const GAME_MESSAGE_ID: u8 = 0xfe;
 /// Largest decompressed batch accepted by default. A joiner's PlayerList carries every player's skin
@@ -30,7 +30,10 @@ pub struct SharedBatch(Bytes);
 
 impl SharedBatch {
     /// `compression` must be what the receiving codecs use ([`BatchCodec::compression`]).
-    pub fn new<'a>(packets: impl IntoIterator<Item = &'a [u8]>, compression: Option<(Algorithm, usize)>) -> Self {
+    pub fn new<'a>(
+        packets: impl IntoIterator<Item = &'a [u8]>,
+        compression: Option<(Algorithm, usize)>,
+    ) -> Self {
         let mut body = BytesMut::new();
         put_body(packets, compression, &mut BytesMut::new(), &mut body);
         Self(Bytes::copy_from_slice(&body))
@@ -38,7 +41,12 @@ impl SharedBatch {
 }
 
 /// Appends a batch body to `out`, with `plain` as scratch for the uncompressed packets.
-fn put_body<'a>(packets: impl IntoIterator<Item = &'a [u8]>, compression: Option<(Algorithm, usize)>, plain: &mut BytesMut, out: &mut BytesMut) {
+fn put_body<'a>(
+    packets: impl IntoIterator<Item = &'a [u8]>,
+    compression: Option<(Algorithm, usize)>,
+    plain: &mut BytesMut,
+    out: &mut BytesMut,
+) {
     plain.clear();
     for p in packets {
         put_varuint32(plain, p.len() as u32);
@@ -61,14 +69,24 @@ fn put_body<'a>(packets: impl IntoIterator<Item = &'a [u8]>, compression: Option
 
 impl Default for BatchCodec {
     fn default() -> Self {
-        Self { header: true, compression: None, encryption: None, max_decompressed: DEFAULT_MAX_DECOMPRESSED, plain: BytesMut::new(), body: BytesMut::new() }
+        Self {
+            header: true,
+            compression: None,
+            encryption: None,
+            max_decompressed: DEFAULT_MAX_DECOMPRESSED,
+            plain: BytesMut::new(),
+            body: BytesMut::new(),
+        }
     }
 }
 
 impl BatchCodec {
     /// NetherNet framing: identical batches with no 0xfe byte in front.
     pub fn without_header() -> Self {
-        Self { header: false, ..Self::default() }
+        Self {
+            header: false,
+            ..Self::default()
+        }
     }
 
     pub fn enable_compression(&mut self, alg: Algorithm, threshold: usize) {
@@ -165,7 +183,10 @@ fn split_packets(payload: &Bytes, out: &mut Vec<Bytes>) -> Result<(), Error> {
     while pos < payload.len() {
         let (len, n) = read_varuint32(&payload[pos..]).ok_or(Error::MalformedBatch)?;
         let start = pos + n;
-        let end = start.checked_add(len as usize).filter(|&e| e <= payload.len()).ok_or(Error::MalformedBatch)?;
+        let end = start
+            .checked_add(len as usize)
+            .filter(|&e| e <= payload.len())
+            .ok_or(Error::MalformedBatch)?;
         out.push(payload.slice(start..end));
         pos = end;
     }
@@ -242,7 +263,10 @@ mod tests {
         rx.enable_compression(Algorithm::Deflate, 0);
         let msg = tx.encode([&big[..]]);
         rx.set_max_decompressed(1024);
-        assert!(matches!(rx.decode(&msg, &mut vec![]), Err(Error::BatchTooLarge)));
+        assert!(matches!(
+            rx.decode(&msg, &mut vec![]),
+            Err(Error::BatchTooLarge)
+        ));
         rx.set_max_decompressed(8192);
         roundtrip(&mut tx, &mut rx, &[&big]);
     }

@@ -7,7 +7,11 @@ const SCALE: f64 = 10430.378350470453;
 
 fn sine_table() -> &'static [f32] {
     static SINE: OnceLock<Box<[f32]>> = OnceLock::new();
-    SINE.get_or_init(|| (0..65536).map(|i| (f64::from(i) / SCALE).sin() as f32).collect())
+    SINE.get_or_init(|| {
+        (0..65536)
+            .map(|i| (f64::from(i) / SCALE).sin() as f32)
+            .collect()
+    })
 }
 
 /// `Mth.sin(double)`.
@@ -28,7 +32,11 @@ pub fn atan2(mut y: f64, mut x: f64) -> f64 {
             .map(|i| {
                 let a = fdlibm_asin(f64::from(i) / 256.0);
                 // HotSpot's x86-64 Math.cos intrinsic rounds entry 61 one ulp above libm.
-                let c = if i == 61 { f64::from_bits(0x3fef_140a_0a08_6af1) } else { a.cos() };
+                let c = if i == 61 {
+                    f64::from_bits(0x3fef_140a_0a08_6af1)
+                } else {
+                    a.cos()
+                };
                 (a, c)
             })
             .unzip()
@@ -129,12 +137,23 @@ mod tests {
 
     #[test]
     fn the_tables_follow_libm_closely() {
-        for (y, x) in [(1.0, 0.0), (0.0, 1.0), (-0.5, 0.25), (0.3, -0.9), (-1.0, -1.0), (0.1, 0.7)] {
+        for (y, x) in [
+            (1.0, 0.0),
+            (0.0, 1.0),
+            (-0.5, 0.25),
+            (0.3, -0.9),
+            (-1.0, -1.0),
+            (0.1, 0.7),
+        ] {
             assert!((atan2(y, x) - f64::atan2(y, x)).abs() < 1e-6, "{y} {x}");
         }
         assert!(atan2(f64::NAN, 1.0).is_nan());
         for a in [0.0, 0.5, -2.0, 3.0] {
-            assert!((sin(a) - (a as f32).sin()).abs() < 1e-3 && (cos(a) - (a as f32).cos()).abs() < 1e-3, "{a}");
+            assert!(
+                (sin(a) - (a as f32).sin()).abs() < 1e-3
+                    && (cos(a) - (a as f32).cos()).abs() < 1e-3,
+                "{a}"
+            );
         }
         assert_eq!((sin(0.0), cos(0.0)), (0.0, 1.0));
         for v in [0.0, 0.25, 0.5, 0.9, 0.99, 1.0, -0.3] {
@@ -145,6 +164,9 @@ mod tests {
 
 #[test]
 fn quarter_turns_are_exact() {
-    assert_eq!((sin(0.0), cos(0.0), sin(std::f64::consts::FRAC_PI_2)), (0.0, 1.0, 1.0));
+    assert_eq!(
+        (sin(0.0), cos(0.0), sin(std::f64::consts::FRAC_PI_2)),
+        (0.0, 1.0, 1.0)
+    );
     assert_eq!(sin(f64::from(std::f32::consts::TAU)), sin(0.0));
 }

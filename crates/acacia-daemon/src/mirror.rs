@@ -20,7 +20,12 @@ impl Mirror {
     pub(crate) fn update(&mut self, host: &Host, bot: &BotId) -> Option<String> {
         let mut parts = Vec::new();
         // Tick 0 is the placeholder before the first tick: `bot.hot` stays null until then, as in-process.
-        if let Some(hot) = host.hot(bot).filter(|h| h.tick != 0).map(|h| to_json(&h)).filter(|h| *h != self.hot) {
+        if let Some(hot) = host
+            .hot(bot)
+            .filter(|h| h.tick != 0)
+            .map(|h| to_json(&h))
+            .filter(|h| *h != self.hot)
+        {
             self.hot = hot.clone();
             parts.push(("hot", hot));
         }
@@ -30,7 +35,9 @@ impl Mirror {
             self.cold = Some(cold.version);
             parts.push(("cold", to_json(&cold)));
         }
-        if host.entities_version(bot).is_some_and(|v| Some(v) != self.entities)
+        if host
+            .entities_version(bot)
+            .is_some_and(|v| Some(v) != self.entities)
             && let Some(delta) = host.entity_delta(bot, self.entities)
         {
             self.entities = Some(delta.version());

@@ -17,13 +17,29 @@ use acacia_testserver::capture::{self, Packet};
 
 /// High-volume packets that bury the actions; shown with --all or --only.
 const NOISY: &[&str] = &[
-    "MoveEntityDelta", "SetEntityMotion", "SetEntityData", "ClientboundMapItemData", "LevelChunk", "Subchunk",
-    "SubchunkRequest", "ClientCacheMissResponse", "ClientCacheBlobStatus", "NetworkChunkPublisherUpdate",
-    "CurrentStructureFeature", "SyncWorldClocks", "CorrectPlayerMovePrediction", "ContainerSetData",
+    "MoveEntityDelta",
+    "SetEntityMotion",
+    "SetEntityData",
+    "ClientboundMapItemData",
+    "LevelChunk",
+    "Subchunk",
+    "SubchunkRequest",
+    "ClientCacheMissResponse",
+    "ClientCacheBlobStatus",
+    "NetworkChunkPublisherUpdate",
+    "CurrentStructureFeature",
+    "SyncWorldClocks",
+    "CorrectPlayerMovePrediction",
+    "ContainerSetData",
 ];
 
 /// PlayerAuthInput flags that flicker every few ticks without meaning a different activity.
-const FLAG_NOISE: &[&str] = &["VerticalCollision", "HorizontalCollision", "CameraRelativeMovementEnabled", "BlockBreakingDelayEnabled"];
+const FLAG_NOISE: &[&str] = &[
+    "VerticalCollision",
+    "HorizontalCollision",
+    "CameraRelativeMovementEnabled",
+    "BlockBreakingDelayEnabled",
+];
 
 #[derive(PartialEq)]
 enum PaiMode {
@@ -61,12 +77,24 @@ fn run() -> Result<(), String> {
     for p in &session.packets {
         let shown = keep(&opts, p);
         let line = if p.name == "PlayerAuthInput" {
-            let Ok(pk) = PlayerAuthInput::decode(&mut &p.body[..]) else { continue };
-            let flags: BTreeSet<String> = pk.input_data.iter().map(|f| format!("{f:?}")).filter(|f| !FLAG_NOISE.contains(&f.as_str())).collect();
+            let Ok(pk) = PlayerAuthInput::decode(&mut &p.body[..]) else {
+                continue;
+            };
+            let flags: BTreeSet<String> = pk
+                .input_data
+                .iter()
+                .map(|f| format!("{f:?}"))
+                .filter(|f| !FLAG_NOISE.contains(&f.as_str()))
+                .collect();
             let changed = last_flags.as_ref() != Some(&flags);
             last_flags = Some(flags.clone());
-            let busy = pk.transaction.is_some() || pk.item_stack_request.is_some() || pk.block_action.is_some();
-            if !shown || opts.pai == PaiMode::None || (opts.pai == PaiMode::Changes && !changed && !busy) {
+            let busy = pk.transaction.is_some()
+                || pk.item_stack_request.is_some()
+                || pk.block_action.is_some();
+            if !shown
+                || opts.pai == PaiMode::None
+                || (opts.pai == PaiMode::Changes && !changed && !busy)
+            {
                 continue;
             }
             pai_line(&pk, &flags)
@@ -76,7 +104,13 @@ fn run() -> Result<(), String> {
             }
             dump(p).unwrap_or_else(|| format!("<undecoded {} bytes>", p.body.len()))
         };
-        println!("{:>9.0} {} {} {}", p.t, if p.from_client { "C>S" } else { "S>C" }, p.name, cap(line, opts.cap));
+        println!(
+            "{:>9.0} {} {} {}",
+            p.t,
+            if p.from_client { "C>S" } else { "S>C" },
+            p.name,
+            cap(line, opts.cap)
+        );
     }
     Ok(())
 }
@@ -92,7 +126,15 @@ fn keep(o: &Opts, p: &Packet) -> bool {
 fn pai_line(pk: &PlayerAuthInput, flags: &BTreeSet<String>) -> String {
     let mut s = format!(
         "tick={} pos=({:.2},{:.2},{:.2}) rot=({:.1},{:.1}) mv=({:.2},{:.2}) flags={:?}",
-        pk.tick, pk.position.x, pk.position.y, pk.position.z, pk.pitch, pk.yaw, pk.move_vector.x, pk.move_vector.z, flags
+        pk.tick,
+        pk.position.x,
+        pk.position.y,
+        pk.position.z,
+        pk.pitch,
+        pk.yaw,
+        pk.move_vector.x,
+        pk.move_vector.z,
+        flags
     );
     if let Some(t) = &pk.transaction {
         s += &format!(" transaction={t:?}");
@@ -104,7 +146,10 @@ fn pai_line(pk: &PlayerAuthInput, flags: &BTreeSet<String>) -> String {
         s += &format!(" block_action={b:?}");
     }
     if let Some(v) = &pk.vehicle_rotation {
-        s += &format!(" vehicle_rotation=({:.1},{:.1}) predicted_vehicle={:?}", v.x, v.z, pk.predicted_vehicle);
+        s += &format!(
+            " vehicle_rotation=({:.1},{:.1}) predicted_vehicle={:?}",
+            v.x, v.z, pk.predicted_vehicle
+        );
     }
     s
 }
@@ -113,16 +158,36 @@ fn cap(line: String, n: usize) -> String {
     if n == 0 || line.len() <= n {
         return line;
     }
-    let cut = (0..=n).rev().find(|i| line.is_char_boundary(*i)).unwrap_or(0);
+    let cut = (0..=n)
+        .rev()
+        .find(|i| line.is_char_boundary(*i))
+        .unwrap_or(0);
     format!("{}...(+{} chars)", &line[..cut], line.len() - cut)
 }
 
 fn parse(args: Vec<String>) -> Result<Opts, String> {
-    let mut o = Opts { only: None, exclude: BTreeSet::new(), from: f64::MIN, to: f64::MAX, dir: None, pai: PaiMode::Changes, cap: 1500 };
+    let mut o = Opts {
+        only: None,
+        exclude: BTreeSet::new(),
+        from: f64::MIN,
+        to: f64::MAX,
+        dir: None,
+        pai: PaiMode::Changes,
+        cap: 1500,
+    };
     let mut all = false;
     let mut it = args.into_iter();
-    let names = |s: Option<String>| -> Result<BTreeSet<String>, String> { Ok(s.ok_or("missing name list")?.split(',').map(str::to_owned).collect()) };
-    let num = |s: Option<String>| -> Result<f64, String> { s.ok_or("missing number")?.parse::<f64>().map_err(|e| e.to_string()) };
+    let names = |s: Option<String>| -> Result<BTreeSet<String>, String> {
+        Ok(s.ok_or("missing name list")?
+            .split(',')
+            .map(str::to_owned)
+            .collect())
+    };
+    let num = |s: Option<String>| -> Result<f64, String> {
+        s.ok_or("missing number")?
+            .parse::<f64>()
+            .map_err(|e| e.to_string())
+    };
     while let Some(a) = it.next() {
         match a.as_str() {
             "--only" => o.only = Some(names(it.next())?),

@@ -28,9 +28,14 @@ impl SignalKind {
     }
 
     fn parse(s: &str) -> Option<Self> {
-        [Self::ConnectRequest, Self::ConnectResponse, Self::CandidateAdd, Self::ConnectError]
-            .into_iter()
-            .find(|k| k.as_str() == s)
+        [
+            Self::ConnectRequest,
+            Self::ConnectResponse,
+            Self::CandidateAdd,
+            Self::ConnectError,
+        ]
+        .into_iter()
+        .find(|k| k.as_str() == s)
     }
 }
 
@@ -43,7 +48,11 @@ pub struct Signal {
 
 impl Signal {
     pub fn new(kind: SignalKind, connection_id: u64, data: impl Into<String>) -> Self {
-        Self { kind, connection_id, data: data.into() }
+        Self {
+            kind,
+            connection_id,
+            data: data.into(),
+        }
     }
 
     pub fn error(connection_id: u64, code: u32) -> Self {
@@ -53,23 +62,38 @@ impl Signal {
     pub fn parse(text: &str) -> Result<Self, Error> {
         let bad = |why: &str| Error::Signal(format!("{why}: {:?}", truncate(text)));
         let mut parts = text.splitn(3, ' ');
-        let kind = parts.next().and_then(SignalKind::parse).ok_or_else(|| bad("unknown type"))?;
+        let kind = parts
+            .next()
+            .and_then(SignalKind::parse)
+            .ok_or_else(|| bad("unknown type"))?;
         let id = parts.next().ok_or_else(|| bad("no connection id"))?;
         // go-nethernet reads the id as a decimal prefix, so `123abc` is connection 123.
         let digits = id.bytes().take_while(u8::is_ascii_digit).count();
         let connection_id = id[..digits].parse().map_err(|_| bad("bad connection id"))?;
-        Ok(Self { kind, connection_id, data: parts.next().unwrap_or_default().to_owned() })
+        Ok(Self {
+            kind,
+            connection_id,
+            data: parts.next().unwrap_or_default().to_owned(),
+        })
     }
 
     /// The code a `CONNECTERROR` carries.
     pub fn error_code(&self) -> Option<u32> {
-        (self.kind == SignalKind::ConnectError).then(|| self.data.trim().parse().ok()).flatten()
+        (self.kind == SignalKind::ConnectError)
+            .then(|| self.data.trim().parse().ok())
+            .flatten()
     }
 }
 
 impl fmt::Display for Signal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {} {}", self.kind.as_str(), self.connection_id, self.data)
+        write!(
+            f,
+            "{} {} {}",
+            self.kind.as_str(),
+            self.connection_id,
+            self.data
+        )
     }
 }
 
@@ -83,16 +107,28 @@ mod tests {
 
     #[test]
     fn round_trips_sdp_with_spaces_and_newlines() {
-        let s = Signal::new(SignalKind::ConnectRequest, 18446744073709551615, "v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\n");
+        let s = Signal::new(
+            SignalKind::ConnectRequest,
+            18446744073709551615,
+            "v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\n",
+        );
         assert_eq!(Signal::parse(&s.to_string()).unwrap(), s);
-        assert!(s.to_string().starts_with("CONNECTREQUEST 18446744073709551615 v=0\r\n"));
+        assert!(
+            s.to_string()
+                .starts_with("CONNECTREQUEST 18446744073709551615 v=0\r\n")
+        );
     }
 
     #[test]
     fn parses_candidates_and_errors() {
-        let c = Signal::parse("CANDIDATEADD 7 candidate:1 1 udp 2113937151 192.168.1.2 5000 typ host").unwrap();
+        let c =
+            Signal::parse("CANDIDATEADD 7 candidate:1 1 udp 2113937151 192.168.1.2 5000 typ host")
+                .unwrap();
         assert_eq!((c.kind, c.connection_id), (SignalKind::CandidateAdd, 7));
-        assert_eq!(c.data, "candidate:1 1 udp 2113937151 192.168.1.2 5000 typ host");
+        assert_eq!(
+            c.data,
+            "candidate:1 1 udp 2113937151 192.168.1.2 5000 typ host"
+        );
         let e = Signal::parse("CONNECTERROR 7 37").unwrap();
         assert_eq!(e.error_code(), Some(37));
         assert_eq!(Signal::error(7, 37), e);
@@ -104,7 +140,10 @@ mod tests {
         assert!(Signal::parse("HELLO 1 x").is_err());
         assert!(Signal::parse("CONNECTREQUEST").is_err());
         assert!(Signal::parse("CONNECTREQUEST abc x").is_err());
-        assert_eq!(Signal::parse("CONNECTERROR 12x 3").unwrap().connection_id, 12);
+        assert_eq!(
+            Signal::parse("CONNECTERROR 12x 3").unwrap().connection_id,
+            12
+        );
         assert_eq!(Signal::parse("CONNECTRESPONSE 5").unwrap().data, "");
     }
 }

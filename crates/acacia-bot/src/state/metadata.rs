@@ -91,7 +91,10 @@ impl Metadata {
 
     /// Collision box width and height in blocks, when the server sent them (every mob gets them at spawn).
     pub fn bounding_box(&self) -> Option<(f32, f32)> {
-        match (self.plain(Key::BoundingboxWidth)?, self.plain(Key::BoundingboxHeight)?) {
+        match (
+            self.plain(Key::BoundingboxWidth)?,
+            self.plain(Key::BoundingboxHeight)?,
+        ) {
             (Plain::Float(w), Plain::Float(h)) => Some((*w, *h)),
             _ => None,
         }
@@ -108,7 +111,8 @@ impl Metadata {
     /// Degrees a seat that locks its rider's rotation (`RiderRotationLocked`) turns the rider from the
     /// vehicle's yaw (`RiderSeatRotationOffset`); `None` on a seat that leaves the rider free.
     pub fn seat_turn(&self) -> Option<f32> {
-        let locked = matches!(self.plain(Key::RiderRotationLocked), Some(Plain::Byte(b)) if *b != 0);
+        let locked =
+            matches!(self.plain(Key::RiderRotationLocked), Some(Plain::Byte(b)) if *b != 0);
         match self.plain(Key::RiderSeatRotationOffset) {
             Some(Plain::Float(v)) if locked => Some(*v),
             _ => locked.then_some(0.0),
@@ -121,8 +125,20 @@ impl Metadata {
 
     /// [`Metadata::merge`] keeping only what hazard avoidance reads: flags, box, scale and target.
     pub(crate) fn merge_lean(&mut self, items: Vec<MetadataDictionaryItem>) {
-        const KEPT: [Key; 6] = [Key::Flags, Key::FlagsExtended, Key::BoundingboxWidth, Key::BoundingboxHeight, Key::Scale, Key::TargetEid];
-        self.0.extend(items.into_iter().filter(|i| KEPT.contains(&i.key)).map(|i| (i.key, i.value)));
+        const KEPT: [Key; 6] = [
+            Key::Flags,
+            Key::FlagsExtended,
+            Key::BoundingboxWidth,
+            Key::BoundingboxHeight,
+            Key::Scale,
+            Key::TargetEid,
+        ];
+        self.0.extend(
+            items
+                .into_iter()
+                .filter(|i| KEPT.contains(&i.key))
+                .map(|i| (i.key, i.value)),
+        );
     }
 }
 

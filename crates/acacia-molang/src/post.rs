@@ -8,7 +8,10 @@ pub(crate) struct Post {
 }
 
 impl Post {
-    pub(crate) const IDENTITY: Post = Post { scale: 1.0, offset: 0.0 };
+    pub(crate) const IDENTITY: Post = Post {
+        scale: 1.0,
+        offset: 0.0,
+    };
 
     /// An offset of -0 counts.
     pub(crate) fn is_identity(self) -> bool {
@@ -18,28 +21,45 @@ impl Post {
     /// The identity leaves `raw` untouched, so a -0 stays one.
     #[inline]
     pub(crate) fn apply(self, raw: f32) -> f32 {
-        if self.is_identity() { raw } else { raw * self.scale + self.offset }
+        if self.is_identity() {
+            raw
+        } else {
+            raw * self.scale + self.offset
+        }
     }
 
     /// What a comparison or a logic operator gives: never a multiplication.
     #[inline]
     pub(crate) fn select(self, condition: bool) -> f32 {
-        if condition { self.scale + self.offset } else { self.offset }
+        if condition {
+            self.scale + self.offset
+        } else {
+            self.offset
+        }
     }
 
     /// The post-op of `x·c`, this being `x`'s.
     pub(crate) fn scaled(self, c: f32) -> Post {
-        Post { scale: c * self.scale, offset: c * self.offset * 1.0 + 0.0 }
+        Post {
+            scale: c * self.scale,
+            offset: c * self.offset * 1.0 + 0.0,
+        }
     }
 
     /// The post-op of `-x`, this being `x`'s.
     pub(crate) fn negated(self) -> Post {
-        Post { scale: -self.scale, offset: 0.0 - self.offset }
+        Post {
+            scale: -self.scale,
+            offset: 0.0 - self.offset,
+        }
     }
 
     /// Two terms of a sum merged into one.
     pub(crate) fn plus(self, other: Post) -> Post {
-        Post { scale: self.scale + other.scale, offset: self.offset + other.offset }
+        Post {
+            scale: self.scale + other.scale,
+            offset: self.offset + other.offset,
+        }
     }
 }
 

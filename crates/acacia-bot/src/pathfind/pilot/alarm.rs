@@ -48,8 +48,18 @@ impl Alarm {
 /// follower's index at its start.
 fn score(h: &Hazards, f: &Follower, pos: Vec3) -> f32 {
     let ahead = f.ahead();
-    let d = |n: &PathNode| (n.pos[0] as f32 + 0.5 - pos[0]).powi(2) + (n.pos[2] as f32 + 0.5 - pos[2]).powi(2);
-    let from = (0..ahead.len()).min_by(|&a, &b| d(&ahead[a]).total_cmp(&d(&ahead[b]))).unwrap_or(0);
-    let cell = |n: &PathNode| if h.closed(n.pos) || h.closed([n.pos[0], n.pos[1] + 1, n.pos[2]]) { CLOSED } else { h.cost(n.pos) };
+    let d = |n: &PathNode| {
+        (n.pos[0] as f32 + 0.5 - pos[0]).powi(2) + (n.pos[2] as f32 + 0.5 - pos[2]).powi(2)
+    };
+    let from = (0..ahead.len())
+        .min_by(|&a, &b| d(&ahead[a]).total_cmp(&d(&ahead[b])))
+        .unwrap_or(0);
+    let cell = |n: &PathNode| {
+        if h.closed(n.pos) || h.closed([n.pos[0], n.pos[1] + 1, n.pos[2]]) {
+            CLOSED
+        } else {
+            h.cost(n.pos)
+        }
+    };
     ahead[from..].iter().take(AHEAD).map(cell).sum()
 }

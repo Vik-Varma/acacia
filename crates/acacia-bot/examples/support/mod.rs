@@ -11,8 +11,8 @@ pub mod schematic;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use acacia_bot::client::auth::{Account, AuthClient, AuthConfig, FileTokenCache};
 use acacia_bot::client::Client;
+use acacia_bot::client::auth::{Account, AuthClient, AuthConfig, FileTokenCache};
 use acacia_bot::world::SharedWorlds;
 use acacia_bot::{Bot, BotConfig};
 use tokio::sync::mpsc;
@@ -38,28 +38,60 @@ pub async fn connect(server: &str, name: &str) -> Result<(Bot, Pad), Error> {
 }
 
 /// [`connect`] recording to `record`, sharing terrain with other bots through `worlds`.
-pub async fn connect_with(server: &str, name: &str, record: Option<PathBuf>, worlds: SharedWorlds) -> Result<(Bot, Pad), Error> {
-    connect_config(server, name, BotConfig { record, shared_worlds: worlds, ..BotConfig::default() }).await
+pub async fn connect_with(
+    server: &str,
+    name: &str,
+    record: Option<PathBuf>,
+    worlds: SharedWorlds,
+) -> Result<(Bot, Pad), Error> {
+    connect_config(
+        server,
+        name,
+        BotConfig {
+            record,
+            shared_worlds: worlds,
+            ..BotConfig::default()
+        },
+    )
+    .await
 }
 
 /// [`connect`] with `config` (physics forced on).
-pub async fn connect_config(server: &str, name: &str, config: BotConfig) -> Result<(Bot, Pad), Error> {
+pub async fn connect_config(
+    server: &str,
+    name: &str,
+    config: BotConfig,
+) -> Result<(Bot, Pad), Error> {
     let mut builder = Client::builder(server);
     // CHUNK_RADIUS: chunks requested around the bot (the client's default is 2; the server sends at least its own few).
-    if let Some(radius) = std::env::var("CHUNK_RADIUS").ok().and_then(|v| v.parse().ok()) {
+    if let Some(radius) = std::env::var("CHUNK_RADIUS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+    {
         builder = builder.chunk_radius(radius);
     }
     builder = match name.strip_prefix('@') {
         Some(account) => {
-            let account = Account::new(Arc::new(AuthClient::new(AuthConfig::default())?), Arc::new(FileTokenCache::new(".tokens")?), account);
+            let account = Account::new(
+                Arc::new(AuthClient::new(AuthConfig::default())?),
+                Arc::new(FileTokenCache::new(".tokens")?),
+                account,
+            );
             let (key, credentials) = account.login_credentials().await?;
             builder.online(credentials, key)
         }
         None => builder.offline(name),
     };
-    let config = BotConfig { physics: true, ..config };
+    let config = BotConfig {
+        physics: true,
+        ..config
+    };
     let mut bot = Bot::connect(builder, config).await?;
-    while bot.bedrock().and_then(|b| b.movement()).is_none_or(|m| !m.is_started()) {
+    while bot
+        .bedrock()
+        .and_then(|b| b.movement())
+        .is_none_or(|m| !m.is_started())
+    {
         bot.wait_ticks(1).await?;
     }
     bot.wait_ticks(20).await?;
@@ -74,13 +106,22 @@ pub async fn connect_config(server: &str, name: &str, config: BotConfig) -> Resu
         bot.command(cmd);
         bot.wait_ticks(2).await?;
     }
-    Ok((bot, Pad { spawn, commander: Commander::Own }))
+    Ok((
+        bot,
+        Pad {
+            spawn,
+            commander: Commander::Own,
+        },
+    ))
 }
 
 /// Ends the process after `MAX_SECS` (default `default_secs`) of wall time, whatever the runtime is doing: a
 /// thread, so a spinning or stuck task can't hold a live run for 20+ minutes (it did, 2026-10-19).
 pub fn watchdog(default_secs: u64) {
-    let secs = std::env::var("MAX_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(default_secs);
+    let secs = std::env::var("MAX_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default_secs);
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(secs));
         eprintln!("WATCHDOG: no finish after {secs} s, exiting");
@@ -89,7 +130,9 @@ pub fn watchdog(default_secs: u64) {
 }
 
 pub fn corrections(bot: &Bot) -> u32 {
-    bot.bedrock().and_then(|b| b.movement()).map_or(0, |m| m.corrections)
+    bot.bedrock()
+        .and_then(|b| b.movement())
+        .map_or(0, |m| m.corrections)
 }
 
 /// Who runs a pad's commands: the bot itself, or an operator they are relayed to with `@s` replaced by
@@ -108,7 +151,10 @@ impl Pad {
     /// A pad whose floor top is `PAD_HEIGHT` above `origin`, wherever the bot spawned: offline players
     /// rejoin where they left, so a spawn-relative pad would creep upwards run after run.
     pub fn at(self, origin: [i32; 3]) -> Pad {
-        Pad { spawn: origin, ..self }
+        Pad {
+            spawn: origin,
+            ..self
+        }
     }
 
     /// The same pad moved `dx` blocks along x (one pad per bot when several share a server).
@@ -119,7 +165,10 @@ impl Pad {
 
     pub fn shifted(self, dx: i32) -> Pad {
         let [x, y, z] = self.spawn;
-        Pad { spawn: [x + dx, y, z], ..self }
+        Pad {
+            spawn: [x + dx, y, z],
+            ..self
+        }
     }
 
     pub fn relayed(self, commander: Commander) -> Pad {
@@ -147,9 +196,15 @@ impl Pad {
     pub async fn build(&self, bot: &mut Bot, fills: &[Fill<'_>], settle: u32) -> Result<(), Error> {
         // Park the bot beside the pad first, so it is never inside blocks while they are refilled.
         // Cleared above too: snow that fell on the parking block pushes a player teleported into it.
-        let mut cmds = vec![self.fill([-8, -1, 0], [-8, -1, 0], "stone"), self.fill([-8, 0, 0], [-8, 1, 0], "air")];
+        let mut cmds = vec![
+            self.fill([-8, -1, 0], [-8, -1, 0], "stone"),
+            self.fill([-8, 0, 0], [-8, 1, 0], "air"),
+        ];
         cmds.push(self.tp_command([-7.5, 0.0, 0.5], -90.0));
-        cmds.extend([self.fill([PAD_MIN[0], 0, PAD_MIN[2]], PAD_MAX, "air"), self.fill(PAD_MIN, [PAD_MAX[0], -1, PAD_MAX[2]], "stone")]);
+        cmds.extend([
+            self.fill([PAD_MIN[0], 0, PAD_MIN[2]], PAD_MAX, "air"),
+            self.fill(PAD_MIN, [PAD_MAX[0], -1, PAD_MAX[2]], "stone"),
+        ]);
         cmds.extend(fills.iter().map(|&(a, b, block)| self.fill(a, b, block)));
         for cmd in cmds {
             self.run(bot, &cmd);
@@ -161,10 +216,17 @@ impl Pad {
     /// Teleports to `at` (feet, offset from the origin block's corner) and waits until it lands: BDS can
     /// send the teleport many ticks late after big fills.
     pub async fn teleport(&self, bot: &mut Bot, at: [f32; 3], yaw: f32) -> Result<(), Error> {
-        let teleports = bot.bedrock().and_then(|b| b.movement()).map_or(0, |m| m.teleports);
+        let teleports = bot
+            .bedrock()
+            .and_then(|b| b.movement())
+            .map_or(0, |m| m.teleports);
         self.run(bot, &self.tp_command(at, yaw));
         for _ in 0..100 {
-            if bot.bedrock().and_then(|b| b.movement()).is_some_and(|m| m.teleports > teleports) {
+            if bot
+                .bedrock()
+                .and_then(|b| b.movement())
+                .is_some_and(|m| m.teleports > teleports)
+            {
                 break;
             }
             bot.wait_ticks(1).await?;
@@ -175,7 +237,10 @@ impl Pad {
     /// Back to the spawn block, or the next run's pad would float another `PAD_HEIGHT` higher.
     pub async fn go_home(&self, bot: &mut Bot) -> Result<(), Error> {
         let [x, y, z] = self.spawn;
-        self.run(bot, &format!("/tp @s {} {y} {}", x as f32 + 0.5, z as f32 + 0.5));
+        self.run(
+            bot,
+            &format!("/tp @s {} {y} {}", x as f32 + 0.5, z as f32 + 0.5),
+        );
         Ok(bot.wait_ticks(10).await?)
     }
 

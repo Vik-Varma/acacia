@@ -2,19 +2,19 @@
 
 use std::net::SocketAddr;
 
-use acacia_session::{raknet, LinkConfig};
 use acacia_nethernet::Identity;
+use acacia_session::{LinkConfig, raknet};
 
+use crate::ConnectError;
 use crate::client::TransportKind;
 use crate::driver::Wire;
 use crate::lan::{self, LanServer};
 use crate::net_wire::NetherNetWire;
-use crate::signaling::{self, Keepalive, SignalingTarget};
 use crate::nethernet::{self, Endpoint, Scheme};
 use crate::ping::ping_addr;
+use crate::signaling::{self, Keepalive, SignalingTarget};
 use crate::socks5::Socks5Proxy;
-use crate::transport::{raknet_client_guid, with_port, Transport};
-use crate::ConnectError;
+use crate::transport::{Transport, raknet_client_guid, with_port};
 
 /// An open path to the server, ready for a session.
 pub(crate) struct Route {
@@ -30,7 +30,10 @@ pub(crate) struct Route {
 }
 
 /// A LAN world found by discovery; always NetherNet.
-pub(crate) async fn open_lan(server: &LanServer, identity: Option<&Identity>) -> Result<Route, ConnectError> {
+pub(crate) async fn open_lan(
+    server: &LanServer,
+    identity: Option<&Identity>,
+) -> Result<Route, ConnectError> {
     let identity = identity.ok_or(ConnectError::NetherNetNeedsOnline)?;
     let (transport, wire) = lan::dial(server, identity).await?;
     Ok(Route {

@@ -27,8 +27,14 @@ pub enum Event<'a> {
     /// A sound definition by name (`random.click`), as `PlaySound` names it.
     Named(&'a str),
     /// A block's event (`place`, `break`, `hit`, `step`), by block name.
-    Block { block: &'a str, event: &'a str },
-    Entity { kind: &'a str, event: &'a str },
+    Block {
+        block: &'a str,
+        event: &'a str,
+    },
+    Entity {
+        kind: &'a str,
+        event: &'a str,
+    },
     /// A world event (`chest.open`).
     World(&'a str),
 }
@@ -36,39 +42,84 @@ pub enum Event<'a> {
 impl Sounds {
     /// `defs_root` holds the Bedrock tables; `roots` the sample files, preferred first.
     pub fn new(defs_root: &std::path::Path, roots: Vec<PathBuf>) -> Sounds {
-        Sounds { defs: Definitions::load(defs_root), roots, cache: HashMap::new(), output: Output::open(), seed: 0x9E37_79B9_7F4A_7C15 }
+        Sounds {
+            defs: Definitions::load(defs_root),
+            roots,
+            cache: HashMap::new(),
+            output: Output::open(),
+            seed: 0x9E37_79B9_7F4A_7C15,
+        }
     }
 
     /// Plays `event` at `at` (`None`: not placed), its volume and pitch scaled.
-    pub fn play(&mut self, event: Event, at: Option<[f64; 3]>, volume: f32, pitch: f32, listener: &Listener) {
+    pub fn play(
+        &mut self,
+        event: Event,
+        at: Option<[f64; 3]>,
+        volume: f32,
+        pitch: f32,
+        listener: &Listener,
+    ) {
         let mut seed = self.seed;
         let mut next = || roll(&mut seed);
         let cue = match event {
-            Event::Named(name) => Some(Cue { sound: name.to_owned(), volume: 1.0, pitch: 1.0 }),
+            Event::Named(name) => Some(Cue {
+                sound: name.to_owned(),
+                volume: 1.0,
+                pitch: 1.0,
+            }),
             Event::Block { block, event } => self.defs.block(block, event, &mut next),
             Event::Entity { kind, event } => self.defs.entity(kind, event, &mut next),
             Event::World(event) => self.defs.individual(event, &mut next),
         };
         self.seed = seed;
         let Some(cue) = cue else { return };
-        let Some((file, max_distance)) = self.pick(&cue.sound) else { return };
-        let Some(pcm) = self.load(&file.path) else { return };
-        tracing::debug!(sound = cue.sound, file = file.path, samples = pcm.samples.len(), "play");
+        let Some((file, max_distance)) = self.pick(&cue.sound) else {
+            return;
+        };
+        let Some(pcm) = self.load(&file.path) else {
+            return;
+        };
+        tracing::debug!(
+            sound = cue.sound,
+            file = file.path,
+            samples = pcm.samples.len(),
+            "play"
+        );
         let volume = volume * cue.volume * file.volume;
         let range = max_distance.unwrap_or(DEFAULT_RANGE) * volume.max(1.0);
-        self.output.play(Voice { pcm, volume, pitch: pitch * cue.pitch * file.pitch, position: at, range }, listener);
+        self.output.play(
+            Voice {
+                pcm,
+                volume,
+                pitch: pitch * cue.pitch * file.pitch,
+                position: at,
+                range,
+            },
+            listener,
+        );
     }
 
     /// Plays one of a definition's long samples (music) everywhere: it is read and decoded on a
     /// thread of its own, so the caller does not wait for it, and is not kept afterwards.
     pub fn stream(&mut self, sound: &str, volume: f32) {
-        let Some((file, _)) = self.pick(sound) else { return };
-        let Some(mixer) = self.output.mixer() else { return };
+        let Some((file, _)) = self.pick(sound) else {
+            return;
+        };
+        let Some(mixer) = self.output.mixer() else {
+            return;
+        };
         let roots = self.roots.clone();
         std::thread::spawn(move || {
             if let Some(pcm) = read(&roots, &file.path) {
                 tracing::debug!(file = file.path, samples = pcm.samples.len(), "stream");
-                crate::player::mix(&mixer, &pcm, (volume * file.volume).min(1.0), file.pitch, [1.0, 1.0]);
+                crate::player::mix(
+                    &mixer,
+                    &pcm,
+                    (volume * file.volume).min(1.0),
+                    file.pitch,
+                    [1.0, 1.0],
+                );
             }
         });
     }
@@ -105,14 +156,20 @@ fn read(roots: &[PathBuf], path: &str) -> Option<Pcm> {
         let ogg_file = root.join(format!("{path}.ogg"));
         if let Ok(bytes) = std::fs::read(&ogg_file) {
             tracing::debug!(file = %ogg_file.display(), "ogg");
-            return ogg::decode(&bytes).inspect_err(|e| tracing::debug!(%e, file = %ogg_file.display(), "ogg")).ok();
+            return ogg::decode(&bytes)
+                .inspect_err(|e| tracing::debug!(%e, file = %ogg_file.display(), "ogg"))
+                .ok();
         }
         let fsb_file = root.join(format!("{path}.fsb"));
         let bytes = std::fs::read(&fsb_file).ok()?;
-        fsb::decode(&bytes).inspect_err(|e| tracing::debug!(%e, file = %fsb_file.display(), "fsb")).ok()
+        fsb::decode(&bytes)
+            .inspect_err(|e| tracing::debug!(%e, file = %fsb_file.display(), "fsb"))
+            .ok()
     };
     let names = crate::java_names::candidates(path);
-    let pcm = roots.iter().find_map(|root| names.iter().find_map(|name| at(root, name)));
+    let pcm = roots
+        .iter()
+        .find_map(|root| names.iter().find_map(|name| at(root, name)));
     if pcm.is_none() {
         tracing::debug!(path, "sound file missing or undecodable");
     }
@@ -138,14 +195,26 @@ mod tests {
         let assets = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets");
         let roots = [assets.join("vanilla"), assets.join("looks/java")];
         let defs = Definitions::load(&roots[0]);
-        let Some(def) = defs.definition("music.game") else { return };
+        let Some(def) = defs.definition("music.game") else {
+            return;
+        };
         let names = crate::java_names::candidates(&def.files[0].path);
-        if !roots.iter().any(|root| names.iter().any(|name| root.join(format!("{name}.ogg")).is_file())) {
+        if !roots.iter().any(|root| {
+            names
+                .iter()
+                .any(|name| root.join(format!("{name}.ogg")).is_file())
+        }) {
             return println!("no music files");
         }
         let pcm = read(&roots, &def.files[0].path).expect("the first track decodes");
         let seconds = pcm.samples.len() as f32 / (pcm.sample_rate as f32 * f32::from(pcm.channels));
-        println!("music track {}: {seconds:.0} s, {} Hz, {} channels", def.files[0].path, pcm.sample_rate, pcm.channels);
-        assert!(seconds > 30.0 && pcm.samples.iter().any(|&s| s != 0), "{seconds} s");
+        println!(
+            "music track {}: {seconds:.0} s, {} Hz, {} channels",
+            def.files[0].path, pcm.sample_rate, pcm.channels
+        );
+        assert!(
+            seconds > 30.0 && pcm.samples.iter().any(|&s| s != 0),
+            "{seconds} s"
+        );
     }
 }

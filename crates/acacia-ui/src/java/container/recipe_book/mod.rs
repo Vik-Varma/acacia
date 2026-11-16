@@ -85,7 +85,10 @@ impl Collection {
 
     /// `getSelectedRecipes(filtering ? CRAFTABLE : ANY)`.
     pub fn fitting(&self, filtering: bool) -> Vec<&Entry> {
-        self.entries.iter().filter(|e| if filtering { e.craftable } else { e.selected }).collect()
+        self.entries
+            .iter()
+            .filter(|e| if filtering { e.craftable } else { e.selected })
+            .collect()
     }
 }
 
@@ -157,12 +160,19 @@ impl Book {
 
     /// `getXOrigin`, `getYOrigin`.
     pub fn origin(&self) -> [i32; 2] {
-        [(self.width - IMAGE_WIDTH) / 2 - self.x_offset(), (self.height - IMAGE_HEIGHT) / 2]
+        [
+            (self.width - IMAGE_WIDTH) / 2 - self.x_offset(),
+            (self.height - IMAGE_HEIGHT) / 2,
+        ]
     }
 
     /// `updateScreenPosition`: the window's left edge.
     pub fn screen_left(&self, image_width: i32) -> i32 {
-        if self.visible && !self.narrow { 177 + (self.width - image_width - 200) / 2 } else { (self.width - image_width) / 2 }
+        if self.visible && !self.narrow {
+            177 + (self.width - image_width - 200) / 2
+        } else {
+            (self.width - image_width) / 2
+        }
     }
 
     /// `slotSelectTime.currentIndex()`.
@@ -171,18 +181,33 @@ impl Book {
     }
 
     fn tab_visible(&self, t: &Tab) -> bool {
-        t.search || t.collections.iter().any(|&c| self.collections[c].has_any_selected())
+        t.search
+            || t.collections
+                .iter()
+                .any(|&c| self.collections[c].has_any_selected())
     }
 
     /// `updateCollections`: the selected tab's collections the page lists.
     pub fn listed(&self) -> Vec<usize> {
-        let Some(tab) = self.tabs.get(self.selected_tab) else { return Vec::new() };
-        let shown = |&&c: &&usize| self.collections[c].has_any_selected() && (!self.filtering || self.collections[c].has_craftable());
+        let Some(tab) = self.tabs.get(self.selected_tab) else {
+            return Vec::new();
+        };
+        let shown = |&&c: &&usize| {
+            self.collections[c].has_any_selected()
+                && (!self.filtering || self.collections[c].has_craftable())
+        };
         tab.collections.iter().filter(shown).copied().collect()
     }
 
     /// `extractRenderState`; widget tooltips go to `tooltip`.
-    pub fn render(&mut self, gui: &mut Gui, env: &Env, mouse: [i32; 2], partial: f32, tooltip: &mut Deferred) {
+    pub fn render(
+        &mut self,
+        gui: &mut Gui,
+        env: &Env,
+        mouse: [i32; 2],
+        partial: f32,
+        tooltip: &mut Deferred,
+    ) {
         if !self.visible {
             return;
         }
@@ -204,11 +229,32 @@ impl Book {
         self.tabs_render(gui, partial);
         let filter = [xo + 110, yo + 12, 26, 16];
         let hovered = widgets::hovered(filter, mouse);
-        let prefix = if self.kind.furnace() { "recipe_book/furnace_filter_" } else { "recipe_book/filter_" };
-        let state = if self.filtering { "enabled" } else { "disabled" };
-        gui.sprite(format!("{prefix}{state}{}", if hovered { "_highlighted" } else { "" }), filter[0], filter[1], filter[2], filter[3]);
+        let prefix = if self.kind.furnace() {
+            "recipe_book/furnace_filter_"
+        } else {
+            "recipe_book/filter_"
+        };
+        let state = if self.filtering {
+            "enabled"
+        } else {
+            "disabled"
+        };
+        gui.sprite(
+            format!(
+                "{prefix}{state}{}",
+                if hovered { "_highlighted" } else { "" }
+            ),
+            filter[0],
+            filter[1],
+            filter[2],
+            filter[3],
+        );
         if hovered {
-            let key = if self.filtering { self.kind.filter_name() } else { "gui.recipebook.toggleRecipes.all" };
+            let key = if self.filtering {
+                self.kind.filter_name()
+            } else {
+                "gui.recipebook.toggleRecipes.all"
+            };
             widgets::tooltip(tooltip, env, key, filter, mouse);
         }
         page::render(self, gui, env, mouse, partial, tooltip);
@@ -229,7 +275,13 @@ impl Book {
     }
 
     /// `extractTooltip`: the hovered button's stack, else a hovered ghost slot's.
-    pub fn tooltip(&self, env: &Env, mouse: [i32; 2], hovered_slot: Option<usize>, tooltip: &mut Deferred) {
+    pub fn tooltip(
+        &self,
+        env: &Env,
+        mouse: [i32; 2],
+        hovered_slot: Option<usize>,
+        tooltip: &mut Deferred,
+    ) {
         if !self.visible {
             return;
         }
@@ -238,13 +290,21 @@ impl Book {
             if let Some(stack) = key.and_then(|k| self.items.get(&k)) {
                 let mut lines = item_lines(stack, env);
                 if many {
-                    lines.push(Line::Text(crate::java::text::Text::translate("gui.recipebook.moreRecipes", &[], env.lang)));
+                    lines.push(Line::Text(crate::java::text::Text::translate(
+                        "gui.recipebook.moreRecipes",
+                        &[],
+                        env.lang,
+                    )));
                 }
                 tooltip.set(stack_tooltip(stack, lines, mouse), false);
             }
         }
         let index = self.index();
-        let ghost = hovered_slot.and_then(|s| self.ghost.iter().find(|g| g.slot == s && !g.items.is_empty()));
+        let ghost = hovered_slot.and_then(|s| {
+            self.ghost
+                .iter()
+                .find(|g| g.slot == s && !g.items.is_empty())
+        });
         if let Some(stack) = ghost.and_then(|g| self.items.get(&g.items[index % g.items.len()])) {
             tooltip.set(stack_tooltip(stack, item_lines(stack, env), mouse), false);
         }
@@ -272,11 +332,24 @@ impl Book {
 }
 
 fn item_lines(stack: &ItemStack, env: &Env) -> Vec<Line> {
-    item::tooltip_lines(stack, &env.details(stack, false)).into_iter().map(Line::Text).collect()
+    item::tooltip_lines(stack, &env.details(stack, false))
+        .into_iter()
+        .map(Line::Text)
+        .collect()
 }
 
 /// `setComponentTooltipForNextFrame` with the stack's tooltip style.
 fn stack_tooltip(stack: &ItemStack, lines: Vec<Line>, mouse: [i32; 2]) -> Tooltip {
-    let style = stack.get("tooltip_style").and_then(|v| v.as_str()).map(str::to_owned);
-    Tooltip { lines, x: mouse[0], y: mouse[1], positioner: Positioner::Default, style, extra_space: false }
+    let style = stack
+        .get("tooltip_style")
+        .and_then(|v| v.as_str())
+        .map(str::to_owned);
+    Tooltip {
+        lines,
+        x: mouse[0],
+        y: mouse[1],
+        positioner: Positioner::Default,
+        style,
+        extra_space: false,
+    }
 }

@@ -28,21 +28,66 @@ fn enum_index(kind: &str, field: &str, value: &str) -> Option<i64> {
     let order: &[&str] = match (kind, field) {
         ("fox", "variant") => &["RED", "SNOW"],
         ("llama" | "trader_llama", "variant") => &["CREAMY", "WHITE", "BROWN", "GRAY"],
-        ("horse", "variant") => &["WHITE", "CREAMY", "CHESTNUT", "BROWN", "BLACK", "GRAY", "DARK_BROWN"],
+        ("horse", "variant") => &[
+            "WHITE",
+            "CREAMY",
+            "CHESTNUT",
+            "BROWN",
+            "BLACK",
+            "GRAY",
+            "DARK_BROWN",
+        ],
         ("horse", "markings") => &["NONE", "WHITE", "WHITE_FIELD", "WHITE_DOTS", "BLACK_DOTS"],
         ("rabbit", "variant") => &["BROWN", "WHITE", "BLACK", "WHITE_SPLOTCHED", "GOLD", "SALT"],
         ("parrot", "variant") => &["RED_BLUE", "BLUE", "GREEN", "YELLOW_BLUE", "GRAY"],
         ("axolotl", "variant") => &["LUCY", "CYAN", "GOLD", "WILD", "BLUE"],
         ("mooshroom", "variant") => &["RED", "BROWN"],
-        ("panda", "variant") => &["NORMAL", "LAZY", "WORRIED", "PLAYFUL", "BROWN", "WEAK", "AGGRESSIVE"],
-        ("frog", "variant") => &["temperate", "cold", "warm"],
-        ("wolf", "variant") => &["pale", "ashen", "black", "chestnut", "rusty", "snowy", "spotted", "striped", "woods"],
-        ("cat", "variant") => &["white", "black", "red", "siamese", "british_shorthair", "calico", "persian", "ragdoll", "tabby", "all_black", "jellie"],
-        (_, "profession") => &[
-            "none", "farmer", "fisherman", "shepherd", "fletcher", "librarian", "cartographer", "cleric", "armorer", "weaponsmith", "toolsmith",
-            "butcher", "leatherworker", "mason", "nitwit",
+        ("panda", "variant") => &[
+            "NORMAL",
+            "LAZY",
+            "WORRIED",
+            "PLAYFUL",
+            "BROWN",
+            "WEAK",
+            "AGGRESSIVE",
         ],
-        (_, "type") => &["plains", "desert", "jungle", "savanna", "snow", "swamp", "taiga"],
+        ("frog", "variant") => &["temperate", "cold", "warm"],
+        ("wolf", "variant") => &[
+            "pale", "ashen", "black", "chestnut", "rusty", "snowy", "spotted", "striped", "woods",
+        ],
+        ("cat", "variant") => &[
+            "white",
+            "black",
+            "red",
+            "siamese",
+            "british_shorthair",
+            "calico",
+            "persian",
+            "ragdoll",
+            "tabby",
+            "all_black",
+            "jellie",
+        ],
+        (_, "profession") => &[
+            "none",
+            "farmer",
+            "fisherman",
+            "shepherd",
+            "fletcher",
+            "librarian",
+            "cartographer",
+            "cleric",
+            "armorer",
+            "weaponsmith",
+            "toolsmith",
+            "butcher",
+            "leatherworker",
+            "mason",
+            "nitwit",
+        ],
+        (_, "type") => &[
+            "plains", "desert", "jungle", "savanna", "snow", "swamp", "taiga",
+        ],
         _ => return None,
     };
     order.iter().position(|v| *v == value).map(|i| i as i64)
@@ -50,8 +95,20 @@ fn enum_index(kind: &str, field: &str, value: &str) -> Option<i64> {
 
 /// `TropicalFish.Pattern`s, the small shape's six then the large's: Bedrock's `variant` is the
 /// shape and `mark_variant` the pattern within it.
-const TROPICAL: [&str; 12] =
-    ["KOB", "SUNSTREAK", "SNOOPER", "DASHER", "BRINELY", "SPOTTY", "FLOPPER", "STRIPEY", "GLITTER", "BLOCKFISH", "BETTY", "CLAYFISH"];
+const TROPICAL: [&str; 12] = [
+    "KOB",
+    "SUNSTREAK",
+    "SNOOPER",
+    "DASHER",
+    "BRINELY",
+    "SPOTTY",
+    "FLOPPER",
+    "STRIPEY",
+    "GLITTER",
+    "BLOCKFISH",
+    "BETTY",
+    "CLAYFISH",
+];
 
 /// Why a Bedrock server cannot send this state, if it cannot: a Java-only variant, or one
 /// carried by data acacia does not track yet.
@@ -67,7 +124,11 @@ pub fn unreachable(kind: &str, fields: &Json) -> Option<&'static str> {
 /// The file name of the texture the entity chose (`texture`), without `_baby`: `cat_black`.
 fn skin(fields: &Json) -> String {
     let path = fields["texture"].as_str().unwrap_or_default();
-    let name = path.rsplit('/').next().unwrap_or_default().trim_end_matches(".png");
+    let name = path
+        .rsplit('/')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(".png");
     name.trim_end_matches("_baby").to_owned()
 }
 
@@ -105,31 +166,77 @@ pub fn query(kind: &str, fields: &Json, name: &str) -> Value {
             _ => num(100),
         },
         "variant" => match kind {
-            "villager" | "zombie_villager" => num(enum_index(kind, "profession", fields["villagerData"]["profession"].as_str().unwrap_or("")).unwrap_or(0)),
-            "wolf" => num(enum_index(kind, "variant", fields["climate"].as_str().unwrap_or("pale")).unwrap_or(0)),
-            "cat" | "frog" => num(enum_index(kind, "variant", skin(fields).trim_start_matches(&format!("{kind}_"))).unwrap_or(0)),
+            "villager" | "zombie_villager" => num(enum_index(
+                kind,
+                "profession",
+                fields["villagerData"]["profession"].as_str().unwrap_or(""),
+            )
+            .unwrap_or(0)),
+            "wolf" => num(enum_index(
+                kind,
+                "variant",
+                fields["climate"].as_str().unwrap_or("pale"),
+            )
+            .unwrap_or(0)),
+            "cat" | "frog" => num(enum_index(
+                kind,
+                "variant",
+                skin(fields).trim_start_matches(&format!("{kind}_")),
+            )
+            .unwrap_or(0)),
             "pufferfish" => num(fields["puffState"].as_i64().unwrap_or(0)),
-            "shulker" => num(fields.get("color").and_then(Json::as_i64).map_or(16, legacy_dye)),
-            "tropical_fish" => num(TROPICAL.iter().position(|p| *p == text("pattern")).map_or(0, |i| i as i64 / 6)),
+            "shulker" => num(fields
+                .get("color")
+                .and_then(Json::as_i64)
+                .map_or(16, legacy_dye)),
+            "tropical_fish" => num(TROPICAL
+                .iter()
+                .position(|p| *p == text("pattern"))
+                .map_or(0, |i| i as i64 / 6)),
             _ => num(enum_index(kind, "variant", &text("variant")).unwrap_or(0)),
         },
         "mark_variant" => match kind {
-            "villager" | "zombie_villager" => num(enum_index(kind, "type", fields["villagerData"]["type"].as_str().unwrap_or("")).unwrap_or(0)),
-            "tropical_fish" => num(TROPICAL.iter().position(|p| *p == text("pattern")).map_or(0, |i| i as i64 % 6)),
+            "villager" | "zombie_villager" => num(enum_index(
+                kind,
+                "type",
+                fields["villagerData"]["type"].as_str().unwrap_or(""),
+            )
+            .unwrap_or(0)),
+            "tropical_fish" => num(TROPICAL
+                .iter()
+                .position(|p| *p == text("pattern"))
+                .map_or(0, |i| i as i64 % 6)),
             _ => num(enum_index(kind, "markings", &text("markings")).unwrap_or(0)),
         },
-        "property:minecraft:climate_variant" => Value::Text(fields["climate"].as_str().unwrap_or("temperate").into()),
-        // Bedrock's zombie nautilus `variant` property: Java's warm one is the coral.
-        "property:minecraft:variant" if kind == "zombie_nautilus" => {
-            Value::Text(if fields["climate"].as_str() == Some("warm") { "coral" } else { "default" }.into())
+        "property:minecraft:climate_variant" => {
+            Value::Text(fields["climate"].as_str().unwrap_or("temperate").into())
         }
-        "property:minecraft:oxidation_level" => Value::Text(match text("weathering").as_str() {
-            "EXPOSED" => "exposed",
-            "WEATHERED" => "weathered",
-            "OXIDIZED" => "oxidized",
-            _ => "unoxidized",
-        }.into()),
-        "property:minecraft:creaking_state" => Value::Text(if flag("eyesGlowing") { "hostile_observed" } else { "neutral" }.into()),
+        // Bedrock's zombie nautilus `variant` property: Java's warm one is the coral.
+        "property:minecraft:variant" if kind == "zombie_nautilus" => Value::Text(
+            if fields["climate"].as_str() == Some("warm") {
+                "coral"
+            } else {
+                "default"
+            }
+            .into(),
+        ),
+        "property:minecraft:oxidation_level" => Value::Text(
+            match text("weathering").as_str() {
+                "EXPOSED" => "exposed",
+                "WEATHERED" => "weathered",
+                "OXIDIZED" => "oxidized",
+                _ => "unoxidized",
+            }
+            .into(),
+        ),
+        "property:minecraft:creaking_state" => Value::Text(
+            if flag("eyesGlowing") {
+                "hostile_observed"
+            } else {
+                "neutral"
+            }
+            .into(),
+        ),
         _ => num(0),
     }
 }

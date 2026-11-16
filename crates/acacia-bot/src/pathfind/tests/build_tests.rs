@@ -2,7 +2,7 @@
 
 use acacia_physics::BlockPos;
 
-use super::build_sim::{builder, explain, run, view, World};
+use super::build_sim::{World, builder, explain, run, view};
 use super::grid::Grid;
 use crate::build::{Block, Structure};
 use crate::pathfind::process::{Act, Arbiter};
@@ -22,15 +22,34 @@ fn house() -> Structure {
             s.set([x, 0, z], b("oak_planks", ""));
             for y in 1..3 {
                 let edge = x == 0 || x == 4 || z == 0 || z == 4;
-                s.set([x, y, z], if edge && y == 1 { b("cobblestone", "") } else { b("air", "") });
+                s.set(
+                    [x, y, z],
+                    if edge && y == 1 {
+                        b("cobblestone", "")
+                    } else {
+                        b("air", "")
+                    },
+                );
             }
         }
     }
     s.set([1, 0, 1], b("oak_log", "pillar_axis=x"));
-    s.set([3, 0, 1], b("oak_double_slab", "minecraft:vertical_half=bottom"));
-    s.set([2, 0, 3], b("furnace", "minecraft:cardinal_direction=north"));
-    s.set([2, 1, 0], b("oak_stairs", "upside_down_bit=0,weirdo_direction=2"));
-    s.set([0, 1, 2], b("oak_stairs", "upside_down_bit=1,weirdo_direction=0"));
+    s.set(
+        [3, 0, 1],
+        b("oak_double_slab", "minecraft:vertical_half=bottom"),
+    );
+    s.set(
+        [2, 0, 3],
+        b("furnace", "minecraft:cardinal_direction=north"),
+    );
+    s.set(
+        [2, 1, 0],
+        b("oak_stairs", "upside_down_bit=0,weirdo_direction=2"),
+    );
+    s.set(
+        [0, 1, 2],
+        b("oak_stairs", "upside_down_bit=1,weirdo_direction=0"),
+    );
     s.set([4, 1, 2], b("oak_slab", "minecraft:vertical_half=top"));
     s.set([2, 2, 4], b("oak_slab", "minecraft:vertical_half=bottom"));
     s.set([1, 2, 0], b("cobblestone", ""));
@@ -38,18 +57,40 @@ fn house() -> Structure {
     s
 }
 
-const ITEMS: &[(&str, u32)] = &[("oak_planks", 64), ("cobblestone", 64), ("oak_log", 8), ("oak_slab", 8), ("furnace", 2), ("oak_stairs", 8), ("torch", 4), ("dirt", 64)];
+const ITEMS: &[(&str, u32)] = &[
+    ("oak_planks", 64),
+    ("cobblestone", 64),
+    ("oak_log", 8),
+    ("oak_slab", 8),
+    ("furnace", 2),
+    ("oak_stairs", 8),
+    ("torch", 4),
+    ("dirt", 64),
+];
 
 /// Cells whose block or click-decided states differ from the target.
 pub(super) fn wrong(g: &Grid, s: &Structure) -> Vec<(BlockPos, String, String)> {
-    let skip = |k: &str| k.contains("connection") || k.contains("corner") || k.starts_with(crate::build::BED_COLOR);
+    let skip = |k: &str| {
+        k.contains("connection") || k.contains("corner") || k.starts_with(crate::build::BED_COLOR)
+    };
     s.cells()
         .filter_map(|(p, t)| {
             let pos = [ORIGIN[0] + p[0], ORIGIN[1] + p[1], ORIGIN[2] + p[2]];
             let (name, props) = view(g, pos);
             let double = t.name.ends_with("_double_slab");
-            let same = name == t.name && t.props.split(',').filter(|kv| !kv.is_empty()).all(|kv| skip(kv) || (double && kv.contains("vertical_half")) || props.split(',').any(|w| w == kv));
-            (!same).then(|| (pos, format!("{} [{}]", t.name, t.props), format!("{name} [{props}]")))
+            let same = name == t.name
+                && t.props.split(',').filter(|kv| !kv.is_empty()).all(|kv| {
+                    skip(kv)
+                        || (double && kv.contains("vertical_half"))
+                        || props.split(',').any(|w| w == kv)
+                });
+            (!same).then(|| {
+                (
+                    pos,
+                    format!("{} [{}]", t.name, t.props),
+                    format!("{name} [{props}]"),
+                )
+            })
         })
         .collect()
 }
@@ -82,11 +123,17 @@ fn builds_a_mixed_structure_block_exact() {
     let ticks = run(&mut w, [0.5, 1.0, 0.5], &mut arb, id, 12_000);
     let st = status.lock().unwrap().clone();
     eprintln!("{ticks} ticks, {st:?}");
-    explain(&w, &s, ORIGIN).iter().for_each(|l| eprintln!("OPEN {l}"));
+    explain(&w, &s, ORIGIN)
+        .iter()
+        .for_each(|l| eprintln!("OPEN {l}"));
     assert_eq!(arb.outcome(id), Some(&Ok(())), "status {st:?}");
     assert_eq!(wrong(&g, &s), Vec::new());
     assert!(st.broken >= 10, "cleared the dirt and gravel: {st:?}");
-    assert_eq!(scaffold_left(&g), Vec::<BlockPos>::new(),"scaffold removed");
+    assert_eq!(
+        scaffold_left(&g),
+        Vec::<BlockPos>::new(),
+        "scaffold removed"
+    );
 }
 
 #[test]
@@ -103,29 +150,54 @@ fn builds_house16_as_live() {
     let at = |p: BlockPos| [ORIGIN[0] + p[0], ORIGIN[1] + p[1], ORIGIN[2] + p[2]];
     g.fill(at([2, 0, 2]), at([4, 1, 4]), "dirt");
     g.fill(at([8, 2, 10]), at([9, 2, 11]), "stone");
-    g.set_state(at([-4, 0, -2]), "barrel", "").set_state(at([-3, 0, -2]), "barrel", "");
+    g.set_state(at([-4, 0, -2]), "barrel", "")
+        .set_state(at([-3, 0, -2]), "barrel", "");
     house16_from(&g, [ORIGIN[0] as f32 - 3.5, 1.0, ORIGIN[2] as f32 + 8.5]);
 }
 
 fn house16_from(g: &Grid, start: [f32; 3]) {
     let s = crate::build::tests::house16::house16();
-    let items: Vec<(&str, u32)> = ["cobblestone", "oak_planks", "oak_log", "glass_pane", "oak_slab", "oak_stairs", "torch", "ladder", "oak_fence", "cobblestone_wall", "stone_button", "furnace", "dispenser", "observer", "piston", "dirt"]
-        .iter()
-        .map(|i| (*i, 400))
-        .collect();
+    let items: Vec<(&str, u32)> = [
+        "cobblestone",
+        "oak_planks",
+        "oak_log",
+        "glass_pane",
+        "oak_slab",
+        "oak_stairs",
+        "torch",
+        "ladder",
+        "oak_fence",
+        "cobblestone_wall",
+        "stone_button",
+        "furnace",
+        "dispenser",
+        "observer",
+        "piston",
+        "dirt",
+    ]
+    .iter()
+    .map(|i| (*i, 400))
+    .collect();
     let mut w = World::new(g, &items);
     let (mut proc, status) = builder(&s, ORIGIN, &[]);
     // `BUILD_JOURNAL=<path>`: the run's journal, for tools that read live ones.
     if let Ok(path) = std::env::var("BUILD_JOURNAL") {
         let out = std::fs::File::create(path).expect("journal file");
-        proc = proc.with_journal(std::sync::Arc::new(crate::build::journal::Journal::new("sim", Box::new(out), false)));
+        proc = proc.with_journal(std::sync::Arc::new(crate::build::journal::Journal::new(
+            "sim",
+            Box::new(out),
+            false,
+        )));
     }
     let mut arb = Arbiter::new();
     let id = arb.add(proc, 10);
     let ticks = run(&mut w, start, &mut arb, id, 8000);
     let st = status.lock().unwrap().clone();
     eprintln!("{ticks} ticks, {st:?}");
-    explain(&w, &s, ORIGIN).iter().take(30).for_each(|l| eprintln!("OPEN {l}"));
+    explain(&w, &s, ORIGIN)
+        .iter()
+        .take(30)
+        .for_each(|l| eprintln!("OPEN {l}"));
     eprintln!("scaffold left {:?}", scaffold_left(g));
     eprint!("{}", crate::build::sight_stats::dump());
     assert_eq!(arb.outcome(id), Some(&Ok(())), "status {st:?}");
@@ -141,18 +213,33 @@ fn restocks_what_is_still_needed_from_a_station() {
     let mut s = Structure::new([4, 1, 4]);
     (0..4).for_each(|x| (0..4).for_each(|z| s.set([x, 0, z], b("oak_planks", ""))));
     let mut w = World::new(&g, &[("dirt", 16)]);
-    w.stations.insert(station, [("minecraft:oak_planks".to_string(), 200), ("minecraft:stone".to_string(), 64)].into());
+    w.stations.insert(
+        station,
+        [
+            ("minecraft:oak_planks".to_string(), 200),
+            ("minecraft:stone".to_string(), 64),
+        ]
+        .into(),
+    );
     let (proc, status) = builder(&s, ORIGIN, &[station]);
     let mut arb = Arbiter::new();
     let id = arb.add(proc, 10);
     run(&mut w, [0.5, 1.0, 0.5], &mut arb, id, 6000);
     let st = status.lock().unwrap().clone();
-    explain(&w, &s, ORIGIN).iter().for_each(|l| eprintln!("OPEN {l}"));
+    explain(&w, &s, ORIGIN)
+        .iter()
+        .for_each(|l| eprintln!("OPEN {l}"));
     assert_eq!(arb.outcome(id), Some(&Ok(())), "status {st:?}");
     assert_eq!(wrong(&g, &s), Vec::new());
     assert_eq!(st.restocks, 1, "one trip covers the need");
-    assert_eq!(w.stations[&station]["minecraft:stone"], 64, "nothing unneeded taken");
-    assert!(w.stations[&station]["minecraft:oak_planks"] >= 200 - 64, "one stack for 16 planks");
+    assert_eq!(
+        w.stations[&station]["minecraft:stone"], 64,
+        "nothing unneeded taken"
+    );
+    assert!(
+        w.stations[&station]["minecraft:oak_planks"] >= 200 - 64,
+        "one stack for 16 planks"
+    );
 }
 
 #[test]
@@ -189,8 +276,11 @@ fn supports_a_floating_block_and_cleans_up() {
     let st = status.lock().unwrap().clone();
     assert_eq!(arb.outcome(id), Some(&Ok(())), "status {st:?}");
     assert_eq!(wrong(&g, &s), Vec::new());
-    assert!(w.log.iter().any(|a| matches!(a, Act::Fill { .. })), "built a support");
-    assert_eq!(scaffold_left(&g), Vec::<BlockPos>::new(),"support removed");
+    assert!(
+        w.log.iter().any(|a| matches!(a, Act::Fill { .. })),
+        "built a support"
+    );
+    assert_eq!(scaffold_left(&g), Vec::<BlockPos>::new(), "support removed");
 }
 
 #[test]
@@ -208,7 +298,12 @@ fn seals_a_liquid_before_breaking_next_to_it() {
     run(&mut w, [0.5, 1.0, 0.5], &mut arb, id, 3000);
     let st = status.lock().unwrap().clone();
     assert_eq!(arb.outcome(id), Some(&Ok(())), "status {st:?}");
-    let seal = w.log.iter().position(|a| *a == Act::Fill { pos: water, blocks: vec![acacia_world::neutral::Item::Dirt] });
+    let seal = w.log.iter().position(|a| {
+        *a == Act::Fill {
+            pos: water,
+            blocks: vec![acacia_world::neutral::Item::Dirt],
+        }
+    });
     let dig = w.log.iter().position(|a| *a == Act::Break { pos: ORIGIN });
     assert!(seal.is_some() && seal < dig, "sealed first: {:?}", w.log);
     assert_eq!(view(&g, ORIGIN).0, "minecraft:air");

@@ -18,9 +18,9 @@ use super::mac::Macro;
 use super::moves::{Edge, MoveKind};
 use super::node::{Entry, Momentum, run_entry};
 use super::profile::MovementProfile;
+use super::rollout::PlanSim;
 use super::solve::{Miss, Solved, Solver};
 use super::terrain::{Blocks, Spot, SpotKind, Terrain};
-use super::rollout::PlanSim;
 use crate::movement::{Controls, Motion, Sim};
 
 /// Macro rollouts may take this share (1/n) of a search's time budget. The default tick budget alone takes about the
@@ -66,7 +66,13 @@ fn can_start(entry: Entry, from: Spot) -> bool {
 }
 
 /// Runs `f` with a solver from `mom` at `p` and books what it simulated; `None` once the budget or time is spent.
-fn simulate<B: Blocks, S: PlanSim<B>, R>(t: &Terrain<B>, p: BlockPos, mom: &Momentum, m: &Macros<S>, f: impl FnOnce(&S, &mut Solver<Terrain<B>>, (&Store, &mut Counts)) -> R) -> Option<R> {
+fn simulate<B: Blocks, S: PlanSim<B>, R>(
+    t: &Terrain<B>,
+    p: BlockPos,
+    mom: &Momentum,
+    m: &Macros<S>,
+    f: impl FnOnce(&S, &mut Solver<Terrain<B>>, (&Store, &mut Counts)) -> R,
+) -> Option<R> {
     let mut stats = m.stats.get();
     if stats.ticks >= m.budget || Instant::now() >= m.deadline {
         stats.exhausted = true;
@@ -75,10 +81,16 @@ fn simulate<B: Blocks, S: PlanSim<B>, R>(t: &Terrain<B>, p: BlockPos, mom: &Mome
     }
     let start = mom.synth(p, m.base);
     let avoid = |q: BlockPos| t.cell(q).has(AVOID);
-    let safe = |q: BlockPos| t.spot(q).is_some_and(|s| s.kind == SpotKind::Stand && !s.wet && s.feet == q[1] as f32);
+    let safe = |q: BlockPos| {
+        t.spot(q)
+            .is_some_and(|s| s.kind == SpotKind::Stand && !s.wet && s.feet == q[1] as f32)
+    };
     let mut solver = Solver::new(t, &avoid, &safe, m.profile, true, Controls::default());
     solver.budget = m.budget - stats.ticks;
-    let mut n = Counts { off: m.cache.off, ..Counts::default() };
+    let mut n = Counts {
+        off: m.cache.off,
+        ..Counts::default()
+    };
     let r = f(&start, &mut solver, (&m.cache, &mut n));
     stats.rollouts += solver.rollouts;
     stats.ticks += solver.ticks;
@@ -91,18 +103,36 @@ fn simulate<B: Blocks, S: PlanSim<B>, R>(t: &Terrain<B>, p: BlockPos, mom: &Mome
 }
 
 /// Runs and hops from `p`; leaps are offered lazily ([`leap_candidates`], [`leap`]).
-pub(crate) fn successors<B: Blocks, S: PlanSim<B>>(t: &Terrain<B>, p: BlockPos, from: Spot, (entry, mom): (Entry, &Momentum), m: &Macros<S>, out: &mut Vec<Edge>) {
+pub(crate) fn successors<B: Blocks, S: PlanSim<B>>(
+    t: &Terrain<B>,
+    p: BlockPos,
+    from: Spot,
+    (entry, mom): (Entry, &Momentum),
+    m: &Macros<S>,
+    out: &mut Vec<Edge>,
+) {
     if !can_start(entry, from) {
         return;
     }
     simulate(t, p, mom, m, |start, solver, (cache, n)| {
         for (q, to, r) in hop::runs(t, p, from, (entry, mom), start, solver, (cache, &mut *n)) {
-            push(t, out, q, to, MoveKind::Run, r.ticks as f32, &r.end, Macro::Run(r.ctl));
+            push(
+                t,
+                out,
+                q,
+                to,
+                MoveKind::Run,
+                r.ticks as f32,
+                &r.end,
+                Macro::Run(r.ctl),
+            );
         }
         if m.hops
             && !solver.spent()
             && let Entry::Run(d, _) = entry
-            && let Some((q, to, s)) = cache.hops.get_or(t, p, (*mom, d), n, || hop::hop(t, p, from, d, start, solver))
+            && let Some((q, to, s)) = cache.hops.get_or(t, p, (*mom, d), n, || {
+                hop::hop(t, p, from, d, start, solver)
+            })
         {
             push_leap(t, out, q, to, s, MoveKind::Hop, m.profile);
         }
@@ -110,7 +140,13 @@ pub(crate) fn successors<B: Blocks, S: PlanSim<B>>(t: &Terrain<B>, p: BlockPos, 
 }
 
 /// Leap targets from `p`, to be solved when the search reaches them.
-pub(crate) fn leap_candidates<B: Blocks, S: Sim>(t: &Terrain<B>, p: BlockPos, from: Spot, (entry, mom): (Entry, &Momentum), m: &Macros<S>) -> Vec<LeapCand> {
+pub(crate) fn leap_candidates<B: Blocks, S: Sim>(
+    t: &Terrain<B>,
+    p: BlockPos,
+    from: Spot,
+    (entry, mom): (Entry, &Momentum),
+    m: &Macros<S>,
+) -> Vec<LeapCand> {
     let stats = m.stats.get();
     if !m.leaps || !can_start(entry, from) || stats.exhausted {
         return Vec::new();
@@ -120,26 +156,71 @@ pub(crate) fn leap_candidates<B: Blocks, S: Sim>(t: &Terrain<B>, p: BlockPos, fr
 
 /// The leap from `p` to `c` as an edge, if it lands; `Err(Miss::Other)` once the budget is spent.
 /// `real_yaw`: keep the momentum's facing (the live start) rather than face the leap.
-pub(crate) fn leap<B: Blocks, S: PlanSim<B>>(t: &Terrain<B>, p: BlockPos, mom: &Momentum, c: LeapCand, real_yaw: bool, m: &Macros<S>) -> Result<Edge, Miss> {
-    let solved = simulate(t, p, mom, m, |start, solver, cache| leap_moves::solve(t, p, (mom, real_yaw), start, c, solver, cache)).unwrap_or(Err(Miss::Other))?;
+pub(crate) fn leap<B: Blocks, S: PlanSim<B>>(
+    t: &Terrain<B>,
+    p: BlockPos,
+    mom: &Momentum,
+    c: LeapCand,
+    real_yaw: bool,
+    m: &Macros<S>,
+) -> Result<Edge, Miss> {
+    let solved = simulate(t, p, mom, m, |start, solver, cache| {
+        leap_moves::solve(t, p, (mom, real_yaw), start, c, solver, cache)
+    })
+    .unwrap_or(Err(Miss::Other))?;
     let mut out = Vec::with_capacity(1);
     push_leap(t, &mut out, c.q, c.to, solved, MoveKind::Parkour, m.profile);
     Ok(out.remove(0))
 }
 
-fn push_leap<B: Blocks>(t: &Terrain<B>, out: &mut Vec<Edge>, pos: BlockPos, to: Spot, s: Solved, kind: MoveKind, profile: MovementProfile) {
+fn push_leap<B: Blocks>(
+    t: &Terrain<B>,
+    out: &mut Vec<Edge>,
+    pos: BlockPos,
+    to: Spot,
+    s: Solved,
+    kind: MoveKind,
+    profile: MovementProfile,
+) {
     let mut cost = s.ticks as f32;
     if profile == MovementProfile::Human {
-        cost += RISK * (1.0 - s.margin / RISK_MARGIN).max(0.0) + if s.ctl.jump == JumpAt::Never { 0.0 } else { HUMAN_JUMP };
+        cost += RISK * (1.0 - s.margin / RISK_MARGIN).max(0.0)
+            + if s.ctl.jump == JumpAt::Never {
+                0.0
+            } else {
+                HUMAN_JUMP
+            };
     }
     push(t, out, pos, to, kind, cost, &s.end, Macro::Leap(s.ctl));
 }
 
 #[allow(clippy::too_many_arguments)]
-fn push<B: Blocks>(t: &Terrain<B>, out: &mut Vec<Edge>, pos: BlockPos, to: Spot, kind: MoveKind, mut cost: f32, end: &Motion, mac: Macro) {
+fn push<B: Blocks>(
+    t: &Terrain<B>,
+    out: &mut Vec<Edge>,
+    pos: BlockPos,
+    to: Spot,
+    kind: MoveKind,
+    mut cost: f32,
+    end: &Motion,
+    mac: Macro,
+) {
     if t.danger_near(pos) {
         cost += DANGER_NEAR;
     }
-    let (entry, mom) = if to.wet { (Entry::Rest, Momentum::rest(to.feet, pos)) } else { (run_entry(end.vel), Momentum::snap(end, pos)) };
-    out.push(Edge { pos, spot: to, kind, cost, work: Default::default(), entry, mom, mac: Some(mac) });
+    let (entry, mom) = if to.wet {
+        (Entry::Rest, Momentum::rest(to.feet, pos))
+    } else {
+        (run_entry(end.vel), Momentum::snap(end, pos))
+    };
+    out.push(Edge {
+        pos,
+        spot: to,
+        kind,
+        cost,
+        work: Default::default(),
+        entry,
+        mom,
+        mac: Some(mac),
+    });
 }

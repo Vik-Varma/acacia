@@ -4,13 +4,13 @@
 use acacia_physics::BlockPos;
 use acacia_world::neutral::prop;
 
+use super::PathNode;
 use super::boat::BoatOpts;
 use super::follow::Sense;
-use super::profile::MovementProfile;
 use super::maneuver;
 use super::moves::MoveKind;
+use super::profile::MovementProfile;
 use super::work::Step;
-use super::PathNode;
 use crate::interact::Face;
 use crate::movement::Controls;
 use crate::survival::Destination;
@@ -21,12 +21,26 @@ const EDGE_TICKS: u32 = 30;
 /// Ticks for a pillar jump to clear the cell.
 const RISE_TICKS: u32 = 12;
 
-pub(super) async fn perform(bot: &mut Bot, node: &PathNode, scaffold: &[acacia_world::neutral::Item], profile: MovementProfile) -> Result<(), ActionError> {
+pub(super) async fn perform(
+    bot: &mut Bot,
+    node: &PathNode,
+    scaffold: &[acacia_world::neutral::Item],
+    profile: MovementProfile,
+) -> Result<(), ActionError> {
     bot.stop_pathing();
     for step in node.work.steps() {
         match step {
             // Boxed: `boat_to` walks with a nested goto, which comes back here.
-            Step::Boat => Box::pin(bot.boat_to(node.pos, BoatOpts { profile, ..BoatOpts::default() })).await?,
+            Step::Boat => {
+                Box::pin(bot.boat_to(
+                    node.pos,
+                    BoatOpts {
+                        profile,
+                        ..BoatOpts::default()
+                    },
+                ))
+                .await?
+            }
             Step::Break(pos) => dig(bot, pos).await?,
             Step::Door { pos, open } => door(bot, pos, open).await?,
             Step::Place { against, face } => {
@@ -43,7 +57,10 @@ pub(super) async fn perform(bot: &mut Bot, node: &PathNode, scaffold: &[acacia_w
 }
 
 async fn dig(bot: &mut Bot, pos: BlockPos) -> Result<(), ActionError> {
-    if bot.block_at(pos).is_some_and(|(_, s)| s.is_air() || s.is_liquid()) {
+    if bot
+        .block_at(pos)
+        .is_some_and(|(_, s)| s.is_air() || s.is_liquid())
+    {
         return Ok(());
     }
     bot.equip_best_tool(pos).await?;
@@ -60,31 +77,60 @@ async fn door(bot: &mut Bot, pos: BlockPos, open: bool) -> Result<(), ActionErro
     bot.door_confirmed(pos, open).await
 }
 
-async fn place(bot: &mut Bot, kind: MoveKind, against: BlockPos, face: Face, scaffold: &[acacia_world::neutral::Item]) -> Result<(), ActionError> {
+async fn place(
+    bot: &mut Bot,
+    kind: MoveKind,
+    against: BlockPos,
+    face: Face,
+    scaffold: &[acacia_world::neutral::Item],
+) -> Result<(), ActionError> {
     let target = face.adjacent(against);
-    if bot.block_at(target).is_some_and(|(_, s)| !s.is_air() && !s.is_liquid()) {
+    if bot
+        .block_at(target)
+        .is_some_and(|(_, s)| !s.is_air() && !s.is_liquid())
+    {
         return Ok(());
     }
-    let slot = bot.scaffold_slot(scaffold).ok_or_else(|| ActionError::NotPossible("no scaffold blocks left".into()))?;
+    let slot = bot
+        .scaffold_slot(scaffold)
+        .ok_or_else(|| ActionError::NotPossible("no scaffold blocks left".into()))?;
     bot.equip(slot, Destination::Hand).await?;
     if kind == MoveKind::Pillar {
-        bot.look_at([against[0] as f32 + 0.5, (against[1] + 1) as f32, against[2] as f32 + 0.5]).await?;
+        bot.look_at([
+            against[0] as f32 + 0.5,
+            (against[1] + 1) as f32,
+            against[2] as f32 + 0.5,
+        ])
+        .await?;
         if !maneuver_until(bot, RISE_TICKS, |s, c| maneuver::rise(s, target, c)).await? {
-            return Err(ActionError::NotPossible(format!("could not jump above {target:?}")));
+            return Err(ActionError::NotPossible(format!(
+                "could not jump above {target:?}"
+            )));
         }
     } else {
         let [dx, _, dz] = face.offset();
         let from = [target[0] - dx, target[1] + 1, target[2] - dz];
-        maneuver_until(bot, EDGE_TICKS, |s, c| maneuver::to_edge(s, from, (dx, dz), c)).await?;
+        maneuver_until(bot, EDGE_TICKS, |s, c| {
+            maneuver::to_edge(s, from, (dx, dz), c)
+        })
+        .await?;
     }
     bot.place_block(against, face).await
 }
 
 /// Lets ticks pass with `step` setting the controls until it reports done (true) or `ticks` run out.
-async fn maneuver_until(bot: &mut Bot, ticks: u32, mut step: impl FnMut(&Sense, &mut Controls) -> bool) -> Result<bool, ActionError> {
+async fn maneuver_until(
+    bot: &mut Bot,
+    ticks: u32,
+    mut step: impl FnMut(&Sense, &mut Controls) -> bool,
+) -> Result<bool, ActionError> {
     for _ in 0..ticks {
-        let Some(sense) = sense(bot) else { return Err(ActionError::NotPossible("no physics position".into())) };
-        let Some(controls) = bot.controls() else { return Ok(false) };
+        let Some(sense) = sense(bot) else {
+            return Err(ActionError::NotPossible("no physics position".into()));
+        };
+        let Some(controls) = bot.controls() else {
+            return Ok(false);
+        };
         if step(&sense, controls) {
             return Ok(true);
         }
@@ -95,7 +141,15 @@ async fn maneuver_until(bot: &mut Bot, ticks: u32, mut step: impl FnMut(&Sense, 
 
 fn sense(bot: &Bot) -> Option<Sense> {
     let (pos, on_ground) = bot.backend.feet()?;
-    let feet = [pos[0].floor() as i32, pos[1].floor() as i32, pos[2].floor() as i32];
+    let feet = [
+        pos[0].floor() as i32,
+        pos[1].floor() as i32,
+        pos[2].floor() as i32,
+    ];
     let in_water = bot.block_at(feet).is_some_and(|(_, s)| s.is_water());
-    Some(Sense { pos, on_ground, in_water })
+    Some(Sense {
+        pos,
+        on_ground,
+        in_water,
+    })
 }

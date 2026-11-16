@@ -69,14 +69,25 @@ impl EffectIcon {
     pub fn vanilla(id: &str, duration: i32, ambient: bool, show_icon: bool) -> Option<EffectIcon> {
         let id = id.trim_start_matches("minecraft:");
         let &(id, color, beneficial) = EFFECTS.iter().find(|e| e.0 == id)?;
-        Some(EffectIcon { id: id.to_owned(), beneficial, color, ambient, duration, show_icon })
+        Some(EffectIcon {
+            id: id.to_owned(),
+            beneficial,
+            color,
+            ambient,
+            duration,
+            show_icon,
+        })
     }
 }
 
 /// `MobEffectInstance.compareTo`: not a total order, so the sort order matters.
 pub fn compare_effects(a: &EffectIcon, o: &EffectIcon) -> Ordering {
     if (a.duration <= 32147 || o.duration <= 32147) && !(a.ambient && o.ambient) {
-        a.ambient.cmp(&o.ambient).then((a.duration == -1).cmp(&(o.duration == -1))).then(a.duration.cmp(&o.duration)).then(a.color.cmp(&o.color))
+        a.ambient
+            .cmp(&o.ambient)
+            .then((a.duration == -1).cmp(&(o.duration == -1)))
+            .then(a.duration.cmp(&o.duration))
+            .then(a.color.cmp(&o.color))
     } else {
         a.ambient.cmp(&o.ambient).then(a.color.cmp(&o.color))
     }
@@ -86,7 +97,8 @@ pub fn compare_effects(a: &EffectIcon, o: &EffectIcon) -> Ordering {
 fn blink_alpha(remaining: i32) -> f32 {
     let used = 10 - remaining / 20;
     let alpha = clamp(remaining as f32 / 10.0 / 5.0 * 0.5, 0.0, 0.5)
-        + cos(f64::from(remaining as f32 * std::f32::consts::PI / 5.0)) * clamp(used as f32 / 10.0 * 0.25, 0.0, 0.25);
+        + cos(f64::from(remaining as f32 * std::f32::consts::PI / 5.0))
+            * clamp(used as f32 / 10.0 * 0.25, 0.0, 0.25);
     clamp(alpha, 0.0, 1.0)
 }
 
@@ -116,7 +128,14 @@ pub fn effects(gui: &mut Gui, demo: bool, effects: &[EffectIcon]) {
                 alpha = blink_alpha(e.duration);
             }
         }
-        gui.sprite_tinted(format!("mob_effect/{}", e.id), x + 3, y + 3, 18, 18, white(alpha));
+        gui.sprite_tinted(
+            format!("mob_effect/{}", e.id),
+            x + 3,
+            y + 3,
+            18,
+            18,
+            white(alpha),
+        );
     }
 }
 
@@ -127,13 +146,20 @@ mod tests {
 
     #[test]
     fn beneficial_on_top_harmful_below() {
-        let icons = [EffectIcon::vanilla("speed", 400, false, true).unwrap(), EffectIcon::vanilla("minecraft:poison", 400, false, true).unwrap()];
+        let icons = [
+            EffectIcon::vanilla("speed", 400, false, true).unwrap(),
+            EffectIcon::vanilla("minecraft:poison", 400, false, true).unwrap(),
+        ];
         let mut gui = Gui::new(100, 100);
         effects(&mut gui, false, &icons);
-        let at: Vec<(i32, i32)> = gui.draws.iter().map(|d| match d {
-            GuiDraw::Sprite { x, y, .. } => (*x, *y),
-            _ => unreachable!(),
-        }).collect();
+        let at: Vec<(i32, i32)> = gui
+            .draws
+            .iter()
+            .map(|d| match d {
+                GuiDraw::Sprite { x, y, .. } => (*x, *y),
+                _ => unreachable!(),
+            })
+            .collect();
         assert_eq!(at, [(75, 27), (78, 30), (75, 1), (78, 4)]);
     }
 

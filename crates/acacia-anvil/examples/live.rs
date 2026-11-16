@@ -56,7 +56,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let line = line?;
         let w: Vec<&str> = line.split_whitespace().collect();
         let num = |i: usize| -> Result<i32, String> {
-            w.get(i).and_then(|s| s.parse().ok()).ok_or(format!("bad argument {i}: {line}"))
+            w.get(i)
+                .and_then(|s| s.parse().ok())
+                .ok_or(format!("bad argument {i}: {line}"))
         };
         let reply = match w.first().copied() {
             Some("init") => {

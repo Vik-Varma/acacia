@@ -7,10 +7,10 @@
 use acacia_client::proto::RawPacket;
 
 use super::equip::hotbar_target;
-use crate::human::{CLICK, HOTBAR_SWITCH};
-use crate::items::{response_for, Op, Plan, SlotRef};
-use crate::state::GameState;
 use crate::Bot;
+use crate::human::{CLICK, HOTBAR_SWITCH};
+use crate::items::{Op, Plan, SlotRef, response_for};
+use crate::state::GameState;
 
 /// Ticks to wait for the server to confirm the inventory opened; BDS may never answer.
 const OPEN_TICKS: u32 = 20;
@@ -51,20 +51,36 @@ pub(crate) struct Fetch {
 
 impl Fetch {
     pub fn new() -> Self {
-        Self { phase: Phase::Opening { left: OPEN_TICKS }, pending: None }
+        Self {
+            phase: Phase::Opening { left: OPEN_TICKS },
+            pending: None,
+        }
     }
 
     pub fn tick(&mut self, ctx: &FetchCtx, mut click: impl FnMut() -> u32) -> FetchStep {
         use Phase as P;
         let (phase, step) = match self.phase {
-            P::Opening { .. } | P::Clicking { .. } if ctx.interrupted => (P::Closing { left: 0, ok: false }, FetchStep::Close(false)),
-            P::Opening { left } if ctx.opened || left == 0 => (P::Clicking { left: click() }, FetchStep::Nothing),
-            P::Opening { left } => (P::Opening { left: left - 1 }, FetchStep::Nothing),
-            P::Clicking { left: 0 } => (P::Waiting { left: RESPONSE_TICKS }, FetchStep::Send),
-            P::Clicking { left } => (P::Clicking { left: left - 1 }, FetchStep::Nothing),
-            P::Waiting { .. } if ctx.response.is_some() => {
-                (P::Closing { left: click(), ok: ctx.response == Some(true) }, FetchStep::Nothing)
+            P::Opening { .. } | P::Clicking { .. } if ctx.interrupted => {
+                (P::Closing { left: 0, ok: false }, FetchStep::Close(false))
             }
+            P::Opening { left } if ctx.opened || left == 0 => {
+                (P::Clicking { left: click() }, FetchStep::Nothing)
+            }
+            P::Opening { left } => (P::Opening { left: left - 1 }, FetchStep::Nothing),
+            P::Clicking { left: 0 } => (
+                P::Waiting {
+                    left: RESPONSE_TICKS,
+                },
+                FetchStep::Send,
+            ),
+            P::Clicking { left } => (P::Clicking { left: left - 1 }, FetchStep::Nothing),
+            P::Waiting { .. } if ctx.response.is_some() => (
+                P::Closing {
+                    left: click(),
+                    ok: ctx.response == Some(true),
+                },
+                FetchStep::Nothing,
+            ),
             P::Waiting { left: 0 } => (P::Closing { left: 0, ok: false }, FetchStep::Nothing),
             P::Waiting { left } => (P::Waiting { left: left - 1 }, FetchStep::Nothing),
             P::Closing { left: 0, ok } => (self.phase, FetchStep::Close(ok)),
@@ -85,7 +101,11 @@ pub(crate) fn fetch_op(state: &GameState, from: u8) -> Op {
     let to = hotbar_target(&state.inventory);
     let (from, to) = (SlotRef::Main(from), SlotRef::Main(to));
     match (from.stack(state), to.stack(state)) {
-        (Some(stack), Some(dst)) if dst.is_empty() => Op::Transfer { from, to, count: u8::try_from(stack.count).unwrap_or(u8::MAX) },
+        (Some(stack), Some(dst)) if dst.is_empty() => Op::Transfer {
+            from,
+            to,
+            count: u8::try_from(stack.count).unwrap_or(u8::MAX),
+        },
         _ => Op::Swap { a: from, b: to },
     }
 }
@@ -97,7 +117,9 @@ impl Bot {
     }
 
     pub(crate) fn tick_fetch(&mut self) {
-        let Some((fetch, from)) = self.survival.fetch.as_mut() else { return };
+        let Some((fetch, from)) = self.survival.fetch.as_mut() else {
+            return;
+        };
         let ctx = FetchCtx {
             opened: self.state.containers.open.is_some(),
             response: self.survival.fetch_response.take(),
@@ -125,9 +147,22 @@ impl Bot {
 
     /// Settles the fetch's request when `packet` carries its response.
     pub(crate) fn on_fetch_packet(&mut self, packet: &RawPacket) {
-        let Some((Fetch { pending: Some((_, id)), .. }, _)) = &self.survival.fetch else { return };
-        let Some(response) = response_for(packet, *id) else { return };
-        let Some((plan, _)) = self.fetch_mut().pending.take() else { return };
+        let Some((
+            Fetch {
+                pending: Some((_, id)),
+                ..
+            },
+            _,
+        )) = &self.survival.fetch
+        else {
+            return;
+        };
+        let Some(response) = response_for(packet, *id) else {
+            return;
+        };
+        let Some((plan, _)) = self.fetch_mut().pending.take() else {
+            return;
+        };
         let ok = self.finish_request(plan, &response).is_ok();
         self.survival.fetch_response = Some(ok);
     }

@@ -34,7 +34,9 @@ impl Sections {
     /// Ignored outside loaded sections.
     #[inline]
     pub fn set(&mut self, x: i32, y: i32, z: i32, value: u8) {
-        let Some(s) = self.map.get_mut(&(x >> 4, y >> 4, z >> 4)) else { return };
+        let Some(s) = self.map.get_mut(&(x >> 4, y >> 4, z >> 4)) else {
+            return;
+        };
         match s {
             Section::Uniform(v) if *v == value => {}
             Section::Uniform(v) => {
@@ -48,7 +50,14 @@ impl Sections {
 
     pub fn insert(&mut self, key: SectionKey, cells: &[u8; SECTION_VOLUME]) {
         let uniform = cells.iter().all(|&v| v == cells[0]);
-        self.map.insert(key, if uniform { Section::Uniform(cells[0]) } else { Section::Cells(Box::new(*cells)) });
+        self.map.insert(
+            key,
+            if uniform {
+                Section::Uniform(cells[0])
+            } else {
+                Section::Cells(Box::new(*cells))
+            },
+        );
     }
 
     pub fn fill(&mut self, key: SectionKey, value: u8) {
@@ -64,7 +73,11 @@ impl Sections {
         match self.map.get(&key) {
             Some(Section::Uniform(0)) | None => {}
             Some(Section::Uniform(v)) => (0..SECTION_VOLUME).for_each(|i| f(i, *v)),
-            Some(Section::Cells(c)) => c.iter().enumerate().filter(|(_, v)| **v != 0).for_each(|(i, v)| f(i, *v)),
+            Some(Section::Cells(c)) => c
+                .iter()
+                .enumerate()
+                .filter(|(_, v)| **v != 0)
+                .for_each(|(i, v)| f(i, *v)),
         }
     }
 }

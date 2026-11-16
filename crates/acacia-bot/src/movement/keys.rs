@@ -24,7 +24,14 @@ pub(crate) struct KeyLatch {
 
 impl KeyLatch {
     /// This tick's input for `c` held by `st`; advances the latches.
-    pub(crate) fn advance(&mut self, c: &Controls, st: &PlayerState, world: &(impl WorldView + ?Sized), using_item: bool, want_down: bool) -> Input {
+    pub(crate) fn advance(
+        &mut self,
+        c: &Controls,
+        st: &PlayerState,
+        world: &(impl WorldView + ?Sized),
+        using_item: bool,
+        want_down: bool,
+    ) -> Input {
         // Simulated with the rotation as sent, so a replay of the packet reproduces the tick exactly.
         let (yaw, pitch) = auth_input::wire_rotation(c.yaw, c.pitch);
         // Pressing forward again within DOUBLE_TAP_TICKS of the last press sprints: BDS runs this client
@@ -48,7 +55,11 @@ impl KeyLatch {
             }
         }
         self.prev_impulse = impulse;
-        self.latched_sprint = if c.sprint { self.mouse_input } else { self.latched_sprint && st.sprinting || double_tap };
+        self.latched_sprint = if c.sprint {
+            self.mouse_input
+        } else {
+            self.latched_sprint && st.sprinting || double_tap
+        };
         Input {
             move_vector: keys(c.strafe, c.forward),
             yaw,
@@ -71,10 +82,23 @@ impl KeyLatch {
 /// speed as one key does (the simulation's own cap would let them reach 1.0).
 fn keys(strafe: f32, forward: f32) -> [f32; 2] {
     let [s, f] = [key(strafe), key(forward)];
-    if s != 0.0 && f != 0.0 { [s * std::f32::consts::FRAC_1_SQRT_2, f * std::f32::consts::FRAC_1_SQRT_2] } else { [s, f] }
+    if s != 0.0 && f != 0.0 {
+        [
+            s * std::f32::consts::FRAC_1_SQRT_2,
+            f * std::f32::consts::FRAC_1_SQRT_2,
+        ]
+    } else {
+        [s, f]
+    }
 }
 
 /// A movement axis as a key press: -1, 0 or 1.
 fn key(axis: f32) -> f32 {
-    if axis > 0.0 { 1.0 } else if axis < 0.0 { -1.0 } else { 0.0 }
+    if axis > 0.0 {
+        1.0
+    } else if axis < 0.0 {
+        -1.0
+    } else {
+        0.0
+    }
 }

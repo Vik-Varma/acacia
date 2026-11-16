@@ -9,7 +9,7 @@ use acacia_proto::packets::{ClientCacheBlobStatus, ClientCacheMissResponse, Leve
 use acacia_proto::{DecodeError, Packet, RawPacket};
 
 use super::deferred::{self, delay};
-use crate::blob_store::{xxh64, BlobStore};
+use crate::blob_store::{BlobStore, xxh64};
 
 pub(super) struct BlobStatus {
     store: Arc<dyn BlobStore>,
@@ -26,7 +26,14 @@ impl BlobStatus {
     pub const PACKETS: &[u32] = &[LevelChunk::ID, Subchunk::ID, ClientCacheMissResponse::ID];
 
     pub fn new(store: Arc<dyn BlobStore>) -> Self {
-        Self { store, slots: Vec::new(), in_flight: HashSet::new(), spawned: false, due: None, rng: deferred::seed() }
+        Self {
+            store,
+            slots: Vec::new(),
+            in_flight: HashSet::new(),
+            spawned: false,
+            due: None,
+            rng: deferred::seed(),
+        }
     }
 
     pub fn apply(&mut self, now: Instant, raw: &RawPacket) -> Result<(), DecodeError> {
@@ -40,7 +47,8 @@ impl BlobStatus {
             Subchunk::ID => {
                 let sub: Subchunk = raw.decode()?;
                 if sub.cache_enabled {
-                    self.slots.extend(sub.entries.iter().filter_map(|e| e.blob_id));
+                    self.slots
+                        .extend(sub.entries.iter().filter_map(|e| e.blob_id));
                 }
             }
             ClientCacheMissResponse::ID => {
@@ -78,7 +86,10 @@ impl BlobStatus {
         if self.slots.is_empty() {
             return None;
         }
-        let mut status = ClientCacheBlobStatus { missing: Vec::new(), have: Vec::new() };
+        let mut status = ClientCacheBlobStatus {
+            missing: Vec::new(),
+            have: Vec::new(),
+        };
         for hash in self.slots.drain(..) {
             if self.store.has(hash) || self.in_flight.contains(&hash) {
                 status.have.push(hash);
@@ -109,7 +120,17 @@ mod tests {
     }
 
     fn chunk(blobs: Vec<u64>) -> RawPacket {
-        raw(&LevelChunk { x: 0, z: 0, dimension: 0, sub_chunk_count: 0, highest_subchunk_count: Some(4), cache_enabled: true, blobs, payload: Bytes::from_static(&[0]) })
+        raw(&LevelChunk {
+            x: 0,
+            z: 0,
+            dimension: 0,
+            sub_chunk_count: 0,
+            highest_subchunk_count: Some(4),
+            cache_enabled: true,
+            client_biome_update: false,
+            blobs,
+            payload: Bytes::from_static(&[0]),
+        })
     }
 
     #[test]
@@ -126,13 +147,44 @@ mod tests {
         let first = s.next_due().unwrap() - t0;
         assert!((380..=450).contains(&(first.as_millis() as u64)));
         let status = s.poll(t0 + Duration::from_secs(1)).unwrap();
-        assert_eq!((status.missing, status.have), (vec![id, 5], vec![id]), "missing deduped, repeats held");
+        assert_eq!(
+            (status.missing, status.have),
+            (vec![id, 5], vec![id]),
+            "missing deduped, repeats held"
+        );
 
-        s.apply(t0, &raw(&ClientCacheMissResponse { blobs: vec![Blob { hash: id, payload: section }, Blob { hash: 5, payload: Bytes::from_static(b"forged") }] })).unwrap();
-        assert!(store.has(id) && !store.has(5), "only blobs matching their hash are kept");
+        s.apply(
+            t0,
+            &raw(&ClientCacheMissResponse {
+                blobs: vec![
+                    Blob {
+                        hash: id,
+                        payload: section,
+                    },
+                    Blob {
+                        hash: 5,
+                        payload: Bytes::from_static(b"forged"),
+                    },
+                ],
+            }),
+        )
+        .unwrap();
+        assert!(
+            store.has(id) && !store.has(5),
+            "only blobs matching their hash are kept"
+        );
 
         let t1 = t0 + Duration::from_secs(2);
-        s.apply(t1, &raw(&Subchunk { cache_enabled: true, dimension: 0, origin: Vec3li { x: 0, y: 0, z: 0 }, entries: Vec::new() })).unwrap();
+        s.apply(
+            t1,
+            &raw(&Subchunk {
+                cache_enabled: true,
+                dimension: 0,
+                origin: Vec3li { x: 0, y: 0, z: 0 },
+                entries: Vec::new(),
+            }),
+        )
+        .unwrap();
         assert_eq!(s.next_due(), None, "nothing to report");
         s.apply(t1, &chunk(vec![id])).unwrap();
         let due = s.next_due().unwrap() - t1;

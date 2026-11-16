@@ -16,7 +16,12 @@ struct Flaky {
 
 #[async_trait::async_trait]
 impl AccountLease for Flaky {
-    async fn acquire(&self, account: &str, holder: &str, ttl: Duration) -> Result<Option<Lease>, LeaseError> {
+    async fn acquire(
+        &self,
+        account: &str,
+        holder: &str,
+        ttl: Duration,
+    ) -> Result<Option<Lease>, LeaseError> {
         self.inner.acquire(account, holder, ttl).await
     }
 
@@ -39,9 +44,16 @@ async fn renews_through_short_races() {
     keeper.acquire("acct").await.unwrap();
     // Raced against phases much shorter than the renewal interval, as the supervisor does.
     for _ in 0..200 {
-        assert!(timeout(Duration::from_secs(1), keeper.lost()).await.is_err());
+        assert!(
+            timeout(Duration::from_secs(1), keeper.lost())
+                .await
+                .is_err()
+        );
     }
-    assert!(leases.acquire("acct", "b", TTL).await.unwrap().is_none(), "still held after 200 s");
+    assert!(
+        leases.acquire("acct", "b", TTL).await.unwrap().is_none(),
+        "still held after 200 s"
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -53,7 +65,10 @@ async fn gives_up_before_expiry_when_the_store_is_down() {
     let start = Instant::now();
     keeper.lost().await;
     assert!(start.elapsed() < TTL, "stopped after {:?}", start.elapsed());
-    assert!(timeout(TTL * 10, keeper.lost()).await.is_err(), "nothing held, so never lost again");
+    assert!(
+        timeout(TTL * 10, keeper.lost()).await.is_err(),
+        "nothing held, so never lost again"
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -68,7 +83,9 @@ async fn busy_while_held_elsewhere_and_lost_on_takeover() {
     // Not polled past the TTL (a stalled shard): another holder takes over, and the next poll notices.
     tokio::time::advance(TTL * 2).await;
     leases.acquire("acct", "b", TTL).await.unwrap().unwrap();
-    timeout(Duration::from_millis(1), keeper.lost()).await.expect("lost at once");
+    timeout(Duration::from_millis(1), keeper.lost())
+        .await
+        .expect("lost at once");
 }
 
 #[tokio::test(start_paused = true)]

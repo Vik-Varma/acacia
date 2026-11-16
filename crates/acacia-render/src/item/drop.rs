@@ -36,8 +36,16 @@ pub fn copies(motion: &Dropped, count: u16) -> usize {
 
 /// The copies to draw; a Java look's item as [`java_frames`] places it under its `ground`
 /// display, else by the look's [`Dropped`] motion.
-pub fn instances(model: &ItemModel, motion: &Dropped, drop: &Drop, camera: DVec3) -> Vec<EntityInstance> {
-    let java = model.java.as_deref().and_then(|d| Some((d.get(super::java::context::GROUND)?, d.ground?)));
+pub fn instances(
+    model: &ItemModel,
+    motion: &Dropped,
+    drop: &Drop,
+    camera: DVec3,
+) -> Vec<EntityInstance> {
+    let java = model
+        .java
+        .as_deref()
+        .and_then(|d| Some((d.get(super::java::context::GROUND)?, d.ground?)));
     if let Some((display, [lo, hi])) = java {
         let feet = Mat4::from_translation((drop.feet - camera).as_vec3());
         let skin = model.ground_skin();
@@ -51,7 +59,8 @@ pub fn instances(model: &ItemModel, motion: &Dropped, drop: &Drop, camera: DVec3
                 scale: 1.0,
                 pose: Pose::default(),
                 frame: Some(feet * frame * display.mesh_frame()),
-                hurt: false, white: 0.0,
+                hurt: false,
+                white: 0.0,
                 glint: model.glint.then_some(crate::glint::Glint::Item),
             })
             .collect();
@@ -64,10 +73,28 @@ fn bedrock_instances(model: &ItemModel, motion: &Dropped, drop: &Drop) -> Vec<En
     let (ground, aside, bottom) = match model.form {
         Form::Block => (motion.block, Vec3::ZERO, -0.5),
         Form::Flat => (motion.flat, Vec3::ZERO, -0.5),
-        Form::Banner => (Ground { scale: held_banner::GROUND.0, lift: held_banner::GROUND.1 }, Vec3::ZERO, -0.5),
-        Form::Shield => (Ground { scale: shield::GROUND.0, lift: shield::GROUND.1.y }, shield::GROUND.1 * Vec3::new(1.0, 0.0, 1.0), shield::LOWEST),
+        Form::Banner => (
+            Ground {
+                scale: held_banner::GROUND.0,
+                lift: held_banner::GROUND.1,
+            },
+            Vec3::ZERO,
+            -0.5,
+        ),
+        Form::Shield => (
+            Ground {
+                scale: shield::GROUND.0,
+                lift: shield::GROUND.1.y,
+            },
+            shield::GROUND.1 * Vec3::new(1.0, 0.0, 1.0),
+            shield::LOWEST,
+        ),
     };
-    let depth = if model.form == Form::Flat { 1.0 / 16.0 } else { 1.0 } * ground.scale;
+    let depth = if model.form == Form::Flat {
+        1.0 / 16.0
+    } else {
+        1.0
+    } * ground.scale;
     // Flat and block models are a unit box around the origin before the ground transform.
     let lowest = ground.lift + bottom * ground.scale;
     let bob = (drop.age_ticks / motion.bob_ticks + drop.bob_offset).sin() * motion.bob + motion.bob;
@@ -79,13 +106,27 @@ fn bedrock_instances(model: &ItemModel, motion: &Dropped, drop: &Drop) -> Vec<En
     let mut draw = Draw::new(i64::from(drop.seed));
     let mut stray = |reach: f32| (draw.float() * 2.0 - 1.0) * reach;
     let offsets: Vec<Vec3> = if depth > FLAT_DEPTH {
-        let rest = (1..n).map(|_| Vec3::new(stray(motion.scatter), stray(motion.scatter), stray(motion.scatter)));
+        let rest = (1..n).map(|_| {
+            Vec3::new(
+                stray(motion.scatter),
+                stray(motion.scatter),
+                stray(motion.scatter),
+            )
+        });
         std::iter::once(Vec3::ZERO).chain(rest).collect()
     } else {
         let step = depth * 1.5;
         let first = -(step * (n - 1) as f32 / 2.0);
-        let rest = (1..n).map(|i| Vec3::new(stray(motion.scatter * 0.5), stray(motion.scatter * 0.5), first + step * i as f32));
-        std::iter::once(Vec3::new(0.0, 0.0, first)).chain(rest).collect()
+        let rest = (1..n).map(|i| {
+            Vec3::new(
+                stray(motion.scatter * 0.5),
+                stray(motion.scatter * 0.5),
+                first + step * i as f32,
+            )
+        });
+        std::iter::once(Vec3::new(0.0, 0.0, first))
+            .chain(rest)
+            .collect()
     };
     offsets
         .into_iter()
@@ -98,7 +139,8 @@ fn bedrock_instances(model: &ItemModel, motion: &Dropped, drop: &Drop) -> Vec<En
             scale: ground.scale,
             pose: Pose::default(),
             frame: None,
-            hurt: false, white: 0.0,
+            hurt: false,
+            white: 0.0,
             glint: model.glint.then_some(crate::glint::Glint::Item),
         })
         .collect()
@@ -112,7 +154,8 @@ pub fn java_frames(bounds: [f32; 2], drop: &Drop) -> Vec<Mat4> {
     let [min_y, depth] = bounds;
     let bob = sin(drop.age_ticks / 10.0 + drop.bob_offset) * 0.1 + 0.1;
     let spin = drop.age_ticks / 20.0 + drop.bob_offset;
-    let mut pose = Mat4::from_translation(Vec3::new(0.0, bob + (-min_y + 0.0625), 0.0)) * joml_rotation_y(spin);
+    let mut pose = Mat4::from_translation(Vec3::new(0.0, bob + (-min_y + 0.0625), 0.0))
+        * joml_rotation_y(spin);
     let n = copies_of(drop.count);
     let mut draw = Draw::new(i64::from(drop.seed));
     let mut stray = |reach: f32| (draw.float() * 2.0 - 1.0) * reach;
@@ -151,7 +194,9 @@ pub fn copies_of(count: u16) -> usize {
 /// `PoseStack.rotate(Axis.YP, angle)`: JOML's `rotateY`, whose cosine is `sqrt(1 - sin²)`.
 fn joml_rotation_y(angle: f32) -> Mat4 {
     let (s, c) = joml_sin_cos(angle);
-    Mat4::from_cols_array(&[c, 0.0, -s, 0.0, 0.0, 1.0, 0.0, 0.0, s, 0.0, c, 0.0, 0.0, 0.0, 0.0, 1.0])
+    Mat4::from_cols_array(&[
+        c, 0.0, -s, 0.0, 0.0, 1.0, 0.0, 0.0, s, 0.0, c, 0.0, 0.0, 0.0, 0.0, 1.0,
+    ])
 }
 
 #[cfg(test)]

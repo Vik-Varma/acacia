@@ -3,12 +3,12 @@ use std::time::{Duration, Instant};
 
 use bytes::{Bytes, BytesMut};
 
-use super::congestion::Congestion;
 use super::CHANNELS;
+use super::congestion::Congestion;
 use crate::wire::datagram::{
-    put_datagram_header, Frame, Reliability, Split, DATAGRAM_HEADER_LEN, MAX_FRAME_HEADER_LEN,
+    DATAGRAM_HEADER_LEN, Frame, MAX_FRAME_HEADER_LEN, Reliability, Split, put_datagram_header,
 };
-use crate::wire::{unwrap24, U24_MASK};
+use crate::wire::{U24_MASK, unwrap24};
 
 /// Largest frame header when the message is not split.
 const UNSPLIT_HEADER_LEN: usize = MAX_FRAME_HEADER_LEN - 10;
@@ -87,7 +87,15 @@ impl SendQueue {
     /// Queues a ping or pong: unreliable, unordered and never split.
     pub fn push_control(&mut self, body: Bytes) {
         let reliability = Reliability::Unreliable;
-        self.control.push_back(Frame { reliability, reliable_index: 0, sequence_index: 0, order_index: 0, order_channel: 0, split: None, body });
+        self.control.push_back(Frame {
+            reliability,
+            reliable_index: 0,
+            sequence_index: 0,
+            order_index: 0,
+            order_channel: 0,
+            split: None,
+            body,
+        });
     }
 
     /// Queues a message, splitting it into fragments if it cannot fit in one datagram of `max_payload` bytes.
@@ -116,8 +124,13 @@ impl SendQueue {
         self.queued_bytes += body.len();
         let room = max_payload.saturating_sub(DATAGRAM_HEADER_LEN);
         if body.len() <= room.saturating_sub(UNSPLIT_HEADER_LEN) {
-            let reliable_index = if reliability.is_reliable() { self.take_reliable_index() } else { 0 };
-            self.pending.push_back(template(reliability, reliable_index, None, body));
+            let reliable_index = if reliability.is_reliable() {
+                self.take_reliable_index()
+            } else {
+                0
+            };
+            self.pending
+                .push_back(template(reliability, reliable_index, None, body));
             return;
         }
 
@@ -128,9 +141,14 @@ impl SendQueue {
         self.next_split_id = id.wrapping_add(1);
         for (index, start) in (0..body.len()).step_by(chunk).enumerate() {
             let part = body.slice(start..(start + chunk).min(body.len()));
-            let split = Split { count, id, index: index as u32 };
+            let split = Split {
+                count,
+                id,
+                index: index as u32,
+            };
             let reliable_index = self.take_reliable_index();
-            self.pending.push_back(template(reliability, reliable_index, Some(split), part));
+            self.pending
+                .push_back(template(reliability, reliable_index, Some(split), part));
         }
     }
 
@@ -160,9 +178,14 @@ impl SendQueue {
         let mut buf = BytesMut::with_capacity(max_payload);
         put_datagram_header(&mut buf, seq as u32);
         // The first frame always goes, so an oversized one cannot block the queue.
-        let fits = |buf: &BytesMut, f: &Frame| buf.len() == DATAGRAM_HEADER_LEN || buf.len() + f.encoded_len() <= max_payload;
+        let fits = |buf: &BytesMut, f: &Frame| {
+            buf.len() == DATAGRAM_HEADER_LEN || buf.len() + f.encoded_len() <= max_payload
+        };
         while self.control.front().is_some_and(|f| fits(&buf, f)) {
-            self.control.pop_front().expect("front exists").encode(&mut buf);
+            self.control
+                .pop_front()
+                .expect("front exists")
+                .encode(&mut buf);
         }
         let mut reliable = Vec::new();
         while window_open && self.pending.front().is_some_and(|f| fits(&buf, f)) {
@@ -174,7 +197,13 @@ impl SendQueue {
             }
         }
         if !reliable.is_empty() {
-            self.in_flight.insert(seq, InFlight { sent_at: now, frames: reliable });
+            self.in_flight.insert(
+                seq,
+                InFlight {
+                    sent_at: now,
+                    frames: reliable,
+                },
+            );
         }
         Some(buf.freeze())
     }
@@ -190,14 +219,20 @@ impl SendQueue {
 
     fn resolve_range(&self, start: u32, end: u32) -> (u64, u64) {
         let start = unwrap24(self.next_datagram.saturating_sub(1), start);
-        (start, start + u64::from(end.wrapping_sub(start as u32) & U24_MASK))
+        (
+            start,
+            start + u64::from(end.wrapping_sub(start as u32) & U24_MASK),
+        )
     }
 
     pub fn on_ack(&mut self, now: Instant, start: u32, end: u32) {
         let (start, end) = self.resolve_range(start, end);
         while let Some(&seq) = self.in_flight.range(start..=end).next().map(|(k, _)| k) {
             let acked = self.in_flight.remove(&seq).expect("key from range");
-            self.congestion.on_ack(now.saturating_duration_since(acked.sent_at), self.window_limited);
+            self.congestion.on_ack(
+                now.saturating_duration_since(acked.sent_at),
+                self.window_limited,
+            );
         }
         self.congestion.on_received(start..=end);
     }
@@ -205,7 +240,12 @@ impl SendQueue {
     pub fn on_nack(&mut self, start: u32, end: u32) {
         let (start, end) = self.resolve_range(start, end);
         // Newest first, so the oldest datagram's frames end up at the head of the queue.
-        while let Some(&seq) = self.in_flight.range(start..=end).next_back().map(|(k, _)| k) {
+        while let Some(&seq) = self
+            .in_flight
+            .range(start..=end)
+            .next_back()
+            .map(|(k, _)| k)
+        {
             let lost = self.in_flight.remove(&seq).expect("key from range");
             self.congestion.on_nack(seq, self.next_datagram);
             self.requeue(lost);
@@ -219,7 +259,8 @@ impl SendQueue {
             if entry.get().sent_at + rto > now {
                 break;
             }
-            self.congestion.on_resend_timeout(*entry.key(), self.next_datagram);
+            self.congestion
+                .on_resend_timeout(*entry.key(), self.next_datagram);
             expired.push(entry.remove());
         }
         for lost in expired.into_iter().rev() {
@@ -228,6 +269,8 @@ impl SendQueue {
     }
 
     pub fn next_resend(&self) -> Option<Instant> {
-        self.in_flight.first_key_value().map(|(_, f)| f.sent_at + self.congestion.rto())
+        self.in_flight
+            .first_key_value()
+            .map(|(_, f)| f.sent_at + self.congestion.rto())
     }
 }

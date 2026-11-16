@@ -38,8 +38,17 @@ impl Book {
     pub fn tab_rects(&self) -> Vec<(usize, [i32; 4])> {
         let x = (self.width - IMAGE_WIDTH) / 2 - if self.narrow { 0 } else { 86 } - 30;
         let y = (self.height - IMAGE_HEIGHT) / 2 + 3;
-        let visible = (0..self.tabs.len()).filter(|&i| self.tabs[i].search || self.tabs[i].collections.iter().any(|&c| self.collections[c].has_any_selected()));
-        visible.enumerate().map(|(n, i)| (i, [x, y + 27 * n as i32, 35, 27])).collect()
+        let visible = (0..self.tabs.len()).filter(|&i| {
+            self.tabs[i].search
+                || self.tabs[i]
+                    .collections
+                    .iter()
+                    .any(|&c| self.collections[c].has_any_selected())
+        });
+        visible
+            .enumerate()
+            .map(|(n, i)| (i, [x, y + 27 * n as i32, 35, 27]))
+            .collect()
     }
 
     /// `mouseClicked`.
@@ -67,7 +76,10 @@ impl Book {
             }
             return Some(BookPress::Changed);
         }
-        let tab = self.tab_rects().into_iter().find(|&(_, rect)| left && hovered(rect, m));
+        let tab = self
+            .tab_rects()
+            .into_iter()
+            .find(|&(_, rect)| left && hovered(rect, m));
         let (i, _) = tab?;
         if i != self.selected_tab {
             self.selected_tab = i;
@@ -81,9 +93,16 @@ impl Book {
         let ([xo, yo], m) = (self.origin(), at(mouse));
         let (listed, page, total) = page::layout(self);
         if let Some(b) = self.overlay {
-            let clicked = overlay_buttons(self, b).and_then(|(_, _, buttons)| buttons.into_iter().find(|o| hovered([o.at[0], o.at[1], 24, 24], m)));
+            let clicked = overlay_buttons(self, b).and_then(|(_, _, buttons)| {
+                buttons
+                    .into_iter()
+                    .find(|o| hovered([o.at[0], o.at[1], 24, 24], m))
+            });
             if let Some(o) = clicked.filter(|_| button == Button::Left) {
-                return Some(BookPress::Recipe { collection: listed[page * PER_PAGE + b], entry: o.entry });
+                return Some(BookPress::Recipe {
+                    collection: listed[page * PER_PAGE + b],
+                    entry: o.entry,
+                });
             }
             self.overlay = None;
             return Some(BookPress::Changed);
@@ -98,7 +117,17 @@ impl Book {
             return Some(BookPress::Changed);
         }
         let shown = listed.len().saturating_sub(page * PER_PAGE).min(PER_PAGE);
-        let i = (0..shown).find(|&i| hovered([xo + 11 + 25 * (i as i32 % 5), yo + 31 + 25 * (i as i32 / 5), 25, 25], m))?;
+        let i = (0..shown).find(|&i| {
+            hovered(
+                [
+                    xo + 11 + 25 * (i as i32 % 5),
+                    yo + 31 + 25 * (i as i32 / 5),
+                    25,
+                    25,
+                ],
+                m,
+            )
+        })?;
         if button == Button::Middle {
             return None;
         }
@@ -106,11 +135,18 @@ impl Book {
         let fitting: Vec<usize> = (0..self.collections[collection].entries.len())
             .filter(|&e| {
                 let entry = &self.collections[collection].entries[e];
-                if self.filtering { entry.craftable } else { entry.selected }
+                if self.filtering {
+                    entry.craftable
+                } else {
+                    entry.selected
+                }
             })
             .collect();
         if left && !fitting.is_empty() {
-            return Some(BookPress::Recipe { collection, entry: fitting[self.index() % fitting.len()] });
+            return Some(BookPress::Recipe {
+                collection,
+                entry: fitting[self.index() % fitting.len()],
+            });
         }
         if !left && fitting.len() != 1 {
             self.overlay = Some(i);
@@ -128,7 +164,10 @@ impl Book {
         let (l, t) = (f64::from(left), f64::from(top));
         let outside = x < l || y < t || x >= l + f64::from(w) || y >= t + f64::from(h);
         let on_book = l - 147.0 < x && x < l && t < y && y < t + f64::from(h);
-        let tab = self.tab_rects().into_iter().find(|&(i, _)| i == self.selected_tab);
+        let tab = self
+            .tab_rects()
+            .into_iter()
+            .find(|&(i, _)| i == self.selected_tab);
         outside && !on_book && !tab.is_some_and(|(_, rect)| hovered(rect, at(mouse)))
     }
 }

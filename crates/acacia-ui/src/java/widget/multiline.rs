@@ -36,7 +36,10 @@ fn lines_of(m: &dyn Metrics, value: &str, width: i32) -> Vec<View> {
     if value.is_empty() {
         return vec![(0, 0)];
     }
-    let mut lines: Vec<View> = split_lines_plain(m, value, width, &Style::default(), false).into_iter().map(|(_, a, b)| (a, b)).collect();
+    let mut lines: Vec<View> = split_lines_plain(m, value, width, &Style::default(), false)
+        .into_iter()
+        .map(|(_, a, b)| (a, b))
+        .collect();
     if value.ends_with('\n') {
         lines.push((value.len(), value.len()));
     }
@@ -45,7 +48,16 @@ fn lines_of(m: &dyn Metrics, value: &str, width: i32) -> Vec<View> {
 
 impl MultilineField {
     pub fn new(m: &dyn Metrics, width: i32) -> MultilineField {
-        let mut f = MultilineField { value: String::new(), cursor: 0, select: 0, selecting: false, width, char_limit: None, line_limit: None, lines: Vec::new() };
+        let mut f = MultilineField {
+            value: String::new(),
+            cursor: 0,
+            select: 0,
+            selecting: false,
+            width,
+            char_limit: None,
+            line_limit: None,
+            lines: Vec::new(),
+        };
         f.set_value(m, "", false);
         f
     }
@@ -56,7 +68,9 @@ impl MultilineField {
 
     fn overflows(&self, m: &dyn Metrics, value: &str) -> bool {
         self.line_limit.is_some_and(|limit| {
-            split_lines_plain(m, value, self.width, &Style::default(), false).len() + usize::from(value.ends_with('\n')) > limit
+            split_lines_plain(m, value, self.width, &Style::default(), false).len()
+                + usize::from(value.ends_with('\n'))
+                > limit
         })
     }
 
@@ -109,9 +123,15 @@ impl MultilineField {
 
     fn step(&self, from: usize, dir: i32) -> usize {
         if dir < 0 {
-            self.value[..from].char_indices().next_back().map_or(0, |(i, _)| i)
+            self.value[..from]
+                .char_indices()
+                .next_back()
+                .map_or(0, |(i, _)| i)
         } else {
-            self.value[from..].chars().next().map_or(from, |c| from + c.len_utf8())
+            self.value[from..]
+                .chars()
+                .next()
+                .map_or(from, |c| from + c.len_utf8())
         }
     }
 
@@ -136,7 +156,9 @@ impl MultilineField {
     }
 
     pub fn line_at_cursor(&self) -> Option<usize> {
-        self.lines.iter().position(|&(a, b)| self.cursor >= a && self.cursor <= b)
+        self.lines
+            .iter()
+            .position(|&(a, b)| self.cursor >= a && self.cursor <= b)
     }
 
     /// `getLineView`: clamped to the lines.
@@ -165,7 +187,8 @@ impl MultilineField {
     /// `seekCursorToPoint`: `(x, y)` from the text's top left.
     pub fn seek_point(&mut self, m: &dyn Metrics, x: f64, y: f64) {
         let (a, b) = self.line_view((y / 9.0).floor() as i32);
-        let column = plain_head_by_width(m, &self.value[a..b], x.floor() as i32, &Style::default()).len();
+        let column =
+            plain_head_by_width(m, &self.value[a..b], x.floor() as i32, &Style::default()).len();
         self.seek(a + column);
     }
 

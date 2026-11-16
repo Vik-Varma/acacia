@@ -4,6 +4,7 @@
 mod abilities;
 mod block_entities;
 mod containers;
+mod creative;
 mod effects;
 mod entities;
 mod environment;
@@ -16,44 +17,47 @@ pub(crate) mod java_inventory;
 #[cfg(feature = "java")]
 pub(crate) mod java_trade;
 mod kept;
+mod maps;
 mod metadata;
 mod player;
 mod player_list;
 pub(crate) mod queries;
-mod creative;
 mod recipes;
 mod riding;
 mod scoreboard;
 mod signs;
-mod maps;
 mod skins;
 mod stations;
 
 pub use abilities::Abilities;
 pub use block_entities::{BlockEntities, BlockEntityTracking};
 pub use containers::{Container, Containers};
-pub use effects::{effect, Effect, Effects};
-pub use entities::{Entities, Entity, Equipment, ITEM_KIND, PLAYER_EYE_HEIGHT, PLAYER_KIND, Property};
-pub(crate) use entities::EntityChange;
-pub use maps::{MAP_SIZE, MapImage, MapMarker, Maps};
-pub use skins::{PlayerSkin, SkinTexture, Skins};
-pub use environment::{BossBar, Environment};
-pub use metadata::Metadata;
-pub use fishing::{Fishing, FishingHook, FISHING_HOOK_KIND};
-pub use hurts::Hurts;
-pub use riding::{Pose, Riding, Vehicle};
-pub use inventory::{Inventory, ItemStack};
-pub use items::ItemRegistry;
 pub use creative::{Creative, CreativeItem, CreativeTab};
-pub use recipes::{Ingredient, Recipe, RecipeBook, RecipeKind, Recipes};
-pub use stations::{EnchantOption, Stations, TradeItem, TradeOffer, TradeWindow};
-pub use player::PlayerState;
-pub use player_list::{PlayerList, PlayerListEntry};
-pub(crate) use player_list::PlayerChange;
+pub use effects::{Effect, Effects, effect};
+pub(crate) use entities::EntityChange;
 #[cfg(feature = "java")]
 pub(crate) use entities::bedrock_kind as java_bedrock_kind;
-pub use scoreboard::{Objective, ScoreEntry, Scoreboard, SortOrder, SLOT_BELOW_NAME, SLOT_LIST, SLOT_SIDEBAR};
+pub use entities::{
+    Entities, Entity, Equipment, ITEM_KIND, PLAYER_EYE_HEIGHT, PLAYER_KIND, Property,
+};
+pub use environment::{BossBar, Environment};
+pub use fishing::{FISHING_HOOK_KIND, Fishing, FishingHook};
+pub use hurts::Hurts;
+pub use inventory::{Inventory, ItemStack};
+pub use items::ItemRegistry;
+pub use maps::{MAP_SIZE, MapImage, MapMarker, Maps};
+pub use metadata::Metadata;
+pub use player::PlayerState;
+pub(crate) use player_list::PlayerChange;
+pub use player_list::{PlayerList, PlayerListEntry};
+pub use recipes::{Ingredient, Recipe, RecipeBook, RecipeKind, Recipes};
+pub use riding::{Pose, Riding, Vehicle};
+pub use scoreboard::{
+    Objective, SLOT_BELOW_NAME, SLOT_LIST, SLOT_SIDEBAR, ScoreEntry, Scoreboard, SortOrder,
+};
 pub use signs::{SignEditor, Signs};
+pub use skins::{PlayerSkin, SkinTexture, Skins};
+pub use stations::{EnchantOption, Stations, TradeItem, TradeOffer, TradeWindow};
 
 use acacia_client::proto::packets::{BlockEntityData, SetEntityData};
 use acacia_client::proto::types::BlockCoordinates;
@@ -63,7 +67,9 @@ use crate::forms::Forms;
 
 /// A `BlockEntityData`'s position and its NBT read in place: decoding it copies the NBT, and pistons
 /// and observers send one every move.
-pub(crate) fn block_entity_parts(packet: &RawPacket) -> Result<(BlockCoordinates, &[u8]), DecodeError> {
+pub(crate) fn block_entity_parts(
+    packet: &RawPacket,
+) -> Result<(BlockCoordinates, &[u8]), DecodeError> {
     let mut r = &packet.body[..];
     Ok((BlockCoordinates::read(&mut r)?, r))
 }
@@ -158,7 +164,11 @@ pub struct GameState {
 
 impl GameState {
     pub(crate) fn new(trackers: Trackers, runtime_entity_id: u64) -> Self {
-        let mut state = Self { trackers, block_entities: BlockEntities::new(trackers.block_entities), ..Self::default() };
+        let mut state = Self {
+            trackers,
+            block_entities: BlockEntities::new(trackers.block_entities),
+            ..Self::default()
+        };
         state.player.runtime_entity_id = runtime_entity_id;
         state.entities.lean = !trackers.entities;
         state
@@ -176,7 +186,10 @@ impl GameState {
     }
 
     pub fn me(&self) -> Me {
-        Me { runtime_entity_id: self.player.runtime_entity_id, unique_entity_id: self.player.unique_entity_id }
+        Me {
+            runtime_entity_id: self.player.runtime_entity_id,
+            unique_entity_id: self.player.unique_entity_id,
+        }
     }
 
     /// Routes one packet to every tracker that consumes its ID.

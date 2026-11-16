@@ -11,18 +11,18 @@ pub mod selection;
 mod view;
 mod world;
 
+pub use acacia_registry as neutral;
 pub use access::BlockAccess;
 pub use change::ChunkChange;
-pub use find::{block_ids, find_blocks};
 pub use chunk::{
-    Chunk, ColumnHeights, Dimension, Heightmap, LevelChunkData, SECTION_VOLUME, SubChunkData, level_chunk_block_entities,
-    sub_chunk_block_entities,
+    Chunk, ColumnHeights, Dimension, Heightmap, LevelChunkData, SECTION_VOLUME, SubChunkData,
+    level_chunk_block_entities, sub_chunk_block_entities,
 };
+pub use find::{block_ids, find_blocks};
 pub use registry::{
-    Aabb, BlockFlags, BlockRegistry, BlockState, CustomBlock, Material, Mining, NeutralFlags, SelectionOffset, Tool,
-    ToolKind, ToolTier, fnv1_64,
+    Aabb, BlockFlags, BlockRegistry, BlockState, CustomBlock, Material, Mining, NeutralFlags,
+    SelectionOffset, Tool, ToolKind, ToolTier, fnv1_64,
 };
-pub use acacia_registry as neutral;
 pub use view::ChunkView;
 pub use world::{BlockIds, Inserted, SharedChunk, World};
 

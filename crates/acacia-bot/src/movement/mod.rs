@@ -8,29 +8,32 @@ mod flight;
 mod fork;
 mod glide;
 mod idle;
+#[cfg(feature = "java")]
+mod java_sim;
 mod keys;
 mod lifecycle;
 mod packets;
 mod rewind;
 mod rotation_noise;
-#[cfg(feature = "java")]
-mod java_sim;
 mod sim;
 #[cfg(test)]
 mod tests;
 
 #[cfg(feature = "java")]
-pub use java_sim::{JAVA, JavaSim, JavaView};
-#[cfg(feature = "java")]
 pub(crate) use java_sim::keys as java_keys;
+#[cfg(feature = "java")]
+pub use java_sim::{JAVA, JavaSim, JavaView};
 
 pub use controls::{Controls, Key};
-pub(crate) use controls::{attach_actions, VehicleCorrection};
+pub(crate) use controls::{VehicleCorrection, attach_actions};
 pub use fork::{BEDROCK, Rollout};
-pub use sim::{Body, Envelope, Live, Motion, Sim, SimWorld, StepIn, Traits};
 pub use idle::Idle;
+pub use sim::{Body, Envelope, Live, Motion, Sim, SimWorld, StepIn, Traits};
 
-use acacia_client::proto::packets::{PlayerAuthInput, PlayerAuthInputBlockActionItem, PlayerAuthInputInputMode, PlayerAuthInputInteractionModel};
+use acacia_client::proto::packets::{
+    PlayerAuthInput, PlayerAuthInputBlockActionItem, PlayerAuthInputInputMode,
+    PlayerAuthInputInteractionModel,
+};
 use acacia_physics::{self as physics, Effects, Equipment, PlayerState, Vec3, WorldView};
 
 use keys::KeyLatch;
@@ -148,7 +151,10 @@ impl Movement {
 
     /// The freeze the simulation holds, and the one the server has reported for input `tick`.
     pub(crate) fn freeze_at(&self, tick: u64) -> (f32, Option<f32>) {
-        (self.physics.as_ref().map_or(0.0, |p| p.freeze), self.history.server_freeze(tick))
+        (
+            self.physics.as_ref().map_or(0.0, |p| p.freeze),
+            self.history.server_freeze(tick),
+        )
     }
 
     /// Simulated feet position.
@@ -206,12 +212,22 @@ impl Movement {
             tracing::debug!(tick = self.tick, replayed, "rewound");
         }
         let solids = std::mem::take(&mut self.solids);
-        let world = &physics::WithEntities { world, boxes: &solids };
+        let world = &physics::WithEntities {
+            world,
+            boxes: &solids,
+        };
         st.equipment = self.equipment;
         self.keys.mouse_input = self.mouse_input;
-        let input = self.keys.advance(&c, st, world, self.using_item, self.recorded_want_down.unwrap_or(c.sneak));
+        let input = self.keys.advance(
+            &c,
+            st,
+            world,
+            self.using_item,
+            self.recorded_want_down.unwrap_or(c.sneak),
+        );
         let jump = input.jump;
-        let (was_sprinting, was_sneaking, was_swimming, was_gliding) = (st.sprinting, st.sneaking, st.swimming, st.gliding);
+        let (was_sprinting, was_sneaking, was_swimming, was_gliding) =
+            (st.sprinting, st.sneaking, st.swimming, st.gliding);
         let was_flying = st.flight.flying;
         let knockback = st.knockback;
         st.equipment.elytra = self.elytra;
@@ -236,7 +252,10 @@ impl Movement {
             jump: (jump && !self.prev_jump, !jump && self.prev_jump),
             swim: (st.swimming && !was_swimming, !st.swimming && was_swimming),
             glide: (st.gliding && !was_gliding, !st.gliding && was_gliding),
-            fly: (st.flight.flying && !was_flying, !st.flight.flying && was_flying),
+            fly: (
+                st.flight.flying && !was_flying,
+                !st.flight.flying && was_flying,
+            ),
             sneaking: st.sneaking,
             sprinting: st.sprinting,
             sprint_key: c.sprint,
@@ -257,5 +276,7 @@ impl Movement {
 }
 
 impl Default for Movement {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }

@@ -28,6 +28,6 @@ pub use aabb::Aabb;
 pub use boat::{Boat, BoatStatus};
 pub use collide::Blocks;
 pub use input::{Keys, Pose};
-pub use mount::{seat_feet, Boost, Mount, MountKind, Rider};
+pub use mount::{Boost, Mount, MountKind, Rider, seat_feet};
 pub use player::{Effects, ItemUse, Player};
 pub use teleport::Placement;

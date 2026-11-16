@@ -8,7 +8,10 @@ use super::{Stations, TradeItem, TradeOffer, TradeWindow};
 
 /// Sets `stations.trade` from the open merchant menu, or clears it once none is open.
 pub(crate) fn mirror_trade(stations: &mut Stations, java: &JavaInventory) {
-    let window = java.window.as_ref().and_then(|w| Some((w, w.merchant.as_ref()?)));
+    let window = java
+        .window
+        .as_ref()
+        .and_then(|w| Some((w, w.merchant.as_ref()?)));
     stations.trade = window.map(|(window, merchant)| TradeWindow {
         window_id: window.id,
         trader: 0,
@@ -24,7 +27,10 @@ fn offer(o: &MerchantOffer) -> TradeOffer {
     TradeOffer {
         buy_a: item(o.cost_a.item, o.price_a()),
         buy_b: o.cost_b.as_ref().map(|b| item(b.item, b.count)),
-        sell: o.result.as_ref().map_or_else(TradeItem::default, |r| item(r.item, r.count)),
+        sell: o
+            .result
+            .as_ref()
+            .map_or_else(TradeItem::default, |r| item(r.item, r.count)),
         uses: o.uses,
         // Java's out-of-stock flag covers what Bedrock reads off uses reaching max uses.
         max_uses: if o.out_of_stock { o.uses } else { o.max_uses },
@@ -34,9 +40,16 @@ fn offer(o: &MerchantOffer) -> TradeOffer {
 }
 
 fn item(java_id: i32, count: i32) -> TradeItem {
-    let (name, metadata) = u16::try_from(java_id).ok().and_then(Item::from_java_id).map_or((String::new(), 0), |i| {
-        let (name, metadata) = i.bedrock();
-        (name.to_owned(), metadata)
-    });
-    TradeItem { name, count: u16::try_from(count).unwrap_or(0), metadata }
+    let (name, metadata) = u16::try_from(java_id)
+        .ok()
+        .and_then(Item::from_java_id)
+        .map_or((String::new(), 0), |i| {
+            let (name, metadata) = i.bedrock();
+            (name.to_owned(), metadata)
+        });
+    TradeItem {
+        name,
+        count: u16::try_from(count).unwrap_or(0),
+        metadata,
+    }
 }

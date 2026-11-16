@@ -33,7 +33,11 @@ impl<'a, B: LightBlocks> Lighter<'a, B> {
     }
 
     fn channels(&self) -> &'static [Channel] {
-        if self.dim.sky { &[Channel::Block, Channel::Sky] } else { &[Channel::Block] }
+        if self.dim.sky {
+            &[Channel::Block, Channel::Sky]
+        } else {
+            &[Channel::Block]
+        }
     }
 
     /// The world's sections and the padding.
@@ -53,7 +57,9 @@ impl<'a, B: LightBlocks> Lighter<'a, B> {
     /// loaded neighbours), then lights it and lets the neighbours' light back in. `false` when
     /// the column isn't loaded.
     pub fn relight_column(&self, data: &mut LightData, cx: i32, cz: i32) -> bool {
-        let Some(sections) = self.blocks.column(cx, cz) else { return false };
+        let Some(sections) = self.blocks.column(cx, cz) else {
+            return false;
+        };
         let was_loaded = !data.columns.insert((cx, cz));
         let air = self.blocks.air();
         let padding = std::iter::repeat_with(|| None).take(self.padding() as usize);
@@ -117,15 +123,20 @@ impl<'a, B: LightBlocks> Lighter<'a, B> {
 
     /// Re-reads one block and updates the light around it.
     pub fn update_block(&self, data: &mut LightData, x: i32, y: i32, z: i32) {
-        let Some(new) = self.blocks.cell(x, y, z) else { return };
-        let (Some(props), Some(shape)) = (data.props.get(x, y, z), data.shapes.get(x, y, z)) else { return };
+        let Some(new) = self.blocks.cell(x, y, z) else {
+            return;
+        };
+        let (Some(props), Some(shape)) = (data.props.get(x, y, z), data.shapes.get(x, y, z)) else {
+            return;
+        };
         if (Cell { props, shape }) == new {
             return;
         }
         data.props.set(x, y, z, new.props);
         data.shapes.set(x, y, z, new.shape);
         for &ch in self.channels() {
-            let sources = (ch == Channel::Sky && self.rules.is_java()).then(|| self.move_sky_sources(data, x, y, z));
+            let sources = (ch == Channel::Sky && self.rules.is_java())
+                .then(|| self.move_sky_sources(data, x, y, z));
             let mut p = self.propagator(data, ch);
             p.remove([x, y, z]);
             if let Some((lost, gained)) = sources {
@@ -145,14 +156,21 @@ impl<'a, B: LightBlocks> Lighter<'a, B> {
                 }
             });
         }
-        emitters.into_iter().for_each(|(pos, level)| p.raise(pos, level));
+        emitters
+            .into_iter()
+            .for_each(|(pos, level)| p.raise(pos, level));
     }
 
     /// Lets light from loaded neighbour columns in through the shared faces.
     fn seed_from_neighbours(&self, p: &mut Propagator, cx: i32, cz: i32) {
         let (x0, z0) = (cx * 16, cz * 16);
         for i in 0..16 {
-            for (x, z) in [(x0 - 1, z0 + i), (x0 + 16, z0 + i), (x0 + i, z0 - 1), (x0 + i, z0 + 16)] {
+            for (x, z) in [
+                (x0 - 1, z0 + i),
+                (x0 + 16, z0 + i),
+                (x0 + i, z0 - 1),
+                (x0 + i, z0 + 16),
+            ] {
                 for y in self.bottom()..self.top() {
                     if p.level([x, y, z]).is_some_and(|l| l > 1) {
                         p.spread_from([x, y, z]);
@@ -165,19 +183,30 @@ impl<'a, B: LightBlocks> Lighter<'a, B> {
 
 impl<'a> WorldLighter<'a> {
     pub fn new(world: &'a World, table: &'a super::blocks::PropsTable, dim: Dimension) -> Self {
-        Lighter { blocks: super::blocks::WorldBlocks { world, table }, rules: table.rules(), dim }
+        Lighter {
+            blocks: super::blocks::WorldBlocks { world, table },
+            rules: table.rules(),
+            dim,
+        }
     }
 }
 
 pub(super) fn world_pos(cx: i32, sy: i32, cz: i32, i: usize) -> [i32; 3] {
     let i = i as i32;
-    [cx * 16 + (i >> 8), sy * 16 + (i & 15), cz * 16 + ((i >> 4) & 15)]
+    [
+        cx * 16 + (i >> 8),
+        sy * 16 + (i & 15),
+        cz * 16 + ((i >> 4) & 15),
+    ]
 }
 
 #[cfg(test)]
 #[test]
 fn world_pos_inverts_index() {
     for p in [[0, 0, 0], [5, 9, 13], [15, 15, 15]] {
-        assert_eq!(world_pos(-2, 3, 4, super::sections::index(p[0], p[1], p[2])), [-32 + p[0], 48 + p[1], 64 + p[2]]);
+        assert_eq!(
+            world_pos(-2, 3, 4, super::sections::index(p[0], p[1], p[2])),
+            [-32 + p[0], 48 + p[1], 64 + p[2]]
+        );
     }
 }

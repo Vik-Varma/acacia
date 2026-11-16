@@ -4,6 +4,150 @@ use crate::DecodeError;
 use crate::codec::*;
 use bytes::{Bytes, BytesMut};
 
+pub type TransactionActions = Vec<TransactionActionsItem>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TransactionActionsItem {
+    pub source_type: TransactionActionsItemSourceType,
+    pub window_id: Option<i8>,
+    pub flags: Option<u32>,
+    pub slot: u32,
+    pub old_item: ItemV4,
+    pub new_item: ItemV4,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TransactionActionsItemSourceType {
+    Container,
+    Global,
+    WorldInteraction,
+    Creative,
+    CraftSlot,
+    Craft,
+    Unknown(i64),
+}
+impl TransactionActionsItemSourceType {
+    pub fn from_raw(v: i64) -> Self {
+        match v {
+            0 => Self::Container,
+            1 => Self::Global,
+            2 => Self::WorldInteraction,
+            3 => Self::Creative,
+            100 => Self::CraftSlot,
+            99999 => Self::Craft,
+            v => Self::Unknown(v),
+        }
+    }
+    pub fn to_raw(self) -> i64 {
+        match self {
+            Self::Container => 0,
+            Self::Global => 1,
+            Self::WorldInteraction => 2,
+            Self::Creative => 3,
+            Self::CraftSlot => 100,
+            Self::Craft => 99999,
+            Self::Unknown(v) => v,
+        }
+    }
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let v = Self::from_raw(read_varint(r)? as i64);
+        if let Self::Unknown(value) = v {
+            crate::strict::note(crate::strict::Leniency::UnknownEnum {
+                ty: "TransactionActionsItemSourceType",
+                value,
+            });
+        }
+        Ok(v)
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        write_varint(w, self.to_raw() as u32)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TransactionLegacy {
+    pub legacy_request_id: i32,
+    pub legacy_transactions: Option<Vec<TransactionLegacyLegacyTransactionsItem>>,
+}
+impl TransactionLegacy {
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let f_legacy_request_id = (|| -> Result<_> { Ok(read_zigzag32(r)?) })()
+            .map_err(|e| e.at("TransactionLegacy.legacy_request_id"))?;
+        let f_legacy_transactions = (|| -> Result<_> {
+            Ok(if read_bool(r)? {
+                Some({
+                    let n = to_len(read_varint(r)?)?;
+                    let mut v = Vec::with_capacity(cap(n, r));
+                    for _ in 0..n {
+                        v.push({
+                            let f1_container_id = read_u8(r)?;
+                            let f1_changed_slots = {
+                                let n = to_len(read_varint(r)?)?;
+                                let mut v = Vec::with_capacity(cap(n, r));
+                                for _ in 0..n {
+                                    v.push({
+                                        let f2_slot_id = read_u8(r)?;
+                                        TransactionLegacyLegacyTransactionsItemChangedSlotsItem {
+                                            slot_id: f2_slot_id,
+                                        }
+                                    });
+                                }
+                                v
+                            };
+                            TransactionLegacyLegacyTransactionsItem {
+                                container_id: f1_container_id,
+                                changed_slots: f1_changed_slots,
+                            }
+                        });
+                    }
+                    v
+                })
+            } else {
+                None
+            })
+        })()
+        .map_err(|e| e.at("TransactionLegacy.legacy_transactions"))?;
+        Ok(Self {
+            legacy_request_id: f_legacy_request_id,
+            legacy_transactions: f_legacy_transactions,
+        })
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        write_zigzag32(w, self.legacy_request_id);
+        match &self.legacy_transactions {
+            Some(x0) => {
+                write_bool(w, true);
+                write_varint(w, x0.len() as u32);
+                for x1 in x0.iter() {
+                    {
+                        let x2 = x1;
+                        write_u8(w, x2.container_id);
+                        write_varint(w, x2.changed_slots.len() as u32);
+                        for x3 in x2.changed_slots.iter() {
+                            {
+                                let x4 = x3;
+                                write_u8(w, x4.slot_id);
+                            }
+                        }
+                    }
+                }
+            }
+            None => write_bool(w, false),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TransactionLegacyLegacyTransactionsItem {
+    pub container_id: u8,
+    pub changed_slots: Vec<TransactionLegacyLegacyTransactionsItemChangedSlotsItem>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TransactionLegacyLegacyTransactionsItemChangedSlotsItem {
+    pub slot_id: u8,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Transaction {
     pub legacy: TransactionLegacy,
@@ -65,6 +209,7 @@ impl Transaction {
                         let f1_action_type =
                             TransactionTransactionDataItemUseOnEntityActionType::read(r)?;
                         let f1_hotbar_slot = read_zigzag32(r)?;
+                        let f1_hand = TransactionTransactionDataItemUseOnEntityHand::read(r)?;
                         let f1_held_item = ItemV4::read(r)?;
                         let f1_player_pos = Vec3f::read(r)?;
                         let f1_click_pos = Vec3f::read(r)?;
@@ -72,6 +217,7 @@ impl Transaction {
                             entity_runtime_id: f1_entity_runtime_id,
                             action_type: f1_action_type,
                             hotbar_slot: f1_hotbar_slot,
+                            hand: f1_hand,
                             held_item: f1_held_item,
                             player_pos: f1_player_pos,
                             click_pos: f1_click_pos,
@@ -84,11 +230,13 @@ impl Transaction {
                         let f1_hotbar_slot = read_zigzag32(r)?;
                         let f1_held_item = ItemV4::read(r)?;
                         let f1_head_pos = Vec3f::read(r)?;
+                        let f1_hand = TransactionTransactionDataItemReleaseHand::read(r)?;
                         TransactionTransactionDataItemRelease {
                             action_type: f1_action_type,
                             hotbar_slot: f1_hotbar_slot,
                             held_item: f1_held_item,
                             head_pos: f1_head_pos,
+                            hand: f1_hand,
                         }
                     })
                 } else {
@@ -142,6 +290,7 @@ impl Transaction {
                 write_varint64(w, x1.entity_runtime_id);
                 x1.action_type.write(w);
                 write_zigzag32(w, x1.hotbar_slot);
+                x1.hand.write(w);
                 x1.held_item.write(w);
                 x1.player_pos.write(w);
                 x1.click_pos.write(w);
@@ -152,6 +301,7 @@ impl Transaction {
                 write_zigzag32(w, x1.hotbar_slot);
                 x1.held_item.write(w);
                 x1.head_pos.write(w);
+                x1.hand.write(w);
             }
             TransactionTransactionData::Default => {}
         }
@@ -218,6 +368,7 @@ pub struct TransactionTransactionDataItemUseOnEntity {
     pub entity_runtime_id: u64,
     pub action_type: TransactionTransactionDataItemUseOnEntityActionType,
     pub hotbar_slot: i32,
+    pub hand: TransactionTransactionDataItemUseOnEntityHand,
     pub held_item: ItemV4,
     pub player_pos: Vec3f,
     pub click_pos: Vec3f,
@@ -259,12 +410,49 @@ impl TransactionTransactionDataItemUseOnEntityActionType {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TransactionTransactionDataItemUseOnEntityHand {
+    MainHand,
+    OffHand,
+    Unknown(i64),
+}
+impl TransactionTransactionDataItemUseOnEntityHand {
+    pub fn from_raw(v: i64) -> Self {
+        match v {
+            0 => Self::MainHand,
+            1 => Self::OffHand,
+            v => Self::Unknown(v),
+        }
+    }
+    pub fn to_raw(self) -> i64 {
+        match self {
+            Self::MainHand => 0,
+            Self::OffHand => 1,
+            Self::Unknown(v) => v,
+        }
+    }
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let v = Self::from_raw(read_u8(r)? as i64);
+        if let Self::Unknown(value) = v {
+            crate::strict::note(crate::strict::Leniency::UnknownEnum {
+                ty: "TransactionTransactionDataItemUseOnEntityHand",
+                value,
+            });
+        }
+        Ok(v)
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        write_u8(w, self.to_raw() as u8)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransactionTransactionDataItemRelease {
     pub action_type: TransactionTransactionDataItemReleaseActionType,
     pub hotbar_slot: i32,
     pub held_item: ItemV4,
     pub head_pos: Vec3f,
+    pub hand: TransactionTransactionDataItemReleaseHand,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -300,6 +488,42 @@ impl TransactionTransactionDataItemReleaseActionType {
     }
     pub fn write(&self, w: &mut BytesMut) {
         write_zigzag32(w, self.to_raw() as i32)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TransactionTransactionDataItemReleaseHand {
+    MainHand,
+    OffHand,
+    Unknown(i64),
+}
+impl TransactionTransactionDataItemReleaseHand {
+    pub fn from_raw(v: i64) -> Self {
+        match v {
+            0 => Self::MainHand,
+            1 => Self::OffHand,
+            v => Self::Unknown(v),
+        }
+    }
+    pub fn to_raw(self) -> i64 {
+        match self {
+            Self::MainHand => 0,
+            Self::OffHand => 1,
+            Self::Unknown(v) => v,
+        }
+    }
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let v = Self::from_raw(read_u8(r)? as i64);
+        if let Self::Unknown(value) = v {
+            crate::strict::note(crate::strict::Leniency::UnknownEnum {
+                ty: "TransactionTransactionDataItemReleaseHand",
+                value,
+            });
+        }
+        Ok(v)
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        write_u8(w, self.to_raw() as u8)
     }
 }
 
@@ -1078,6 +1302,7 @@ pub enum PersonaPieceType {
     Capes,
     ClassicSkin,
     Emote,
+    Coco,
     Unsupported,
     Unknown(i64),
 }
@@ -1112,7 +1337,8 @@ impl PersonaPieceType {
             25 => Self::Capes,
             26 => Self::ClassicSkin,
             27 => Self::Emote,
-            28 => Self::Unsupported,
+            28 => Self::Coco,
+            29 => Self::Unsupported,
             v => Self::Unknown(v),
         }
     }
@@ -1146,7 +1372,8 @@ impl PersonaPieceType {
             Self::Capes => 25,
             Self::ClassicSkin => 26,
             Self::Emote => 27,
-            Self::Unsupported => 28,
+            Self::Coco => 28,
+            Self::Unsupported => 29,
             Self::Unknown(v) => v,
         }
     }
@@ -1168,7 +1395,6 @@ impl PersonaPieceType {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Skin {
     pub skin_id: String,
-    pub play_fab_id: String,
     pub skin_resource_pack: String,
     pub skin_data: SkinImage,
     pub animations: Vec<SkinAnimationsItem>,
@@ -1199,13 +1425,6 @@ impl Skin {
             })
         })()
         .map_err(|e| e.at("Skin.skin_id"))?;
-        let f_play_fab_id = (|| -> Result<_> {
-            Ok({
-                let n = to_len(read_varint(r)?)?;
-                read_utf8(r, n)?
-            })
-        })()
-        .map_err(|e| e.at("Skin.play_fab_id"))?;
         let f_skin_resource_pack = (|| -> Result<_> {
             Ok({
                 let n = to_len(read_varint(r)?)?;
@@ -1355,7 +1574,6 @@ impl Skin {
         .map_err(|e| e.at("Skin.profile_hash"))?;
         Ok(Self {
             skin_id: f_skin_id,
-            play_fab_id: f_play_fab_id,
             skin_resource_pack: f_skin_resource_pack,
             skin_data: f_skin_data,
             animations: f_animations,
@@ -1381,11 +1599,6 @@ impl Skin {
     pub fn write(&self, w: &mut BytesMut) {
         {
             let b = self.skin_id.as_bytes();
-            write_varint(w, b.len() as u32);
-            write_slice(w, b);
-        }
-        {
-            let b = self.play_fab_id.as_bytes();
             write_varint(w, b.len() as u32);
             write_slice(w, b);
         }
@@ -1568,6 +1781,10 @@ impl PlayerRecord {
                         let n = to_len(read_varint(r)?)?;
                         read_utf8(r, n)?
                     };
+                    let f1_play_fab_id = {
+                        let n = to_len(read_varint(r)?)?;
+                        read_utf8(r, n)?
+                    };
                     let f1_platform_chat_id = {
                         let n = to_len(read_varint(r)?)?;
                         read_utf8(r, n)?
@@ -1583,6 +1800,7 @@ impl PlayerRecord {
                         entity_unique_id: f1_entity_unique_id,
                         username: f1_username,
                         xbox_user_id: f1_xbox_user_id,
+                        play_fab_id: f1_play_fab_id,
                         platform_chat_id: f1_platform_chat_id,
                         build_platform: f1_build_platform,
                         skin_data: f1_skin_data,
@@ -1623,6 +1841,11 @@ impl PlayerRecord {
                 }
                 {
                     let b = x1.xbox_user_id.as_bytes();
+                    write_varint(w, b.len() as u32);
+                    write_slice(w, b);
+                }
+                {
+                    let b = x1.play_fab_id.as_bytes();
                     write_varint(w, b.len() as u32);
                     write_slice(w, b);
                 }
@@ -1696,6 +1919,7 @@ pub struct PlayerRecordContentAdd {
     pub entity_unique_id: i64,
     pub username: String,
     pub xbox_user_id: String,
+    pub play_fab_id: String,
     pub platform_chat_id: String,
     pub build_platform: i32,
     pub skin_data: Skin,
@@ -2479,6 +2703,18 @@ impl ItemStackRequest {
                                     times_crafted: f2_times_crafted,
                                 }
                             })
+                        } else if f1_type_id == ItemStackRequestActionsItemTypeId::CraftReserved {
+                            ItemStackRequestActionsItemContent::CraftReserved({
+                                let f2_reserved_id = {
+                                    let n = to_len(read_varint(r)?)?;
+                                    read_utf8(r, n)?
+                                };
+                                let f2_times_crafted = read_u8(r)?;
+                                ItemStackRequestActionsItemContentCraftReserved {
+                                    reserved_id: f2_reserved_id,
+                                    times_crafted: f2_times_crafted,
+                                }
+                            })
                         } else if f1_type_id == ItemStackRequestActionsItemTypeId::NonImplemented {
                             ItemStackRequestActionsItemContent::NonImplemented
                         } else if f1_type_id == ItemStackRequestActionsItemTypeId::ResultsDeprecated
@@ -2631,6 +2867,15 @@ impl ItemStackRequest {
                         }
                         write_u8(w, x3.times_crafted);
                     }
+                    ItemStackRequestActionsItemContent::CraftReserved(x2) => {
+                        let x3 = x2;
+                        {
+                            let b = x3.reserved_id.as_bytes();
+                            write_varint(w, b.len() as u32);
+                            write_slice(w, b);
+                        }
+                        write_u8(w, x3.times_crafted);
+                    }
                     ItemStackRequestActionsItemContent::NonImplemented => {}
                     ItemStackRequestActionsItemContent::ResultsDeprecated(x2) => {
                         let x3 = x2;
@@ -2681,6 +2926,7 @@ pub enum ItemStackRequestActionsItemTypeId {
     Optional,
     CraftGrindstoneRequest,
     CraftLoomRequest,
+    CraftReserved,
     NonImplemented,
     ResultsDeprecated,
     Unknown(i64),
@@ -2704,8 +2950,9 @@ impl ItemStackRequestActionsItemTypeId {
             13 => Self::Optional,
             14 => Self::CraftGrindstoneRequest,
             15 => Self::CraftLoomRequest,
-            16 => Self::NonImplemented,
-            17 => Self::ResultsDeprecated,
+            16 => Self::CraftReserved,
+            17 => Self::NonImplemented,
+            18 => Self::ResultsDeprecated,
             v => Self::Unknown(v),
         }
     }
@@ -2727,8 +2974,9 @@ impl ItemStackRequestActionsItemTypeId {
             Self::Optional => 13,
             Self::CraftGrindstoneRequest => 14,
             Self::CraftLoomRequest => 15,
-            Self::NonImplemented => 16,
-            Self::ResultsDeprecated => 17,
+            Self::CraftReserved => 16,
+            Self::NonImplemented => 17,
+            Self::ResultsDeprecated => 18,
             Self::Unknown(v) => v,
         }
     }
@@ -2764,6 +3012,7 @@ pub enum ItemStackRequestActionsItemContent {
     Optional(ItemStackRequestActionsItemContentOptional),
     CraftGrindstoneRequest(ItemStackRequestActionsItemContentCraftGrindstoneRequest),
     CraftLoomRequest(ItemStackRequestActionsItemContentCraftLoomRequest),
+    CraftReserved(ItemStackRequestActionsItemContentCraftReserved),
     NonImplemented,
     ResultsDeprecated(ItemStackRequestActionsItemContentResultsDeprecated),
     Default,
@@ -2861,6 +3110,12 @@ pub struct ItemStackRequestActionsItemContentCraftGrindstoneRequest {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ItemStackRequestActionsItemContentCraftLoomRequest {
     pub pattern: String,
+    pub times_crafted: u8,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ItemStackRequestActionsItemContentCraftReserved {
+    pub reserved_id: String,
     pub times_crafted: u8,
 }
 

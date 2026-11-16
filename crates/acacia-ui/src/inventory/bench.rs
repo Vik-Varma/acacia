@@ -36,9 +36,21 @@ pub enum Bench {
 
 /// The beacon's 22-pixel buttons: its five powers by pyramid layer, regeneration and level II,
 /// and the confirm.
-pub(super) const BEACON_BUTTONS: [[f32; 2]; 8] = [[53.0, 22.0], [77.0, 22.0], [53.0, 47.0], [77.0, 47.0], [65.0, 72.0], [156.0, 47.0], [180.0, 47.0], [164.0, 107.0]];
+pub(super) const BEACON_BUTTONS: [[f32; 2]; 8] = [
+    [53.0, 22.0],
+    [77.0, 22.0],
+    [53.0, 47.0],
+    [77.0, 47.0],
+    [65.0, 72.0],
+    [156.0, 47.0],
+    [180.0, 47.0],
+    [164.0, 107.0],
+];
 /// The beacon's two headings and the middle of each.
-pub(super) const BEACON_HEADINGS: [(&str, [f32; 2]); 2] = [("Primary Power", [62.0, 10.0]), ("Secondary Power", [169.0, 10.0])];
+pub(super) const BEACON_HEADINGS: [(&str, [f32; 2]); 2] = [
+    ("Primary Power", [62.0, 10.0]),
+    ("Secondary Power", [169.0, 10.0]),
+];
 
 /// A bench's pick list: buttons in rows from `at`, each `cell` big.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -67,7 +79,6 @@ impl Bench {
         }
     }
 
-
     pub(super) fn title_at(self) -> [f32; 2] {
         match self {
             Bench::Crafting => [29.0, 6.0],
@@ -82,11 +93,35 @@ impl Bench {
     /// The results to pick from, for a bench that offers several.
     pub fn picks(self) -> Option<Picks> {
         match self {
-            Bench::Stonecutter => Some(Picks { at: [52.0, 14.0], columns: 4, rows: 3, cell: [16.0, 18.0], text: 5.0 }),
-            Bench::Enchanting => Some(Picks { at: [60.0, 14.0], columns: 1, rows: 3, cell: [108.0, 19.0], text: 5.0 }),
+            Bench::Stonecutter => Some(Picks {
+                at: [52.0, 14.0],
+                columns: 4,
+                rows: 3,
+                cell: [16.0, 18.0],
+                text: 5.0,
+            }),
+            Bench::Enchanting => Some(Picks {
+                at: [60.0, 14.0],
+                columns: 1,
+                rows: 3,
+                cell: [108.0, 19.0],
+                text: 5.0,
+            }),
             // Not a grid: the buttons lie at `BEACON_BUTTONS`.
-            Bench::Beacon => Some(Picks { at: BEACON_BUTTONS[0], columns: BEACON_BUTTONS.len(), rows: 1, cell: [22.0, 22.0], text: 6.0 }),
-            Bench::Loom => Some(Picks { at: [60.0, 13.0], columns: 4, rows: 4, cell: [14.0, 14.0], text: 5.0 }),
+            Bench::Beacon => Some(Picks {
+                at: BEACON_BUTTONS[0],
+                columns: BEACON_BUTTONS.len(),
+                rows: 1,
+                cell: [22.0, 22.0],
+                text: 6.0,
+            }),
+            Bench::Loom => Some(Picks {
+                at: [60.0, 13.0],
+                columns: 4,
+                rows: 4,
+                cell: [14.0, 14.0],
+                text: 5.0,
+            }),
             _ => None,
         }
     }
@@ -127,20 +162,49 @@ impl Bench {
 
     /// The top-left of each slot's item.
     pub(super) fn slots(self) -> Vec<(Slot, [f32; 2])> {
-        let ui = |offsets: &[u8], at: &[[f32; 2]], result: [f32; 2]| offsets.iter().zip(at).map(|(&o, &at)| (Slot::Ui(o), at)).chain([(Slot::Result, result)]).collect();
+        let ui = |offsets: &[u8], at: &[[f32; 2]], result: [f32; 2]| {
+            offsets
+                .iter()
+                .zip(at)
+                .map(|(&o, &at)| (Slot::Ui(o), at))
+                .chain([(Slot::Result, result)])
+                .collect()
+        };
         match self {
             Bench::Crafting => {
-                let cell = |i: u8| (Slot::Ui(GRID_3X3 + i), [30.0 + SLOT * f32::from(i % 3), 17.0 + SLOT * f32::from(i / 3)]);
-                (0..9).map(cell).chain([(Slot::Result, [124.0, 35.0])]).collect()
+                let cell = |i: u8| {
+                    (
+                        Slot::Ui(GRID_3X3 + i),
+                        [
+                            30.0 + SLOT * f32::from(i % 3),
+                            17.0 + SLOT * f32::from(i / 3),
+                        ],
+                    )
+                };
+                (0..9)
+                    .map(cell)
+                    .chain([(Slot::Result, [124.0, 35.0])])
+                    .collect()
             }
             Bench::Anvil => ui(&ANVIL, &[[27.0, 47.0], [76.0, 47.0]], [134.0, 47.0]),
-            Bench::Smithing => ui(&SMITHING, &[[8.0, 48.0], [26.0, 48.0], [44.0, 48.0]], [98.0, 48.0]),
+            Bench::Smithing => ui(
+                &SMITHING,
+                &[[8.0, 48.0], [26.0, 48.0], [44.0, 48.0]],
+                [98.0, 48.0],
+            ),
             Bench::Grindstone => ui(&GRINDSTONE, &[[49.0, 19.0], [49.0, 40.0]], [129.0, 34.0]),
             Bench::Stonecutter => ui(&[STONECUTTER], &[[20.0, 33.0]], [143.0, 33.0]),
             Bench::Cartography => ui(&CARTOGRAPHY, &[[15.0, 15.0], [15.0, 52.0]], [145.0, 39.0]),
-            Bench::Enchanting => vec![(Slot::Ui(ENCHANTING[0]), [15.0, 47.0]), (Slot::Ui(ENCHANTING[1]), [35.0, 47.0])],
+            Bench::Enchanting => vec![
+                (Slot::Ui(ENCHANTING[0]), [15.0, 47.0]),
+                (Slot::Ui(ENCHANTING[1]), [35.0, 47.0]),
+            ],
             Bench::Beacon => vec![(Slot::Ui(BEACON), [136.0, 110.0])],
-            Bench::Loom => ui(&LOOM, &[[13.0, 26.0], [33.0, 26.0], [23.0, 45.0]], [143.0, 58.0]),
+            Bench::Loom => ui(
+                &LOOM,
+                &[[13.0, 26.0], [33.0, 26.0], [23.0, 45.0]],
+                [143.0, 58.0],
+            ),
         }
     }
 }

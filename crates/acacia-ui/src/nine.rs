@@ -24,28 +24,52 @@ impl Nine {
     pub fn bedrock(root: &Path, name: &str, atlas: &mut Atlas) -> Option<Nine> {
         let base = root.join("textures/ui").join(name);
         let sprite = atlas.add(&format!("ui/{name}"), &png(&base.with_extension("png"))?);
-        let json: serde_json::Value = std::fs::read_to_string(base.with_extension("json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        let json: serde_json::Value = std::fs::read_to_string(base.with_extension("json"))
+            .ok()
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_default();
         let border = match &json["nineslice_size"] {
             serde_json::Value::Number(n) => [n.as_f64().unwrap_or(0.0) as f32; 4],
-            serde_json::Value::Array(a) if a.len() == 4 => std::array::from_fn(|i| a[i].as_f64().unwrap_or(0.0) as f32),
+            serde_json::Value::Array(a) if a.len() == 4 => {
+                std::array::from_fn(|i| a[i].as_f64().unwrap_or(0.0) as f32)
+            }
             _ => [0.0; 4],
         };
-        let scale = json["base_size"][0].as_f64().filter(|&w| w > 0.0).map_or(1.0, |w| sprite.width as f32 / w as f32);
-        Some(Nine { sprite, border, tile: false, scale })
+        let scale = json["base_size"][0]
+            .as_f64()
+            .filter(|&w| w > 0.0)
+            .map_or(1.0, |w| sprite.width as f32 / w as f32);
+        Some(Nine {
+            sprite,
+            border,
+            tile: false,
+            scale,
+        })
     }
 
     /// A Java `textures/gui/sprites` image, `name` without extension, with its `.mcmeta` border.
     pub fn java(root: &Path, name: &str, atlas: &mut Atlas) -> Option<Nine> {
         let base = root.join("textures/gui/sprites").join(name);
-        let sprite = atlas.add(&format!("sprites/{name}"), &png(&base.with_extension("png"))?);
-        let meta: serde_json::Value = std::fs::read_to_string(base.with_extension("png.mcmeta")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        let sprite = atlas.add(
+            &format!("sprites/{name}"),
+            &png(&base.with_extension("png"))?,
+        );
+        let meta: serde_json::Value = std::fs::read_to_string(base.with_extension("png.mcmeta"))
+            .ok()
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_default();
         let b = &meta["gui"]["scaling"]["border"];
         let side = |k: &str| b[k].as_f64().unwrap_or(0.0) as f32;
         let border = match b.as_f64() {
             Some(n) => [n as f32; 4],
             None => [side("left"), side("top"), side("right"), side("bottom")],
         };
-        Some(Nine { sprite, border, tile: true, scale: 1.0 })
+        Some(Nine {
+            sprite,
+            border,
+            tile: true,
+            scale: 1.0,
+        })
     }
 }
 
@@ -60,8 +84,16 @@ impl DrawList {
         let (bl, br) = (bl.min((r - l) / 2.0), br.min((r - l) / 2.0));
         let (bt, bb) = (bt.min((b - t) / 2.0), bb.min((b - t) / 2.0));
         let ([mu0, mu1], [mv0, mv1]) = (middle(sl, sw - sr), middle(st, sh - sb));
-        let cols = [(l, l + bl, 0.0, sl), (l + bl, r - br, mu0, mu1), (r - br, r, sw - sr, sw)];
-        let rows = [(t, t + bt, 0.0, st), (t + bt, b - bb, mv0, mv1), (b - bb, b, sh - sb, sh)];
+        let cols = [
+            (l, l + bl, 0.0, sl),
+            (l + bl, r - br, mu0, mu1),
+            (r - br, r, sw - sr, sw),
+        ];
+        let rows = [
+            (t, t + bt, 0.0, st),
+            (t + bt, b - bb, mv0, mv1),
+            (b - bb, b, sh - sb, sh),
+        ];
         for (ci, &(x0, x1, u0, u1)) in cols.iter().enumerate() {
             for (ri, &(y0, y1, v0, v1)) in rows.iter().enumerate() {
                 if x1 <= x0 || y1 <= y0 || u1 <= u0 || v1 <= v0 {
@@ -69,21 +101,37 @@ impl DrawList {
                 }
                 let tile_x = nine.tile && ci == 1;
                 let tile_y = nine.tile && ri == 1;
-                self.cell(nine.sprite, [x0, y0, x1, y1], [u0, v0, u1, v1], [tile_x, tile_y], color);
+                self.cell(
+                    nine.sprite,
+                    [x0, y0, x1, y1],
+                    [u0, v0, u1, v1],
+                    [tile_x, tile_y],
+                    color,
+                );
             }
         }
     }
-
 }
 
 /// The source span between two borders; when they meet (`control`: 2×2, slice 1), the texel before.
 fn middle(from: f32, to: f32) -> [f32; 2] {
-    if to > from { [from, to] } else { [(from - 1.0).max(0.0), from.max(1.0)] }
+    if to > from {
+        [from, to]
+    } else {
+        [(from - 1.0).max(0.0), from.max(1.0)]
+    }
 }
 
 impl DrawList {
     /// The `part` of `sprite` over `rect`, repeated along the axes `tile` names, else stretched.
-    fn cell(&mut self, sprite: Sprite, rect: [f32; 4], part: [f32; 4], tile: [bool; 2], color: [u8; 4]) {
+    fn cell(
+        &mut self,
+        sprite: Sprite,
+        rect: [f32; 4],
+        part: [f32; 4],
+        tile: [bool; 2],
+        color: [u8; 4],
+    ) {
         let [x0, y0, x1, y1] = rect;
         let [u0, v0, u1, v1] = part;
         let step_x = if tile[0] { u1 - u0 } else { x1 - x0 };
@@ -97,7 +145,11 @@ impl DrawList {
                 let w = step_x.min(x1 - x);
                 let ur = if tile[0] { u0 + w } else { u1 };
                 let (u, v) = (sprite.x as f32, sprite.y as f32);
-                self.quad([x, y, x + w, y + h], [u + u0, v + v0, u + ur, v + vb], color);
+                self.quad(
+                    [x, y, x + w, y + h],
+                    [u + u0, v + v0, u + ur, v + vb],
+                    color,
+                );
                 x += w;
             }
             y += h;
@@ -111,16 +163,35 @@ mod tests {
     use crate::draw::WHITE;
 
     fn nine(tile: bool) -> Nine {
-        Nine { sprite: Sprite { x: 0, y: 0, width: 200, height: 20 }, border: [3.0; 4], tile, scale: 1.0 }
+        Nine {
+            sprite: Sprite {
+                x: 0,
+                y: 0,
+                width: 200,
+                height: 20,
+            },
+            border: [3.0; 4],
+            tile,
+            scale: 1.0,
+        }
     }
 
     #[test]
     fn at_its_own_size_it_is_the_sprite() {
         let mut list = DrawList::new(1.0);
         list.nine(nine(true), [0.0, 0.0, 200.0, 20.0], WHITE);
-        let area: f32 = list.quads.iter().map(|q| (q.rect[2] - q.rect[0]) * (q.rect[3] - q.rect[1])).sum();
+        let area: f32 = list
+            .quads
+            .iter()
+            .map(|q| (q.rect[2] - q.rect[0]) * (q.rect[3] - q.rect[1]))
+            .sum();
         assert_eq!(area, 4000.0);
-        assert!(list.quads.iter().all(|q| q.uv[2] - q.uv[0] == q.rect[2] - q.rect[0]), "texel for pixel");
+        assert!(
+            list.quads
+                .iter()
+                .all(|q| q.uv[2] - q.uv[0] == q.rect[2] - q.rect[0]),
+            "texel for pixel"
+        );
     }
 
     #[test]
@@ -131,7 +202,12 @@ mod tests {
         assert_eq!(right.uv[0], 197.0, "Java shows the sprite's own right edge");
         let mut list = DrawList::new(1.0);
         list.nine(nine(true), [0.0, 0.0, 400.0, 20.0], WHITE);
-        assert!(list.quads.iter().all(|q| q.uv[2] - q.uv[0] == q.rect[2] - q.rect[0]), "tiled, never stretched");
+        assert!(
+            list.quads
+                .iter()
+                .all(|q| q.uv[2] - q.uv[0] == q.rect[2] - q.rect[0]),
+            "tiled, never stretched"
+        );
         let mut list = DrawList::new(1.0);
         list.nine(nine(false), [0.0, 0.0, 400.0, 20.0], WHITE);
         assert_eq!(list.quads.len(), 9, "Bedrock stretches each cell once");
@@ -140,22 +216,64 @@ mod tests {
     #[test]
     fn borders_keep_their_size_whatever_the_image() {
         // Bedrock's dialog: 18×33 with a 23 px top; its 2×2 centre is the transparent hole.
-        let dialog = Nine { sprite: Sprite { x: 0, y: 0, width: 18, height: 33 }, border: [8.0, 23.0, 8.0, 8.0], tile: false, scale: 1.0 };
+        let dialog = Nine {
+            sprite: Sprite {
+                x: 0,
+                y: 0,
+                width: 18,
+                height: 33,
+            },
+            border: [8.0, 23.0, 8.0, 8.0],
+            tile: false,
+            scale: 1.0,
+        };
         let mut list = DrawList::new(1.0);
         list.nine(dialog, [0.0, 0.0, 225.0, 200.0], WHITE);
-        let centre = list.quads.iter().find(|q| q.rect == [8.0, 23.0, 217.0, 192.0]).unwrap();
+        let centre = list
+            .quads
+            .iter()
+            .find(|q| q.rect == [8.0, 23.0, 217.0, 192.0])
+            .unwrap();
         assert_eq!(centre.uv, [8.0, 23.0, 10.0, 25.0]);
         // `control`: 2×2, slice 1, nothing between the borders: the centre samples a border texel.
-        let control = Nine { sprite: Sprite { x: 0, y: 0, width: 2, height: 2 }, border: [1.0; 4], tile: false, scale: 1.0 };
+        let control = Nine {
+            sprite: Sprite {
+                x: 0,
+                y: 0,
+                width: 2,
+                height: 2,
+            },
+            border: [1.0; 4],
+            tile: false,
+            scale: 1.0,
+        };
         let mut list = DrawList::new(1.0);
         list.nine(control, [0.0, 0.0, 20.0, 20.0], WHITE);
-        let centre = list.quads.iter().find(|q| q.rect == [1.0, 1.0, 19.0, 19.0]).unwrap();
+        let centre = list
+            .quads
+            .iter()
+            .find(|q| q.rect == [1.0, 1.0, 19.0, 19.0])
+            .unwrap();
         assert_eq!(centre.uv, [0.0, 0.0, 1.0, 1.0]);
         // `cell_image`: a 10×10 image for a 5×5 base, slice 1: two texels make one pixel of border.
-        let cell = Nine { sprite: Sprite { x: 0, y: 0, width: 10, height: 10 }, border: [1.0; 4], tile: false, scale: 2.0 };
+        let cell = Nine {
+            sprite: Sprite {
+                x: 0,
+                y: 0,
+                width: 10,
+                height: 10,
+            },
+            border: [1.0; 4],
+            tile: false,
+            scale: 2.0,
+        };
         let mut list = DrawList::new(1.0);
         list.nine(cell, [0.0, 0.0, 18.0, 18.0], WHITE);
-        let centre = list.quads.iter().find(|q| q.rect == [1.0, 1.0, 17.0, 17.0]).unwrap();
+        let centre = list
+            .quads
+            .iter()
+            .find(|q| q.rect == [1.0, 1.0, 17.0, 17.0])
+            .unwrap();
         assert_eq!(centre.uv, [2.0, 2.0, 8.0, 8.0]);
     }
 }

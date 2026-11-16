@@ -1,6 +1,7 @@
 use acacia_client::proto::packets::{
-    RemoveObjective, SetDisplayObjective, SetScore, SetScoreEntriesItem, SetScoreEntriesItemContent as Content,
-    SetScoreEntriesItemContentDefault, SetScoreEntriesItemContentFakePlayer, SetScoreEntriesItemContentRemove,
+    RemoveObjective, SetDisplayObjective, SetScore, SetScoreEntriesItem,
+    SetScoreEntriesItemContent as Content, SetScoreEntriesItemContentDefault,
+    SetScoreEntriesItemContentFakePlayer, SetScoreEntriesItemContentRemove,
     SetScoreEntriesItemEntryType as EntryType, SetScoreboardIdentity, SetScoreboardIdentityAction,
     SetScoreboardIdentityEntriesItem,
 };
@@ -36,7 +37,9 @@ fn remove(id: i64, objective: Option<&str>) -> SetScoreEntriesItem {
         entry_type: EntryType::Remove,
         entry_type_name: "remove".into(),
         scoreboard_id: id,
-        content: Content::Remove(SetScoreEntriesItemContentRemove { objective_name: objective.map(Into::into) }),
+        content: Content::Remove(SetScoreEntriesItemContentRemove {
+            objective_name: objective.map(Into::into),
+        }),
     }
 }
 
@@ -63,14 +66,27 @@ fn sidebar_text_is_sorted_and_stripped() {
     let o = sb.sidebar().unwrap();
     assert_eq!(o.display_name, "§6§lSKYBLOCK");
     assert_eq!(o.sort_order, SortOrder::Descending);
-    assert_eq!(sb.sidebar_text(), ["$ Money 1.5K", "★ Shards 120", "🗡 Kills 7", "⌚ Playtime 3d 4h"]);
+    assert_eq!(
+        sb.sidebar_text(),
+        [
+            "$ Money 1.5K",
+            "★ Shards 120",
+            "🗡 Kills 7",
+            "⌚ Playtime 3d 4h"
+        ]
+    );
 }
 
 #[test]
 fn ascending_order_and_name_tiebreak() {
     let mut sb = Scoreboard::default();
     sb.apply(&display("sidebar", "o", 0)).unwrap();
-    sb.apply(&scores(vec![fake(1, "o", 2, "b"), fake(2, "o", 1, "z"), fake(3, "o", 2, "a")])).unwrap();
+    sb.apply(&scores(vec![
+        fake(1, "o", 2, "b"),
+        fake(2, "o", 1, "z"),
+        fake(3, "o", 2, "a"),
+    ]))
+    .unwrap();
     let lines = sb.sidebar().unwrap().lines();
     assert_eq!(lines, [("z".into(), 1), ("a".into(), 2), ("b".into(), 2)]);
 }
@@ -78,7 +94,13 @@ fn ascending_order_and_name_tiebreak() {
 #[test]
 fn change_replaces_entry_with_same_id() {
     let mut sb = sample_sidebar();
-    sb.apply(&scores(vec![fake(1, "sidebar_main", 5, "§a$ §fMoney §a2K")])).unwrap();
+    sb.apply(&scores(vec![fake(
+        1,
+        "sidebar_main",
+        5,
+        "§a$ §fMoney §a2K",
+    )]))
+    .unwrap();
     assert_eq!(sb.sidebar_text()[0], "$ Money 2K");
     assert_eq!(sb.sidebar().unwrap().scores.len(), 4);
 }
@@ -89,7 +111,8 @@ fn remove_with_and_without_objective_name() {
     sb.apply(&display("list", "other", 1)).unwrap();
     sb.apply(&scores(vec![fake(2, "other", 9, "x")])).unwrap();
 
-    sb.apply(&scores(vec![remove(1, Some("sidebar_main"))])).unwrap();
+    sb.apply(&scores(vec![remove(1, Some("sidebar_main"))]))
+        .unwrap();
     assert_eq!(sb.sidebar().unwrap().scores.len(), 3);
 
     sb.apply(&scores(vec![remove(2, None)])).unwrap();
@@ -113,13 +136,19 @@ fn player_entries_keep_entity_id() {
     }]))
     .unwrap();
     let e = &sb.displayed("belowname").unwrap().scores[&7];
-    assert_eq!((e.entity_unique_id, e.score, e.display.as_str()), (Some(-42), 20, ""));
+    assert_eq!(
+        (e.entity_unique_id, e.score, e.display.as_str()),
+        (Some(-42), 20, "")
+    );
 }
 
 #[test]
 fn remove_objective_clears_slots() {
     let mut sb = sample_sidebar();
-    sb.apply(&raw(&RemoveObjective { objective_name: "sidebar_main".into() })).unwrap();
+    sb.apply(&raw(&RemoveObjective {
+        objective_name: "sidebar_main".into(),
+    }))
+    .unwrap();
     assert!(sb.sidebar().is_none());
     assert!(sb.objective("sidebar_main").is_none());
     assert!(sb.sidebar_text().is_empty());
@@ -149,11 +178,19 @@ fn identities_register_and_clear() {
     let identity = |action, uid| {
         raw(&SetScoreboardIdentity {
             action,
-            entries: vec![SetScoreboardIdentityEntriesItem { scoreboard_id: 3, entity_unique_id: uid }],
+            entries: vec![SetScoreboardIdentityEntriesItem {
+                scoreboard_id: 3,
+                entity_unique_id: uid,
+            }],
         })
     };
-    sb.apply(&identity(SetScoreboardIdentityAction::RegisterIdentity, Some(99))).unwrap();
+    sb.apply(&identity(
+        SetScoreboardIdentityAction::RegisterIdentity,
+        Some(99),
+    ))
+    .unwrap();
     assert_eq!(sb.identity(3), Some(99));
-    sb.apply(&identity(SetScoreboardIdentityAction::ClearIdentity, None)).unwrap();
+    sb.apply(&identity(SetScoreboardIdentityAction::ClearIdentity, None))
+        .unwrap();
     assert_eq!(sb.identity(3), None);
 }

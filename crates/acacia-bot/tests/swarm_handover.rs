@@ -4,10 +4,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use acacia_bot::client::auth::MemoryTokenCache;
-use acacia_bot::client::TransportKind;
-use acacia_bot::swarm::{AccountLease, BotId, BotSpec, BotStatus, LocalLeases, Login, Policy, Swarm, SwarmEvent, Target};
 use acacia_bot::Bot;
+use acacia_bot::client::TransportKind;
+use acacia_bot::client::auth::MemoryTokenCache;
+use acacia_bot::swarm::{
+    AccountLease, BotId, BotSpec, BotStatus, LocalLeases, Login, Policy, Swarm, SwarmEvent, Target,
+};
 use acacia_testserver::{FakeServer, Script};
 use common::wait_for;
 use tokio::time::timeout;
@@ -30,12 +32,27 @@ async fn remove_returns_the_spec_with_its_state() {
         .start(count_sessions)
         .unwrap();
     let mut events = swarm.events();
-    let target = Target::Server { address: server.addr().to_string() };
-    let login = Login::Offline { name: "Mover".into() };
-    swarm.add(BotSpec { id: BotId::from("m"), login, target, proxy: None, state: 0 }).unwrap();
+    let target = Target::Server {
+        address: server.addr().to_string(),
+    };
+    let login = Login::Offline {
+        name: "Mover".into(),
+    };
+    swarm
+        .add(BotSpec {
+            id: BotId::from("m"),
+            login,
+            target,
+            proxy: None,
+            state: 0,
+        })
+        .unwrap();
     wait_for(&mut events, |e| matches!(e, SwarmEvent::Spawned { .. })).await;
 
-    let spec = timeout(Duration::from_secs(10), swarm.remove(&BotId::from("m"))).await.unwrap().expect("spec back");
+    let spec = timeout(Duration::from_secs(10), swarm.remove(&BotId::from("m")))
+        .await
+        .unwrap()
+        .expect("spec back");
     assert_eq!(spec.state, 1, "the state the task left");
     assert!(swarm.snapshot().bots.is_empty());
     swarm.shutdown().await;
@@ -45,20 +62,43 @@ async fn remove_returns_the_spec_with_its_state() {
 async fn drained_swarm_parks_waiting_bots_for_handover() {
     let leases = Arc::new(LocalLeases::new());
     let ttl = Duration::from_secs(600);
-    leases.acquire("acct", "elsewhere", ttl).await.unwrap().unwrap();
+    leases
+        .acquire("acct", "elsewhere", ttl)
+        .await
+        .unwrap()
+        .unwrap();
     let swarm = Swarm::builder()
         .shards(1)
-        .policy(Policy { initial: Duration::from_millis(20), max: Duration::from_millis(50), ..Policy::default() })
+        .policy(Policy {
+            initial: Duration::from_millis(20),
+            max: Duration::from_millis(50),
+            ..Policy::default()
+        })
         .join_spacing(Duration::from_millis(10), Duration::ZERO)
         .leases(leases.clone())
         .token_cache(Arc::new(MemoryTokenCache::new()))
         .start(count_sessions)
         .unwrap();
     let mut events = swarm.events();
-    let login = Login::Online { account: "acct".into() };
-    let target = Target::Server { address: "127.0.0.1:9".into() };
-    swarm.add(BotSpec { id: BotId::from("p"), login, target, proxy: None, state: 5 }).unwrap();
-    wait_for(&mut events, |e| matches!(e, SwarmEvent::Reconnecting { .. })).await;
+    let login = Login::Online {
+        account: "acct".into(),
+    };
+    let target = Target::Server {
+        address: "127.0.0.1:9".into(),
+    };
+    swarm
+        .add(BotSpec {
+            id: BotId::from("p"),
+            login,
+            target,
+            proxy: None,
+            state: 5,
+        })
+        .unwrap();
+    wait_for(&mut events, |e| {
+        matches!(e, SwarmEvent::Reconnecting { .. })
+    })
+    .await;
 
     swarm.drain();
     timeout(Duration::from_secs(5), async {
@@ -68,8 +108,19 @@ async fn drained_swarm_parks_waiting_bots_for_handover() {
     })
     .await
     .expect("parks after its backoff");
-    let spec = timeout(Duration::from_secs(5), swarm.remove(&BotId::from("p"))).await.unwrap().expect("spec back");
-    assert_eq!((spec.state, spec.login), (5, Login::Online { account: "acct".into() }));
+    let spec = timeout(Duration::from_secs(5), swarm.remove(&BotId::from("p")))
+        .await
+        .unwrap()
+        .expect("spec back");
+    assert_eq!(
+        (spec.state, spec.login),
+        (
+            5,
+            Login::Online {
+                account: "acct".into()
+            }
+        )
+    );
     assert!(swarm.snapshot().bots.is_empty());
     swarm.shutdown().await;
 }

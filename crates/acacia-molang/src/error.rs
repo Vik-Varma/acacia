@@ -22,7 +22,11 @@ pub enum ErrorKind {
     /// see [`crate::Compiler::documented_queries_only`].
     UnknownQuery(String),
     UnknownArray(String),
-    ArgumentCount { name: &'static str, expected: u8, found: usize },
+    ArgumentCount {
+        name: &'static str,
+        expected: u8,
+        found: usize,
+    },
     /// Call arguments on something that takes none (`v.x(1)`).
     NotCallable(String),
     /// The left of `=` is not a `variable.` or `temp.` name.
@@ -59,12 +63,23 @@ impl fmt::Display for Error {
             ErrorKind::UnknownMath(name) => write!(f, "unknown math function `{name}`"),
             ErrorKind::UnknownQuery(name) => write!(f, "unknown query `{name}`"),
             ErrorKind::UnknownArray(name) => write!(f, "unknown array `{name}`"),
-            ErrorKind::ArgumentCount { name, expected, found } => write!(f, "`math.{name}` takes {expected} arguments, found {found}"),
+            ErrorKind::ArgumentCount {
+                name,
+                expected,
+                found,
+            } => write!(f, "`math.{name}` takes {expected} arguments, found {found}"),
             ErrorKind::NotCallable(name) => write!(f, "`{name}` takes no arguments"),
-            ErrorKind::NotAssignable => write!(f, "only `variable.` and `temp.` names can be assigned"),
-            ErrorKind::CoalesceTarget => write!(f, "the left of `??` must be a plain variable or a query"),
+            ErrorKind::NotAssignable => {
+                write!(f, "only `variable.` and `temp.` names can be assigned")
+            }
+            ErrorKind::CoalesceTarget => {
+                write!(f, "the left of `??` must be a plain variable or a query")
+            }
             ErrorKind::Unreachable => write!(f, "statements after `return`, `break` or `continue`"),
-            ErrorKind::MissingSemicolon => write!(f, "a `{{}}` block, or an expression with `;` or `=`, must end with `;`"),
+            ErrorKind::MissingSemicolon => write!(
+                f,
+                "a `{{}}` block, or an expression with `;` or `=`, must end with `;`"
+            ),
             ErrorKind::StringOperand => write!(f, "strings only support `==` and `!=`"),
             ErrorKind::AssignmentOperand => write!(f, "an assignment where only a number fits"),
             ErrorKind::LoopBody => write!(f, "the body of `loop` must be a `{{}}` block"),

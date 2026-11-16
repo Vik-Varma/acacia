@@ -60,7 +60,9 @@ impl PlayerList {
 
     /// Case-insensitive, like Bedrock usernames.
     pub fn by_name(&self, name: &str) -> Option<&PlayerListEntry> {
-        self.players.values().find(|p| p.username.eq_ignore_ascii_case(name))
+        self.players
+            .values()
+            .find(|p| p.username.eq_ignore_ascii_case(name))
     }
 
     pub fn len(&self) -> usize {

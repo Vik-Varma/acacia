@@ -45,8 +45,29 @@ const SNAP_DISTANCE_SQR: f64 = 4096.0;
 
 impl Entity {
     pub fn new(uuid: u128, kind: i32, position: [f64; 3], y_rot: f32, x_rot: f32) -> Self {
-        let name = usize::try_from(kind).ok().and_then(|k| ENTITY_TYPES.get(k)).copied().unwrap_or("");
-        Entity { uuid, kind, position, y_rot, x_rot, on_ground: false, aggressive: false, pose: 0, baby: false, stays_still: false, attached_to: None, passengers: Vec::new(), mount: MountData::default(), motion: [0.0; 3], base: position, lerp: Lerp::for_kind(name) }
+        let name = usize::try_from(kind)
+            .ok()
+            .and_then(|k| ENTITY_TYPES.get(k))
+            .copied()
+            .unwrap_or("");
+        Entity {
+            uuid,
+            kind,
+            position,
+            y_rot,
+            x_rot,
+            on_ground: false,
+            aggressive: false,
+            pose: 0,
+            baby: false,
+            stays_still: false,
+            attached_to: None,
+            passengers: Vec::new(),
+            mount: MountData::default(),
+            motion: [0.0; 3],
+            base: position,
+            lerp: Lerp::for_kind(name),
+        }
     }
 
     /// `getDimensions` and how movers collide with it.
@@ -73,14 +94,19 @@ impl Entity {
         let bb = Aabb::of_entity(self.position, width, height);
         let blocks = match (collision, mover) {
             (EntityCollision::Solid, _) | (EntityCollision::Pushable, Mover::Vehicle) => true,
-            (_, Mover::Player { feet }) => self.is(HAPPY_GHAST) && !self.baby && (feet >= bb.max[1] || self.stays_still),
+            (_, Mover::Player { feet }) => {
+                self.is(HAPPY_GHAST) && !self.baby && (feet >= bb.max[1] || self.stays_still)
+            }
             _ => false,
         };
         blocks.then_some(bb)
     }
 
     fn is(&self, name: &str) -> bool {
-        usize::try_from(self.kind).ok().and_then(|k| ENTITY_TYPES.get(k)) == Some(&name)
+        usize::try_from(self.kind)
+            .ok()
+            .and_then(|k| ENTITY_TYPES.get(k))
+            == Some(&name)
     }
 
     /// Pose and baby flag from `SetEntityData` items.
@@ -89,23 +115,38 @@ impl Entity {
         if seek_data(input, POSE)? == Some(SERIALIZER_POSE) {
             self.pose = read_varint(input)?;
         }
-        let baby = ENTITY_SHAPES.get(usize::try_from(self.kind).unwrap_or(usize::MAX)).and_then(|s| s.baby);
+        let baby = ENTITY_SHAPES
+            .get(usize::try_from(self.kind).unwrap_or(usize::MAX))
+            .and_then(|s| s.baby);
         if let Some((_, _, index)) = baby {
             self.baby = read_flag(body, index)?.unwrap_or(self.baby);
         }
         if self.is(HAPPY_GHAST) {
-            self.stays_still = read_flag(body, HAPPY_GHAST_STAYS_STILL)?.unwrap_or(self.stays_still);
+            self.stays_still =
+                read_flag(body, HAPPY_GHAST_STAYS_STILL)?.unwrap_or(self.stays_still);
         }
         Ok(())
     }
 
     /// `moveOrInterpolateTo`; positions farther than vanilla interpolates snap when `may_snap`.
-    pub(crate) fn move_to(&mut self, path: Option<PositionPath>, rot: Option<(f32, f32)>, may_snap: bool) {
+    pub(crate) fn move_to(
+        &mut self,
+        path: Option<PositionPath>,
+        rot: Option<(f32, f32)>,
+        may_snap: bool,
+    ) {
         let end = path.as_ref().map(PositionPath::end);
-        if let Some(end) = end.filter(|e| may_snap && (0..3).map(|i| (e[i] - self.position[i]).powi(2)).sum::<f64>() > SNAP_DISTANCE_SQR) {
+        if let Some(end) = end.filter(|e| {
+            may_snap
+                && (0..3)
+                    .map(|i| (e[i] - self.position[i]).powi(2))
+                    .sum::<f64>()
+                    > SNAP_DISTANCE_SQR
+        }) {
             self.position = end;
         } else {
-            self.lerp.interpolate_to(&mut self.position, (self.y_rot, self.x_rot), path, rot);
+            self.lerp
+                .interpolate_to(&mut self.position, (self.y_rot, self.x_rot), path, rot);
         }
         if let Some((y, x)) = rot {
             (self.y_rot, self.x_rot) = (y, x);
@@ -118,13 +159,21 @@ pub(crate) const MOB_FLAGS: u8 = 15;
 pub(crate) const MOB_AGGRESSIVE: u8 = 4;
 
 pub(crate) fn is_rocket(kind: i32) -> bool {
-    usize::try_from(kind).ok().and_then(|k| ENTITY_TYPES.get(k)) == Some(&"minecraft:firework_rocket")
+    usize::try_from(kind).ok().and_then(|k| ENTITY_TYPES.get(k))
+        == Some(&"minecraft:firework_rocket")
 }
 
 /// Living types whose index 15 is not Mob's flags.
 pub(crate) fn has_mob_flags(kind: i32) -> bool {
-    let name = usize::try_from(kind).ok().and_then(|k| ENTITY_TYPES.get(k)).copied().unwrap_or("");
-    !matches!(name, "minecraft:player" | "minecraft:armor_stand" | "minecraft:mannequin")
+    let name = usize::try_from(kind)
+        .ok()
+        .and_then(|k| ENTITY_TYPES.get(k))
+        .copied()
+        .unwrap_or("");
+    !matches!(
+        name,
+        "minecraft:player" | "minecraft:armor_stand" | "minecraft:mannequin"
+    )
 }
 
 /// `FireworkRocketEntity.DATA_ATTACHED_TO_TARGET`, an optional unsigned int (0 none, else entity id + 1).
@@ -163,7 +212,9 @@ pub(crate) fn read_mob_flags(input: &mut &[u8]) -> Result<Option<u8>, Error> {
 /// The entity a firework rocket's data attaches it to: `Some(None)` when detached, `None` when the item is absent.
 pub(crate) fn read_rocket_target(input: &mut &[u8]) -> Result<Option<Option<i32>>, Error> {
     match seek_data(input, ROCKET_TARGET)? {
-        Some(SERIALIZER_OPTIONAL_UNSIGNED_INT) => Ok(Some(read_varint(input)?.checked_sub(1).filter(|&id| id >= 0))),
+        Some(SERIALIZER_OPTIONAL_UNSIGNED_INT) => Ok(Some(
+            read_varint(input)?.checked_sub(1).filter(|&id| id >= 0),
+        )),
         _ => Ok(None),
     }
 }
@@ -220,13 +271,24 @@ mod tests {
     #[test]
     fn poses_and_babies_size_the_box() {
         let mut player = Entity::new(0, kind("minecraft:player"), [0.0; 3], 0.0, 0.0);
-        player.read_body_data(&[0, 0, 0, POSE, 20, 5, 0xff]).unwrap();
-        assert_eq!(player.dimensions(), Some((0.6, 1.5, EntityCollision::Pushable)));
+        player
+            .read_body_data(&[0, 0, 0, POSE, 20, 5, 0xff])
+            .unwrap();
+        assert_eq!(
+            player.dimensions(),
+            Some((0.6, 1.5, EntityCollision::Pushable))
+        );
         let mut pig = Entity::new(0, kind("minecraft:pig"), [0.0; 3], 0.0, 0.0);
         pig.read_body_data(&[16, 8, 1, 0xff]).unwrap();
-        assert_eq!(pig.dimensions(), Some((0.45, 0.45, EntityCollision::Pushable)));
+        assert_eq!(
+            pig.dimensions(),
+            Some((0.45, 0.45, EntityCollision::Pushable))
+        );
         let boat = Entity::new(0, kind("minecraft:oak_boat"), [0.0; 3], 0.0, 0.0);
-        assert_eq!(boat.dimensions(), Some((1.375, 0.5625, EntityCollision::Solid)));
+        assert_eq!(
+            boat.dimensions(),
+            Some((1.375, 0.5625, EntityCollision::Solid))
+        );
     }
 
     #[test]

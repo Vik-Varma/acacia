@@ -7,8 +7,8 @@ use p384::ecdsa::SigningKey;
 use serde::Serialize;
 
 use super::ClientData;
-use crate::jwt::{self, now_unix, public_key_der_b64};
 use crate::LoginCredentials;
+use crate::jwt::{self, now_unix, public_key_der_b64};
 
 /// Audience of multiplayer tokens (real and self-signed).
 pub const MULTIPLAYER_AUDIENCE: &str = "api://auth-minecraft-services/multiplayer";
@@ -78,8 +78,14 @@ pub fn build_connection_request(
     client: &impl Serialize,
 ) -> Vec<u8> {
     if let Some(token) = creds.multiplayer_token.as_deref() {
-        let envelope = TokenEnvelope { authentication_type: AUTH_TYPE_FULL, token };
-        return frame(&serde_json::to_vec(&envelope).expect("serializable"), &sign_client(key, client));
+        let envelope = TokenEnvelope {
+            authentication_type: AUTH_TYPE_FULL,
+            token,
+        };
+        return frame(
+            &serde_json::to_vec(&envelope).expect("serializable"),
+            &sign_client(key, client),
+        );
     }
     let mut chain = Vec::with_capacity(creds.chain.len() + 1);
     let mojang_x5u = creds
@@ -90,12 +96,15 @@ pub fn build_connection_request(
     match mojang_x5u {
         Some(x5u) => {
             let now = now_unix();
-            chain.push(sign(key, &HeadClaims {
-                exp: now + SIX_HOURS,
-                nbf: now - SIX_HOURS,
-                identity_public_key: &x5u,
-                certificate_authority: true,
-            }));
+            chain.push(sign(
+                key,
+                &HeadClaims {
+                    exp: now + SIX_HOURS,
+                    nbf: now - SIX_HOURS,
+                    identity_public_key: &x5u,
+                    certificate_authority: true,
+                },
+            ));
             chain.extend(creds.chain.iter().cloned());
         }
         None => chain.push(String::new()),
@@ -112,7 +121,15 @@ pub fn build_offline_connection_request(
     client: &ClientData,
 ) -> Vec<u8> {
     let uuid = offline_identity(display_name);
-    build_offline_connection_request_for(&OfflineIdentity { name: display_name, xuid: "", uuid: &uuid }, key, client)
+    build_offline_connection_request_for(
+        &OfflineIdentity {
+            name: display_name,
+            xuid: "",
+            uuid: &uuid,
+        },
+        key,
+        client,
+    )
 }
 
 /// Who a self-signed multiplayer token names.
@@ -131,19 +148,27 @@ pub fn build_offline_connection_request_for(
 ) -> Vec<u8> {
     let now = now_unix();
     let cpk = public_key_der_b64(key);
-    let token = sign(key, &SelfSignedTokenClaims {
-        aud: MULTIPLAYER_AUDIENCE,
-        exp: now + SIX_HOURS,
-        nbf: now - SIX_HOURS,
-        ipt: "",
-        mid: "",
-        tid: "",
-        cpk: &cpk,
-        xid: identity.xuid,
-        xname: identity.name,
-        leguuid: identity.uuid,
-    });
-    encode(&[String::new()], AUTH_TYPE_SELF_SIGNED, &token, &sign_client(key, client))
+    let token = sign(
+        key,
+        &SelfSignedTokenClaims {
+            aud: MULTIPLAYER_AUDIENCE,
+            exp: now + SIX_HOURS,
+            nbf: now - SIX_HOURS,
+            ipt: "",
+            mid: "",
+            tid: "",
+            cpk: &cpk,
+            xid: identity.xuid,
+            xname: identity.name,
+            leguuid: identity.uuid,
+        },
+    );
+    encode(
+        &[String::new()],
+        AUTH_TYPE_SELF_SIGNED,
+        &token,
+        &sign_client(key, client),
+    )
 }
 
 /// Splits a connection request into its envelope JSON and client-data JWT.
@@ -186,15 +211,23 @@ fn sign(key: &SigningKey, claims: &impl Serialize) -> String {
 /// Sorted explicitly: serde_json's map keeps insertion order if any crate enables `preserve_order`.
 fn sign_client(key: &SigningKey, client: &impl Serialize) -> String {
     let claims = serde_json::to_value(client).expect("client data serializes");
-    let sorted: std::collections::BTreeMap<String, serde_json::Value> =
-        claims.as_object().into_iter().flatten().map(|(k, v)| (k.clone(), v.clone())).collect();
+    let sorted: std::collections::BTreeMap<String, serde_json::Value> = claims
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
     sign(key, &sorted)
 }
 
 fn encode(chain: &[String], authentication_type: u8, token: &str, client_jwt: &str) -> Vec<u8> {
     let certificate = serde_json::to_string(&Certificate { chain }).expect("serializable");
-    let envelope = serde_json::to_vec(&Envelope { certificate, authentication_type, token })
-        .expect("serializable");
+    let envelope = serde_json::to_vec(&Envelope {
+        certificate,
+        authentication_type,
+        token,
+    })
+    .expect("serializable");
     frame(&envelope, client_jwt)
 }
 

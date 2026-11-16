@@ -23,7 +23,8 @@ const TEXTURES: &str = "textures/entity";
 /// Copies the models, textures, equipment and trims into `out`; the number of layers.
 pub fn bake(exporter: &Exporter, jar: &Jar, out: &Path) -> Result<usize, Error> {
     let models = exporter.output("EntityModelExporter")?;
-    let layers = serde_json::from_slice::<serde_json::Map<String, Value>>(&std::fs::read(&models)?)?.len();
+    let layers =
+        serde_json::from_slice::<serde_json::Map<String, Value>>(&std::fs::read(&models)?)?.len();
     let to = out.join(MODELS);
     std::fs::create_dir_all(to.parent().expect("a file in a directory"))?;
     std::fs::copy(&models, to)?;
@@ -32,8 +33,14 @@ pub fn bake(exporter: &Exporter, jar: &Jar, out: &Path) -> Result<usize, Error> 
     copy_tree(&jar.assets.join(TEXTURES), &java.join(TEXTURES))?;
     // Read by acacia-render entity/java/equipment.rs and trims.rs.
     copy_tree(&jar.assets.join("equipment"), &java.join("equipment"))?;
-    copy_tree(&jar.assets.join("textures/trims/entity"), &java.join("textures/trims/entity"))?;
-    copy_tree(&jar.data.join("trim_material"), &java.join("trims/material"))?;
+    copy_tree(
+        &jar.assets.join("textures/trims/entity"),
+        &java.join("textures/trims/entity"),
+    )?;
+    copy_tree(
+        &jar.data.join("trim_material"),
+        &java.join("trims/material"),
+    )?;
     copy_tree(&jar.data.join("trim_pattern"), &java.join("trims/pattern"))?;
     Ok(layers)
 }

@@ -25,7 +25,9 @@ fn floor(size: [i32; 3], name: &str) -> Structure {
 /// north (a junction), a rising rail onto a block, powered and detector rails in a line, dust, a lava source.
 pub fn rails() -> Structure {
     let mut s = floor([8, 3, 6], "stone");
-    let rail = |s: &mut Structure, p: [i32; 3], name: &str, shape: u8| put(s, p, name, &format!("rail_direction={shape}"));
+    let rail = |s: &mut Structure, p: [i32; 3], name: &str, shape: u8| {
+        put(s, p, name, &format!("rail_direction={shape}"))
+    };
     (0..4).for_each(|x| rail(&mut s, [x, 1, 1], "rail", 1));
     rail(&mut s, [4, 1, 1], "rail", 7);
     rail(&mut s, [4, 1, 2], "rail", 0);
@@ -49,7 +51,12 @@ pub fn garden() -> Structure {
     let mut s = floor([7, 3, 6], "grass_block");
     // Liquids only inside: a source on the edge would flow off the footprint.
     put(&mut s, [5, 0, 1], "water", "liquid_depth=0");
-    for (x, crop) in [(1, "wheat"), (2, "carrots"), (3, "potatoes"), (4, "beetroot")] {
+    for (x, crop) in [
+        (1, "wheat"),
+        (2, "carrots"),
+        (3, "potatoes"),
+        (4, "beetroot"),
+    ] {
         put(&mut s, [x, 0, 1], "farmland", "moisturized_amount=0");
         put(&mut s, [x, 1, 1], crop, "growth=0");
     }

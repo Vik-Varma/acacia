@@ -19,7 +19,9 @@ pub mod text_area;
 
 use std::borrow::Cow;
 
-use crate::java::gui::{Blend, Gui, GuiDraw, IDENTITY, Metrics, Pose, PoseOp, pose_apply, transform};
+use crate::java::gui::{
+    Blend, Gui, GuiDraw, IDENTITY, Metrics, Pose, PoseOp, pose_apply, transform,
+};
 use crate::java::mth::{as8, floor, white};
 use crate::java::text::{Lang, Style, Text};
 use input::{Action, Key, KeyOutcome};
@@ -37,8 +39,21 @@ pub struct Ctx<'a> {
 }
 
 impl<'a> Ctx<'a> {
-    pub fn new(gui: &'a mut Gui, font: &'a dyn Metrics, lang: Lang<'a>, mouse: (i32, i32)) -> Ctx<'a> {
-        Ctx { gui, font, lang, mouse, millis: 0, poses: vec![IDENTITY], scissors: Vec::new() }
+    pub fn new(
+        gui: &'a mut Gui,
+        font: &'a dyn Metrics,
+        lang: Lang<'a>,
+        mouse: (i32, i32),
+    ) -> Ctx<'a> {
+        Ctx {
+            gui,
+            font,
+            lang,
+            mouse,
+            millis: 0,
+            poses: vec![IDENTITY],
+            scissors: Vec::new(),
+        }
     }
 
     pub fn tr(&self, key: &str) -> Text {
@@ -73,11 +88,32 @@ impl<'a> Ctx<'a> {
     pub fn enable_scissor(&mut self, x0: i32, y0: i32, x1: i32, y1: i32) {
         self.gui.scissor(x0, y0, x1, y1);
         let m = self.poses.last().unwrap_or(&IDENTITY);
-        let (a, b) = (transform(m, x0 as f32, y0 as f32), transform(m, x1 as f32, y1 as f32));
-        let r = [floor(a[0].min(b[0])), floor(a[1].min(b[1])), floor(a[0].max(b[0])), floor(a[1].max(b[1]))];
-        let last = self.scissors.last().copied().unwrap_or([0, 0, self.gui.width, self.gui.height]);
-        let cut = [r[0].max(last[0]), r[1].max(last[1]), r[2].min(last[2]), r[3].min(last[3])];
-        self.scissors.push(if cut[0] < cut[2] && cut[1] < cut[3] { cut } else { [0, 0, 0, 0] });
+        let (a, b) = (
+            transform(m, x0 as f32, y0 as f32),
+            transform(m, x1 as f32, y1 as f32),
+        );
+        let r = [
+            floor(a[0].min(b[0])),
+            floor(a[1].min(b[1])),
+            floor(a[0].max(b[0])),
+            floor(a[1].max(b[1])),
+        ];
+        let last = self
+            .scissors
+            .last()
+            .copied()
+            .unwrap_or([0, 0, self.gui.width, self.gui.height]);
+        let cut = [
+            r[0].max(last[0]),
+            r[1].max(last[1]),
+            r[2].min(last[2]),
+            r[3].min(last[3]),
+        ];
+        self.scissors.push(if cut[0] < cut[2] && cut[1] < cut[3] {
+            cut
+        } else {
+            [0, 0, 0, 0]
+        });
     }
 
     pub fn disable_scissor(&mut self) {
@@ -88,7 +124,9 @@ impl<'a> Ctx<'a> {
     /// `containsPointInScissor`: Java's `ScissorStack.containsPoint` tests the first scissor
     /// pushed, not the innermost one.
     pub fn in_scissor(&self, x: i32, y: i32) -> bool {
-        self.scissors.first().is_none_or(|r| x >= r[0] && x < r[2] && y >= r[1] && y < r[3])
+        self.scissors
+            .first()
+            .is_none_or(|r| x >= r[0] && x < r[2] && y >= r[1] && y < r[3])
     }
 
     /// `isHovered` as `AbstractWidget.extractRenderState` sets it.
@@ -112,14 +150,42 @@ impl<'a> Ctx<'a> {
     /// `AbstractWidget.extractScrollingStringOverContents(output, message, margin)`.
     pub fn scrolling_over(&mut self, b: &Base, message: Text, margin: i32, opacity: f32) {
         let (left, right) = (b.x + margin, b.x + b.w - margin);
-        self.gui.scrolling(message, (left + right) / 2, left, right, b.y, b.y + b.h, white(opacity));
+        self.gui.scrolling(
+            message,
+            (left + right) / 2,
+            left,
+            right,
+            b.y,
+            b.y + b.h,
+            white(opacity),
+        );
     }
 
     /// `blit(GUI_TEXTURED, texture, x, y, u, v, w, h, texW, texH)`; `texture` without `textures/`
     /// and `.png`.
     #[allow(clippy::too_many_arguments)]
-    pub fn blit(&mut self, texture: &'static str, x: i32, y: i32, uv: [f32; 2], w: i32, h: i32, tex: [i32; 2]) {
-        self.gui.draws.push(GuiDraw::Blit { texture: texture.into(), blend: Blend::Textured, x, y, w, h, uv, src: [w, h], tex, color: 0xFFFF_FFFF });
+    pub fn blit(
+        &mut self,
+        texture: &'static str,
+        x: i32,
+        y: i32,
+        uv: [f32; 2],
+        w: i32,
+        h: i32,
+        tex: [i32; 2],
+    ) {
+        self.gui.draws.push(GuiDraw::Blit {
+            texture: texture.into(),
+            blend: Blend::Textured,
+            x,
+            y,
+            w,
+            h,
+            uv,
+            src: [w, h],
+            tex,
+            color: 0xFFFF_FFFF,
+        });
     }
 
     /// `GuiGraphicsExtractor.centeredText`: centred on `x` with a shadow.
@@ -147,7 +213,18 @@ pub struct Base {
 
 impl Base {
     pub fn new(x: i32, y: i32, w: i32, h: i32, message: Text) -> Base {
-        Base { x, y, w, h, message, active: true, visible: true, alpha: 1.0, focused: false, id: Cow::Borrowed("") }
+        Base {
+            x,
+            y,
+            w,
+            h,
+            message,
+            active: true,
+            visible: true,
+            alpha: 1.0,
+            focused: false,
+            id: Cow::Borrowed(""),
+        }
     }
 
     pub fn with_id(mut self, id: impl Into<Cow<'static, str>>) -> Base {
@@ -167,13 +244,19 @@ impl Base {
     /// `WithInactiveMessage.getMessage`: greyed (`-6250336` merged under the message's style) when
     /// inactive.
     pub fn shown_message(&self) -> Text {
-        if self.active { self.message.clone() } else { inactive(&self.message) }
+        if self.active {
+            self.message.clone()
+        } else {
+            inactive(&self.message)
+        }
     }
 }
 
 /// `WithInactiveMessage.defaultInactiveMessage`.
 pub fn inactive(message: &Text) -> Text {
-    message.clone().with_style(&Style::color(INACTIVE & 0xFF_FFFF))
+    message
+        .clone()
+        .with_style(&Style::color(INACTIVE & 0xFF_FFFF))
 }
 
 /// `-6250336`, the inactive label colour (a style colour drops the alpha).
@@ -227,7 +310,13 @@ pub trait Widget {
 pub fn render(w: &mut dyn Widget, ctx: &mut Ctx) {
     if w.base().visible {
         let b = w.base().clone();
-        let hovered = ctx.in_scissor(ctx.mouse.0, ctx.mouse.1) && Base { w: w.width(), h: w.height(), ..b }.contains(ctx.mouse.0, ctx.mouse.1);
+        let hovered = ctx.in_scissor(ctx.mouse.0, ctx.mouse.1)
+            && Base {
+                w: w.width(),
+                h: w.height(),
+                ..b
+            }
+            .contains(ctx.mouse.0, ctx.mouse.1);
         w.extract(ctx, hovered);
     }
 }

@@ -5,9 +5,9 @@ use acacia_bot::Bot;
 use acacia_bot::forms::FormReply;
 use acacia_bot::interact::Face;
 use acacia_bot::items::{Click, SlotRef};
-use acacia_bot::state::ItemStack;
 use acacia_bot::movement::Controls;
 use acacia_bot::proto::types::WindowType;
+use acacia_bot::state::ItemStack;
 use acacia_ui::inventory::{Bench, Progress, Station};
 use glam::IVec3;
 
@@ -22,7 +22,10 @@ pub enum Command {
     /// Right-click on a block face.
     UseOn(IVec3, Face),
     /// Left- (`attack`) or right-click on an entity.
-    Entity { runtime_id: u64, attack: bool },
+    Entity {
+        runtime_id: u64,
+        attack: bool,
+    },
     /// Right-click on nothing, and its release.
     UseItem,
     ReleaseItem,
@@ -38,14 +41,23 @@ pub enum Command {
     /// A click on a slot of the open screen.
     Click(SlotRef, Click),
     /// A recipe-book click: one craft of item `name`, at the crafting table at `table` if given.
-    Craft { name: String, table: Option<[i32; 3]> },
+    Craft {
+        name: String,
+        table: Option<[i32; 3]>,
+    },
     /// A click on what the workstation's slots make: one craft, or all a crafting grid holds.
-    TakeCrafted { all: bool, name: Option<String> },
+    TakeCrafted {
+        all: bool,
+        name: Option<String>,
+    },
     /// The text in an anvil's name box changed (`None`: empty); handled by the bot loop, for the
     /// result shown.
     Name(Option<String>),
     /// A click on the stonecutter's result with recipe `id` picked: one cut, or all.
-    TakeCut { id: u32, all: bool },
+    TakeCut {
+        id: u32,
+        all: bool,
+    },
     /// The right-click that opens the held book, and a page of a book and quill as typed.
     OpenBook,
     EditBook(acacia_bot::books::PageEdit),
@@ -57,11 +69,19 @@ pub enum Command {
     /// A click on a trader's offer of this index: one trade.
     Trade(usize),
     /// The beacon screen's confirm with these powers.
-    Beacon(acacia_bot::workstation::BeaconEffect, Option<acacia_bot::workstation::BeaconEffect>),
+    Beacon(
+        acacia_bot::workstation::BeaconEffect,
+        Option<acacia_bot::workstation::BeaconEffect>,
+    ),
     /// A click on a creative inventory entry: this many of it into the inventory.
-    Creative { id: u32, count: u8 },
+    Creative {
+        id: u32,
+        count: u8,
+    },
     /// A click outside the screen: throws the held stack, or one of it.
-    DropCursor { one: bool },
+    DropCursor {
+        one: bool,
+    },
     /// A click on the creative items with a stack held: it is gone.
     DestroyCursor,
     /// The player's answer to open form `id`.
@@ -122,7 +142,10 @@ pub fn crafted(bot: &Bot, name: Option<&str>) -> Option<Stack> {
 
 /// One result stack per item [`Inventory`]'s crafting can make now.
 pub fn craftable(bot: &Bot, table: bool) -> Vec<Stack> {
-    bot.craftable(table).iter().filter_map(|s| stack_of(bot, s)).collect()
+    bot.craftable(table)
+        .iter()
+        .filter_map(|s| stack_of(bot, s))
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -133,26 +156,63 @@ pub struct Rows {
 
 /// A stack's block id in the world's registry: items carry the server's wire id, hashed on BDS.
 pub fn block_of(bot: &Bot, s: &ItemStack) -> u32 {
-    let Some(view) = bot.bedrock().and_then(|b| b.world()).and_then(|w| w.view()) else { return 0 };
+    let Some(view) = bot.bedrock().and_then(|b| b.world()).and_then(|w| w.view()) else {
+        return 0;
+    };
     match s.block_runtime_id {
         // Recipe outputs carry no block id: the block of the item's name, in its first state.
-        0 => bot.state().item_name(s).and_then(|name| view.world().registry().states_of(name).next()).map_or(0, |(id, _)| id),
+        0 => bot
+            .state()
+            .item_name(s)
+            .and_then(|name| view.world().registry().states_of(name).next())
+            .map_or(0, |(id, _)| id),
         wire => view.world().runtime_id(wire),
     }
 }
 
 pub fn stack_of(bot: &Bot, s: &ItemStack) -> Option<Stack> {
-    let name = bot.state().item_name(s).filter(|_| !s.is_empty())?.to_owned();
-    let (banner, map) = (crate::item_look::banner(&name, s), s.map_id().and_then(|id| bot.state().maps.get(id).cloned()));
+    let name = bot
+        .state()
+        .item_name(s)
+        .filter(|_| !s.is_empty())?
+        .to_owned();
+    let (banner, map) = (
+        crate::item_look::banner(&name, s),
+        s.map_id().and_then(|id| bot.state().maps.get(id).cloned()),
+    );
     let durability = acacia_bot::workstation::max_durability(&name).map(|max| (s.damage(), max));
-    let (block, enchanted, dye, title) = (block_of(bot, s), s.is_enchanted(), s.custom_color(), s.custom_name.clone());
+    let (block, enchanted, dye, title) = (
+        block_of(bot, s),
+        s.is_enchanted(),
+        s.custom_color(),
+        s.custom_name.clone(),
+    );
     let trim = s.trim().map(|(material, _)| material);
-    Some(Stack { name, aux: s.metadata, count: s.count, block, enchanted, dye, banner, map, title, enchantments: s.enchantments(), lore: s.lore.clone(), trim, durability })
+    Some(Stack {
+        name,
+        aux: s.metadata,
+        count: s.count,
+        block,
+        enchanted,
+        dye,
+        banner,
+        map,
+        title,
+        enchantments: s.enchantments(),
+        lore: s.lore.clone(),
+        trim,
+        durability,
+    })
 }
 
 /// The player list's names, sorted.
 pub fn player_names(bot: &Bot) -> Vec<String> {
-    let mut names: Vec<String> = bot.state().player_list.iter().map(|p| p.username.to_string()).collect();
+    let mut names: Vec<String> = bot
+        .state()
+        .player_list
+        .iter()
+        .map(|p| p.username.to_string())
+        .collect();
     names.sort_unstable_by_key(|n| n.to_lowercase());
     names
 }
@@ -161,32 +221,80 @@ pub fn inventory(bot: &Bot) -> Inventory {
     let state = bot.state();
     let stack = |s: &ItemStack| stack_of(bot, s);
     let inv = &state.inventory;
-    let station = bot.open_container().and_then(|c| crate::stations::station(c.window_type));
+    let station = bot
+        .open_container()
+        .and_then(|c| crate::stations::station(c.window_type));
     Inventory {
         station,
-        progress: station.map_or(Progress::default(), |s| crate::stations::progress(s, &state.containers.data)),
+        progress: station.map_or(Progress::default(), |s| {
+            crate::stations::progress(s, &state.containers.data)
+        }),
         main: inv.main.iter().map(stack).collect(),
         armor: std::array::from_fn(|i| inv.armor.get(i).and_then(stack)),
         offhand: stack(&inv.offhand),
         cursor: stack(inv.cursor()),
         // A station's screen shows as soon as its window opens: its contents may come slot by slot.
-        container: bot.open_container().filter(|c| station.is_some() || c.window_type == WindowType::Crafter || c.window_type == WindowType::Container && !c.slots.is_empty() && c.slots.len() % 9 == 0).map(|c| Rows {
-            title: station.map_or(if c.window_type == WindowType::Crafter { "Crafter" } else if c.slots.len() > 27 { "Large Chest" } else { "Chest" }, Station::title).into(),
-            slots: (0..c.slots.len().max(station.map_or(0, Station::slot_count))).map(|i| c.slots.get(i).and_then(stack)).collect(),
-        }),
-        workbench: bot.open_container().filter(|c| c.window_type == WindowType::Workbench).and_then(|c| c.position.as_ref()).map(|p| [p.x, p.y, p.z]),
+        container: bot
+            .open_container()
+            .filter(|c| {
+                station.is_some()
+                    || c.window_type == WindowType::Crafter
+                    || c.window_type == WindowType::Container
+                        && !c.slots.is_empty()
+                        && c.slots.len() % 9 == 0
+            })
+            .map(|c| Rows {
+                title: station
+                    .map_or(
+                        if c.window_type == WindowType::Crafter {
+                            "Crafter"
+                        } else if c.slots.len() > 27 {
+                            "Large Chest"
+                        } else {
+                            "Chest"
+                        },
+                        Station::title,
+                    )
+                    .into(),
+                slots: (0..c.slots.len().max(station.map_or(0, Station::slot_count)))
+                    .map(|i| c.slots.get(i).and_then(stack))
+                    .collect(),
+            }),
+        workbench: bot
+            .open_container()
+            .filter(|c| c.window_type == WindowType::Workbench)
+            .and_then(|c| c.position.as_ref())
+            .map(|p| [p.x, p.y, p.z]),
         ui: inv.ui.iter().map(stack).collect(),
         craftable: Vec::new(),
         crafted: None,
         cost: None,
-        bench: bot.open_container().and_then(|c| crate::stations::bench(c.window_type)),
-        patterns: bot.loom_choices().into_iter().map(|code| (code, bot.loom_result(code).and_then(|s| stack_of(bot, &s)))).collect(),
-        enchants: bot.enchant_costs().into_iter().zip(bot.enchant_names()).map(|((level, hint), words)| (level, hint, words)).collect(),
+        bench: bot
+            .open_container()
+            .and_then(|c| crate::stations::bench(c.window_type)),
+        patterns: bot
+            .loom_choices()
+            .into_iter()
+            .map(|code| (code, bot.loom_result(code).and_then(|s| stack_of(bot, &s))))
+            .collect(),
+        enchants: bot
+            .enchant_costs()
+            .into_iter()
+            .zip(bot.enchant_names())
+            .map(|((level, hint), words)| (level, hint, words))
+            .collect(),
         beacon: bot.beacon_levels().unwrap_or(0),
         trade: crate::stations::trade(bot),
-        picks: bot.stonecutter_choices().into_iter().filter_map(|(id, s)| Some((id, stack_of(bot, &s)?))).collect(),
+        picks: bot
+            .stonecutter_choices()
+            .into_iter()
+            .filter_map(|(id, s)| Some((id, stack_of(bot, &s)?)))
+            .collect(),
         window: bot.open_container().map(|c| c.window_type),
-        block: bot.open_container().and_then(|c| c.position.as_ref()).and_then(|p| bot.block_name([p.x, p.y, p.z])),
+        block: bot
+            .open_container()
+            .and_then(|c| c.position.as_ref())
+            .and_then(|p| bot.block_name([p.x, p.y, p.z])),
         custom_title: bot.open_container().and_then(|c| c.title.clone()),
         data: state.containers.data.clone(),
     }
@@ -256,22 +364,32 @@ pub async fn apply(bot: &mut Bot, command: Command) {
         Command::Creative { id, count } => bot.take_creative(id, count).await,
         Command::Beacon(primary, secondary) => bot.take_beacon(primary, secondary).await,
         Command::Click(slot, click) => bot.click_slot(slot, click).await,
-        Command::Craft { name, table } => match acacia_world::neutral::Item::from_name(&name).or_else(|| acacia_world::neutral::Item::from_bedrock(&name, 0)) {
+        Command::Craft { name, table } => match acacia_world::neutral::Item::from_name(&name)
+            .or_else(|| acacia_world::neutral::Item::from_bedrock(&name, 0))
+        {
             Some(item) => bot.craft(item, 1, table).await.map(|_| ()),
-            None => Err(acacia_bot::ActionError::NotPossible(format!("no item called {name}"))),
+            None => Err(acacia_bot::ActionError::NotPossible(format!(
+                "no item called {name}"
+            ))),
         },
         Command::DropCursor { one } => bot.drop_cursor(one).await,
         Command::DestroyCursor => bot.destroy_cursor().await,
         Command::AnswerForm(id, reply) => bot.answer_form_now(id, reply),
         Command::WriteSign(text) => {
-            let text = text.or_else(|| crate::sign_text::open(bot).map(|(text, _)| text)).unwrap_or_default();
+            let text = text
+                .or_else(|| crate::sign_text::open(bot).map(|(text, _)| text))
+                .unwrap_or_default();
             bot.write_open_sign(&text)
         }
         Command::Controls(c) => {
             if let Some(controls) = bot.controls() {
                 // The flight follows the player's own Space taps (`Play::controls`): a changed `fly` would add
                 // the bot's double tap, which BDS could pair with the player's.
-                *controls = Controls { glide: controls.glide, fly: controls.fly, ..c };
+                *controls = Controls {
+                    glide: controls.glide,
+                    fly: controls.fly,
+                    ..c
+                };
             }
             Ok(())
         }
@@ -305,7 +423,11 @@ pub async fn apply(bot: &mut Bot, command: Command) {
                 Some(command) => bot.command(command),
                 None => bot.chat(&text),
             };
-            if sent { Ok(()) } else { Err(acacia_bot::ActionError::NotPossible("chat not sent".into())) }
+            if sent {
+                Ok(())
+            } else {
+                Err(acacia_bot::ActionError::NotPossible("chat not sent".into()))
+            }
         }
     };
     if let Err(e) = result {

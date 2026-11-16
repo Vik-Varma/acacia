@@ -1315,6 +1315,7 @@ pub struct StartGame {
     pub editor_world_type: StartGameEditorWorldType,
     pub created_in_editor: bool,
     pub exported_from_editor: bool,
+    pub editor_level_migration_version: StartGameEditorLevelMigrationVersion,
     pub day_cycle_stop_time: i32,
     pub edu_offer: u32,
     pub edu_features_enabled: bool,
@@ -1423,6 +1424,9 @@ impl StartGame {
             .map_err(|e| e.at("StartGame.created_in_editor"))?;
         let f_exported_from_editor = (|| -> Result<_> { Ok(read_bool(r)?) })()
             .map_err(|e| e.at("StartGame.exported_from_editor"))?;
+        let f_editor_level_migration_version =
+            (|| -> Result<_> { Ok(StartGameEditorLevelMigrationVersion::read(r)?) })()
+                .map_err(|e| e.at("StartGame.editor_level_migration_version"))?;
         let f_day_cycle_stop_time = (|| -> Result<_> { Ok(read_zigzag32(r)?) })()
             .map_err(|e| e.at("StartGame.day_cycle_stop_time"))?;
         let f_edu_offer =
@@ -1672,6 +1676,7 @@ impl StartGame {
             editor_world_type: f_editor_world_type,
             created_in_editor: f_created_in_editor,
             exported_from_editor: f_exported_from_editor,
+            editor_level_migration_version: f_editor_level_migration_version,
             day_cycle_stop_time: f_day_cycle_stop_time,
             edu_offer: f_edu_offer,
             edu_features_enabled: f_edu_features_enabled,
@@ -1762,6 +1767,7 @@ impl StartGame {
         self.editor_world_type.write(w);
         write_bool(w, self.created_in_editor);
         write_bool(w, self.exported_from_editor);
+        self.editor_level_migration_version.write(w);
         write_zigzag32(w, self.day_cycle_stop_time);
         write_varint(w, self.edu_offer);
         write_bool(w, self.edu_features_enabled);
@@ -1984,6 +1990,42 @@ impl StartGameEditorWorldType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StartGameEditorLevelMigrationVersion {
+    Legacy,
+    EditorAchievements,
+    Unknown(i64),
+}
+impl StartGameEditorLevelMigrationVersion {
+    pub fn from_raw(v: i64) -> Self {
+        match v {
+            0 => Self::Legacy,
+            1 => Self::EditorAchievements,
+            v => Self::Unknown(v),
+        }
+    }
+    pub fn to_raw(self) -> i64 {
+        match self {
+            Self::Legacy => 0,
+            Self::EditorAchievements => 1,
+            Self::Unknown(v) => v,
+        }
+    }
+    pub fn read(r: &mut &[u8]) -> Result<Self> {
+        let v = Self::from_raw(read_u8(r)? as i64);
+        if let Self::Unknown(value) = v {
+            crate::strict::note(crate::strict::Leniency::UnknownEnum {
+                ty: "StartGameEditorLevelMigrationVersion",
+                value,
+            });
+        }
+        Ok(v)
+    }
+    pub fn write(&self, w: &mut BytesMut) {
+        write_u8(w, self.to_raw() as u8)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StartGameChatRestrictionLevel {
     None,
     Dropped,
@@ -2042,6 +2084,7 @@ pub struct AddPlayer {
     pub command_permission: types::CommandPermissionLevel,
     pub abilities: Vec<types::AbilityLayers>,
     pub links: types::Links,
+    pub passenger_of_block: Option<types::PassengerOfBlockData>,
     pub device_id: String,
     pub device_os: Option<types::DeviceOS>,
 }
@@ -2188,6 +2231,14 @@ impl AddPlayer {
             })
         })()
         .map_err(|e| e.at("AddPlayer.links"))?;
+        let f_passenger_of_block = (|| -> Result<_> {
+            Ok(if read_bool(r)? {
+                Some(types::PassengerOfBlockData::read(r)?)
+            } else {
+                None
+            })
+        })()
+        .map_err(|e| e.at("AddPlayer.passenger_of_block"))?;
         let f_device_id = (|| -> Result<_> {
             Ok({
                 let n = to_len(read_varint(r)?)?;
@@ -2222,6 +2273,7 @@ impl AddPlayer {
             command_permission: f_command_permission,
             abilities: f_abilities,
             links: f_links,
+            passenger_of_block: f_passenger_of_block,
             device_id: f_device_id,
             device_os: f_device_os,
         })
@@ -2312,6 +2364,13 @@ impl AddPlayer {
         write_varint(w, self.links.len() as u32);
         for x0 in self.links.iter() {
             x0.write(w);
+        }
+        match &self.passenger_of_block {
+            Some(x0) => {
+                write_bool(w, true);
+                x0.write(w);
+            }
+            None => write_bool(w, false),
         }
         {
             let b = self.device_id.as_bytes();

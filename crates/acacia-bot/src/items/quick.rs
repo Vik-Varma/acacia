@@ -6,8 +6,8 @@
 use super::plan::stacks_with;
 use super::slot::open_container;
 use super::{Op, SlotRef};
-use crate::state::{GameState, Inventory, ItemStack};
 use crate::ActionError;
+use crate::state::{GameState, Inventory, ItemStack};
 
 /// Assumed maximum stack size when merging; the item registry does not carry it.
 const MAX_STACK: u16 = 64;
@@ -19,10 +19,21 @@ pub(crate) fn quick_move_ops(state: &GameState, from: SlotRef) -> Result<Vec<Op>
 }
 
 /// [`quick_move_ops`] for at most `count` of the stack's items.
-pub(crate) fn quick_move_up_to_ops(state: &GameState, from: SlotRef, count: u16) -> Result<Vec<Op>, ActionError> {
-    let mut stack = from.stack(state).filter(|s| !s.is_empty()).ok_or_else(|| ActionError::NotPossible(format!("{from:?} is empty")))?.clone();
+pub(crate) fn quick_move_up_to_ops(
+    state: &GameState,
+    from: SlotRef,
+    count: u16,
+) -> Result<Vec<Op>, ActionError> {
+    let mut stack = from
+        .stack(state)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| ActionError::NotPossible(format!("{from:?} is empty")))?
+        .clone();
     stack.count = stack.count.min(count);
-    let targets: Vec<(SlotRef, ItemStack)> = targets(state, from).into_iter().filter_map(|t| t.stack(state).map(|s| (t, s.clone()))).collect();
+    let targets: Vec<(SlotRef, ItemStack)> = targets(state, from)
+        .into_iter()
+        .filter_map(|t| t.stack(state).map(|s| (t, s.clone())))
+        .collect();
     let ops = move_ops(from, &stack, &targets);
     if ops.is_empty() {
         return Err(ActionError::NotPossible("no room for the stack".into()));
@@ -32,15 +43,30 @@ pub(crate) fn quick_move_up_to_ops(state: &GameState, from: SlotRef, count: u16)
 
 /// Ops that move `stack`, the contents `from` will have (a craft result not made yet), into the
 /// player's main inventory.
-pub(crate) fn to_inventory_ops(state: &GameState, from: SlotRef, stack: &ItemStack) -> Result<Vec<Op>, ActionError> {
+pub(crate) fn to_inventory_ops(
+    state: &GameState,
+    from: SlotRef,
+    stack: &ItemStack,
+) -> Result<Vec<Op>, ActionError> {
     to_inventory_ops_after(state, from, stack, &[])
 }
 
 /// [`to_inventory_ops`] into the inventory as `earlier` ops of the same request leave it: their
 /// `Consume`s free room (vanilla put a recipe-book result into the slot its planks came from) and
 /// slots they move items into are left out.
-pub(crate) fn to_inventory_ops_after(state: &GameState, from: SlotRef, stack: &ItemStack, earlier: &[Op]) -> Result<Vec<Op>, ActionError> {
-    let mut targets: Vec<(SlotRef, ItemStack)> = state.inventory.main.iter().enumerate().map(|(i, s)| (SlotRef::Main(i as u8), s.clone())).collect();
+pub(crate) fn to_inventory_ops_after(
+    state: &GameState,
+    from: SlotRef,
+    stack: &ItemStack,
+    earlier: &[Op],
+) -> Result<Vec<Op>, ActionError> {
+    let mut targets: Vec<(SlotRef, ItemStack)> = state
+        .inventory
+        .main
+        .iter()
+        .enumerate()
+        .map(|(i, s)| (SlotRef::Main(i as u8), s.clone()))
+        .collect();
     for op in earlier {
         match *op {
             Op::Consume { from, count } => {
@@ -56,9 +82,20 @@ pub(crate) fn to_inventory_ops_after(state: &GameState, from: SlotRef, stack: &I
         }
     }
     let ops = move_ops(from, stack, &targets);
-    let moved: u16 = ops.iter().map(|op| if let Op::Transfer { count, .. } = op { u16::from(*count) } else { 0 }).sum();
+    let moved: u16 = ops
+        .iter()
+        .map(|op| {
+            if let Op::Transfer { count, .. } = op {
+                u16::from(*count)
+            } else {
+                0
+            }
+        })
+        .sum();
     if moved < stack.count {
-        return Err(ActionError::NotPossible("no room in the inventory for the result".into()));
+        return Err(ActionError::NotPossible(
+            "no room in the inventory for the result".into(),
+        ));
     }
     Ok(ops)
 }
@@ -68,11 +105,18 @@ pub(crate) fn to_inventory_ops_after(state: &GameState, from: SlotRef, stack: &I
 pub(crate) fn onto_cursor(state: &GameState, created: &[ItemStack], mut ops: Vec<Op>) -> Vec<Op> {
     let [result] = created else { return ops };
     let cursor = state.inventory.cursor();
-    let merges = stacks_with(cursor, result) && (cursor.count > 1 || result.count > 1) && cursor.count + result.count <= MAX_STACK;
-    let takes_result = |op: &Op| matches!(op, Op::Transfer { from, .. } if *from == SlotRef::CREATED_OUTPUT);
+    let merges = stacks_with(cursor, result)
+        && (cursor.count > 1 || result.count > 1)
+        && cursor.count + result.count <= MAX_STACK;
+    let takes_result =
+        |op: &Op| matches!(op, Op::Transfer { from, .. } if *from == SlotRef::CREATED_OUTPUT);
     if (cursor.is_empty() || merges) && ops.iter().any(takes_result) {
         ops.retain(|op| !takes_result(op));
-        ops.push(Op::Transfer { from: SlotRef::CREATED_OUTPUT, to: SlotRef::Cursor, count: clamp(result.count) });
+        ops.push(Op::Transfer {
+            from: SlotRef::CREATED_OUTPUT,
+            to: SlotRef::Cursor,
+            count: clamp(result.count),
+        });
     }
     ops
 }
@@ -89,14 +133,22 @@ fn move_ops(from: SlotRef, stack: &ItemStack, targets: &[(SlotRef, ItemStack)]) 
         }
         if !dst.is_empty() && dst.count < MAX_STACK && stacks_with(dst, stack) && stackable(dst) {
             let count = left.min(MAX_STACK - dst.count);
-            ops.push(Op::Transfer { from, to: *to, count: clamp(count) });
+            ops.push(Op::Transfer {
+                from,
+                to: *to,
+                count: clamp(count),
+            });
             left -= count;
         }
     }
     if left > 0
         && let Some((to, _)) = targets.iter().find(|(_, s)| s.is_empty())
     {
-        ops.push(Op::Transfer { from, to: *to, count: clamp(left) });
+        ops.push(Op::Transfer {
+            from,
+            to: *to,
+            count: clamp(left),
+        });
     }
     ops
 }
@@ -110,10 +162,15 @@ fn targets(state: &GameState, from: SlotRef) -> Vec<SlotRef> {
     let all = Inventory::MAIN_SLOTS as u8;
     match (from, open_container(state)) {
         (SlotRef::Container(_) | SlotRef::Ui(_), _) => main_slots(0..all),
-        (_, Some(open)) => (0..open.slots.len().min(usize::from(u8::MAX)) as u8).map(SlotRef::Container).collect(),
+        (_, Some(open)) => (0..open.slots.len().min(usize::from(u8::MAX)) as u8)
+            .map(SlotRef::Container)
+            .collect(),
         (SlotRef::Main(i), None) if i < hotbar => main_slots(hotbar..all),
         (SlotRef::Main(_), None) => main_slots(0..hotbar),
-        (_, None) => main_slots(hotbar..all).into_iter().chain(main_slots(0..hotbar)).collect(),
+        (_, None) => main_slots(hotbar..all)
+            .into_iter()
+            .chain(main_slots(0..hotbar))
+            .collect(),
     }
 }
 

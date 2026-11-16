@@ -23,17 +23,32 @@ fn sin_cos(angle: f32) -> (f32, f32) {
 
 pub fn rotation_x(radians: f32) -> Mat4 {
     let (s, c) = sin_cos(radians);
-    Mat4::from_cols(Vec4::X, Vec4::new(0.0, c, s, 0.0), Vec4::new(0.0, -s, c, 0.0), Vec4::W)
+    Mat4::from_cols(
+        Vec4::X,
+        Vec4::new(0.0, c, s, 0.0),
+        Vec4::new(0.0, -s, c, 0.0),
+        Vec4::W,
+    )
 }
 
 pub fn rotation_y(radians: f32) -> Mat4 {
     let (s, c) = sin_cos(radians);
-    Mat4::from_cols(Vec4::new(c, 0.0, -s, 0.0), Vec4::Y, Vec4::new(s, 0.0, c, 0.0), Vec4::W)
+    Mat4::from_cols(
+        Vec4::new(c, 0.0, -s, 0.0),
+        Vec4::Y,
+        Vec4::new(s, 0.0, c, 0.0),
+        Vec4::W,
+    )
 }
 
 pub fn rotation_z(radians: f32) -> Mat4 {
     let (s, c) = sin_cos(radians);
-    Mat4::from_cols(Vec4::new(c, s, 0.0, 0.0), Vec4::new(-s, c, 0.0, 0.0), Vec4::Z, Vec4::W)
+    Mat4::from_cols(
+        Vec4::new(c, s, 0.0, 0.0),
+        Vec4::new(-s, c, 0.0, 0.0),
+        Vec4::Z,
+        Vec4::W,
+    )
 }
 
 #[cfg(test)]
@@ -44,12 +59,25 @@ mod tests {
     fn matches_glam_but_for_the_cosine() {
         for degrees in [0.0f32, 30.0, 89.5, 90.0, 180.0, 200.0, 270.0, -90.0] {
             let a = degrees.to_radians();
-            assert!(rotation_x(a).abs_diff_eq(Mat4::from_rotation_x(a), 2e-4), "{degrees}");
-            assert!(rotation_y(a).abs_diff_eq(Mat4::from_rotation_y(a), 2e-4), "{degrees}");
-            assert!(rotation_z(a).abs_diff_eq(Mat4::from_rotation_z(a), 2e-4), "{degrees}");
+            assert!(
+                rotation_x(a).abs_diff_eq(Mat4::from_rotation_x(a), 2e-4),
+                "{degrees}"
+            );
+            assert!(
+                rotation_y(a).abs_diff_eq(Mat4::from_rotation_y(a), 2e-4),
+                "{degrees}"
+            );
+            assert!(
+                rotation_z(a).abs_diff_eq(Mat4::from_rotation_z(a), 2e-4),
+                "{degrees}"
+            );
         }
         // The game's sun frame at 89.5 degrees: 100 * cos lands at 0.8727814, not 0.8726562.
         let m = rotation_x(89.5 * (std::f64::consts::PI / 180.0) as f32);
-        assert!((m.y_axis.y * 100.0 - 0.872_781_4).abs() < 1e-5, "{}", m.y_axis.y * 100.0);
+        assert!(
+            (m.y_axis.y * 100.0 - 0.872_781_4).abs() < 1e-5,
+            "{}",
+            m.y_axis.y * 100.0
+        );
     }
 }

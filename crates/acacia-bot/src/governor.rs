@@ -36,7 +36,11 @@ impl Limits {
 
 impl Default for Limits {
     fn default() -> Self {
-        Self { max_in_flight: Self::DEFAULT_IN_FLIGHT, min_gap_ticks: 1, max_gap_ticks: 3 }
+        Self {
+            max_in_flight: Self::DEFAULT_IN_FLIGHT,
+            min_gap_ticks: 1,
+            max_gap_ticks: 3,
+        }
     }
 }
 
@@ -62,7 +66,10 @@ pub struct Governor {
 
 impl Governor {
     pub fn new(limits: Limits) -> Self {
-        Self { limits, ..Self::default() }
+        Self {
+            limits,
+            ..Self::default()
+        }
     }
 
     /// Advances one client tick; `setback_age`: ticks since the server last set the bot back.
@@ -113,7 +120,9 @@ impl Governor {
 
     /// [`Governor::timeout`] in client ticks.
     pub fn timeout_ticks(&self) -> u64 {
-        unscaled(self.timeout()).as_millis().div_ceil(TICK.as_millis()) as u64
+        unscaled(self.timeout())
+            .as_millis()
+            .div_ceil(TICK.as_millis()) as u64
     }
 
     /// The server set the bot back within the last [`SETTLE_TICKS`].
@@ -125,13 +134,19 @@ impl Governor {
     pub fn may_send(&self) -> bool {
         self.in_flight < self.limits.max_in_flight
             && !self.settling()
-            && self.last_sent.is_none_or(|t| self.tick >= t + self.gap.max(self.limits.min_gap_ticks))
+            && self
+                .last_sent
+                .is_none_or(|t| self.tick >= t + self.gap.max(self.limits.min_gap_ticks))
     }
 
     /// An action went out (a retry of one counts again).
     pub fn sent(&mut self, retry: bool) {
         self.last_sent = Some(self.tick);
-        let Limits { min_gap_ticks: lo, max_gap_ticks: hi, .. } = self.limits;
+        let Limits {
+            min_gap_ticks: lo,
+            max_gap_ticks: hi,
+            ..
+        } = self.limits;
         self.gap = lo + crate::cadence::splitmix(&mut self.rng) % (hi.max(lo) - lo + 1);
         self.sent_this_tick += 1;
         self.sent += 1;
@@ -177,16 +192,27 @@ mod tests {
             g.sample(Duration::from_millis(400));
         }
         let t = g.timeout().as_millis();
-        assert!((500..=600).contains(&t), "steady 400 ms echo: timeout {t} ms");
+        assert!(
+            (500..=600).contains(&t),
+            "steady 400 ms echo: timeout {t} ms"
+        );
         g.sample(Duration::from_millis(1400));
-        assert!(g.timeout().as_millis() > 1200, "a spike widens it: {:?}", g.timeout());
+        assert!(
+            g.timeout().as_millis() > 1200,
+            "a spike widens it: {:?}",
+            g.timeout()
+        );
         assert!(g.lagging());
         assert_eq!(Governor::default().timeout_ticks(), 12);
     }
 
     #[test]
     fn caps_actions_and_holds_after_setbacks() {
-        let mut g = Governor::new(Limits { max_in_flight: 1, min_gap_ticks: 2, max_gap_ticks: 2 });
+        let mut g = Governor::new(Limits {
+            max_in_flight: 1,
+            min_gap_ticks: 2,
+            max_gap_ticks: 2,
+        });
         assert!(g.may_send());
         g.sent(false);
         assert!(!g.may_send(), "one in flight");
@@ -203,13 +229,21 @@ mod tests {
 
     #[test]
     fn gaps_vary_within_the_limits() {
-        let mut g = Governor::new(Limits { max_in_flight: 9, min_gap_ticks: 1, max_gap_ticks: 3 });
+        let mut g = Governor::new(Limits {
+            max_in_flight: 9,
+            min_gap_ticks: 1,
+            max_gap_ticks: 3,
+        });
         let mut gaps = std::collections::BTreeSet::new();
         for _ in 0..200 {
             g.sent(false);
             g.settled();
             let mut waited = 0;
-            while { g.tick(None); waited += 1; !g.may_send() } {}
+            while {
+                g.tick(None);
+                waited += 1;
+                !g.may_send()
+            } {}
             gaps.insert(waited);
         }
         assert_eq!(gaps.into_iter().collect::<Vec<_>>(), vec![1, 2, 3]);

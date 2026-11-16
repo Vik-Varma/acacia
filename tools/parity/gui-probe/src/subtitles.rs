@@ -23,8 +23,16 @@ pub fn replay(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<Gui
             "time" => now = op["ms"].as_i64().unwrap_or(0),
             "play" if overlay.listening() => {
                 let range = op["range"].as_f64().map_or(f32::INFINITY, |r| r as f32);
-                let key = op["key"].as_str().map(|k| (k.to_owned(), translate(assets, k)));
-                overlay.on_play(key, vec3(&op["at"]), range, op["looping"].as_bool().unwrap_or(false), now);
+                let key = op["key"]
+                    .as_str()
+                    .map(|k| (k.to_owned(), translate(assets, k)));
+                overlay.on_play(
+                    key,
+                    vec3(&op["at"]),
+                    range,
+                    op["looping"].as_bool().unwrap_or(false),
+                    now,
+                );
             }
             "play" => {}
             "frame" => {
@@ -34,9 +42,16 @@ pub fn replay(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<Gui
                     forward: vec3(&op["forward"]),
                     up: vec3(&op["up"]),
                     multiplier: op["mult"].as_f64().unwrap_or(1.0),
-                    background: background_color(op["chatOnly"].as_bool().unwrap_or(true), op["opacity"].as_f64().unwrap_or(0.5) as f32, 0.8),
+                    background: background_color(
+                        op["chatOnly"].as_bool().unwrap_or(true),
+                        op["opacity"].as_f64().unwrap_or(0.5) as f32,
+                        0.8,
+                    ),
                 };
-                gui = Gui::new(op["w"].as_i64().unwrap_or(0) as i32, op["h"].as_i64().unwrap_or(0) as i32);
+                gui = Gui::new(
+                    op["w"].as_i64().unwrap_or(0) as i32,
+                    op["h"].as_i64().unwrap_or(0) as i32,
+                );
                 overlay.extract(&mut gui, assets.font.as_ref(), &frame, now);
             }
             other => panic!("unknown subtitle op {other}"),

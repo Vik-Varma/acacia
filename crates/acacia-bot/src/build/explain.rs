@@ -1,8 +1,8 @@
 use acacia_physics::Vec3;
 
 use super::builder::Builder;
-use super::plan::{in_body, STANDS};
-use super::reach::{click_for, stands, Keep, STAND_SLACK};
+use super::plan::{STANDS, in_body};
+use super::reach::{Keep, STAND_SLACK, click_for, stands};
 use super::rules;
 use super::survey::Need;
 use crate::pathfind::process::Look;
@@ -17,9 +17,27 @@ pub(crate) fn explain(b: &Builder, look: &dyn Look, feet: Vec3) -> Vec<String> {
         .filter(|(_, n)| **n == Need::Place)
         .map(|(c, _)| {
             let now = click_for(c.pos, &c.target, eye, look, 0.0);
-            let found = stands(c.pos, feet, look, &Keep { feet: &|_| false, pillar: &|_| false }, &|e| click_for(c.pos, &c.target, e, look, STAND_SLACK).is_some(), STANDS);
+            let found = stands(
+                c.pos,
+                feet,
+                look,
+                &Keep {
+                    feet: &|_| false,
+                    pillar: &|_| false,
+                },
+                &|e| click_for(c.pos, &c.target, e, look, STAND_SLACK).is_some(),
+                STANDS,
+            );
             let item = rules::item(&c.target).map(|i| look.count(&i));
-            format!("{:?} {} [{}]: held {item:?} resting {} body {} now {now:?} stands {:?}", c.pos, c.target.name, c.target.props, b.resting(c.pos), in_body(feet, c.pos), found.iter().map(|s| s.feet).collect::<Vec<_>>())
+            format!(
+                "{:?} {} [{}]: held {item:?} resting {} body {} now {now:?} stands {:?}",
+                c.pos,
+                c.target.name,
+                c.target.props,
+                b.resting(c.pos),
+                in_body(feet, c.pos),
+                found.iter().map(|s| s.feet).collect::<Vec<_>>()
+            )
         })
         .collect()
 }

@@ -31,7 +31,11 @@ impl WorldView for Flat {
     }
 
     fn block(&self, pos: BlockPos) -> BlockPhysics {
-        if pos[1] < 0 { BlockPhysics::solid(self.0) } else { BlockPhysics::AIR }
+        if pos[1] < 0 {
+            BlockPhysics::solid(self.0)
+        } else {
+            BlockPhysics::AIR
+        }
     }
 }
 
@@ -57,7 +61,16 @@ impl Reach {
             let mut r = start.clone();
             for (k, d) in by_tick.iter_mut().enumerate().skip(1) {
                 let jump = after.is_some_and(|a| k > a);
-                r.step(&Controls { forward: 1.0, sprint: true, jump, yaw: -90.0, ..Controls::default() }, &flat);
+                r.step(
+                    &Controls {
+                        forward: 1.0,
+                        sprint: true,
+                        jump,
+                        yaw: -90.0,
+                        ..Controls::default()
+                    },
+                    &flat,
+                );
                 *d = d.max(r.body().pos[0] - 0.5);
             }
         }
@@ -66,7 +79,10 @@ impl Reach {
 
     /// Fewest ticks to cover `d` blocks (the last tick if never).
     fn ticks(&self, d: f32) -> f32 {
-        self.by_tick.iter().position(|&x| x >= d).unwrap_or(self.by_tick.len() - 1) as f32
+        self.by_tick
+            .iter()
+            .position(|&x| x >= d)
+            .unwrap_or(self.by_tick.len() - 1) as f32
     }
 }
 
@@ -78,17 +94,33 @@ impl Reaches {
     pub fn get<S: StepIn<Flat>>(&mut self, mom: &Momentum, base: &S) -> &Reach {
         let v = mom.velocity();
         let speed = (v[0].hypot(v[2]) * 4096.0).round() as i16;
-        self.0.entry((speed, mom.vel[1], mom.off[1], mom.flags)).or_insert_with(|| Reach::new(mom, base))
+        self.0
+            .entry((speed, mom.vel[1], mom.off[1], mom.flags))
+            .or_insert_with(|| Reach::new(mom, base))
     }
 }
 
 /// Least cost the leap to `c` from `p` (moving as `mom`) can have: ticks for the feet to reach the target cell at
 /// the fastest run (one tick of slack), `Human`'s hesitation when it must jump, and the hazard term.
-pub(crate) fn leap_floor<B: Blocks, S: Sim>(t: &Terrain<B>, p: BlockPos, mom: &Momentum, c: &LeapCand, reach: &Reach, base: &S, profile: MovementProfile) -> f32 {
+pub(crate) fn leap_floor<B: Blocks, S: Sim>(
+    t: &Terrain<B>,
+    p: BlockPos,
+    mom: &Momentum,
+    c: &LeapCand,
+    reach: &Reach,
+    base: &S,
+    profile: MovementProfile,
+) -> f32 {
     let env = S::envelope();
     let [x, _, z] = mom.feet(p);
-    let (lo, hi) = ([c.q[0] as f32, c.q[2] as f32], [c.q[0] as f32 + 1.0, c.q[2] as f32 + 1.0]);
-    let d = (lo[0] - x).max(x - hi[0]).max(0.0).hypot((lo[1] - z).max(z - hi[1]).max(0.0));
+    let (lo, hi) = (
+        [c.q[0] as f32, c.q[2] as f32],
+        [c.q[0] as f32 + 1.0, c.q[2] as f32 + 1.0],
+    );
+    let d = (lo[0] - x)
+        .max(x - hi[0])
+        .max(0.0)
+        .hypot((lo[1] - z).max(z - hi[1]).max(0.0));
     // Other floors (ice) carry more speed than the flat run assumes.
     let ticks = if t.friction([p[0], p[1] - 1, p[2]]) > env.friction {
         d / (env.leap_vmax * (base.traits().speed / env.movement_speed).max(1.0))
@@ -96,7 +128,11 @@ pub(crate) fn leap_floor<B: Blocks, S: Sim>(t: &Terrain<B>, p: BlockPos, mom: &M
         (reach.ticks(d) - 1.0).max(0.0)
     };
     let jumps = !c.to.wet && c.q[1] >= p[1];
-    let hesitation = if profile == MovementProfile::Human && jumps { HUMAN_JUMP } else { 0.0 };
+    let hesitation = if profile == MovementProfile::Human && jumps {
+        HUMAN_JUMP
+    } else {
+        0.0
+    };
     let danger = if t.danger_near(c.q) { DANGER_NEAR } else { 0.0 };
     ticks + hesitation + danger
 }

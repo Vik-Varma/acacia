@@ -25,7 +25,9 @@ const DIRECTIONS: [Direction; 6] = [Down, Up, North, South, West, East];
 
 impl Direction {
     pub fn named(name: &str) -> Option<Direction> {
-        DIRECTIONS.into_iter().find(|d| format!("{d:?}").eq_ignore_ascii_case(name))
+        DIRECTIONS
+            .into_iter()
+            .find(|d| format!("{d:?}").eq_ignore_ascii_case(name))
     }
 
     fn normal(self) -> Vec3 {
@@ -52,13 +54,16 @@ impl Direction {
     }
 
     fn turned(self, degrees: u16, cycle: [Direction; 4]) -> Direction {
-        let Some(at) = cycle.iter().position(|d| *d == self) else { return self };
+        let Some(at) = cycle.iter().position(|d| *d == self) else {
+            return self;
+        };
         cycle[(at + usize::from(degrees / 90)) % 4]
     }
 
     /// After a blockstate's `x` then `y` rotation.
     fn rotated(self, x: u16, y: u16) -> Direction {
-        self.turned(x, [North, Down, South, Up]).turned(y, [North, East, South, West])
+        self.turned(x, [North, Down, South, Up])
+            .turned(y, [North, East, South, West])
     }
 
     /// Where a point on a face of this direction lands in the texture when the texture is laid
@@ -113,11 +118,18 @@ pub fn bake(model: &Resolved, placed: &ModelRef) -> Vec<BakedFace> {
     let mut faces = Vec::new();
     for element in &model.elements {
         for (name, face) in &element.faces {
-            let (Some(direction), Some(texture)) = (Direction::named(name), model.texture(&face.texture)) else { continue };
+            let (Some(direction), Some(texture)) =
+                (Direction::named(name), model.texture(&face.texture))
+            else {
+                continue;
+            };
             if !drawn(direction, element.from, element.to) {
                 continue;
             }
-            let mut positions = turn::element(face_positions(direction, element.from, element.to), element.rotation.as_ref());
+            let mut positions = turn::element(
+                face_positions(direction, element.from, element.to),
+                element.rotation.as_ref(),
+            );
             let mut uvs = face_uvs(direction, element.from, element.to, face.uv, face.rotation);
             let mut cull = face.cullface.as_deref().and_then(Direction::named);
             if placed.x != 0 || placed.y != 0 {
@@ -130,7 +142,9 @@ pub fn bake(model: &Resolved, placed: &ModelRef) -> Vec<BakedFace> {
                 // Not in Pomme. The texture stays aligned to the world: each corner's place on the
                 // unturned block's side goes where the model's turn takes it.
                 let turned = direction.rotated(placed.x, placed.y);
-                uvs = uvs.map(|uv| turned.project(turn::model(direction.unproject(uv), placed.x, placed.y)));
+                uvs = uvs.map(|uv| {
+                    turned.project(turn::model(direction.unproject(uv), placed.x, placed.y))
+                });
             }
             if element.rotation.is_none()
                 && let Some(facing) = nearest_direction(&positions)
@@ -138,21 +152,37 @@ pub fn bake(model: &Resolved, placed: &ModelRef) -> Vec<BakedFace> {
                 rewind(&mut positions, &mut uvs, facing);
             }
             // Shaded as up is full brightness, which is what `shade: false` meant before 26.1.
-            let shade = match element.shade_direction_override.as_deref().and_then(Direction::named) {
+            let shade = match element
+                .shade_direction_override
+                .as_deref()
+                .and_then(Direction::named)
+            {
                 _ if !element.shade => None,
                 Some(Up) => None,
                 Some(direction) => Some(direction),
                 None => Some(facing),
             };
             let tint_index = face.tintindex.filter(|index| *index >= 0);
-            faces.push(BakedFace { positions, uvs, texture: texture.to_owned(), cull, tint_index, shade, ambient_occlusion: model.ambient_occlusion });
+            faces.push(BakedFace {
+                positions,
+                uvs,
+                texture: texture.to_owned(),
+                cull,
+                tint_index,
+                shade,
+                ambient_occlusion: model.ambient_occlusion,
+            });
         }
     }
     faces
 }
 
 /// Vanilla `FaceInfo`: the vertex order the UV rules are defined against.
-fn face_positions(direction: Direction, [x0, y0, z0]: [f32; 3], [x1, y1, z1]: [f32; 3]) -> [[f32; 3]; 4] {
+fn face_positions(
+    direction: Direction,
+    [x0, y0, z0]: [f32; 3],
+    [x1, y1, z1]: [f32; 3],
+) -> [[f32; 3]; 4] {
     match direction {
         Down => [[x0, y0, z1], [x0, y0, z0], [x1, y0, z0], [x1, y0, z1]],
         Up => [[x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]],
@@ -163,10 +193,19 @@ fn face_positions(direction: Direction, [x0, y0, z0]: [f32; 3], [x1, y1, z1]: [f
     }
 }
 
-fn face_uvs(direction: Direction, from: [f32; 3], to: [f32; 3], explicit: Option<[f32; 4]>, rotation: Option<i32>) -> [[f32; 2]; 4] {
+fn face_uvs(
+    direction: Direction,
+    from: [f32; 3],
+    to: [f32; 3],
+    explicit: Option<[f32; 4]>,
+    rotation: Option<i32>,
+) -> [[f32; 2]; 4] {
     // FaceBakery.defaultFaceUV: the window the face covers when the texture lies on the block.
     let [u1, v1, u2, v2] = explicit.unwrap_or_else(|| {
-        let ([a, b], [c, d]) = (direction.project(face_positions(direction, from, to)[0]), direction.project(face_positions(direction, from, to)[2]));
+        let ([a, b], [c, d]) = (
+            direction.project(face_positions(direction, from, to)[0]),
+            direction.project(face_positions(direction, from, to)[2]),
+        );
         [a, b, c, d]
     });
     // CuboidFace.UVs: one corner cycle for every face; a rotation shifts each vertex along it,
@@ -179,11 +218,15 @@ fn face_uvs(direction: Direction, from: [f32; 3], to: [f32; 3], explicit: Option
 /// FaceBakery.recalculateWinding: the vertices (and their texture coordinates) reordered to
 /// `facing`'s `FaceInfo` over the quad's bounds. Java lights vertices by index, so order matters.
 fn rewind(positions: &mut [[f32; 3]; 4], uvs: &mut [[f32; 2]; 4], facing: Direction) {
-    let bound = |pick: fn(f32, f32) -> f32, from: f32| [0, 1, 2].map(|a| positions.iter().map(|p| p[a]).fold(from, pick));
+    let bound = |pick: fn(f32, f32) -> f32, from: f32| {
+        [0, 1, 2].map(|a| positions.iter().map(|p| p[a]).fold(from, pick))
+    };
     let target = face_positions(facing, bound(f32::min, f32::MAX), bound(f32::max, f32::MIN));
     for (vertex, corner) in target.into_iter().enumerate() {
         let same = |p: &[f32; 3]| p.iter().zip(corner).all(|(a, b)| (a - b).abs() < 1e-3);
-        let Some(found) = (vertex..4).find(|&i| same(&positions[i])) else { return };
+        let Some(found) = (vertex..4).find(|&i| same(&positions[i])) else {
+            return;
+        };
         positions.swap(vertex, found);
         uvs.swap(vertex, found);
     }
@@ -214,14 +257,39 @@ mod tests {
 
     fn cube(faces: &[FaceSpec]) -> Resolved {
         let face = |(name, uv, cull): &FaceSpec| {
-            (name.to_string(), FaceDef { uv: *uv, texture: "#all".into(), cullface: cull.map(str::to_owned), rotation: None, tintindex: None })
+            (
+                name.to_string(),
+                FaceDef {
+                    uv: *uv,
+                    texture: "#all".into(),
+                    cullface: cull.map(str::to_owned),
+                    rotation: None,
+                    tintindex: None,
+                },
+            )
         };
-        let element = Element { from: [0.0; 3], to: [16.0; 3], rotation: None, faces: faces.iter().map(face).collect(), shade: true, shade_direction_override: None };
-        Resolved { textures: [("all".to_owned(), "block/stone".to_owned())].into(), elements: vec![element], ambient_occlusion: true }
+        let element = Element {
+            from: [0.0; 3],
+            to: [16.0; 3],
+            rotation: None,
+            faces: faces.iter().map(face).collect(),
+            shade: true,
+            shade_direction_override: None,
+        };
+        Resolved {
+            textures: [("all".to_owned(), "block/stone".to_owned())].into(),
+            elements: vec![element],
+            ambient_occlusion: true,
+        }
     }
 
     fn placed(x: u16, y: u16, uvlock: bool) -> ModelRef {
-        ModelRef { model: "block/stone".into(), x, y, uvlock }
+        ModelRef {
+            model: "block/stone".into(),
+            x,
+            y,
+            uvlock,
+        }
     }
 
     fn rounded<const N: usize>(points: [[f32; N]; 4]) -> [[i32; N]; 4] {
@@ -230,11 +298,22 @@ mod tests {
 
     #[test]
     fn faces_wind_counter_clockwise_and_take_the_default_window() {
-        let faces = bake(&cube(&[("up", None, Some("up")), ("east", None, None), ("down", None, None)]), &placed(0, 0, false));
+        let faces = bake(
+            &cube(&[
+                ("up", None, Some("up")),
+                ("east", None, None),
+                ("down", None, None),
+            ]),
+            &placed(0, 0, false),
+        );
         for face in &faces {
             let direction = nearest_direction(&face.positions).unwrap();
             assert_eq!(face.shade, Some(direction));
-            assert_eq!(face.uvs, face.positions.map(|p| direction.project(p)), "{direction:?}");
+            assert_eq!(
+                face.uvs,
+                face.positions.map(|p| direction.project(p)),
+                "{direction:?}"
+            );
         }
         let up = faces.iter().find(|f| f.shade == Some(Up)).unwrap();
         assert_eq!((up.cull, up.texture.as_str()), (Some(Up), "block/stone"));
@@ -248,32 +327,82 @@ mod tests {
         let [turned] = bake(&model, &placed(0, 90, false)).try_into().unwrap();
         assert_eq!((turned.cull, turned.shade), (Some(East), Some(East)));
         assert!(turned.positions.iter().all(|p| (p[0] - 16.0).abs() < 1e-4));
-        assert_eq!(rounded(turned.uvs), [[0, 0], [0, 16], [8, 16], [8, 0]], "the window turns with the face");
+        assert_eq!(
+            rounded(turned.uvs),
+            [[0, 0], [0, 16], [8, 16], [8, 0]],
+            "the window turns with the face"
+        );
         let [locked] = bake(&model, &placed(0, 90, true)).try_into().unwrap();
-        assert_eq!(rounded(locked.uvs), rounded(turned.uvs), "a turn about y leaves a side's window alone");
-        let [top] = bake(&cube(&[("up", None, None)]), &placed(0, 90, true)).try_into().unwrap();
-        assert_eq!(rounded(top.uvs), rounded(top.positions.map(|p| Up.project(p))), "and turns the top's back");
+        assert_eq!(
+            rounded(locked.uvs),
+            rounded(turned.uvs),
+            "a turn about y leaves a side's window alone"
+        );
+        let [top] = bake(&cube(&[("up", None, None)]), &placed(0, 90, true))
+            .try_into()
+            .unwrap();
+        assert_eq!(
+            rounded(top.uvs),
+            rounded(top.positions.map(|p| Up.project(p))),
+            "and turns the top's back"
+        );
         // x = 90 turns up to north.
-        let [tipped] = bake(&cube(&[("up", None, Some("up"))]), &placed(90, 0, false)).try_into().unwrap();
+        let [tipped] = bake(&cube(&[("up", None, Some("up"))]), &placed(90, 0, false))
+            .try_into()
+            .unwrap();
         assert_eq!((tipped.cull, tipped.shade), (Some(North), Some(North)));
     }
 
     #[test]
     fn a_turned_face_starts_where_its_new_sides_order_starts() {
-        let [down] = bake(&cube(&[("down", None, None)]), &placed(0, 90, false)).try_into().unwrap();
-        assert_eq!(rounded(down.positions), rounded(face_positions(Down, [0.0; 3], [16.0, 0.0, 16.0])));
+        let [down] = bake(&cube(&[("down", None, None)]), &placed(0, 90, false))
+            .try_into()
+            .unwrap();
+        assert_eq!(
+            rounded(down.positions),
+            rounded(face_positions(Down, [0.0; 3], [16.0, 0.0, 16.0]))
+        );
     }
 
     #[test]
     fn an_element_rotation_with_rescale_reaches_the_block_edge() {
-        let rotation = ElementRotation { origin: [8.0, 8.0, 8.0], axis: Some("y".into()), angle: 45.0, x: 0.0, y: 0.0, z: 0.0, rescale: true };
-        let face = FaceDef { uv: None, texture: "#all".into(), cullface: None, rotation: None, tintindex: Some(0) };
+        let rotation = ElementRotation {
+            origin: [8.0, 8.0, 8.0],
+            axis: Some("y".into()),
+            angle: 45.0,
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            rescale: true,
+        };
+        let face = FaceDef {
+            uv: None,
+            texture: "#all".into(),
+            cullface: None,
+            rotation: None,
+            tintindex: Some(0),
+        };
         let faces = [("south".to_owned(), face)].into();
-        let plane = Element { from: [0.0, 0.0, 8.0], to: [16.0, 16.0, 8.0], rotation: Some(rotation), faces, shade: true, shade_direction_override: Some("up".into()) };
-        let model = Resolved { textures: [("all".to_owned(), "block/poppy".to_owned())].into(), elements: vec![plane], ambient_occlusion: false };
+        let plane = Element {
+            from: [0.0, 0.0, 8.0],
+            to: [16.0, 16.0, 8.0],
+            rotation: Some(rotation),
+            faces,
+            shade: true,
+            shade_direction_override: Some("up".into()),
+        };
+        let model = Resolved {
+            textures: [("all".to_owned(), "block/poppy".to_owned())].into(),
+            elements: vec![plane],
+            ambient_occlusion: false,
+        };
         let [face] = bake(&model, &placed(0, 0, false)).try_into().unwrap();
         assert!(face.tint_index == Some(0) && face.shade.is_none());
         let xs: Vec<i32> = face.positions.iter().map(|p| p[0].round() as i32).collect();
-        assert_eq!((xs.iter().min(), xs.iter().max()), (Some(&0), Some(&16)), "the diagonal spans the block");
+        assert_eq!(
+            (xs.iter().min(), xs.iter().max()),
+            (Some(&0), Some(&16)),
+            "the diagonal spans the block"
+        );
     }
 }

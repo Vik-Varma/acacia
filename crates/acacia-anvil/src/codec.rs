@@ -130,7 +130,10 @@ pub mod lz4_block {
     fn header(out: &mut [u8], method: u8, compressed: usize, original: usize, check: u32) {
         out[..8].copy_from_slice(MAGIC);
         out[8] = method | LEVEL;
-        for (i, v) in [compressed as u32, original as u32, check].into_iter().enumerate() {
+        for (i, v) in [compressed as u32, original as u32, check]
+            .into_iter()
+            .enumerate()
+        {
             out[9 + 4 * i..13 + 4 * i].copy_from_slice(&v.to_le_bytes());
         }
     }
@@ -140,7 +143,10 @@ pub mod lz4_block {
     pub fn compress_into(data: &[u8], out: &mut Vec<u8>) {
         for block in data.chunks(BLOCK) {
             let at = out.len();
-            out.resize(at + HEADER + lz4_flex::block::get_maximum_output_size(block.len()), 0);
+            out.resize(
+                at + HEADER + lz4_flex::block::get_maximum_output_size(block.len()),
+                0,
+            );
             let n = lz4_flex::block::compress_into(block, &mut out[at + HEADER..])
                 .expect("output sized to the bound");
             let (method, n) = if n < block.len() {

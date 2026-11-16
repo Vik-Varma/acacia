@@ -11,7 +11,11 @@ pub fn lines<'a>(a: &[&'a str], b: &[&'a str]) -> Vec<Line<'a>> {
     let mut lcs = vec![vec![0u32; m + 1]; n + 1];
     for i in (0..n).rev() {
         for j in (0..m).rev() {
-            lcs[i][j] = if a[i] == b[j] { lcs[i + 1][j + 1] + 1 } else { lcs[i + 1][j].max(lcs[i][j + 1]) };
+            lcs[i][j] = if a[i] == b[j] {
+                lcs[i + 1][j + 1] + 1
+            } else {
+                lcs[i + 1][j].max(lcs[i][j + 1])
+            };
         }
     }
     let (mut i, mut j, mut out) = (0, 0, Vec::new());
@@ -33,7 +37,8 @@ pub fn lines<'a>(a: &[&'a str], b: &[&'a str]) -> Vec<Line<'a>> {
 /// Prints only the changed lines, each with `ctx` unchanged lines around it; `-` = left, `+` = right.
 pub fn print(diff: &[Line], ctx: usize) -> usize {
     let changed: Vec<bool> = diff.iter().map(|l| !matches!(l, Line::Same(_))).collect();
-    let near = |i: usize| (i.saturating_sub(ctx)..=(i + ctx).min(diff.len() - 1)).any(|k| changed[k]);
+    let near =
+        |i: usize| (i.saturating_sub(ctx)..=(i + ctx).min(diff.len() - 1)).any(|k| changed[k]);
     let mut gap = false;
     for (i, line) in diff.iter().enumerate() {
         if !near(i) {

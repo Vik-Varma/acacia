@@ -1,8 +1,8 @@
 use super::{Abilities, Effects};
 use acacia_client::proto::packets::{
-    ChangeDimension, CorrectPlayerMovePrediction, CorrectPlayerMovePredictionPredictionType, MobEffect, MovePlayer, Respawn,
-    SetEntityData, SetHealth, SetPlayerGameType, SetSpawnPosition, SetSpawnPositionSpawnType, StartGame, UpdateAbilities,
-    UpdateAttributes, UpdatePlayerGameType,
+    ChangeDimension, CorrectPlayerMovePrediction, CorrectPlayerMovePredictionPredictionType,
+    MobEffect, MovePlayer, Respawn, SetEntityData, SetHealth, SetPlayerGameType, SetSpawnPosition,
+    SetSpawnPositionSpawnType, StartGame, UpdateAbilities, UpdateAttributes, UpdatePlayerGameType,
 };
 use acacia_client::proto::types::{
     BlockCoordinates, GameMode, MetadataDictionaryItemKey, MetadataDictionaryItemValue as Meta,
@@ -59,7 +59,11 @@ impl Default for PlayerState {
         PlayerState {
             runtime_entity_id: 0,
             unique_entity_id: 0,
-            position: Vec3f { x: 0.0, y: 0.0, z: 0.0 },
+            position: Vec3f {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
             yaw: 0.0,
             pitch: 0.0,
             game_mode: GameMode::Survival,
@@ -103,13 +107,20 @@ impl PlayerState {
     pub const EYE_HEIGHT: f32 = acacia_physics::constants::DEFAULT_PLAYER_HEIGHT_OFFSET;
 
     pub fn eye_position(&self) -> Vec3f {
-        Vec3f { y: self.position.y + Self::EYE_HEIGHT, ..self.position.clone() }
+        Vec3f {
+            y: self.position.y + Self::EYE_HEIGHT,
+            ..self.position.clone()
+        }
     }
 
     /// Flight is allowed: by the may-fly ability, or in creative or spectator mode, where BDS 1.26.52's abilities
     /// layer lacks it (`PlayerAction` StartFlying's game mode check grants the flight).
     pub fn may_fly(&self) -> bool {
-        self.abilities.may_fly || matches!(self.game_mode, GameMode::Creative | GameMode::Spectator | GameMode::CreativeSpectator)
+        self.abilities.may_fly
+            || matches!(
+                self.game_mode,
+                GameMode::Creative | GameMode::Spectator | GameMode::CreativeSpectator
+            )
     }
 
     /// In a bed, as the server shows it.
@@ -120,18 +131,32 @@ impl PlayerState {
     /// `SetEntityData` is routed here separately: it is not a movement packet (see `PACKETS`).
     pub(crate) fn apply_entity_data(&mut self, packet: &RawPacket) -> Result<(), DecodeError> {
         // Every entity's metadata arrives here; peek the leading runtime id so others cost no decode.
-        if acacia_client::proto::codec::read_varint64(&mut &packet.body[..])? != self.runtime_entity_id {
+        if acacia_client::proto::codec::read_varint64(&mut &packet.body[..])?
+            != self.runtime_entity_id
+        {
             return Ok(());
         }
         let p: SetEntityData = packet.decode()?;
         for item in p.metadata {
             match item.value {
-                Meta::FlagsExtended(f) => self.sleep_flags[0] = f.contains(MetadataFlags2::SLEEPING),
-                Meta::Default(MetadataDictionaryItemValueDefault::Byte(b)) if item.key == MetadataDictionaryItemKey::PlayerFlags => {
+                Meta::FlagsExtended(f) => {
+                    self.sleep_flags[0] = f.contains(MetadataFlags2::SLEEPING)
+                }
+                Meta::Default(MetadataDictionaryItemValueDefault::Byte(b))
+                    if item.key == MetadataDictionaryItemKey::PlayerFlags =>
+                {
                     self.sleep_flags[1] = b & PLAYER_FLAG_SLEEP != 0;
                 }
-                Meta::Default(MetadataDictionaryItemValueDefault::Short(v)) if item.key == MetadataDictionaryItemKey::Air => self.air.0 = v,
-                Meta::Default(MetadataDictionaryItemValueDefault::Short(v)) if item.key == MetadataDictionaryItemKey::MaxAirdataMaxAir => self.air.1 = v,
+                Meta::Default(MetadataDictionaryItemValueDefault::Short(v))
+                    if item.key == MetadataDictionaryItemKey::Air =>
+                {
+                    self.air.0 = v
+                }
+                Meta::Default(MetadataDictionaryItemValueDefault::Short(v))
+                    if item.key == MetadataDictionaryItemKey::MaxAirdataMaxAir =>
+                {
+                    self.air.1 = v
+                }
                 _ => {}
             }
         }
@@ -156,8 +181,14 @@ impl PlayerState {
                     self.position = feet(p.position);
                 }
             }
-            UpdateAttributes::ID if super::leading_entity(packet) == Some(self.runtime_entity_id) => {
-                packet.decode::<UpdateAttributes>()?.attributes.iter().for_each(|a| self.on_attribute(a));
+            UpdateAttributes::ID
+                if super::leading_entity(packet) == Some(self.runtime_entity_id) =>
+            {
+                packet
+                    .decode::<UpdateAttributes>()?
+                    .attributes
+                    .iter()
+                    .for_each(|a| self.on_attribute(a));
             }
             MobEffect::ID => {
                 let p: MobEffect = packet.decode()?;
@@ -173,7 +204,9 @@ impl PlayerState {
                 }
             }
             SetHealth::ID => self.set_health(packet.decode::<SetHealth>()?.health as f32),
-            SetPlayerGameType::ID => self.game_mode = packet.decode::<SetPlayerGameType>()?.gamemode,
+            SetPlayerGameType::ID => {
+                self.game_mode = packet.decode::<SetPlayerGameType>()?.gamemode
+            }
             UpdatePlayerGameType::ID => {
                 let p: UpdatePlayerGameType = packet.decode()?;
                 if p.player_unique_id == self.unique_entity_id {
@@ -256,7 +289,10 @@ impl PlayerState {
 }
 
 fn feet(eye: Vec3f) -> Vec3f {
-    Vec3f { y: eye.y - PlayerState::EYE_HEIGHT, ..eye }
+    Vec3f {
+        y: eye.y - PlayerState::EYE_HEIGHT,
+        ..eye
+    }
 }
 
 #[cfg(test)]

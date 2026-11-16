@@ -37,11 +37,18 @@ impl Station {
     }
 
     pub fn is_furnace(self) -> bool {
-        matches!(self, Station::Furnace | Station::BlastFurnace | Station::Smoker)
+        matches!(
+            self,
+            Station::Furnace | Station::BlastFurnace | Station::Smoker
+        )
     }
 
     pub(super) fn height(self) -> f32 {
-        if self == Station::Hopper { 133.0 } else { 166.0 }
+        if self == Station::Hopper {
+            133.0
+        } else {
+            166.0
+        }
     }
 
     /// Top of the player's three inventory rows.
@@ -58,11 +65,21 @@ impl Station {
     pub(super) fn slots(self) -> Vec<[f32; 2]> {
         match self {
             // Ingredient, fuel, result.
-            Station::Furnace | Station::BlastFurnace | Station::Smoker => vec![[56.0, 17.0], [56.0, 53.0], [116.0, 35.0]],
+            Station::Furnace | Station::BlastFurnace | Station::Smoker => {
+                vec![[56.0, 17.0], [56.0, 53.0], [116.0, 35.0]]
+            }
             Station::Hopper => (0..5).map(|i| [44.0 + SLOT * i as f32, 20.0]).collect(),
-            Station::Dispenser | Station::Dropper => (0..9).map(|i| [62.0 + SLOT * (i % 3) as f32, 17.0 + SLOT * (i / 3) as f32]).collect(),
+            Station::Dispenser | Station::Dropper => (0..9)
+                .map(|i| [62.0 + SLOT * (i % 3) as f32, 17.0 + SLOT * (i / 3) as f32])
+                .collect(),
             // Bedrock's order: the ingredient, three bottles, the blaze powder.
-            Station::Brewing => vec![[79.0, 17.0], [56.0, 51.0], [79.0, 58.0], [102.0, 51.0], [17.0, 17.0]],
+            Station::Brewing => vec![
+                [79.0, 17.0],
+                [56.0, 51.0],
+                [79.0, 58.0],
+                [102.0, 51.0],
+                [17.0, 17.0],
+            ],
         }
     }
 }

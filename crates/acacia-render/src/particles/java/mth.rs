@@ -7,7 +7,11 @@ const SCALE: f64 = 10430.378350470453;
 /// The 65536-entry float table at `index`, wrapped as Java casts it to long.
 fn table(index: f64) -> f32 {
     static TABLE: OnceLock<Box<[f32]>> = OnceLock::new();
-    let table = TABLE.get_or_init(|| (0..65536).map(|i| (f64::from(i) / SCALE).sin() as f32).collect());
+    let table = TABLE.get_or_init(|| {
+        (0..65536)
+            .map(|i| (f64::from(i) / SCALE).sin() as f32)
+            .collect()
+    });
     table[(index as i64 & 65535) as usize]
 }
 

@@ -13,14 +13,26 @@ use super::types::Type;
 use crate::particles::collide::Blocks;
 
 /// `Direction.values()` order, which `Direction.getRandom` indexes.
-pub const DIRECTIONS: [IVec3; 6] = [IVec3::NEG_Y, IVec3::Y, IVec3::NEG_Z, IVec3::Z, IVec3::NEG_X, IVec3::X];
+pub const DIRECTIONS: [IVec3; 6] = [
+    IVec3::NEG_Y,
+    IVec3::Y,
+    IVec3::NEG_Z,
+    IVec3::Z,
+    IVec3::NEG_X,
+    IVec3::X,
+];
 
 /// `CandleBlock.PARTICLE_OFFSETS` in sixteenths, by candle count.
 const CANDLE_WICKS: [&[[f64; 3]]; 4] = [
     &[[8.0, 8.0, 8.0]],
     &[[6.0, 7.0, 8.0], [10.0, 8.0, 7.0]],
     &[[8.0, 5.0, 10.0], [6.0, 7.0, 8.0], [9.0, 8.0, 7.0]],
-    &[[7.0, 5.0, 9.0], [10.0, 7.0, 9.0], [6.0, 7.0, 6.0], [9.0, 8.0, 6.0]],
+    &[
+        [7.0, 5.0, 9.0],
+        [10.0, 7.0, 9.0],
+        [6.0, 7.0, 6.0],
+        [9.0, 8.0, 6.0],
+    ],
 ];
 
 pub fn redstone() -> Options {
@@ -56,7 +68,11 @@ impl Engine {
             A::RedstoneTorch(wall) => {
                 let r = &mut self.animate;
                 let mut p = c + DVec3::new(0.5, 0.7, 0.5);
-                p += DVec3::new((r.next_double() - 0.5) * 0.2, (r.next_double() - 0.5) * 0.2, (r.next_double() - 0.5) * 0.2);
+                p += DVec3::new(
+                    (r.next_double() - 0.5) * 0.2,
+                    (r.next_double() - 0.5) * 0.2,
+                    (r.next_double() - 0.5) * 0.2,
+                );
                 if let Some(s) = wall {
                     p += DVec3::new(0.27 * f64::from(s.x), 0.22, 0.27 * f64::from(s.z));
                 }
@@ -66,9 +82,17 @@ impl Engine {
                 let r = &mut self.animate;
                 let _crackle = r.next_double() < 0.1;
                 let ss = r.next_double() * 0.6 - 0.3;
-                let dx = if facing.x != 0 { f64::from(facing.x) * 0.52 } else { ss };
+                let dx = if facing.x != 0 {
+                    f64::from(facing.x) * 0.52
+                } else {
+                    ss
+                };
                 let dy = r.next_double() * if blast { 9.0 } else { 6.0 } / 16.0;
-                let dz = if facing.z != 0 { f64::from(facing.z) * 0.52 } else { ss };
+                let dz = if facing.z != 0 {
+                    f64::from(facing.z) * 0.52
+                } else {
+                    ss
+                };
                 let p = c + DVec3::new(0.5, 0.0, 0.5) + DVec3::new(dx, dy, dz);
                 self.simple(Type::Smoke, p, zero);
                 if !blast {
@@ -77,7 +101,11 @@ impl Engine {
             }
             A::Smoker => {
                 let _sound = self.animate.next_double() < 0.1;
-                self.simple(Type::Smoke, c + DVec3::new(0.5, 0.0, 0.5) + DVec3::new(0.0, 1.1, 0.0), zero);
+                self.simple(
+                    Type::Smoke,
+                    c + DVec3::new(0.5, 0.0, 0.5) + DVec3::new(0.0, 1.1, 0.0),
+                    zero,
+                );
             }
             A::Campfire { lava } => {
                 if self.animate.next_int(10) == 0 {
@@ -87,7 +115,8 @@ impl Engine {
                     let mut i = 0;
                     while i < self.animate.next_int(1) + 1 {
                         let r = &mut self.animate;
-                        let v = DVec3::new(f(r.next_float() / 2.0), 5.0e-5, f(r.next_float() / 2.0));
+                        let v =
+                            DVec3::new(f(r.next_float() / 2.0), 5.0e-5, f(r.next_float() / 2.0));
                         self.simple(Type::Lava, c + DVec3::splat(0.5), v);
                         i += 1;
                     }
@@ -98,12 +127,20 @@ impl Engine {
                 if self.animate.next_int(100) == 0 {
                     self.sound(1);
                 }
-                let same = |s: IVec3| blocks.block(cell + s).is_some_and(|b| b.name == "minecraft:portal");
+                let same = |s: IVec3| {
+                    blocks
+                        .block(cell + s)
+                        .is_some_and(|b| b.name == "minecraft:portal")
+                };
                 let along_z = same(IVec3::NEG_X) || same(IVec3::X);
                 for _ in 0..4 {
                     let r = &mut self.animate;
                     let mut p = c + DVec3::new(r.next_double(), r.next_double(), r.next_double());
-                    let mut v = DVec3::new(f(r.next_float() - 0.5) * 0.5, f(r.next_float() - 0.5) * 0.5, f(r.next_float() - 0.5) * 0.5);
+                    let mut v = DVec3::new(
+                        f(r.next_float() - 0.5) * 0.5,
+                        f(r.next_float() - 0.5) * 0.5,
+                        f(r.next_float() - 0.5) * 0.5,
+                    );
                     let flip = f64::from(r.next_int(2) * 2 - 1);
                     if along_z {
                         p.z = c.z + 0.5 + 0.25 * flip;
@@ -124,11 +161,17 @@ impl Engine {
                                 continue;
                             }
                             let offset = IVec3::new(ox, oy, oz);
-                            if self.animate.next_int(16) != 0 || !level::bookshelf_reaches(blocks, cell, offset) {
+                            if self.animate.next_int(16) != 0
+                                || !level::bookshelf_reaches(blocks, cell, offset)
+                            {
                                 continue;
                             }
                             let r = &mut self.animate;
-                            let v = DVec3::new(f(ox as f32 + r.next_float()) - 0.5, f(oy as f32 - r.next_float() - 1.0), f(oz as f32 + r.next_float()) - 0.5);
+                            let v = DVec3::new(
+                                f(ox as f32 + r.next_float()) - 0.5,
+                                f(oy as f32 - r.next_float() - 1.0),
+                                f(oz as f32 + r.next_float()) - 0.5,
+                            );
                             self.simple(Type::Enchant, c + DVec3::new(0.5, 2.0, 0.5), v);
                         }
                     }
@@ -136,10 +179,19 @@ impl Engine {
             }
             A::EndRod(facing) => {
                 let r = &mut self.animate;
-                let p = c + DVec3::splat(0.55) - DVec3::new(f(r.next_float() * 0.1), f(r.next_float() * 0.1), f(r.next_float() * 0.1));
+                let p = c + DVec3::splat(0.55)
+                    - DVec3::new(
+                        f(r.next_float() * 0.1),
+                        f(r.next_float() * 0.1),
+                        f(r.next_float() * 0.1),
+                    );
                 let d = f(0.4 - (r.next_float() + r.next_float()) * 0.4);
                 if r.next_int(5) == 0 {
-                    let v = DVec3::new(r.next_gaussian() * 0.005, r.next_gaussian() * 0.005, r.next_gaussian() * 0.005);
+                    let v = DVec3::new(
+                        r.next_gaussian() * 0.005,
+                        r.next_gaussian() * 0.005,
+                        r.next_gaussian() * 0.005,
+                    );
                     self.simple(Type::EndRod, p + facing.as_dvec3() * d, v);
                 }
             }
@@ -155,7 +207,8 @@ impl Engine {
                     let at = cell + IVec3::new(x, y, z);
                     if !level::full_collision(blocks, at) {
                         let r = &mut self.animate;
-                        let p = at.as_dvec3() + DVec3::new(r.next_double(), r.next_double(), r.next_double());
+                        let p = at.as_dvec3()
+                            + DVec3::new(r.next_double(), r.next_double(), r.next_double());
                         self.simple(Type::SporeBlossomAir, p, zero);
                     }
                 }
@@ -165,7 +218,13 @@ impl Engine {
                     let d = DIRECTIONS[self.animate.next_int(6) as usize];
                     if d != IVec3::Y && !level::sturdy(blocks, cell + d) {
                         let r = &mut self.animate;
-                        let mut off = |s: i32| if s == 0 { r.next_double() } else { 0.5 + f64::from(s) * 0.6 };
+                        let mut off = |s: i32| {
+                            if s == 0 {
+                                r.next_double()
+                            } else {
+                                0.5 + f64::from(s) * 0.6
+                            }
+                        };
                         let p = c + DVec3::new(off(d.x), off(d.y), off(d.z));
                         self.simple(Type::DrippingObsidianTear, p, zero);
                     }
@@ -180,8 +239,13 @@ impl Engine {
                         p += DVec3::new(r.next_double(), -0.05, r.next_double());
                     } else {
                         p.y += r.next_double() * 0.8;
-                        let (along, across) = (r.next_double(), if d.x > 0 || d.z > 0 { 1.1 } else { 0.05 });
-                        p += if d.x != 0 { DVec3::new(across, 0.0, along) } else { DVec3::new(along, 0.0, across) };
+                        let (along, across) =
+                            (r.next_double(), if d.x > 0 || d.z > 0 { 1.1 } else { 0.05 });
+                        p += if d.x != 0 {
+                            DVec3::new(across, 0.0, along)
+                        } else {
+                            DVec3::new(along, 0.0, across)
+                        };
                     }
                     self.simple(Type::DrippingWater, p, zero);
                 }
@@ -201,7 +265,13 @@ impl Engine {
             A::CandleCake => self.candle(c + DVec3::new(0.5, 1.0, 0.5)),
             A::BrewingStand => {
                 let r = &mut self.animate;
-                let p = c + DVec3::new(0.4, 0.7, 0.4) + DVec3::new(f(r.next_float()) * 0.2, f(r.next_float()) * 0.3, f(r.next_float()) * 0.2);
+                let p = c
+                    + DVec3::new(0.4, 0.7, 0.4)
+                    + DVec3::new(
+                        f(r.next_float()) * 0.2,
+                        f(r.next_float()) * 0.3,
+                        f(r.next_float()) * 0.2,
+                    );
                 self.simple(Type::Smoke, p, zero);
             }
             A::EnderChest => {
@@ -210,8 +280,16 @@ impl Engine {
                     let fx = r.next_int(2) * 2 - 1;
                     let fz = r.next_int(2) * 2 - 1;
                     // `pos.getY() + random.nextFloat()` adds in float.
-                    let p = DVec3::new(c.x + 0.5 + 0.25 * f64::from(fx), f(cell.y as f32 + r.next_float()), c.z + 0.5 + 0.25 * f64::from(fz));
-                    let v = DVec3::new(f(r.next_float()) * f64::from(fx), f(r.next_float() - 0.5) * 0.125, f(r.next_float()) * f64::from(fz));
+                    let p = DVec3::new(
+                        c.x + 0.5 + 0.25 * f64::from(fx),
+                        f(cell.y as f32 + r.next_float()),
+                        c.z + 0.5 + 0.25 * f64::from(fz),
+                    );
+                    let v = DVec3::new(
+                        f(r.next_float()) * f64::from(fx),
+                        f(r.next_float() - 0.5) * 0.125,
+                        f(r.next_float()) * f64::from(fz),
+                    );
                     self.simple(Type::Portal, p, v);
                 }
             }
@@ -225,19 +303,30 @@ impl Engine {
     }
 
     /// `LeavesBlock` and `FallingParticlesLeavesBlock.animateTick`.
-    fn leaves_animate(&mut self, blocks: &impl Blocks, cell: IVec3, falling: Option<(Type, f32, Tint)>) {
+    fn leaves_animate(
+        &mut self,
+        blocks: &impl Blocks,
+        cell: IVec3,
+        falling: Option<(Type, f32, Tint)>,
+    ) {
         let below = cell - IVec3::Y;
-        if self.raining && level::sky_above(blocks, cell + IVec3::Y) && self.animate.next_int(15) == 1 && !level::sturdy(blocks, below) {
-            self.below(cell,Options::simple(Type::DrippingWater));
+        if self.raining
+            && level::sky_above(blocks, cell + IVec3::Y)
+            && self.animate.next_int(15) == 1
+            && !level::sturdy(blocks, below)
+        {
+            self.below(cell, Options::simple(Type::DrippingWater));
         }
-        let Some((ty, chance, tint)) = falling else { return };
+        let Some((ty, chance, tint)) = falling else {
+            return;
+        };
         if self.animate.next_float() < chance && !level::sturdy(blocks, below) {
             let options = match tint {
                 Tint::Foliage => Options::colored(ty, self.foliage),
                 Tint::Fixed(rgb) => Options::colored(ty, rgb),
                 Tint::Untinted => Options::simple(ty),
             };
-            self.below(cell,options);
+            self.below(cell, options);
         }
     }
 

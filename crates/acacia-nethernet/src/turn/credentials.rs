@@ -51,8 +51,12 @@ impl IceServers {
 
     pub fn from_json(root: &Value) -> Result<Self, TurnError> {
         let bad = |what: &str| TurnError::Config(format!("missing or bad {what}"));
-        let expires_in = root["ExpirationInSeconds"].as_u64().ok_or_else(|| bad("ExpirationInSeconds"))?;
-        let servers = root["TurnAuthServers"].as_array().ok_or_else(|| bad("TurnAuthServers"))?;
+        let expires_in = root["ExpirationInSeconds"]
+            .as_u64()
+            .ok_or_else(|| bad("ExpirationInSeconds"))?;
+        let servers = root["TurnAuthServers"]
+            .as_array()
+            .ok_or_else(|| bad("TurnAuthServers"))?;
         let servers = servers
             .iter()
             .map(|s| {
@@ -61,16 +65,24 @@ impl IceServers {
                 Ok(IceServer {
                     username: text("Username")?,
                     password: text("Password")?,
-                    urls: urls.iter().map(|u| u.as_str().ok_or_else(|| bad("Urls"))?.parse()).collect::<Result<_, _>>()?,
+                    urls: urls
+                        .iter()
+                        .map(|u| u.as_str().ok_or_else(|| bad("Urls"))?.parse())
+                        .collect::<Result<_, _>>()?,
                 })
             })
             .collect::<Result<_, TurnError>>()?;
-        Ok(Self { expires_in: Duration::from_secs(expires_in), servers })
+        Ok(Self {
+            expires_in: Duration::from_secs(expires_in),
+            servers,
+        })
     }
 
     /// Every `(url, server)` pair, for picking STUN and UDP TURN endpoints.
     pub fn urls(&self) -> impl Iterator<Item = (&IceUrl, &IceServer)> {
-        self.servers.iter().flat_map(|s| s.urls.iter().map(move |u| (u, s)))
+        self.servers
+            .iter()
+            .flat_map(|s| s.urls.iter().map(move |u| (u, s)))
     }
 }
 
@@ -113,7 +125,12 @@ impl FromStr for IceUrl {
         if host.is_empty() {
             return Err(bad());
         }
-        Ok(Self { scheme, host: host.to_owned(), port, transport })
+        Ok(Self {
+            scheme,
+            host: host.to_owned(),
+            port,
+            transport,
+        })
     }
 }
 
@@ -129,22 +146,42 @@ mod tests {
         assert_eq!(ice.expires_in, Duration::from_secs(86400));
         let s = &ice.servers[0];
         assert_eq!((s.username.as_str(), s.password.as_str()), ("u1", "p1"));
-        let url = |scheme, host: &str, port, transport| IceUrl { scheme, host: host.into(), port, transport };
-        assert_eq!(s.urls, [
-            url(Scheme::Stun, "relay.example.net", 3478, Transport::Udp),
-            url(Scheme::Turn, "relay.example.net", 3478, Transport::Udp),
-            url(Scheme::Turns, "2001:db8::1", 5349, Transport::Tcp),
-        ]);
+        let url = |scheme, host: &str, port, transport| IceUrl {
+            scheme,
+            host: host.into(),
+            port,
+            transport,
+        };
+        assert_eq!(
+            s.urls,
+            [
+                url(Scheme::Stun, "relay.example.net", 3478, Transport::Udp),
+                url(Scheme::Turn, "relay.example.net", 3478, Transport::Udp),
+                url(Scheme::Turns, "2001:db8::1", 5349, Transport::Tcp),
+            ]
+        );
         assert_eq!(ice.urls().count(), 3);
     }
 
     #[test]
     fn rejects_bad_input() {
-        for url in ["http://x", "turn:", "turn:h:port", "turn:h?transport=sctp", "turn:[::1"] {
+        for url in [
+            "http://x",
+            "turn:",
+            "turn:h:port",
+            "turn:h?transport=sctp",
+            "turn:[::1",
+        ] {
             assert!(url.parse::<IceUrl>().is_err(), "{url}");
         }
-        assert_eq!("TURN:h?transport=TCP".parse::<IceUrl>().unwrap().transport, Transport::Tcp);
+        assert_eq!(
+            "TURN:h?transport=TCP".parse::<IceUrl>().unwrap().transport,
+            Transport::Tcp
+        );
         assert!(IceServers::parse(r#"{"TurnAuthServers":[]}"#).is_err());
-        assert!(IceServers::parse(r#"{"ExpirationInSeconds":1,"TurnAuthServers":[{"Username":"u"}]}"#).is_err());
+        assert!(
+            IceServers::parse(r#"{"ExpirationInSeconds":1,"TurnAuthServers":[{"Username":"u"}]}"#)
+                .is_err()
+        );
     }
 }

@@ -53,7 +53,23 @@ pub struct LeapCtl {
 impl LeapCtl {
     pub fn new(target: BlockPos, feet: f32, jump: JumpAt, coast: Option<u8>, aim: Aim) -> Self {
         let (t, air, grounded, jumped, origin, takeoff) = (0, 0, false, false, None, None);
-        Self { target, feet, wet: false, jump, coast, yaw_off: 0.0, air_aim: false, slack: false, aim, t, air, grounded, jumped, origin, takeoff }
+        Self {
+            target,
+            feet,
+            wet: false,
+            jump,
+            coast,
+            yaw_off: 0.0,
+            air_aim: false,
+            slack: false,
+            aim,
+            t,
+            air,
+            grounded,
+            jumped,
+            origin,
+            takeoff,
+        }
     }
 
     /// The tick the jump was pressed on, once it was.
@@ -68,11 +84,15 @@ impl LeapCtl {
 
     fn landed(&self, b: &Body) -> bool {
         if self.wet {
-            return b.cell() == [self.target[0], self.target[2]] && b.pos[1] < (self.target[1] + 1) as f32;
+            return b.cell() == [self.target[0], self.target[2]]
+                && b.pos[1] < (self.target[1] + 1) as f32;
         }
         if self.slack {
             let [x, z] = b.cell();
-            return b.on_ground && (b.pos[1] - self.feet).abs() < LAND_EPS && (x - self.target[0]).abs() <= 1 && (z - self.target[2]).abs() <= 1;
+            return b.on_ground
+                && (b.pos[1] - self.feet).abs() < LAND_EPS
+                && (x - self.target[0]).abs() <= 1
+                && (z - self.target[2]).abs() <= 1;
         }
         standing_on(b, self.target, self.feet)
     }
@@ -85,7 +105,12 @@ impl LeapCtl {
 }
 
 impl Controller for LeapCtl {
-    fn step(&mut self, b: &Body, peek: &mut dyn FnMut(&Controls) -> Body, c: &mut Controls) -> Phase {
+    fn step(
+        &mut self,
+        b: &Body,
+        peek: &mut dyn FnMut(&Controls) -> Body,
+        c: &mut Controls,
+    ) -> Phase {
         let origin = *self.origin.get_or_insert([b.pos[0], b.pos[2]]);
         if self.air > 0 && self.landed(b) {
             return Phase::Done;
@@ -111,7 +136,9 @@ impl Controller for LeapCtl {
         (c.strafe, c.sneak, c.jump, c.pitch) = (0.0, false, false, 0.0);
         let coasting = self.coast.is_some_and(|k| self.air >= u16::from(k));
         if b.on_ground {
-            c.yaw = self.aim.turn(b.yaw, yaw_to(b, centre(self.target)) + self.yaw_off);
+            c.yaw = self
+                .aim
+                .turn(b.yaw, yaw_to(b, centre(self.target)) + self.yaw_off);
         } else if self.air_aim && !coasting {
             c.yaw = self.aim.turn(b.yaw, yaw_to(b, centre(self.target)));
         }

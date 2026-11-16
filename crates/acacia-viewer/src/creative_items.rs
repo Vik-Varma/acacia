@@ -14,6 +14,17 @@ pub struct CreativeEntry {
 }
 
 pub fn creative(bot: &Bot) -> Vec<CreativeEntry> {
-    let entry = |i: &acacia_bot::state::CreativeItem| Some(CreativeEntry { id: i.entry_id, stack: stack_of(bot, &i.stack)?, tab: i.tab as usize });
-    bot.state().creative.items().iter().filter_map(entry).collect()
+    let entry = |i: &acacia_bot::state::CreativeItem| {
+        Some(CreativeEntry {
+            id: i.entry_id,
+            stack: stack_of(bot, &i.stack)?,
+            tab: i.tab as usize,
+        })
+    };
+    bot.state()
+        .creative
+        .items()
+        .iter()
+        .filter_map(entry)
+        .collect()
 }

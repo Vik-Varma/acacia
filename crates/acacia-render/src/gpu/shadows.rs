@@ -15,12 +15,23 @@ impl Renderer {
             Some(scene) => {
                 let light = self.light_cache.reader(Some(&**scene.light()));
                 let realm = Realm::of(&scene.world().dimension());
-                let ground = shadows::WorldGround { world: scene.world(), table: scene.table(), light: |p| light.at(p), sky_darken: sky.darken() as i32 };
-                shadows::quads(&self.shadows, camera, &ground, shadows::ambient_light(realm))
+                let ground = shadows::WorldGround {
+                    world: scene.world(),
+                    table: scene.table(),
+                    light: |p| light.at(p),
+                    sky_darken: sky.darken() as i32,
+                };
+                shadows::quads(
+                    &self.shadows,
+                    camera,
+                    &ground,
+                    shadows::ambient_light(realm),
+                )
             }
             None => Vec::new(),
         };
-        self.shadow_pass.prepare(&self.device, &self.queue, &vertices);
+        self.shadow_pass
+            .prepare(&self.device, &self.queue, &vertices);
     }
 }
 
@@ -35,23 +46,36 @@ impl ShadowPass {
     pub fn new(device: &wgpu::Device, color: wgpu::TextureFormat, globals: &wgpu::Buffer) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shadows"),
-            source: wgpu::ShaderSource::Wgsl(concat!(include_str!("globals.wgsl"), include_str!("shadows.wgsl")).into()),
+            source: wgpu::ShaderSource::Wgsl(
+                concat!(include_str!("globals.wgsl"), include_str!("shadows.wgsl")).into(),
+            ),
         });
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("shadows"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
                 count: None,
             }],
         });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("shadows"),
             layout: &layout,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: globals.as_entire_binding() }],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: globals.as_entire_binding(),
+            }],
         });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("shadows"), bind_group_layouts: &[Some(&layout)], immediate_size: 0 });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("shadows"),
+            bind_group_layouts: &[Some(&layout)],
+            immediate_size: 0,
+        });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("shadows"),
             layout: Some(&pipeline_layout),
@@ -83,16 +107,30 @@ impl ShadowPass {
             multiview_mask: None,
             cache: None,
         });
-        ShadowPass { pipeline, bind_group, vertices: None, count: 0 }
+        ShadowPass {
+            pipeline,
+            bind_group,
+            vertices: None,
+            count: 0,
+        }
     }
 
-    pub fn prepare(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, vertices: &[ShadowVertex]) {
+    pub fn prepare(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        vertices: &[ShadowVertex],
+    ) {
         self.count = vertices.len() as u32;
         if vertices.is_empty() {
             return;
         }
         let bytes: &[u8] = bytemuck::cast_slice(vertices);
-        if self.vertices.as_ref().is_none_or(|b| b.size() < bytes.len() as u64) {
+        if self
+            .vertices
+            .as_ref()
+            .is_none_or(|b| b.size() < bytes.len() as u64)
+        {
             self.vertices = Some(device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("shadows"),
                 size: bytes.len().next_power_of_two() as u64,
@@ -104,7 +142,9 @@ impl ShadowPass {
     }
 
     pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
-        let Some(vertices) = self.vertices.as_ref().filter(|_| self.count > 0) else { return };
+        let Some(vertices) = self.vertices.as_ref().filter(|_| self.count > 0) else {
+            return;
+        };
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.set_vertex_buffer(0, vertices.slice(..));

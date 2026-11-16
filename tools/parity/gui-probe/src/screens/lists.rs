@@ -23,7 +23,11 @@ fn str_of(v: &Value) -> &str {
 
 fn key(v: &Value) -> Key {
     let value = v[1].as_i64().unwrap_or(0) as i32;
-    if str_of(&v[0]) == "mouse" { Key::mouse(value) } else { Key::keyboard(value) }
+    if str_of(&v[0]) == "mouse" {
+        Key::mouse(value)
+    } else {
+        Key::keyboard(value)
+    }
 }
 
 fn pack(v: &Value, selected: bool, lang: &std::collections::HashMap<String, String>) -> Pack {
@@ -51,7 +55,12 @@ fn pack(v: &Value, selected: bool, lang: &std::collections::HashMap<String, Stri
 pub fn replay(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<GuiDraw> {
     let lang = lang(assets);
     let tr = |k: &str| lang.get(k).cloned();
-    let env = Env { width: int(c, "width", 427), height: int(c, "height", 240), in_world: true, blur: int(c, "blur", 5) >= 1 };
+    let env = Env {
+        width: int(c, "width", 427),
+        height: int(c, "height", 240),
+        in_world: true,
+        blur: int(c, "blur", 5) >= 1,
+    };
     let mut gui = Gui::new(env.width, env.height);
     let mouse = ints(&c["mouse"]);
     let mut ctx = Ctx::new(&mut gui, assets.font.as_ref(), &tr, (mouse[0], mouse[1]));
@@ -67,14 +76,26 @@ pub fn replay(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<Gui
                     }
                 }
             }
-            let k = KeyBinds { mappings: &mappings, selected: c["selected"].as_str(), os: Os::Linux, drawn_before: flag(c, "warm", false) };
+            let k = KeyBinds {
+                mappings: &mappings,
+                selected: c["selected"].as_str(),
+                os: Os::Linux,
+                drawn_before: flag(c, "warm", false),
+            };
             let mut s = keybinds::build(&ctx, env, &k);
             s.lists[0].set_scroll(f64::from(int(c, "scroll", 0)));
             s
         }
         "language" => {
-            let languages: Vec<Language> = c["languages"].as_array().into_iter().flatten()
-                .map(|l| Language { code: str_of(&l[0]).into(), name: str_of(&l[1]).into(), region: str_of(&l[2]).into() })
+            let languages: Vec<Language> = c["languages"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|l| Language {
+                    code: str_of(&l[0]).into(),
+                    name: str_of(&l[1]).into(),
+                    region: str_of(&l[2]).into(),
+                })
                 .collect();
             let list_focused = flag(c, "listFocus", false);
             let l = Languages {
@@ -89,9 +110,20 @@ pub fn replay(c: &Value, assets: &Assets, _: &mut Map<String, Value>) -> Vec<Gui
             language::build(&ctx, env, &l)
         }
         "packs" => {
-            let list = |k: &str, selected: bool| c[k].as_array().into_iter().flatten().map(|p| pack(p, selected, lang)).collect::<Vec<_>>();
+            let list = |k: &str, selected: bool| {
+                c[k].as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|p| pack(p, selected, lang))
+                    .collect::<Vec<_>>()
+            };
             let (available, selected) = (list("available", false), list("selected", true));
-            let focus = c["focus"].as_array().map(|f| (f[0].as_u64().unwrap_or(0) as usize, f[1].as_u64().unwrap_or(0) as usize));
+            let focus = c["focus"].as_array().map(|f| {
+                (
+                    f[0].as_u64().unwrap_or(0) as usize,
+                    f[1].as_u64().unwrap_or(0) as usize,
+                )
+            });
             let scroll = ints(&c["scroll"]);
             let p = Packs {
                 title: text(&c["title"], lang),

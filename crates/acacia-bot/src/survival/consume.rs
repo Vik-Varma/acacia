@@ -2,7 +2,7 @@ use acacia_client::proto::packets::{EntityEvent, EntityEventEventId};
 use acacia_client::proto::types::{GameMode, InputData};
 
 use super::food::{always_consumable, use_ticks};
-use super::item_use::{eating_data, ItemUse, Snapshot, UseTick};
+use super::item_use::{ItemUse, Snapshot, UseTick, eating_data};
 use crate::human::USE_RELEASE;
 use crate::interact::wire;
 use crate::{ActionError, Bot};
@@ -33,16 +33,27 @@ impl Bot {
         }
         let held = self.state.item(self.state.inventory.held());
         let Some((held, ticks)) = held.and_then(|i| Some((i, use_ticks(i)?))) else {
-            return Err(ActionError::NotPossible(format!("cannot eat or drink {held:?}")));
+            return Err(ActionError::NotPossible(format!(
+                "cannot eat or drink {held:?}"
+            )));
         };
         let p = &self.state.player;
-        let hungry = p.hunger < 20.0 || !matches!(p.game_mode, GameMode::Survival | GameMode::Adventure);
+        let hungry =
+            p.hunger < 20.0 || !matches!(p.game_mode, GameMode::Survival | GameMode::Adventure);
         if !hungry && !always_consumable(held) {
-            return Err(ActionError::NotPossible(format!("not hungry enough to eat {held}")));
+            return Err(ActionError::NotPossible(format!(
+                "not hungry enough to eat {held}"
+            )));
         }
         let release = self.human.ticks_between(USE_RELEASE);
         let slot = self.state.inventory.selected_hotbar_slot;
-        self.survival.item_use = Some(ItemUse::new(slot, self.use_snapshot(), ticks, release, auto));
+        self.survival.item_use = Some(ItemUse::new(
+            slot,
+            self.use_snapshot(),
+            ticks,
+            release,
+            auto,
+        ));
         self.survival.result = None;
         self.send_bedrock(&wire::click_air(self.hand()));
         #[cfg(feature = "java")]
@@ -55,8 +66,13 @@ impl Bot {
     /// Runs the item use one client tick on.
     pub(crate) fn tick_item_use(&mut self) {
         let snapshot = self.use_snapshot();
-        let (selected, alive) = (self.state.inventory.selected_hotbar_slot, self.state.player.alive);
-        let Some(item_use) = self.survival.item_use.as_mut() else { return };
+        let (selected, alive) = (
+            self.state.inventory.selected_hotbar_slot,
+            self.state.player.alive,
+        );
+        let Some(item_use) = self.survival.item_use.as_mut() else {
+            return;
+        };
         match item_use.tick(&snapshot, selected, alive) {
             UseTick::Nothing => {}
             UseTick::Effect => {
@@ -91,7 +107,12 @@ impl Bot {
     fn use_snapshot(&self) -> Snapshot {
         let held = self.state.inventory.held();
         let p = &self.state.player;
-        Snapshot { network_id: held.network_id, count: held.count, hunger: p.hunger, saturation: p.saturation }
+        Snapshot {
+            network_id: held.network_id,
+            count: held.count,
+            hunger: p.hunger,
+            saturation: p.saturation,
+        }
     }
 
     fn set_using_item(&mut self, on: bool) {

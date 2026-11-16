@@ -22,7 +22,12 @@ pub enum Alpha {
 }
 
 fn open(path: &Path) -> Result<image::RgbaImage, Error> {
-    Ok(image::open(path).map_err(|source| Error::Image { path: path.display().to_string(), source })?.into_rgba8())
+    Ok(image::open(path)
+        .map_err(|source| Error::Image {
+            path: path.display().to_string(),
+            source,
+        })?
+        .into_rgba8())
 }
 
 impl Texture {
@@ -37,7 +42,9 @@ impl Texture {
     pub fn load_frames(path: &Path, quad: bool) -> Result<Vec<Texture>, Error> {
         let img = open(path)?;
         let (w, h) = img.dimensions();
-        Ok((0..(h / w.min(h)).max(1)).map(|i| Texture::tile(&img, i, quad)).collect())
+        Ok((0..(h / w.min(h)).max(1))
+            .map(|i| Texture::tile(&img, i, quad))
+            .collect())
     }
 
     fn tile(img: &image::RgbaImage, index: u32, quad: bool) -> Texture {
@@ -47,7 +54,10 @@ impl Texture {
         let mut rgba = Box::new([0; TEXEL_BYTES]);
         for y in 0..TEXTURE_SIZE {
             for x in 0..TEXTURE_SIZE {
-                let p = img.get_pixel(x * frame / TEXTURE_SIZE, index * side + y * frame / TEXTURE_SIZE);
+                let p = img.get_pixel(
+                    x * frame / TEXTURE_SIZE,
+                    index * side + y * frame / TEXTURE_SIZE,
+                );
                 let i = ((y * TEXTURE_SIZE + x) * 4) as usize;
                 rgba[i..i + 4].copy_from_slice(&p.0);
             }
@@ -61,17 +71,27 @@ impl Texture {
         for (i, px) in rgba.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let (x, y) = (i as u32 % TEXTURE_SIZE, i as u32 / TEXTURE_SIZE);
             let magenta = (x / 8 + y / 8) % 2 == 0;
-            px.copy_from_slice(if magenta { &[248, 0, 248, 255] } else { &[0, 0, 0, 255] });
+            px.copy_from_slice(if magenta {
+                &[248, 0, 248, 255]
+            } else {
+                &[0, 0, 0, 255]
+            });
         }
         Texture { rgba }
     }
 
     pub fn alpha(&self) -> Alpha {
-        self.rgba.as_chunks::<4>().0.iter().map(|p| match p[3] {
-            255 => Alpha::Opaque,
-            0 => Alpha::Cutout,
-            _ => Alpha::Blended,
-        }).max().unwrap_or(Alpha::Opaque)
+        self.rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|p| match p[3] {
+                255 => Alpha::Opaque,
+                0 => Alpha::Cutout,
+                _ => Alpha::Blended,
+            })
+            .max()
+            .unwrap_or(Alpha::Opaque)
     }
 
     /// Mip chain below this level (8×8 down to 1×1), box-filtered. Cutout texels average only
@@ -84,14 +104,25 @@ impl Texture {
             let mut next = vec![0u8; half * half * 4];
             for y in 0..half {
                 for x in 0..half {
-                    let texels = [(0, 0), (1, 0), (0, 1), (1, 1)].map(|(dx, dy)| ((y * 2 + dy) * size + x * 2 + dx) * 4);
-                    let opaque: Vec<usize> = texels.iter().copied().filter(|&i| prev[i + 3] > 0).collect();
-                    let src = if opaque.is_empty() { &texels[..] } else { &opaque[..] };
+                    let texels = [(0, 0), (1, 0), (0, 1), (1, 1)]
+                        .map(|(dx, dy)| ((y * 2 + dy) * size + x * 2 + dx) * 4);
+                    let opaque: Vec<usize> = texels
+                        .iter()
+                        .copied()
+                        .filter(|&i| prev[i + 3] > 0)
+                        .collect();
+                    let src = if opaque.is_empty() {
+                        &texels[..]
+                    } else {
+                        &opaque[..]
+                    };
                     let o = (y * half + x) * 4;
                     for c in 0..3 {
-                        next[o + c] = (src.iter().map(|&i| prev[i + c] as u32).sum::<u32>() / src.len() as u32) as u8;
+                        next[o + c] = (src.iter().map(|&i| prev[i + c] as u32).sum::<u32>()
+                            / src.len() as u32) as u8;
                     }
-                    next[o + 3] = (texels.iter().map(|&i| prev[i + 3] as u32).sum::<u32>() / 4) as u8;
+                    next[o + 3] =
+                        (texels.iter().map(|&i| prev[i + 3] as u32).sum::<u32>() / 4) as u8;
                 }
             }
             levels.push(next.clone());

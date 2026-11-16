@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use acacia_physics::BlockPos;
 
+use super::PathNode;
 use super::boat::{BoatSource, HEURISTIC_FLOOR};
 use super::costs;
 use super::favour::Favour;
@@ -13,7 +14,6 @@ use super::hazard::Hazards;
 use super::kit::Kit;
 use super::macros::MacroStats;
 use super::profile::MovementProfile;
-use super::PathNode;
 use crate::movement::Envelope;
 
 #[derive(Debug, Clone)]
@@ -86,7 +86,12 @@ impl SearchOpts {
     /// faster still (design decision 7).
     pub(crate) fn speed(&self, env: &'static Envelope) -> Speed {
         let mut s = if self.macros {
-            Speed { per_block: costs::macro_ticks_per_block(env, self.profile), startup: costs::MACRO_STARTUP, overlap: true, env }
+            Speed {
+                per_block: costs::macro_ticks_per_block(env, self.profile),
+                startup: costs::MACRO_STARTUP,
+                overlap: true,
+                env,
+            }
         } else {
             Speed::classic(env)
         };

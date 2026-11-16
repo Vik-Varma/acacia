@@ -18,12 +18,20 @@ pub struct Scene {
 
 impl Scene {
     pub fn new() -> Scene {
-        Scene { registry: BlockRegistry::vanilla(), placed: Vec::new(), liquids: Vec::new() }
+        Scene {
+            registry: BlockRegistry::vanilla(),
+            placed: Vec::new(),
+            liquids: Vec::new(),
+        }
     }
 
     /// Empty `properties` takes the block's first state.
     fn id(&self, name: &str, properties: &str) -> u32 {
-        let id = if properties.is_empty() { self.registry.states_of(name).next().map(|(id, _)| id) } else { self.registry.find(name, properties) };
+        let id = if properties.is_empty() {
+            self.registry.states_of(name).next().map(|(id, _)| id)
+        } else {
+            self.registry.find(name, properties)
+        };
         id.unwrap_or_else(|| panic!("vanilla state {name}[{properties}]"))
     }
 
@@ -43,18 +51,38 @@ impl Scene {
 
 impl Blocks for Scene {
     fn block(&self, cell: IVec3) -> Option<&BlockState> {
-        let placed = self.placed.iter().rev().find(|(c, _)| *c == cell).map(|(_, id)| *id);
-        let id = placed.unwrap_or_else(|| self.id(if cell.y < 64 { "minecraft:stone" } else { "minecraft:air" }, ""));
+        let placed = self
+            .placed
+            .iter()
+            .rev()
+            .find(|(c, _)| *c == cell)
+            .map(|(_, id)| *id);
+        let id = placed.unwrap_or_else(|| {
+            self.id(
+                if cell.y < 64 {
+                    "minecraft:stone"
+                } else {
+                    "minecraft:air"
+                },
+                "",
+            )
+        });
         self.registry.get(id)
     }
 
     fn liquid(&self, cell: IVec3) -> Option<&BlockState> {
-        self.liquids.iter().rev().find(|(c, _)| *c == cell).and_then(|(_, id)| self.registry.get(*id))
+        self.liquids
+            .iter()
+            .rev()
+            .find(|(c, _)| *c == cell)
+            .and_then(|(_, id)| self.registry.get(*id))
     }
 }
 
 fn made(ty: Type, p: DVec3, v: DVec3, seed: i64) -> Particle {
-    Engine::seeded(1).probe_create(&Options::simple(ty), p, v, seed, &Scene::new()).expect("a particle")
+    Engine::seeded(1)
+        .probe_create(&Options::simple(ty), p, v, seed, &Scene::new())
+        .expect("a particle")
 }
 
 const UP: DVec3 = DVec3::new(0.5, 65.0, 0.5);
@@ -74,7 +102,11 @@ fn a_moving_particle_is_jittered_to_a_random_speed_and_lifted() {
     let mut r = JavaRandom::new(9);
     let q = Particle::base_moving(&mut r, Type::Smoke, UP, DVec3::ZERO);
     let horizontal = q.velocity.with_y(0.0).length();
-    assert!(horizontal <= 0.15 * 3.0 * 0.4 + 1e-9 && q.velocity.y > 0.0, "{}", q.velocity);
+    assert!(
+        horizontal <= 0.15 * 3.0 * 0.4 + 1e-9 && q.velocity.y > 0.0,
+        "{}",
+        q.velocity
+    );
 }
 
 #[test]
@@ -84,14 +116,24 @@ fn flames_jitter_their_spot_but_not_their_box() {
     assert!((12..=44).contains(&q.lifetime), "{}", q.lifetime);
     let mut q = q;
     q.base_tick(&Scene::new());
-    let centre = DVec3::new((q.bb_min.x + q.bb_max.x) / 2.0, q.bb_min.y, (q.bb_min.z + q.bb_max.z) / 2.0);
-    assert_eq!(q.position, centre, "the first move snaps it back onto its box");
+    let centre = DVec3::new(
+        (q.bb_min.x + q.bb_max.x) / 2.0,
+        q.bb_min.y,
+        (q.bb_min.z + q.bb_max.z) / 2.0,
+    );
+    assert_eq!(
+        q.position, centre,
+        "the first move snaps it back onto its box"
+    );
     assert_eq!((q.size_curve, q.glow), (Size::Flame, Glow::AgeEmission));
 }
 
 #[test]
 fn a_small_flame_is_half_a_flame() {
-    let (big, small) = (made(Type::Flame, UP, DVec3::ZERO, 7), made(Type::SmallFlame, UP, DVec3::ZERO, 7));
+    let (big, small) = (
+        made(Type::Flame, UP, DVec3::ZERO, 7),
+        made(Type::SmallFlame, UP, DVec3::ZERO, 7),
+    );
     assert_eq!(small.size, big.size * 0.5);
     assert_eq!(small.bb_width, 0.1);
 }
@@ -100,14 +142,20 @@ fn a_small_flame_is_half_a_flame() {
 fn smoke_rises_slows_and_steps_its_sprites_by_age() {
     let scene = Scene::new();
     let mut engine = Engine::seeded(1);
-    let mut q = engine.probe_create(&Options::simple(Type::Smoke), UP, DVec3::ZERO, 11, &scene).unwrap();
+    let mut q = engine
+        .probe_create(&Options::simple(Type::Smoke), UP, DVec3::ZERO, 11, &scene)
+        .unwrap();
     assert_eq!(q.sprite, Some("generic_7"));
     let y = q.position.y;
     for _ in 0..q.lifetime {
         engine.probe_tick(&mut q, &scene);
     }
     assert!(q.position.y > y && !q.removed);
-    assert_eq!(q.sprite, Some("generic_0"), "the last frame at the end of its life");
+    assert_eq!(
+        q.sprite,
+        Some("generic_0"),
+        "the last frame at the end of its life"
+    );
     engine.probe_tick(&mut q, &scene);
     assert!(q.removed);
 }
@@ -117,14 +165,26 @@ fn quad_sizes_follow_each_classes_curve() {
     let mut q = made(Type::Lava, UP, DVec3::ZERO, 1);
     q.lifetime = 10;
     q.age = 5;
-    assert!((q.quad_size(0.0) - q.size * 0.75).abs() < 1e-6, "lava: 1 - t²");
+    assert!(
+        (q.quad_size(0.0) - q.size * 0.75).abs() < 1e-6,
+        "lava: 1 - t²"
+    );
     q.size_curve = Size::Flame;
-    assert!((q.quad_size(0.0) - q.size * 0.875).abs() < 1e-6, "flame: 1 - t²/2");
+    assert!(
+        (q.quad_size(0.0) - q.size * 0.875).abs() < 1e-6,
+        "flame: 1 - t²/2"
+    );
     q.size_curve = Size::Portal;
-    assert!((q.quad_size(0.0) - q.size * 0.75).abs() < 1e-6, "portal: 1 - (1 - t)²");
+    assert!(
+        (q.quad_size(0.0) - q.size * 0.75).abs() < 1e-6,
+        "portal: 1 - (1 - t)²"
+    );
     q.size_curve = Size::GrowIn;
     q.age = 0;
-    assert!((q.quad_size(0.16) - q.size * 0.512).abs() < 1e-6, "full within a 32nd of its life");
+    assert!(
+        (q.quad_size(0.16) - q.size * 0.512).abs() < 1e-6,
+        "full within a 32nd of its life"
+    );
 }
 
 #[test]
@@ -153,7 +213,9 @@ fn lava_leaves_smoke_more_early_on() {
     let scene = Scene::new();
     let mut engine = Engine::seeded(3);
     engine.requested = Some(Vec::new());
-    let mut q = engine.probe_create(&Options::simple(Type::Lava), UP, DVec3::ZERO, 21, &scene).unwrap();
+    let mut q = engine
+        .probe_create(&Options::simple(Type::Lava), UP, DVec3::ZERO, 21, &scene)
+        .unwrap();
     for _ in 0..4 {
         engine.probe_tick(&mut q, &scene);
     }
@@ -166,14 +228,26 @@ fn a_drip_lands_in_the_fluid_it_dripped_from() {
     let mut scene = Scene::new();
     scene.flood(IVec3::new(0, 64, 0), "minecraft:water", 0);
     let mut engine = Engine::seeded(1);
-    let mut q = engine.probe_create(&Options::simple(Type::FallingWater), DVec3::new(0.5, 65.5, 0.5), DVec3::ZERO, 5, &scene).unwrap();
+    let mut q = engine
+        .probe_create(
+            &Options::simple(Type::FallingWater),
+            DVec3::new(0.5, 65.5, 0.5),
+            DVec3::ZERO,
+            5,
+            &scene,
+        )
+        .unwrap();
     for _ in 0..40 {
         engine.probe_tick(&mut q, &scene);
         if q.removed {
             break;
         }
     }
-    assert!(q.removed && q.position.y < 65.0 && q.position.y > 64.0, "{}", q.position.y);
+    assert!(
+        q.removed && q.position.y < 65.0 && q.position.y > 64.0,
+        "{}",
+        q.position.y
+    );
 }
 
 #[test]
@@ -181,7 +255,15 @@ fn bubbles_pop_out_of_water() {
     let mut scene = Scene::new();
     scene.flood(IVec3::new(0, 64, 0), "minecraft:water", 0);
     let mut engine = Engine::seeded(1);
-    let mut q = engine.probe_create(&Options::simple(Type::Bubble), DVec3::new(0.5, 64.5, 0.5), DVec3::new(0.0, 0.5, 0.0), 8, &scene).unwrap();
+    let mut q = engine
+        .probe_create(
+            &Options::simple(Type::Bubble),
+            DVec3::new(0.5, 64.5, 0.5),
+            DVec3::new(0.0, 0.5, 0.0),
+            8,
+            &scene,
+        )
+        .unwrap();
     for _ in 0..q.lifetime + 1 {
         engine.probe_tick(&mut q, &scene);
     }
@@ -208,10 +290,21 @@ fn a_note_is_coloured_by_its_pitch() {
 #[test]
 fn far_spawns_are_dropped_unless_the_type_overrides_the_limiter() {
     let mut engine = Engine::seeded(1);
-    engine.add(&Options::simple(Type::Flame), DVec3::new(40.0, 65.0, 0.0), DVec3::ZERO);
-    engine.add(&Options::simple(Type::Poof), DVec3::new(40.0, 65.0, 0.0), DVec3::ZERO);
+    engine.add(
+        &Options::simple(Type::Flame),
+        DVec3::new(40.0, 65.0, 0.0),
+        DVec3::ZERO,
+    );
+    engine.add(
+        &Options::simple(Type::Poof),
+        DVec3::new(40.0, 65.0, 0.0),
+        DVec3::ZERO,
+    );
     engine.tick(&Scene::new());
-    assert_eq!(engine.particles.iter().map(|q| q.ty).collect::<Vec<_>>(), [Type::Poof]);
+    assert_eq!(
+        engine.particles.iter().map(|q| q.ty).collect::<Vec<_>>(),
+        [Type::Poof]
+    );
 }
 
 #[test]
@@ -222,8 +315,17 @@ fn an_explosion_seed_scatters_six_puffs_a_tick_for_eight_ticks() {
     for _ in 0..10 {
         engine.tick(&scene);
     }
-    let puffs = engine.particles.iter().filter(|q| q.ty == Type::Explosion).count();
-    assert!(engine.particles.iter().all(|q| q.ty != Type::ExplosionEmitter));
+    let puffs = engine
+        .particles
+        .iter()
+        .filter(|q| q.ty == Type::Explosion)
+        .count();
+    assert!(
+        engine
+            .particles
+            .iter()
+            .all(|q| q.ty != Type::ExplosionEmitter)
+    );
     assert!(puffs > 0 && puffs <= 48, "{puffs}");
 }
 
@@ -233,16 +335,49 @@ fn probes_dump_a_blocks_effects_and_a_particles_life() {
     let torch = IVec3::new(0, 64, 0);
     scene.place(torch, "minecraft:torch", "torch_facing_direction=top");
     let ticks = probe::block(&scene, torch, 5, 3, 0, &[]);
-    assert_eq!(ticks.iter().map(|t| (t.spawns.len(), t.particles.len())).collect::<Vec<_>>(), [(2, 2), (2, 4), (2, 6)]);
-    assert_eq!(ticks, probe::block(&scene, torch, 5, 3, 0, &[]), "the same seed, the same dump");
-    let life = probe::particle(&scene, &Options::simple(Type::Smoke), UP, DVec3::ZERO, 8, 100, &[]);
+    assert_eq!(
+        ticks
+            .iter()
+            .map(|t| (t.spawns.len(), t.particles.len()))
+            .collect::<Vec<_>>(),
+        [(2, 2), (2, 4), (2, 6)]
+    );
+    assert_eq!(
+        ticks,
+        probe::block(&scene, torch, 5, 3, 0, &[]),
+        "the same seed, the same dump"
+    );
+    let life = probe::particle(
+        &scene,
+        &Options::simple(Type::Smoke),
+        UP,
+        DVec3::ZERO,
+        8,
+        100,
+        &[],
+    );
     let lived = life.iter().take_while(|t| !t.particles.is_empty()).count() as i32;
-    assert_eq!(lived, life[0].particles[0].lifetime + 1, "admitted unticked, then each tick of its life");
+    assert_eq!(
+        lived,
+        life[0].particles[0].lifetime + 1,
+        "admitted unticked, then each tick of its life"
+    );
     assert_eq!(life[0].particles[0].sprite, Some("generic_7"));
     let mut seeds = probe::Seeds::default();
     seeds.insert(probe::key(Type::Smoke, UP, DVec3::ZERO), 77);
-    let given = probe::particle(&scene, &Options::simple(Type::Smoke), UP, DVec3::ZERO, 8, 1, &[seeds]);
-    assert_eq!(given[0].particles[0].seed, 77, "a particle Java made takes Java's seed");
+    let given = probe::particle(
+        &scene,
+        &Options::simple(Type::Smoke),
+        UP,
+        DVec3::ZERO,
+        8,
+        1,
+        &[seeds],
+    );
+    assert_eq!(
+        given[0].particles[0].seed, 77,
+        "a particle Java made takes Java's seed"
+    );
 }
 
 #[test]
@@ -256,7 +391,11 @@ fn the_engine_is_deterministic_for_a_seed() {
         for _ in 0..5 {
             engine.tick(&scene);
         }
-        engine.particles.iter().map(|q| (q.position, q.lifetime, q.sprite)).collect::<Vec<_>>()
+        engine
+            .particles
+            .iter()
+            .map(|q| (q.position, q.lifetime, q.sprite))
+            .collect::<Vec<_>>()
     };
     assert_eq!(run(), run());
 }

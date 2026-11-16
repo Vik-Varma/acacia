@@ -15,7 +15,10 @@ use super::{Open, Target, player};
 use crate::stations::{brewing_data, furnace_data};
 
 fn container(slots: impl IntoIterator<Item = u8>) -> Vec<Target> {
-    slots.into_iter().map(|i| Target::Slot(SlotRef::Container(i))).collect()
+    slots
+        .into_iter()
+        .map(|i| Target::Slot(SlotRef::Container(i)))
+        .collect()
 }
 
 /// The container's slots, then the player's.
@@ -37,13 +40,24 @@ pub(super) fn chest(kit: &mut Kit, slots: usize) -> (Open, Vec<Target>) {
         _ if rows == 6 => "container.chestDouble",
         _ => "container.chest",
     };
-    let kind = if shulker { Kind::Shulker } else { Kind::Chest { rows } };
+    let kind = if shulker {
+        Kind::Shulker
+    } else {
+        Kind::Chest { rows }
+    };
     simple(kit, kind, title, targets(0..(rows * 9) as u8))
 }
 
 fn simple(kit: &mut Kit, kind: Kind, title: &str, targets: Vec<Target>) -> (Open, Vec<Target>) {
     let [w, h] = kit.size();
-    let mut s = Simple::new(kind, w, h, kit.title(title), kit.inventory_title(), kit.env.font);
+    let mut s = Simple::new(
+        kind,
+        w,
+        h,
+        kit.title(title),
+        kit.inventory_title(),
+        kit.env.font,
+    );
     fill(kit, &mut s.base, &targets);
     (Open::Simple(s), targets)
 }
@@ -60,7 +74,14 @@ pub(super) fn station(kit: &mut Kit, station: Station) -> (Open, Vec<Target>) {
         Station::Brewing => {
             // Java's bottles, ingredient, fuel; Bedrock's ingredient, bottles, fuel.
             let targets = targets([1, 2, 3, 0, 4]);
-            let mut s = Brewing::new(w, h, kit.title("container.brewing"), kit.inventory_title(), brewing_data(data), kit.env.font);
+            let mut s = Brewing::new(
+                w,
+                h,
+                kit.title("container.brewing"),
+                kit.inventory_title(),
+                brewing_data(data),
+                kit.env.font,
+            );
             fill(kit, &mut s.base, &targets);
             (Open::Brewing(s), targets)
         }
@@ -70,7 +91,10 @@ pub(super) fn station(kit: &mut Kit, station: Station) -> (Open, Vec<Target>) {
                 Station::Smoker => (BookKind::Smoker, "container.smoker"),
                 _ => (BookKind::Furnace, "container.furnace"),
             };
-            let (window, title) = (Window::Furnace(furnace_data(station, data)), kit.title(title));
+            let (window, title) = (
+                Window::Furnace(furnace_data(station, data)),
+                kit.title(title),
+            );
             player::recipe_screen(kit, kind, window, title, targets(0..3))
         }
     }
@@ -82,7 +106,14 @@ pub(super) fn crafter(kit: &mut Kit) -> (Open, Vec<Target>) {
     let mut targets = targets(0..9);
     targets.push(Target::None);
     // Which slots are disabled and whether it is powered come in its block entity, not tracked: none, unpowered.
-    let mut s = Crafter::new(w, h, kit.title("container.crafter"), kit.inventory_title(), [0; 10], kit.env.font);
+    let mut s = Crafter::new(
+        w,
+        h,
+        kit.title("container.crafter"),
+        kit.inventory_title(),
+        [0; 10],
+        kit.env.font,
+    );
     fill(kit, &mut s.base, &targets);
     (Open::Crafter(s), targets)
 }

@@ -22,7 +22,8 @@ pub(crate) struct MountBody {
 impl Player {
     /// Width and height.
     pub(crate) fn size(&self) -> (f32, f32) {
-        self.mount.map_or((WIDTH, self.pose.height()), |m| (m.width, m.height))
+        self.mount
+            .map_or((WIDTH, self.pose.height()), |m| (m.width, m.height))
     }
 
     pub(crate) fn step_height(&self) -> f32 {
@@ -31,6 +32,7 @@ impl Player {
 
     /// Mobs' default eye height; it only decides the 0.4 fluid jump threshold and eye-in-fluid flags.
     pub(crate) fn eye_height(&self) -> f32 {
-        self.mount.map_or(self.pose.eye_height(), |m| m.height * 0.85)
+        self.mount
+            .map_or(self.pose.eye_height(), |m| m.height * 0.85)
     }
 }

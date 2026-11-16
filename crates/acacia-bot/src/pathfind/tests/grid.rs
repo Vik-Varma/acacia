@@ -39,7 +39,8 @@ impl Grid {
         let mut view = ChunkView::new(World::new(registry.clone(), 0, BlockIds::Runtime));
         for cx in -r..=r {
             for cz in -r..=r {
-                view.insert_sub_chunk(cx, 0, cz, EMPTY_SECTION).expect("empty section");
+                view.insert_sub_chunk(cx, 0, cz, EMPTY_SECTION)
+                    .expect("empty section");
             }
         }
         Self { view, registry }
@@ -57,19 +58,34 @@ impl Grid {
         let full = format!("minecraft:{name}");
         let want: Vec<&str> = props.split(',').filter(|s| !s.is_empty()).collect();
         let mut states = self.registry.states_of(&full);
-        let found = states.find(|(_, s)| want.iter().all(|kv| s.properties.split(',').any(|p| p == *kv)));
+        let found = states.find(|(_, s)| {
+            want.iter()
+                .all(|kv| s.properties.split(',').any(|p| p == *kv))
+        });
         match found {
             Some((id, _)) => id,
             None => {
-                let all: Vec<_> = self.registry.states_of(&full).map(|(_, s)| s.properties).take(8).collect();
+                let all: Vec<_> = self
+                    .registry
+                    .states_of(&full)
+                    .map(|(_, s)| s.properties)
+                    .take(8)
+                    .collect();
                 panic!("no state {full} [{props}]; some states: {all:?}")
             }
         }
     }
 
     pub fn set_state(&self, [x, y, z]: BlockPos, name: &str, props: &str) -> &Self {
-        let id = if name == "air" { self.registry.air_id() } else { self.id(name, props) };
-        assert!(self.view.set_block(x, y, z, 0, id), "outside the loaded grid");
+        let id = if name == "air" {
+            self.registry.air_id()
+        } else {
+            self.id(name, props)
+        };
+        assert!(
+            self.view.set_block(x, y, z, 0, id),
+            "outside the loaded grid"
+        );
         self
     }
 
@@ -94,10 +110,21 @@ impl Grid {
     /// closed, as the live step does: not a toggle.
     pub fn set_open(&self, [x, y, z]: BlockPos, want: bool) {
         for pos in [[x, y, z], [x, y + 1, z]] {
-            let state = self.registry.get(self.view.block(pos[0], pos[1], pos[2])).expect("known block");
-            let Some(open) = state.property("open_bit") else { continue };
-            let flipped = state.properties.replace(&format!("open_bit={open}"), &format!("open_bit={}", u8::from(want)));
-            let id = self.registry.find(state.name, &flipped).expect("toggled state");
+            let state = self
+                .registry
+                .get(self.view.block(pos[0], pos[1], pos[2]))
+                .expect("known block");
+            let Some(open) = state.property("open_bit") else {
+                continue;
+            };
+            let flipped = state.properties.replace(
+                &format!("open_bit={open}"),
+                &format!("open_bit={}", u8::from(want)),
+            );
+            let id = self
+                .registry
+                .find(state.name, &flipped)
+                .expect("toggled state");
             self.view.set_block(pos[0], pos[1], pos[2], 0, id);
         }
     }
@@ -107,6 +134,9 @@ impl Grid {
     }
 
     pub fn physics(&self) -> PhysicsWorld<'_> {
-        PhysicsWorld { view: &self.view, registry: &self.registry }
+        PhysicsWorld {
+            view: &self.view,
+            registry: &self.registry,
+        }
     }
 }

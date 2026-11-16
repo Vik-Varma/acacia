@@ -50,7 +50,11 @@ pub struct Reply2 {
 }
 
 fn expect_id(r: &mut Reader, id: u8) -> Result<()> {
-    if r.u8()? == id { Ok(()) } else { Err(WireError::Malformed("unexpected packet id")) }
+    if r.u8()? == id {
+        Ok(())
+    } else {
+        Err(WireError::Malformed("unexpected packet id"))
+    }
 }
 
 pub fn unconnected_ping(out: &mut BytesMut, time: i64, client_guid: u64) {
@@ -68,7 +72,11 @@ pub fn parse_pong(data: &[u8]) -> Result<Pong> {
     r.magic()?;
     let len = r.u16_be()?;
     let motd = String::from_utf8_lossy(r.take(len.into())?).into_owned();
-    Ok(Pong { time, server_guid, motd })
+    Ok(Pong {
+        time,
+        server_guid,
+        motd,
+    })
 }
 
 /// Padded so the datagram plus IP/UDP headers equals `mtu`: the server infers our MTU from its size.
@@ -87,7 +95,11 @@ pub fn parse_reply_1(data: &[u8]) -> Result<Reply1> {
     let server_guid = r.u64_be()?;
     let cookie = if r.bool()? { Some(r.u32_be()?) } else { None };
     let mtu = r.u16_be()?;
-    Ok(Reply1 { server_guid, cookie, mtu })
+    Ok(Reply1 {
+        server_guid,
+        cookie,
+        mtu,
+    })
 }
 
 pub fn open_connection_request_2(
@@ -115,7 +127,11 @@ pub fn parse_reply_2(data: &[u8]) -> Result<Reply2> {
     let server_guid = r.u64_be()?;
     let client_addr = r.addr()?;
     let mtu = r.u16_be()?;
-    Ok(Reply2 { server_guid, client_addr, mtu })
+    Ok(Reply2 {
+        server_guid,
+        client_addr,
+        mtu,
+    })
 }
 
 /// Both ping IDs: 0x02 ("open connections only") is answered the same way.
@@ -188,7 +204,11 @@ pub fn parse_request_2(data: &[u8], with_cookie: bool) -> Result<Request2> {
         None
     };
     r.addr()?;
-    Ok(Request2 { cookie, mtu: r.u16_be()?, client_guid: r.u64_be()? })
+    Ok(Request2 {
+        cookie,
+        mtu: r.u16_be()?,
+        client_guid: r.u64_be()?,
+    })
 }
 
 pub fn reply_2(out: &mut BytesMut, server_guid: u64, client: SocketAddr, mtu: u16) {
@@ -211,27 +231,68 @@ mod tests {
         assert_eq!(parse_request_1(&buf).unwrap(), (11, 1400));
         let mut buf = BytesMut::new();
         reply_1(&mut buf, 9, None, 1400);
-        assert_eq!(parse_reply_1(&buf).unwrap(), Reply1 { server_guid: 9, cookie: None, mtu: 1400 });
+        assert_eq!(
+            parse_reply_1(&buf).unwrap(),
+            Reply1 {
+                server_guid: 9,
+                cookie: None,
+                mtu: 1400
+            }
+        );
         let mut buf = BytesMut::new();
         reply_1(&mut buf, 9, Some(0xdead_beef), 1400);
-        assert_eq!(parse_reply_1(&buf).unwrap(), Reply1 { server_guid: 9, cookie: Some(0xdead_beef), mtu: 1400 });
+        assert_eq!(
+            parse_reply_1(&buf).unwrap(),
+            Reply1 {
+                server_guid: 9,
+                cookie: Some(0xdead_beef),
+                mtu: 1400
+            }
+        );
 
         let client: SocketAddr = "10.0.0.2:5000".parse().unwrap();
         for cookie in [None, Some(0xdead_beef)] {
             let mut buf = BytesMut::new();
-            open_connection_request_2(&mut buf, cookie, "10.0.0.1:19132".parse().unwrap(), 1400, 77);
-            assert_eq!(parse_request_2(&buf, cookie.is_some()).unwrap(), Request2 { cookie, mtu: 1400, client_guid: 77 });
+            open_connection_request_2(
+                &mut buf,
+                cookie,
+                "10.0.0.1:19132".parse().unwrap(),
+                1400,
+                77,
+            );
+            assert_eq!(
+                parse_request_2(&buf, cookie.is_some()).unwrap(),
+                Request2 {
+                    cookie,
+                    mtu: 1400,
+                    client_guid: 77
+                }
+            );
         }
         let mut buf = BytesMut::new();
         reply_2(&mut buf, 9, client, 1400);
-        assert_eq!(parse_reply_2(&buf).unwrap(), Reply2 { server_guid: 9, client_addr: client, mtu: 1400 });
+        assert_eq!(
+            parse_reply_2(&buf).unwrap(),
+            Reply2 {
+                server_guid: 9,
+                client_addr: client,
+                mtu: 1400
+            }
+        );
 
         let mut buf = BytesMut::new();
         unconnected_ping(&mut buf, 123, 5);
         assert_eq!(parse_unconnected_ping(&buf).unwrap(), 123);
         let mut buf = BytesMut::new();
         unconnected_pong(&mut buf, 123, 9, "MCPE;x");
-        assert_eq!(parse_pong(&buf).unwrap(), Pong { time: 123, server_guid: 9, motd: "MCPE;x".into() });
+        assert_eq!(
+            parse_pong(&buf).unwrap(),
+            Pong {
+                time: 123,
+                server_guid: 9,
+                motd: "MCPE;x".into()
+            }
+        );
     }
 
     #[test]
@@ -253,7 +314,11 @@ mod tests {
         buf.put_u16(1400);
         assert_eq!(
             parse_reply_1(&buf).unwrap(),
-            Reply1 { server_guid: 42, cookie: Some(0xdead_beef), mtu: 1400 }
+            Reply1 {
+                server_guid: 42,
+                cookie: Some(0xdead_beef),
+                mtu: 1400
+            }
         );
 
         let mut buf = BytesMut::new();

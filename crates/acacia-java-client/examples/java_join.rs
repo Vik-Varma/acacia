@@ -7,7 +7,9 @@ use acacia_java_proto::ids;
 use acacia_registry::BlockState;
 
 fn name(state: Option<u32>) -> String {
-    state.and_then(BlockState::from_java_id).map_or("unloaded".into(), |s| s.block().name().to_string())
+    state
+        .and_then(BlockState::from_java_id)
+        .map_or("unloaded".into(), |s| s.block().name().to_string())
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -34,9 +36,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let world = &client.world;
     let [x, y, z] = client.pose.position.map(|v| v.floor() as i32);
-    println!("{} at {:?}: {} chunks, {sections} sections, {wrong} with a wrong block count, {} entities", world.dimension, client.pose.position, world.chunk_count(), world.entities.len());
-    println!("probe set={} fill={} other_fill={}", name(world.block([x, y + 3, z])), name(world.block([x + 1, y + 3, z + 1])), name(world.block([x + 2, y + 3, z + 2])));
-    let moved = world.entities.values().filter(|e| e.position.iter().all(|v| v.is_finite()) && (-64.0..400.0).contains(&e.position[1])).count();
+    println!(
+        "{} at {:?}: {} chunks, {sections} sections, {wrong} with a wrong block count, {} entities",
+        world.dimension,
+        client.pose.position,
+        world.chunk_count(),
+        world.entities.len()
+    );
+    println!(
+        "probe set={} fill={} other_fill={}",
+        name(world.block([x, y + 3, z])),
+        name(world.block([x + 1, y + 3, z + 1])),
+        name(world.block([x + 2, y + 3, z + 2]))
+    );
+    let moved = world
+        .entities
+        .values()
+        .filter(|e| {
+            e.position.iter().all(|v| v.is_finite()) && (-64.0..400.0).contains(&e.position[1])
+        })
+        .count();
     println!("entities with sane positions: {moved}");
     Ok(())
 }

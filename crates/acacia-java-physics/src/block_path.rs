@@ -7,7 +7,12 @@ use crate::mth::{floor, length_sqr};
 
 /// Calls `visit(cell, iteration)` for each cell the box ending at `target` passes through on the way from `from` to
 /// `to`; `visit` returning false stops the walk.
-pub(crate) fn for_each_cell_between(from: [f64; 3], to: [f64; 3], target: &Aabb, mut visit: impl FnMut([i32; 3], u32) -> bool) {
+pub(crate) fn for_each_cell_between(
+    from: [f64; 3],
+    to: [f64; 3],
+    target: &Aabb,
+    mut visit: impl FnMut([i32; 3], u32) -> bool,
+) {
     let travel = sub(to, from);
     if length_sqr(travel) < (1.0E-5_f32 * 1.0E-5_f32) as f64 {
         let (low, high) = (target.min.map(floor), target.max.map(floor));
@@ -30,7 +35,9 @@ pub(crate) fn for_each_cell_between(from: [f64; 3], to: [f64; 3], target: &Aabb,
         }
         seen.insert(cell);
     }
-    let Some(iterations) = along_travel(&mut seen, travel, target, &mut visit) else { return };
+    let Some(iterations) = along_travel(&mut seen, travel, target, &mut visit) else {
+        return;
+    };
     for cell in corners_in_direction(target.min.map(floor), target.max.map(floor), travel) {
         if seen.insert(cell) && !visit(cell, iterations + 1) {
             return;
@@ -40,17 +47,43 @@ pub(crate) fn for_each_cell_between(from: [f64; 3], to: [f64; 3], target: &Aabb,
 
 /// `addCollisionsAlongTravel`: steps the leading corner cell by cell, visiting the box's cross-section at each;
 /// `None` when `visit` stopped the walk.
-fn along_travel(seen: &mut HashSet<[i32; 3]>, travel: [f64; 3], target: &Aabb, visit: &mut impl FnMut([i32; 3], u32) -> bool) -> Option<u32> {
+fn along_travel(
+    seen: &mut HashSet<[i32; 3]>,
+    travel: [f64; 3],
+    target: &Aabb,
+    visit: &mut impl FnMut([i32; 3], u32) -> bool,
+) -> Option<u32> {
     let size = sub(target.max, target.min);
     let corner = furthest_corner(travel);
     let center = [0, 1, 2].map(|a| (target.min[a] + target.max[a]) * 0.5);
     let to_corner = [0, 1, 2].map(|a| center[a] + size[a] * 0.5 * corner[a] as f64);
     let from_corner = sub(to_corner, travel);
     let mut cell = from_corner.map(floor);
-    let sign = travel.map(|v| if v > 0.0 { 1 } else if v < 0.0 { -1 } else { 0 });
-    let t_delta = [0, 1, 2].map(|a| if sign[a] == 0 { f64::MAX } else { sign[a] as f64 / travel[a] });
+    let sign = travel.map(|v| {
+        if v > 0.0 {
+            1
+        } else if v < 0.0 {
+            -1
+        } else {
+            0
+        }
+    });
+    let t_delta = [0, 1, 2].map(|a| {
+        if sign[a] == 0 {
+            f64::MAX
+        } else {
+            sign[a] as f64 / travel[a]
+        }
+    });
     let frac = |v: f64| v - v.floor();
-    let mut t = [0, 1, 2].map(|a| t_delta[a] * if sign[a] > 0 { 1.0 - frac(from_corner[a]) } else { frac(from_corner[a]) });
+    let mut t = [0, 1, 2].map(|a| {
+        t_delta[a]
+            * if sign[a] > 0 {
+                1.0 - frac(from_corner[a])
+            } else {
+                frac(from_corner[a])
+            }
+    });
     let mut iterations = 0;
     while t[0] <= 1.0 || t[1] <= 1.0 || t[2] <= 1.0 {
         let axis = if t[0] < t[1] {
@@ -62,11 +95,17 @@ fn along_travel(seen: &mut HashSet<[i32; 3]>, travel: [f64; 3], target: &Aabb, v
         };
         cell[axis] += sign[axis];
         t[axis] += t_delta[axis];
-        let block = Aabb { min: cell.map(f64::from), max: cell.map(|v| f64::from(v) + 1.0) };
-        let Some(hit) = clip(&block, from_corner, to_corner) else { continue };
+        let block = Aabb {
+            min: cell.map(f64::from),
+            max: cell.map(|v| f64::from(v) + 1.0),
+        };
+        let Some(hit) = clip(&block, from_corner, to_corner) else {
+            continue;
+        };
         iterations += 1;
         let margin = 1.0E-5_f32 as f64;
-        let hit = [0, 1, 2].map(|a| hit[a].clamp(cell[a] as f64 + margin, cell[a] as f64 + 1.0 - margin));
+        let hit =
+            [0, 1, 2].map(|a| hit[a].clamp(cell[a] as f64 + margin, cell[a] as f64 + 1.0 - margin));
         let opposite = [0, 1, 2].map(|a| floor(hit[a] - size[a] * corner[a] as f64));
         for c in corners_in_direction(cell, opposite, travel) {
             if seen.insert(c) && !visit(c, iterations) {
@@ -93,10 +132,17 @@ fn furthest_corner(d: [f64; 3]) -> [i32; 3] {
 /// `BlockPos.betweenCornersInDirection`: the box of cells, walked from the corner `direction` leaves, the axes in
 /// `Direction.axisStepOrder` with the last one fastest.
 fn corners_in_direction(a: [i32; 3], b: [i32; 3], direction: [f64; 3]) -> Vec<[i32; 3]> {
-    let (low, high) = ([0, 1, 2].map(|i| a[i].min(b[i])), [0, 1, 2].map(|i| a[i].max(b[i])));
+    let (low, high) = (
+        [0, 1, 2].map(|i| a[i].min(b[i])),
+        [0, 1, 2].map(|i| a[i].max(b[i])),
+    );
     let start = [0, 1, 2].map(|i| if direction[i] >= 0.0 { low[i] } else { high[i] });
     let step = direction.map(|v| if v >= 0.0 { 1 } else { -1 });
-    let order = if direction[0].abs() < direction[2].abs() { [1, 2, 0] } else { [1, 0, 2] };
+    let order = if direction[0].abs() < direction[2].abs() {
+        [1, 2, 0]
+    } else {
+        [1, 0, 2]
+    };
     let mut cells = Vec::new();
     for i in 0..=high[order[0]] - low[order[0]] {
         for j in 0..=high[order[1]] - low[order[1]] {
@@ -129,7 +175,8 @@ fn clip(area: &Aabb, from: [f64; 3], to: [f64; 3]) -> Option<[f64; 3]> {
         let s = (face - from[a]) / d[a];
         let pb = from[b] + s * d[b];
         let pc = from[c] + s * d[c];
-        let inside = |p: f64, axis: usize| area.min[axis] - 1.0E-7 < p && p < area.max[axis] + 1.0E-7;
+        let inside =
+            |p: f64, axis: usize| area.min[axis] - 1.0E-7 < p && p < area.max[axis] + 1.0E-7;
         if 0.0 < s && s < scale && inside(pb, b) && inside(pc, c) {
             scale = s;
             hit = true;
@@ -148,7 +195,10 @@ mod tests {
 
     #[test]
     fn a_long_fall_visits_every_cell_on_the_way() {
-        let target = Aabb { min: [0.2, 0.2, 0.2], max: [0.8, 1.0, 0.8] };
+        let target = Aabb {
+            min: [0.2, 0.2, 0.2],
+            max: [0.8, 1.0, 0.8],
+        };
         let mut ys = Vec::new();
         for_each_cell_between([0.5, 5.2, 0.5], [0.5, 0.2, 0.5], &target, |cell, _| {
             ys.push(cell[1]);
@@ -161,7 +211,10 @@ mod tests {
 
     #[test]
     fn standing_still_walks_x_fastest() {
-        let target = Aabb { min: [0.5, 0.5, 0.5], max: [1.5, 0.9, 1.5] };
+        let target = Aabb {
+            min: [0.5, 0.5, 0.5],
+            max: [1.5, 0.9, 1.5],
+        };
         let mut cells = Vec::new();
         for_each_cell_between([1.0; 3], [1.0; 3], &target, |cell, _| {
             cells.push(cell);

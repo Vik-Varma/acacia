@@ -40,7 +40,12 @@ pub enum Input {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Click {
     /// `slot` indexes `Base::slots`; `outside` is the window's slot id -999.
-    Slot { slot: Option<usize>, outside: bool, button: i32, input: Input },
+    Slot {
+        slot: Option<usize>,
+        outside: bool,
+        button: i32,
+        input: Input,
+    },
     /// Quick-craft `kind` (0 split, 1 one each, 2 a full stack each) over `slots`.
     QuickCraft { kind: i32, slots: Vec<usize> },
 }
@@ -66,7 +71,9 @@ pub enum Key {
     Hotbar(i32),
     SwapOffhand,
     /// `keyDrop`; with Control the whole stack.
-    Drop { all: bool },
+    Drop {
+        all: bool,
+    },
     Pick,
 }
 
@@ -87,7 +94,11 @@ pub struct Pointer {
 impl Pointer {
     /// The drag as `extractSlot` and `extractCarriedItem` read it.
     pub fn quick(&self) -> Option<QuickCraft> {
-        self.quick_crafting.then(|| QuickCraft { kind: self.quick_kind, slots: self.quick_slots.clone(), remainder: 0 })
+        self.quick_crafting.then(|| QuickCraft {
+            kind: self.quick_kind,
+            slots: self.quick_slots.clone(),
+            remainder: 0,
+        })
     }
 }
 
@@ -101,25 +112,43 @@ fn target<S: Screen + ?Sized>(s: &S, mouse: [f64; 2]) -> (Option<usize>, bool) {
 }
 
 /// `mouseClicked` after the widgets; `cloning` is the pick key on a player with infinite materials.
-pub fn mouse_clicked<S: Screen + ?Sized>(s: &S, p: &mut Pointer, mouse: [f64; 2], button: Button, shift: bool, double: bool, cloning: bool) -> Vec<Click> {
+pub fn mouse_clicked<S: Screen + ?Sized>(
+    s: &S,
+    p: &mut Pointer,
+    mouse: [f64; 2],
+    button: Button,
+    shift: bool,
+    double: bool,
+    cloning: bool,
+) -> Vec<Click> {
     let (slot, outside) = target(s, mouse);
     p.double_click = p.last_click_slot == slot && double;
     p.skip_next_release = false;
     let mut out = Vec::new();
     // Otherwise checkHotbarMouseClicked: hotbar keys bound to mouse buttons, which are not bound here.
-    if (matches!(button, Button::Left | Button::Right) || cloning) && (slot.is_some() || outside) && !p.quick_crafting {
+    if (matches!(button, Button::Left | Button::Right) || cloning)
+        && (slot.is_some() || outside)
+        && !p.quick_crafting
+    {
         if s.base().carried().is_none() {
             let input = if cloning {
                 Input::Clone
             } else if !outside && shift {
-                p.last_quick_moved = slot.and_then(|i| s.base().slots[i].item.clone()).filter(|s| !s.is_empty());
+                p.last_quick_moved = slot
+                    .and_then(|i| s.base().slots[i].item.clone())
+                    .filter(|s| !s.is_empty());
                 Input::QuickMove
             } else if outside {
                 Input::Throw
             } else {
                 Input::Pickup
             };
-            out.push(Click::Slot { slot: slot.filter(|_| !outside), outside, button: button.num(), input });
+            out.push(Click::Slot {
+                slot: slot.filter(|_| !outside),
+                outside,
+                button: button.num(),
+                input,
+            });
             p.skip_next_release = true;
         } else {
             p.quick_crafting = true;
@@ -139,24 +168,48 @@ pub fn mouse_clicked<S: Screen + ?Sized>(s: &S, p: &mut Pointer, mouse: [f64; 2]
 
 /// `mouseDragged`: the slot under the mouse joins the quick craft if it can take the carried stack.
 pub fn mouse_dragged<S: Screen + ?Sized>(s: &S, p: &mut Pointer, mouse: [f64; 2]) {
-    let Some(i) = hovered_slot(s, at(mouse)) else { return };
-    let Some(carried) = s.base().carried() else { return };
+    let Some(i) = hovered_slot(s, at(mouse)) else {
+        return;
+    };
+    let Some(carried) = s.base().carried() else {
+        return;
+    };
     let slot = &s.base().slots[i];
     let room = carried.count as usize > p.quick_slots.len() || p.quick_kind == 2;
-    if p.quick_crafting && room && can_quick_replace(slot, carried) && slot.drag_target && !p.quick_slots.contains(&i) {
+    if p.quick_crafting
+        && room
+        && can_quick_replace(slot, carried)
+        && slot.drag_target
+        && !p.quick_slots.contains(&i)
+    {
         p.quick_slots.push(i);
     }
 }
 
 /// `mouseReleased`.
-pub fn mouse_released<S: Screen + ?Sized>(s: &S, p: &mut Pointer, mouse: [f64; 2], button: Button, shift: bool, cloning: bool) -> Vec<Click> {
+pub fn mouse_released<S: Screen + ?Sized>(
+    s: &S,
+    p: &mut Pointer,
+    mouse: [f64; 2],
+    button: Button,
+    shift: bool,
+    cloning: bool,
+) -> Vec<Click> {
     let (slot, outside) = target(s, mouse);
     let mut out = Vec::new();
     // canTakeItemForPickAll: the menus here refuse exactly the slots they refuse drags to.
-    if p.double_click && button == Button::Left && slot.is_some_and(|i| s.base().slots[i].drag_target) {
+    if p.double_click
+        && button == Button::Left
+        && slot.is_some_and(|i| s.base().slots[i].drag_target)
+    {
         // TODO: Shift's variant quick-moves every stack like the last one from the slot's container, which Slot doesn't name.
         if !shift {
-            out.push(Click::Slot { slot, outside: false, button: 0, input: Input::PickupAll });
+            out.push(Click::Slot {
+                slot,
+                outside: false,
+                button: 0,
+                input: Input::PickupAll,
+            });
         }
         p.double_click = false;
     } else {
@@ -171,11 +224,16 @@ pub fn mouse_released<S: Screen + ?Sized>(s: &S, p: &mut Pointer, mouse: [f64; 2
             return out;
         }
         if p.quick_crafting && !p.quick_slots.is_empty() {
-            out.push(Click::QuickCraft { kind: p.quick_kind, slots: p.quick_slots.clone() });
+            out.push(Click::QuickCraft {
+                kind: p.quick_kind,
+                slots: p.quick_slots.clone(),
+            });
         } else if s.base().carried().is_some() {
             let quick = !outside && shift && !cloning;
             if quick {
-                p.last_quick_moved = slot.and_then(|i| s.base().slots[i].item.clone()).filter(|s| !s.is_empty());
+                p.last_quick_moved = slot
+                    .and_then(|i| s.base().slots[i].item.clone())
+                    .filter(|s| !s.is_empty());
             }
             let input = if cloning {
                 Input::Clone
@@ -184,7 +242,12 @@ pub fn mouse_released<S: Screen + ?Sized>(s: &S, p: &mut Pointer, mouse: [f64; 2
             } else {
                 Input::Pickup
             };
-            out.push(Click::Slot { slot: slot.filter(|_| !outside), outside, button: button.num(), input });
+            out.push(Click::Slot {
+                slot: slot.filter(|_| !outside),
+                outside,
+                button: button.num(),
+                input,
+            });
         }
     }
     p.quick_crafting = false;
@@ -194,7 +257,14 @@ pub fn mouse_released<S: Screen + ?Sized>(s: &S, p: &mut Pointer, mouse: [f64; 2
 /// `keyPressed`'s slot keys over the slot under the mouse.
 pub fn key_pressed<S: Screen + ?Sized>(s: &S, mouse: [f64; 2], key: Key) -> Option<Click> {
     let slot = hovered_slot(s, at(mouse))?;
-    let click = |button, input| Some(Click::Slot { slot: Some(slot), outside: false, button, input });
+    let click = |button, input| {
+        Some(Click::Slot {
+            slot: Some(slot),
+            outside: false,
+            button,
+            input,
+        })
+    };
     let empty_hand = s.base().carried().is_none();
     match key {
         Key::SwapOffhand if empty_hand => return click(40, Input::Swap),

@@ -36,6 +36,7 @@ impl Pilot {
 
     /// Takes over what `old` (a pilot for an earlier goal) knew of the entities.
     pub(crate) fn inherit(&mut self, old: Pilot) {
-        (self.senses, self.striker, self.field, self.perceived_at) = (old.senses, old.striker, old.field, old.perceived_at);
+        (self.senses, self.striker, self.field, self.perceived_at) =
+            (old.senses, old.striker, old.field, old.perceived_at);
     }
 }

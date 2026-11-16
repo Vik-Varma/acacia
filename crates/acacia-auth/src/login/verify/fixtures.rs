@@ -15,9 +15,9 @@ use serde_json::{Value, json};
 use sha2::Sha256;
 
 use super::{MULTIPLAYER_ISSUER, SigningKeys, Verifier};
+use crate::LoginCredentials;
 use crate::jwt::{self, public_key_der_b64};
 use crate::login::{ClientData, MULTIPLAYER_AUDIENCE, build_connection_request};
-use crate::LoginCredentials;
 
 pub const NOW: i64 = 1_800_000_000;
 pub const KID: &str = "TESTKID";
@@ -51,8 +51,14 @@ pub fn public(key: &SigningKey) -> p384::PublicKey {
 
 /// A JWT with any header, carrying the issuer's RS256 signature.
 pub fn issuer_jwt(header: &Value, claims: &Value) -> String {
-    let input = format!("{}.{}", URL_SAFE_NO_PAD.encode(header.to_string()), URL_SAFE_NO_PAD.encode(claims.to_string()));
-    let signature = RsaSigner::<Sha256>::new(issuer_key().clone()).sign(input.as_bytes()).to_vec();
+    let input = format!(
+        "{}.{}",
+        URL_SAFE_NO_PAD.encode(header.to_string()),
+        URL_SAFE_NO_PAD.encode(claims.to_string())
+    );
+    let signature = RsaSigner::<Sha256>::new(issuer_key().clone())
+        .sign(input.as_bytes())
+        .to_vec();
     format!("{input}.{}", URL_SAFE_NO_PAD.encode(signature))
 }
 
@@ -87,7 +93,11 @@ pub fn credentials(chain: Vec<String>, token: Option<String>) -> LoginCredential
 
 /// A token login built by acacia's own client code.
 pub fn token_request(token: String, client: &SigningKey) -> Vec<u8> {
-    build_connection_request(&credentials(Vec::new(), Some(token)), client, &client_data())
+    build_connection_request(
+        &credentials(Vec::new(), Some(token)),
+        client,
+        &client_data(),
+    )
 }
 
 /// A connection request from raw parts.
@@ -112,14 +122,28 @@ pub fn extra_data(xuid: &str) -> Value {
 /// instead of Mojang.
 pub fn mojang_chain(root: &SigningKey, client: &SigningKey, xuid: &str) -> Vec<String> {
     let intermediate = ec_key();
-    let validity = json!({"iss": "Mojang", "exp": jwt::now_unix() + 3600, "nbf": jwt::now_unix() - 60});
+    let validity =
+        json!({"iss": "Mojang", "exp": jwt::now_unix() + 3600, "nbf": jwt::now_unix() - 60});
     let with = |extra: Value| {
         let mut claims = validity.clone();
-        claims.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        claims
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
         claims
     };
     vec![
-        client_jwt(root, &with(json!({"identityPublicKey": public_key_der_b64(&intermediate), "certificateAuthority": true}))),
-        client_jwt(&intermediate, &with(json!({"identityPublicKey": public_key_der_b64(client), "extraData": extra_data(xuid)}))),
+        client_jwt(
+            root,
+            &with(
+                json!({"identityPublicKey": public_key_der_b64(&intermediate), "certificateAuthority": true}),
+            ),
+        ),
+        client_jwt(
+            &intermediate,
+            &with(
+                json!({"identityPublicKey": public_key_der_b64(client), "extraData": extra_data(xuid)}),
+            ),
+        ),
     ]
 }

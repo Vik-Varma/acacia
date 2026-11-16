@@ -52,7 +52,12 @@ struct Alternative {
 
 impl State {
     fn slots(&self) -> Vec<Slot> {
-        self.slots.clone().unwrap_or_else(|| self.parts.iter().map(|&part| vec![Alternative { weight: 1, part }]).collect())
+        self.slots.clone().unwrap_or_else(|| {
+            self.parts
+                .iter()
+                .map(|&part| vec![Alternative { weight: 1, part }])
+                .collect()
+        })
     }
 }
 
@@ -85,7 +90,12 @@ pub struct Outcome {
 
 impl Outcome {
     fn diverge(&mut self, case: &str, field: &str, expected: impl ToString, got: impl ToString) {
-        self.divergences.push([case.to_owned(), field.to_owned(), expected.to_string(), got.to_string()]);
+        self.divergences.push([
+            case.to_owned(),
+            field.to_owned(),
+            expected.to_string(),
+            got.to_string(),
+        ]);
     }
 
     /// `CASES`, then one `DIVERGENCE` line per divergence, tab-separated.
@@ -99,9 +109,15 @@ impl Outcome {
 
 /// `assets` is the jar's `assets/minecraft`, `biome_colors` our colours by Java biome, `dump` the
 /// game's `quads.json.gz`; its `placement.json`, `biomes.json` and `shade.json` are beside it.
-pub fn print(assets: &Path, biome_colors: &BTreeMap<String, Colors>, mapping: &Mapping, dump: &Path) -> Result<Outcome, Error> {
+pub fn print(
+    assets: &Path,
+    biome_colors: &BTreeMap<String, Colors>,
+    mapping: &Mapping,
+    dump: &Path,
+) -> Result<Outcome, Error> {
     let mut outcome = Outcome::default();
-    let placement: placed::Placement = serde_json::from_slice(&std::fs::read(dump.with_file_name("placement.json"))?)?;
+    let placement: placed::Placement =
+        serde_json::from_slice(&std::fs::read(dump.with_file_name("placement.json"))?)?;
     let truth: Truth = serde_json::from_reader(flate2::read::GzDecoder::new(File::open(dump)?))?;
     let mut models = Models::new(assets.to_owned());
     let mut blockstates: HashMap<String, Option<Value>> = HashMap::new();
@@ -111,23 +127,48 @@ pub fn print(assets: &Path, biome_colors: &BTreeMap<String, Colors>, mapping: &M
     for (key, state) in &truth.states {
         let java = JavaState::parse(key);
         let file = blockstates.entry(java.name.clone()).or_insert_with(|| {
-            serde_json::from_slice(&std::fs::read(assets.join(format!("blockstates/{}.json", java.name))).ok()?).ok()
+            serde_json::from_slice(
+                &std::fs::read(assets.join(format!("blockstates/{}.json", java.name))).ok()?,
+            )
+            .ok()
         });
-        let ours = file.as_ref().map(|f| blockstate::drawn(f, &java)).unwrap_or_default();
+        let ours = file
+            .as_ref()
+            .map(|f| blockstate::drawn(f, &java))
+            .unwrap_or_default();
         let theirs = state.slots();
-        let our_weights: Vec<Vec<u32>> = ours.parts.iter().map(|p| p.iter().map(|(weight, _)| *weight).collect()).collect();
-        let their_weights: Vec<Vec<u32>> = theirs.iter().map(|s| s.iter().map(|a| a.weight).collect()).collect();
+        let our_weights: Vec<Vec<u32>> = ours
+            .parts
+            .iter()
+            .map(|p| p.iter().map(|(weight, _)| *weight).collect())
+            .collect();
+        let their_weights: Vec<Vec<u32>> = theirs
+            .iter()
+            .map(|s| s.iter().map(|a| a.weight).collect())
+            .collect();
         let mut found = BTreeSet::new();
         if our_weights != their_weights {
             found.insert("alternatives or their weights");
-            outcome.diverge(key, "weights", format!("{their_weights:?}"), format!("{our_weights:?}"));
+            outcome.diverge(
+                key,
+                "weights",
+                format!("{their_weights:?}"),
+                format!("{our_weights:?}"),
+            );
         } else {
             let pairs = ours.parts.iter().flatten().zip(theirs.iter().flatten());
             let mut first = true;
             for ((_, model), alternative) in pairs {
-                let (faces, part) = (bake(&models.resolve(&model.model), model), &truth.parts[alternative.part]);
+                let (faces, part) = (
+                    bake(&models.resolve(&model.model), model),
+                    &truth.parts[alternative.part],
+                );
                 found.extend(compare(&faces, &part.quads));
-                if first && faces.first().is_some_and(|f| f.ambient_occlusion != part.ambient_occlusion) {
+                if first
+                    && faces
+                        .first()
+                        .is_some_and(|f| f.ambient_occlusion != part.ambient_occlusion)
+                {
                     found.insert("ambient occlusion");
                 }
                 first = false;
@@ -141,7 +182,10 @@ pub fn print(assets: &Path, biome_colors: &BTreeMap<String, Colors>, mapping: &M
             if difference != "alternatives or their weights" {
                 outcome.diverge(key, difference, "the game's", "ours");
             }
-            blocks.entry(difference).or_default().insert(key.split('[').next().unwrap_or(key));
+            blocks
+                .entry(difference)
+                .or_default()
+                .insert(key.split('[').next().unwrap_or(key));
             let (count, examples) = differences.entry(difference).or_default();
             *count += 1;
             if examples.len() < EXAMPLES {
@@ -149,20 +193,45 @@ pub fn print(assets: &Path, biome_colors: &BTreeMap<String, Colors>, mapping: &M
             }
         }
     }
-    println!("{same} of {} Java block states bake as the game bakes them, {} with alternatives picked by position", truth.states.len(), placement.picks.len());
+    println!(
+        "{same} of {} Java block states bake as the game bakes them, {} with alternatives picked by position",
+        truth.states.len(),
+        placement.picks.len()
+    );
     for (difference, (count, examples)) in differences {
-        println!("  {difference}: {count} states, e.g. {}", examples.join(" "));
-        println!("    blocks: {}", blocks[difference].iter().copied().collect::<Vec<_>>().join(" "));
+        println!(
+            "  {difference}: {count} states, e.g. {}",
+            examples.join(" ")
+        );
+        println!(
+            "    blocks: {}",
+            blocks[difference]
+                .iter()
+                .copied()
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
     }
     outcome.cases += truth.states.len() + placement.offset_blocks();
     match placement.offsets_differing() {
-        differing if differing.is_empty() => println!("blocks stand off the grid as the game shifts them"),
+        differing if differing.is_empty() => {
+            println!("blocks stand off the grid as the game shifts them")
+        }
         differing => {
-            println!("blocks shifted otherwise than the game shifts them: {}", differing.join(" "));
-            differing.iter().for_each(|block| outcome.diverge(block, "offset", "the game's shift", "ours"));
+            println!(
+                "blocks shifted otherwise than the game shifts them: {}",
+                differing.join(" ")
+            );
+            differing
+                .iter()
+                .for_each(|block| outcome.diverge(block, "offset", "the game's shift", "ours"));
         }
     }
-    biomes::print(biome_colors, &dump.with_file_name("biomes.json"), &mut outcome)?;
+    biomes::print(
+        biome_colors,
+        &dump.with_file_name("biomes.json"),
+        &mut outcome,
+    )?;
     shade::print(mapping, &dump.with_file_name("shade.json"), &mut outcome)?;
     Ok(outcome)
 }
@@ -200,8 +269,14 @@ fn compare(ours: &[BakedFace], theirs: &[Quad]) -> BTreeSet<&'static str> {
         if face.tint_index.unwrap_or(-1) != quad.tint_index {
             found.insert("tint index");
         }
-        let shaded_as = quad.shade_direction_override.as_deref().unwrap_or(&quad.direction);
-        if face.shade != Direction::named(shaded_as).filter(|d| quad.shade_direction_override.is_none() || *d != Direction::Up) {
+        let shaded_as = quad
+            .shade_direction_override
+            .as_deref()
+            .unwrap_or(&quad.direction);
+        if face.shade
+            != Direction::named(shaded_as)
+                .filter(|d| quad.shade_direction_override.is_none() || *d != Direction::Up)
+        {
             found.insert("shade direction");
         }
     }
@@ -224,12 +299,25 @@ fn turn(ours: &[[f32; 3]; 4], theirs: &[[f32; 3]; 4]) -> Option<usize> {
 mod tests {
     use super::*;
 
-    const SQUARE: [[f32; 3]; 4] = [[0.0, 16.0, 0.0], [0.0, 16.0, 16.0], [16.0, 16.0, 16.0], [16.0, 16.0, 0.0]];
+    const SQUARE: [[f32; 3]; 4] = [
+        [0.0, 16.0, 0.0],
+        [0.0, 16.0, 16.0],
+        [16.0, 16.0, 16.0],
+        [16.0, 16.0, 0.0],
+    ];
     const UVS: [[f32; 2]; 4] = [[0.0, 0.0], [0.0, 16.0], [16.0, 16.0], [16.0, 0.0]];
 
     fn ours() -> BakedFace {
         let (cull, shade) = (Some(Direction::Up), Some(Direction::Up));
-        BakedFace { positions: SQUARE, uvs: UVS, texture: "block/stone".into(), cull, tint_index: None, shade, ambient_occlusion: true }
+        BakedFace {
+            positions: SQUARE,
+            uvs: UVS,
+            texture: "block/stone".into(),
+            cull,
+            tint_index: None,
+            shade,
+            ambient_occlusion: true,
+        }
     }
 
     fn theirs(start: usize) -> Quad {
@@ -247,7 +335,12 @@ mod tests {
     #[test]
     fn the_same_quad_matches_from_any_first_vertex_but_names_the_order() {
         assert!(compare(&[ours()], &[theirs(0)]).is_empty());
-        assert_eq!(compare(&[ours()], &[theirs(3)]).into_iter().collect::<Vec<_>>(), ["vertex order"]);
+        assert_eq!(
+            compare(&[ours()], &[theirs(3)])
+                .into_iter()
+                .collect::<Vec<_>>(),
+            ["vertex order"]
+        );
     }
 
     #[test]
@@ -255,10 +348,19 @@ mod tests {
         let mut quad = theirs(0);
         (quad.uvs[0], quad.tint_index, quad.cullface) = ([1.0, 0.0], 0, None);
         let found = compare(&[ours()], &[quad]);
-        assert_eq!(found.into_iter().collect::<Vec<_>>(), ["cull side", "texture coordinates", "tint index"]);
+        assert_eq!(
+            found.into_iter().collect::<Vec<_>>(),
+            ["cull side", "texture coordinates", "tint index"]
+        );
         let mut reversed = theirs(0);
         reversed.positions.reverse();
         let found = compare(&[ours()], &[reversed]);
-        assert_eq!(found.into_iter().collect::<Vec<_>>(), ["a quad of the game's is missing", "a quad the game does not have"]);
+        assert_eq!(
+            found.into_iter().collect::<Vec<_>>(),
+            [
+                "a quad of the game's is missing",
+                "a quad the game does not have"
+            ]
+        );
     }
 }

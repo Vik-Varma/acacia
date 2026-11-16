@@ -31,33 +31,56 @@ pub struct Click {
 
 impl Click {
     pub fn left(slot: i16) -> Self {
-        Click { slot, button: 0, input: ContainerInput::Pickup }
+        Click {
+            slot,
+            button: 0,
+            input: ContainerInput::Pickup,
+        }
     }
 
     pub fn right(slot: i16) -> Self {
-        Click { slot, button: 1, input: ContainerInput::Pickup }
+        Click {
+            slot,
+            button: 1,
+            input: ContainerInput::Pickup,
+        }
     }
 
     /// The number key `button` (hotbar 0-8, or [`OFFHAND_BUTTON`]) over `slot`.
     pub fn swap(slot: i16, button: i8) -> Self {
-        Click { slot, button, input: ContainerInput::Swap }
+        Click {
+            slot,
+            button,
+            input: ContainerInput::Swap,
+        }
     }
 
     /// Shift-click on `slot`.
     pub fn quick_move(slot: i16) -> Self {
-        Click { slot, button: 0, input: ContainerInput::QuickMove }
+        Click {
+            slot,
+            button: 0,
+            input: ContainerInput::QuickMove,
+        }
     }
 
     /// Q over `slot`; `all` is ctrl+Q.
     pub fn throw(slot: i16, all: bool) -> Self {
-        Click { slot, button: i8::from(all), input: ContainerInput::Throw }
+        Click {
+            slot,
+            button: i8::from(all),
+            input: ContainerInput::Throw,
+        }
     }
 }
 
 /// `ItemStack.getMaxStackSize`: the component if the stack sets it, else the item's default.
 pub fn max_stack(stack: &ItemStack) -> i32 {
     stack.components.max_stack_size.unwrap_or_else(|| {
-        u16::try_from(stack.item).ok().and_then(Item::from_java_id).map_or(64, |i| i32::from(i.max_stack()))
+        u16::try_from(stack.item)
+            .ok()
+            .and_then(Item::from_java_id)
+            .map_or(64, |i| i32::from(i.max_stack()))
     })
 }
 
@@ -69,7 +92,10 @@ fn same_item(a: &ItemStack, b: &ItemStack) -> bool {
 fn split(stack: &mut Option<ItemStack>, n: i32) -> Option<ItemStack> {
     let s = stack.as_mut()?;
     let n = n.min(s.count);
-    let taken = ItemStack { count: n, ..s.clone() };
+    let taken = ItemStack {
+        count: n,
+        ..s.clone()
+    };
     s.count -= n;
     if s.count <= 0 {
         *stack = None;
@@ -95,10 +121,18 @@ impl Menu {
 
     /// `Slot.safeInsert`: puts up to `amount` of `carried` into `slot`, leaving the rest carried.
     fn safe_insert(&mut self, slot: usize, carried: &mut Option<ItemStack>, amount: i32) {
-        let Some(stack) = carried.as_ref() else { return };
+        let Some(stack) = carried.as_ref() else {
+            return;
+        };
         let current = self.slots[slot].as_ref().map_or(0, |s| s.count);
-        let n = amount.min(stack.count).min(self.slot_max(slot, stack) - current);
-        if n <= 0 || self.slots[slot].as_ref().is_some_and(|s| !same_item(s, stack)) {
+        let n = amount
+            .min(stack.count)
+            .min(self.slot_max(slot, stack) - current);
+        if n <= 0
+            || self.slots[slot]
+                .as_ref()
+                .is_some_and(|s| !same_item(s, stack))
+        {
             return;
         }
         let moved = split(carried, n).expect("n > 0");
@@ -109,7 +143,14 @@ impl Menu {
     }
 
     /// `doClick` for PICKUP, SWAP, THROW and clicks outside; other inputs change nothing.
-    fn click(&mut self, Click { slot, button, input }: Click) {
+    fn click(
+        &mut self,
+        Click {
+            slot,
+            button,
+            input,
+        }: Click,
+    ) {
         if slot == OUTSIDE {
             if input == ContainerInput::Pickup {
                 let mut carried = self.cursor.take();
@@ -120,7 +161,9 @@ impl Menu {
             }
             return;
         }
-        let Some(i) = usize::try_from(slot).ok().filter(|&i| i < self.slots.len()) else { return };
+        let Some(i) = usize::try_from(slot).ok().filter(|&i| i < self.slots.len()) else {
+            return;
+        };
         match input {
             ContainerInput::Pickup => self.pickup(i, button == 0),
             ContainerInput::Swap => self.swap(i, button),
@@ -164,7 +207,10 @@ impl Menu {
             OFFHAND_BUTTON if self.own => OFFHAND,
             _ => return,
         };
-        if self.slots[source].as_ref().is_some_and(|s| s.count > self.slot_max(i, s)) {
+        if self.slots[source]
+            .as_ref()
+            .is_some_and(|s| s.count > self.slot_max(i, s))
+        {
             return;
         }
         self.slots.swap(source, i);
@@ -191,7 +237,10 @@ impl Inventory {
         self.predicted.clear();
         for (i, (old, new)) in before.into_iter().zip(menu.slots).enumerate() {
             if old != new {
-                changed.push((i as i16, new.as_ref().map(|s| HashedStack::of(s, &self.enchantments))));
+                changed.push((
+                    i as i16,
+                    new.as_ref().map(|s| HashedStack::of(s, &self.enchantments)),
+                ));
                 if let Some(at) = self.locate(i) {
                     if let crate::window::At::Player(p) = at {
                         self.predicted.push(p);
@@ -202,16 +251,38 @@ impl Inventory {
         }
         self.cursor = menu.cursor;
         let (container, state_id) = self.menu_ids();
-        let carried = self.cursor.as_ref().map(|s| HashedStack::of(s, &self.enchantments));
-        ContainerClick { container, state_id, slot: click.slot, button: click.button, input: click.input, changed, carried }
+        let carried = self
+            .cursor
+            .as_ref()
+            .map(|s| HashedStack::of(s, &self.enchantments));
+        ContainerClick {
+            container,
+            state_id,
+            slot: click.slot,
+            button: click.button,
+            input: click.input,
+            changed,
+            carried,
+        }
     }
 
     /// `click` as a packet that predicts nothing, for clicks the server alone can work out (taking a crafting result):
     /// every slot it changes comes back from the server.
     pub fn unpredicted(&self, click: Click) -> ContainerClick {
         let (container, state_id) = self.menu_ids();
-        let carried = self.cursor.as_ref().map(|s| HashedStack::of(s, &self.enchantments));
-        ContainerClick { container, state_id, slot: click.slot, button: click.button, input: click.input, changed: Vec::new(), carried }
+        let carried = self
+            .cursor
+            .as_ref()
+            .map(|s| HashedStack::of(s, &self.enchantments));
+        ContainerClick {
+            container,
+            state_id,
+            slot: click.slot,
+            button: click.button,
+            input: click.input,
+            changed: Vec::new(),
+            carried,
+        }
     }
 }
 
@@ -233,7 +304,12 @@ impl Client {
     pub fn close_screen(&mut self) -> Result<(), Error> {
         let (container, _) = self.inventory.menu_ids();
         self.inventory.window = None;
-        self.queue(to::CONTAINER_CLOSE, &ContainerClose { container: VarInt(container) })
+        self.queue(
+            to::CONTAINER_CLOSE,
+            &ContainerClose {
+                container: VarInt(container),
+            },
+        )
     }
 }
 

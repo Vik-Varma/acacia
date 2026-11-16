@@ -12,9 +12,9 @@ use crate::biome::BiomeColors;
 use crate::blocks::BlockTable;
 use crate::light::{LightData, LightEvent, LightVolume, Lighting as LightThread};
 use crate::look::Lighting;
-use parking_lot::RwLock;
 use crate::mesh::SectionMesh;
 use crate::workers::{Job, Output, SectionKey, Work, Workers};
+use parking_lot::RwLock;
 
 pub enum Update {
     Mesh(SectionKey, SectionMesh),
@@ -54,7 +54,12 @@ struct Tracked {
 impl Scene {
     /// `lighting` may come from a previous scene of the same world ([`Scene::into_parts`]): its
     /// lit columns are meshed at once.
-    pub fn new(world: Arc<World>, table: Arc<BlockTable>, biomes: Arc<BiomeColors>, lighting: LightThread) -> Self {
+    pub fn new(
+        world: Arc<World>,
+        table: Arc<BlockTable>,
+        biomes: Arc<BiomeColors>,
+        lighting: LightThread,
+    ) -> Self {
         let dim = world.dimension();
         let min = dim.min_y >> 4;
         let mut t = Tracked {
@@ -73,7 +78,13 @@ impl Scene {
             t.apply(ChunkChange::Column { x, z });
         }
         let workers = Workers::new(world, lighting.data.clone(), table.clone(), biomes);
-        Scene { workers, table, lighting, tracked: t, frame: 0 }
+        Scene {
+            workers,
+            table,
+            lighting,
+            tracked: t,
+            frame: 0,
+        }
     }
 
     pub fn world(&self) -> &Arc<World> {
@@ -105,8 +116,12 @@ impl Scene {
     /// A section's face pairs: all open until meshed, `None` outside loaded columns.
     pub fn visibility(&self, key: SectionKey) -> Option<u16> {
         let t = &self.tracked;
-        (t.sections.contains(&key.1) && t.columns.contains(&(key.0, key.2)))
-            .then(|| t.visibility.get(&key).copied().unwrap_or(crate::mesh::visibility::ALL))
+        (t.sections.contains(&key.1) && t.columns.contains(&(key.0, key.2))).then(|| {
+            t.visibility
+                .get(&key)
+                .copied()
+                .unwrap_or(crate::mesh::visibility::ALL)
+        })
     }
 
     pub fn pump(&mut self, camera_block: IVec3, out: &mut Vec<Update>) {
@@ -154,13 +169,26 @@ impl Scene {
             t.dirty.remove(&key);
             t.relight.remove(&key);
             t.in_flight.insert(key);
-            self.workers.submit(Job { key, work: Work::Mesh { version: t.versions[&key] } });
+            self.workers.submit(Job {
+                key,
+                work: Work::Mesh {
+                    version: t.versions[&key],
+                },
+            });
         }
-        let ready: Vec<_> = t.relight.iter().copied().filter(|k| !t.in_flight.contains(k)).collect();
+        let ready: Vec<_> = t
+            .relight
+            .iter()
+            .copied()
+            .filter(|k| !t.in_flight.contains(k))
+            .collect();
         for key in ready {
             t.relight.remove(&key);
             t.in_flight.insert(key);
-            self.workers.submit(Job { key, work: Work::Light });
+            self.workers.submit(Job {
+                key,
+                work: Work::Light,
+            });
         }
     }
 }
@@ -202,7 +230,10 @@ impl Tracked {
     }
 
     fn light_changed(&mut self, key: SectionKey) {
-        if self.sections.contains(&key.1) && self.columns.contains(&(key.0, key.2)) && !self.dirty.contains(&key) {
+        if self.sections.contains(&key.1)
+            && self.columns.contains(&(key.0, key.2))
+            && !self.dirty.contains(&key)
+        {
             self.relight.insert(key);
         }
     }
@@ -217,7 +248,12 @@ impl Tracked {
     }
 
     fn drop_unloaded(&mut self, out: &mut Vec<Update>) {
-        let gone: Vec<_> = self.columns.iter().copied().filter(|&(x, z)| self.world.get(x, z).is_none()).collect();
+        let gone: Vec<_> = self
+            .columns
+            .iter()
+            .copied()
+            .filter(|&(x, z)| self.world.get(x, z).is_none())
+            .collect();
         for (x, z) in gone {
             self.columns.remove(&(x, z));
             for sy in self.sections.clone() {
@@ -238,11 +274,17 @@ impl Tracked {
         let cam = camera_block >> IVec3::splat(4);
         let score = |&(x, y, z): &SectionKey| {
             let d: IVec3 = IVec3::new(x, y, z) - cam;
-            let missing = neighbourhood().filter(|&(dx, dz)| !self.columns.contains(&(x + dx, z + dz))).count() as i32;
+            let missing = neighbourhood()
+                .filter(|&(dx, dz)| !self.columns.contains(&(x + dx, z + dz)))
+                .count() as i32;
             d.length_squared() + missing * MISSING_NEIGHBOUR_COST
         };
-        let mut candidates: Vec<(i32, SectionKey)> =
-            self.dirty.iter().filter(|k| !self.in_flight.contains(k)).map(|k| (score(k), *k)).collect();
+        let mut candidates: Vec<(i32, SectionKey)> = self
+            .dirty
+            .iter()
+            .filter(|k| !self.in_flight.contains(k))
+            .map(|k| (score(k), *k))
+            .collect();
         if candidates.len() > count {
             candidates.select_nth_unstable(count);
             candidates.truncate(count);

@@ -19,9 +19,16 @@ use crate::widget::{Value, Widget, Widgets};
 pub enum Spec {
     /// `items` are buttons, text, headers and dividers, in order.
     Action { content: String, items: Vec<Widget> },
-    Modal { content: String, yes: String, no: String },
+    Modal {
+        content: String,
+        yes: String,
+        no: String,
+    },
     /// `submit` is the button's text: [`SUBMIT`] on a server's form.
-    Custom { elements: Vec<Widget>, submit: String },
+    Custom {
+        elements: Vec<Widget>,
+        submit: String,
+    },
 }
 
 /// How the player answered.
@@ -79,13 +86,25 @@ pub const SUBMIT: &str = "Submit";
 
 impl FormView {
     pub fn new(title: &str, spec: Spec, theme: &Theme, size: [f32; 2]) -> FormView {
-        let shape = Shape { body: matches!(&spec, Spec::Action { content, .. } | Spec::Modal { content, .. } if !content.is_empty()), custom: matches!(spec, Spec::Custom { .. }) };
+        let shape = Shape {
+            body: matches!(&spec, Spec::Action { content, .. } | Spec::Modal { content, .. } if !content.is_empty()),
+            custom: matches!(spec, Spec::Custom { .. }),
+        };
         let (content, actions) = match spec {
             Spec::Action { content, items } => (text_then(content, items), Vec::new()),
-            Spec::Modal { content, yes, no } => (text_then(content, Vec::new()), vec![(Action::Yes, yes), (Action::No, no)]),
+            Spec::Modal { content, yes, no } => (
+                text_then(content, Vec::new()),
+                vec![(Action::Yes, yes), (Action::No, no)],
+            ),
             Spec::Custom { elements, submit } => (elements, vec![(Action::Submit, submit)]),
         };
-        let buttons = actions.iter().map(|(_, text)| Widget::Button { text: text.clone(), image: None }).collect();
+        let buttons = actions
+            .iter()
+            .map(|(_, text)| Widget::Button {
+                text: text.clone(),
+                image: None,
+            })
+            .collect();
         let mut view = FormView {
             title: title.to_owned(),
             panel: Panel::new(Vec::new(), [0.0; 4], 0.0),
@@ -105,10 +124,14 @@ impl FormView {
         let font = theme.font.as_ref();
         (self.panel, self.chrome) = match &theme.widgets {
             Widgets::Bedrock(kit) => {
-                let (panel, origin) = bedrock::lay_out(kit, font, self.shape, content, buttons, self.size);
+                let (panel, origin) =
+                    bedrock::lay_out(kit, font, self.shape, content, buttons, self.size);
                 (panel, Chrome::Bedrock(origin))
             }
-            Widgets::Java(kit) => (java::lay_out(kit, font, content, buttons, self.size), Chrome::Java),
+            Widgets::Java(kit) => (
+                java::lay_out(kit, font, content, buttons, self.size),
+                Chrome::Java,
+            ),
         };
     }
 
@@ -118,17 +141,23 @@ impl FormView {
             return;
         }
         self.size = size;
-        let mut widgets: Vec<Widget> = std::mem::take(&mut self.panel.items).into_iter().map(|p| p.widget).collect();
+        let mut widgets: Vec<Widget> = std::mem::take(&mut self.panel.items)
+            .into_iter()
+            .map(|p| p.widget)
+            .collect();
         let buttons = widgets.split_off(self.content);
         self.lay_out(theme, widgets, buttons);
     }
 
     /// Sets the image of the n-th button of an action form (an image that finished loading).
     pub fn set_image(&mut self, button: usize, sprite: crate::atlas::Sprite) {
-        let found = self.panel.items[..self.content].iter_mut().filter_map(|p| match &mut p.widget {
-            Widget::Button { image, .. } => Some(image),
-            _ => None,
-        });
+        let found =
+            self.panel.items[..self.content]
+                .iter_mut()
+                .filter_map(|p| match &mut p.widget {
+                    Widget::Button { image, .. } => Some(image),
+                    _ => None,
+                });
         if let Some(image) = found.into_iter().nth(button) {
             *image = Some(sprite);
         }
@@ -144,26 +173,41 @@ impl FormView {
             }
             Input::Release(at) if self.close_held => {
                 self.close_held = false;
-                return close.is_some_and(|r| crate::widget::contains(r, *at)).then_some(Outcome::Close);
+                return close
+                    .is_some_and(|r| crate::widget::contains(r, *at))
+                    .then_some(Outcome::Close);
             }
             _ => {}
         }
-        match self.panel.handle(input, theme.widgets.skin(), theme.font.as_ref()) {
+        match self
+            .panel
+            .handle(input, theme.widgets.skin(), theme.font.as_ref())
+        {
             Response::Pressed(i) => Some(self.outcome(i)),
-            Response::Ignored if *input == Input::Key(Key::Escape, Default::default()) => Some(Outcome::Close),
+            Response::Ignored if *input == Input::Key(Key::Escape, Default::default()) => {
+                Some(Outcome::Close)
+            }
             Response::Ignored | Response::Consumed => None,
         }
     }
 
     fn outcome(&self, i: usize) -> Outcome {
         if i < self.content {
-            let n = self.panel.items[..i].iter().filter(|p| matches!(p.widget, Widget::Button { .. })).count();
+            let n = self.panel.items[..i]
+                .iter()
+                .filter(|p| matches!(p.widget, Widget::Button { .. }))
+                .count();
             return Outcome::Button(n);
         }
         match self.actions[i - self.content] {
             Action::Yes => Outcome::Modal(true),
             Action::No => Outcome::Modal(false),
-            Action::Submit => Outcome::Submit(self.panel.items[..self.content].iter().filter_map(|p| p.widget.value()).collect()),
+            Action::Submit => Outcome::Submit(
+                self.panel.items[..self.content]
+                    .iter()
+                    .filter_map(|p| p.widget.value())
+                    .collect(),
+            ),
         }
     }
 
@@ -178,10 +222,14 @@ impl FormView {
         let font = theme.font.as_ref();
         match (&theme.widgets, self.chrome) {
             (Widgets::Bedrock(kit), Chrome::Bedrock(origin)) => {
-                let close = self.close_rect().is_some_and(|r| crate::widget::contains(r, self.mouse));
+                let close = self
+                    .close_rect()
+                    .is_some_and(|r| crate::widget::contains(r, self.mouse));
                 bedrock::draw_frame(list, kit, font, &self.title, origin, close, self.close_held);
             }
-            (Widgets::Java(_), _) => java::draw_frame(list, theme.atlas.white(), font, &self.title, self.size),
+            (Widgets::Java(_), _) => {
+                java::draw_frame(list, theme.atlas.white(), font, &self.title, self.size)
+            }
             _ => {}
         }
         self.panel.draw(list, theme.widgets.skin(), font, now);

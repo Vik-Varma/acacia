@@ -101,7 +101,11 @@ macro_rules! varint {
                 bytes[n] = v as u8;
                 put_slice(w, &bytes[..=n]);
             }
-            if v < 0x80 { put(w, [v as u8]) } else { long(w, v) }
+            if v < 0x80 {
+                put(w, [v as u8])
+            } else {
+                long(w, v)
+            }
         }
     };
 }

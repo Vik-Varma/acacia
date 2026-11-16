@@ -17,7 +17,11 @@ fn batch(len: usize) -> Vec<u8> {
             seed ^= seed << 13;
             seed ^= seed >> 17;
             seed ^= seed << 5;
-            if i % 7 < 3 { (seed & 0x0f) as u8 } else { [0x90, 0x01, 0x3f, 0x80, 0x00, 0x00][i % 6] }
+            if i % 7 < 3 {
+                (seed & 0x0f) as u8
+            } else {
+                [0x90, 0x01, 0x3f, 0x80, 0x00, 0x00][i % 6]
+            }
         })
         .collect()
 }
@@ -32,7 +36,10 @@ fn ns_per_call(mut f: impl FnMut()) -> f64 {
 
 fn main() {
     let mut zlib = flate2::Compress::new(flate2::Compression::fast(), false);
-    println!("{:>6} {:>10} {:>10} {:>8} {:>8}", "bytes", "ours ns", "zlib ns", "ours B", "zlib B");
+    println!(
+        "{:>6} {:>10} {:>10} {:>8} {:>8}",
+        "bytes", "ours ns", "zlib ns", "ours B", "zlib B"
+    );
     for len in [32, 64, 128, 256, 512, 1024, 2048, 4096] {
         let input = batch(len);
         let mut out = BytesMut::with_capacity(2 * len + 64);
@@ -45,8 +52,12 @@ fn main() {
         let theirs = ns_per_call(|| {
             zout.clear();
             zlib.reset();
-            zlib.compress_vec(black_box(&input), &mut zout, flate2::FlushCompress::Finish).unwrap();
+            zlib.compress_vec(black_box(&input), &mut zout, flate2::FlushCompress::Finish)
+                .unwrap();
         });
-        println!("{len:>6} {ours:>10.0} {theirs:>10.0} {ours_len:>8} {:>8}", zout.len());
+        println!(
+            "{len:>6} {ours:>10.0} {theirs:>10.0} {ours_len:>8} {:>8}",
+            zout.len()
+        );
     }
 }

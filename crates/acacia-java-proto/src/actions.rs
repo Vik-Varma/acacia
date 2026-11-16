@@ -11,7 +11,11 @@ pub struct BlockPos(pub [i32; 3]);
 impl Wire for BlockPos {
     fn read(input: &mut &[u8]) -> Result<Self, Error> {
         let v = i64::read(input)?;
-        Ok(Self([(v >> 38) as i32, (v << 52 >> 52) as i32, (v << 26 >> 38) as i32]))
+        Ok(Self([
+            (v >> 38) as i32,
+            (v << 52 >> 52) as i32,
+            (v << 26 >> 38) as i32,
+        ]))
     }
 
     fn write(&self, out: &mut Vec<u8>) {
@@ -34,10 +38,20 @@ pub enum Direction {
 }
 
 impl Direction {
-    const ALL: [Self; 6] = [Self::Down, Self::Up, Self::North, Self::South, Self::West, Self::East];
+    const ALL: [Self; 6] = [
+        Self::Down,
+        Self::Up,
+        Self::North,
+        Self::South,
+        Self::West,
+        Self::East,
+    ];
 
     pub fn from_index(index: i32) -> Result<Self, Error> {
-        usize::try_from(index).ok().and_then(|i| Self::ALL.get(i).copied()).ok_or(Error::Invalid("direction"))
+        usize::try_from(index)
+            .ok()
+            .and_then(|i| Self::ALL.get(i).copied())
+            .ok_or(Error::Invalid("direction"))
     }
 }
 
@@ -101,11 +115,18 @@ pub struct PlayerAction {
 
 impl Wire for PlayerAction {
     fn read(input: &mut &[u8]) -> Result<Self, Error> {
-        let action = usize::try_from(VarInt::read(input)?.0).ok().and_then(|i| Action::ALL.get(i).copied());
+        let action = usize::try_from(VarInt::read(input)?.0)
+            .ok()
+            .and_then(|i| Action::ALL.get(i).copied());
         let action = action.ok_or(Error::Invalid("player action"))?;
         let pos = BlockPos::read(input)?;
         let face = Direction::from_index(i32::from(u8::read(input)?))?;
-        Ok(Self { action, pos, face, sequence: VarInt::read(input)?.0 })
+        Ok(Self {
+            action,
+            pos,
+            face,
+            sequence: VarInt::read(input)?.0,
+        })
     }
 
     fn write(&self, out: &mut Vec<u8>) {
@@ -135,7 +156,15 @@ impl Wire for UseItemOn {
         let face = Direction::from_index(VarInt::read(input)?.0)?;
         let click = [f32::read(input)?, f32::read(input)?, f32::read(input)?];
         let (inside, world_border) = (bool::read(input)?, bool::read(input)?);
-        Ok(Self { hand, pos, face, click, inside, world_border, sequence: VarInt::read(input)?.0 })
+        Ok(Self {
+            hand,
+            pos,
+            face,
+            click,
+            inside,
+            world_border,
+            sequence: VarInt::read(input)?.0,
+        })
     }
 
     fn write(&self, out: &mut Vec<u8>) {
@@ -149,10 +178,20 @@ impl Wire for UseItemOn {
     }
 }
 
-packet!(UseItem { hand: Hand, sequence: VarInt, y_rot: f32, x_rot: f32 });
+packet!(UseItem {
+    hand: Hand,
+    sequence: VarInt,
+    y_rot: f32,
+    x_rot: f32
+});
 packet!(SetCarriedItem { slot: i16 });
 packet!(Attack { entity: VarInt });
-packet!(Interact { entity: VarInt, hand: Hand, location: LpVec3, secondary: bool });
+packet!(Interact {
+    entity: VarInt,
+    hand: Hand,
+    location: LpVec3,
+    secondary: bool
+});
 packet!(BlockChangedAck { sequence: VarInt });
 
 #[cfg(test)]
@@ -173,16 +212,35 @@ mod tests {
 
     #[test]
     fn actions_round_trip() {
-        round_trip(PlayerAction { action: Action::StopDestroy, pos: BlockPos([1, -2, 3]), face: Direction::East, sequence: 7 });
-        let use_on = UseItemOn { face: Direction::Up, click: [0.5, 1.0, 0.25], sequence: 300, ..Default::default() };
+        round_trip(PlayerAction {
+            action: Action::StopDestroy,
+            pos: BlockPos([1, -2, 3]),
+            face: Direction::East,
+            sequence: 7,
+        });
+        let use_on = UseItemOn {
+            face: Direction::Up,
+            click: [0.5, 1.0, 0.25],
+            sequence: 300,
+            ..Default::default()
+        };
         round_trip(use_on);
-        round_trip(Interact { entity: VarInt(9), hand: Hand::Off, location: LpVec3([0.0; 3]), secondary: true });
+        round_trip(Interact {
+            entity: VarInt(9),
+            hand: Hand::Off,
+            location: LpVec3([0.0; 3]),
+            secondary: true,
+        });
     }
 
     #[test]
     fn player_action_face_is_one_byte() {
         let mut buf = Vec::new();
-        PlayerAction { face: Direction::South, ..Default::default() }.write(&mut buf);
+        PlayerAction {
+            face: Direction::South,
+            ..Default::default()
+        }
+        .write(&mut buf);
         assert_eq!(buf, [0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0]);
     }
 }

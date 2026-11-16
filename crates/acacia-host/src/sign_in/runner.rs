@@ -2,14 +2,16 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use acacia_api::{ApiError, CallId, CallResult, ErrorCode, MsaCode, Out, Reply, SignInParams, SignInResult};
+use acacia_api::{
+    ApiError, CallId, CallResult, ErrorCode, MsaCode, Out, Reply, SignInParams, SignInResult,
+};
 use parking_lot::Mutex;
 use tokio::runtime::Runtime;
 use tokio::task::{AbortHandle, JoinHandle};
 
 use acacia_client::auth::Account;
 
-use super::{default_profiles_folder, DeviceCode, MsaAccount, OnlineLogin, Prompt, SignIn};
+use super::{DeviceCode, MsaAccount, OnlineLogin, Prompt, SignIn, default_profiles_folder};
 use crate::outbound::ShardBuf;
 
 /// The host's sign-in side: the provider, the thread it runs on (started at first use, so a device-code wait of
@@ -27,42 +29,82 @@ pub(crate) struct SignIns {
 }
 
 impl SignIns {
-    pub(crate) fn new(provider: Arc<dyn SignIn>, profiles_folder: Option<PathBuf>, buf: Arc<ShardBuf>) -> Self {
+    pub(crate) fn new(
+        provider: Arc<dyn SignIn>,
+        profiles_folder: Option<PathBuf>,
+        buf: Arc<ShardBuf>,
+    ) -> Self {
         let profiles_folder = profiles_folder.unwrap_or_else(default_profiles_folder);
-        Self { provider, profiles_folder, runtime: Mutex::new(None), closed: Mutex::new(false), open: Arc::default(), buf }
+        Self {
+            provider,
+            profiles_folder,
+            runtime: Mutex::new(None),
+            closed: Mutex::new(false),
+            open: Arc::default(),
+            buf,
+        }
     }
 
     pub(crate) fn account(&self, username: &str, profiles_folder: Option<&str>) -> MsaAccount {
-        let profiles_folder = profiles_folder.map_or_else(|| self.profiles_folder.clone(), PathBuf::from);
-        MsaAccount { username: username.to_owned(), profiles_folder }
+        let profiles_folder =
+            profiles_folder.map_or_else(|| self.profiles_folder.clone(), PathBuf::from);
+        MsaAccount {
+            username: username.to_owned(),
+            profiles_folder,
+        }
     }
 
     /// Runs the provider's login on the sign-in thread; dropping the future abandons it.
-    pub(crate) async fn login(&self, account: MsaAccount, prompt: Prompt) -> Result<OnlineLogin, ApiError> {
+    pub(crate) async fn login(
+        &self,
+        account: MsaAccount,
+        prompt: Prompt,
+    ) -> Result<OnlineLogin, ApiError> {
         self.run(self.provider.login(account, prompt)).await
     }
 
     /// [`SignIns::login`] for a Java server: the signed-in account, its Java profile fetched.
-    pub(crate) async fn java_account(&self, account: MsaAccount, prompt: Prompt) -> Result<Account, ApiError> {
+    pub(crate) async fn java_account(
+        &self,
+        account: MsaAccount,
+        prompt: Prompt,
+    ) -> Result<Account, ApiError> {
         self.run(self.provider.java_account(account, prompt)).await
     }
 
-    async fn run<T: Send + 'static>(&self, task: impl Future<Output = Result<T, ApiError>> + Send + 'static) -> Result<T, ApiError> {
+    async fn run<T: Send + 'static>(
+        &self,
+        task: impl Future<Output = Result<T, ApiError>> + Send + 'static,
+    ) -> Result<T, ApiError> {
         let mut task = AbortOnDrop(self.spawn(task)?);
-        (&mut task.0).await.map_err(|e| ApiError::new(ErrorCode::Internal, format!("the sign-in task failed: {e}")))?
+        (&mut task.0).await.map_err(|e| {
+            ApiError::new(ErrorCode::Internal, format!("the sign-in task failed: {e}"))
+        })?
     }
 
     /// Starts a `signIn` call; its `msaCode` and `done` go out on the host's first shard.
     pub(crate) fn sign_in(&self, call: CallId, params: SignInParams) -> Result<(), ApiError> {
         let account = self.account(&params.username, params.profiles_folder.as_deref());
         let buf = self.buf.clone();
-        let login = self.provider.login(account, Box::new(move |code| buf.push(msa_code(call, code))));
+        let login = self.provider.login(
+            account,
+            Box::new(move |code| buf.push(msa_code(call, code))),
+        );
         let (open, buf) = (self.open.clone(), self.buf.clone());
         open.lock().insert(call, None);
         let spawned = self.spawn(async move {
-            let result = login.await.map(|l| Reply::SignIn(SignInResult { display_name: l.credentials.display_name, xuid: l.credentials.xuid }));
+            let result = login.await.map(|l| {
+                Reply::SignIn(SignInResult {
+                    display_name: l.credentials.display_name,
+                    xuid: l.credentials.xuid,
+                })
+            });
             if open.lock().remove(&call).is_some() {
-                buf.push(Out::Done { bot: None, call, result: result.map_or_else(CallResult::Err, |r| CallResult::ok(&r)) });
+                buf.push(Out::Done {
+                    bot: None,
+                    call,
+                    result: result.map_or_else(CallResult::Err, |r| CallResult::ok(&r)),
+                });
             }
         });
         match spawned {
@@ -81,33 +123,57 @@ impl SignIns {
 
     /// Abandons open `signIn` call `call`, answering it `CANCELLED`; false when no such call is open.
     pub(crate) fn cancel(&self, call: CallId) -> bool {
-        let Some(task) = self.open.lock().remove(&call) else { return false };
+        let Some(task) = self.open.lock().remove(&call) else {
+            return false;
+        };
         if let Some(task) = task {
             task.abort();
         }
-        self.answer(call, Err(ApiError::new(ErrorCode::Cancelled, "cancelled while signing in")));
+        self.answer(
+            call,
+            Err(ApiError::new(
+                ErrorCode::Cancelled,
+                "cancelled while signing in",
+            )),
+        );
         true
     }
 
     /// A `done` naming no bot, on the sign-in records' shard.
     pub(crate) fn answer(&self, call: CallId, result: Result<Reply, ApiError>) {
-        self.buf.push(Out::Done { bot: None, call, result: result.map_or_else(CallResult::Err, |r| CallResult::ok(&r)) });
+        self.buf.push(Out::Done {
+            bot: None,
+            call,
+            result: result.map_or_else(CallResult::Err, |r| CallResult::ok(&r)),
+        });
     }
 
     /// Answers the open `signIn` calls `CLOSED` and stops the sign-in thread; later sign-ins are refused.
     pub(crate) fn close(&self) {
         *self.closed.lock() = true;
         for call in std::mem::take(&mut *self.open.lock()).into_keys() {
-            self.answer(call, Err(ApiError::new(ErrorCode::Closed, "the host shut down during the sign-in")));
+            self.answer(
+                call,
+                Err(ApiError::new(
+                    ErrorCode::Closed,
+                    "the host shut down during the sign-in",
+                )),
+            );
         }
         if let Some(runtime) = self.runtime.lock().take() {
             runtime.shutdown_background();
         }
     }
 
-    fn spawn<T: Send + 'static>(&self, task: impl Future<Output = T> + Send + 'static) -> Result<JoinHandle<T>, ApiError> {
+    fn spawn<T: Send + 'static>(
+        &self,
+        task: impl Future<Output = T> + Send + 'static,
+    ) -> Result<JoinHandle<T>, ApiError> {
         if *self.closed.lock() {
-            return Err(ApiError::new(ErrorCode::Closed, "the host is shutting down"));
+            return Err(ApiError::new(
+                ErrorCode::Closed,
+                "the host is shutting down",
+            ));
         }
         let mut runtime = self.runtime.lock();
         let runtime = match &mut *runtime {
@@ -118,7 +184,9 @@ impl SignIns {
                     .thread_name("acacia-sign-in")
                     .enable_all()
                     .build()
-                    .map_err(|e| ApiError::new(ErrorCode::Internal, format!("the sign-in thread: {e}")))?,
+                    .map_err(|e| {
+                        ApiError::new(ErrorCode::Internal, format!("the sign-in thread: {e}"))
+                    })?,
             ),
         };
         Ok(runtime.spawn(task))
@@ -148,5 +216,11 @@ pub(crate) fn msa_code(call: CallId, code: DeviceCode) -> Out {
         "To sign in, use a web browser to open the page {} and enter the code {} to authenticate.",
         code.verification_uri, code.user_code
     );
-    Out::MsaCode(MsaCode { call, user_code: code.user_code, verification_uri: code.verification_uri, message, expires_in: code.expires_in })
+    Out::MsaCode(MsaCode {
+        call,
+        user_code: code.user_code,
+        verification_uri: code.verification_uri,
+        message,
+        expires_in: code.expires_in,
+    })
 }

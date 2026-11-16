@@ -9,9 +9,9 @@ mod surface;
 mod tests;
 
 pub use pilot::{FlightPilot, Order};
-pub use surface::{ChunkSurface, Surface, TopCache};
 #[cfg(test)]
 pub(crate) use surface::HURTS;
+pub use surface::{ChunkSurface, Surface, TopCache};
 
 use super::profile::MovementProfile;
 
@@ -30,6 +30,12 @@ pub struct FlyOpts {
 
 impl Default for FlyOpts {
     fn default() -> Self {
-        Self { profile: MovementProfile::Optimal, cruise_margin: 24, land_radius: 3, rocket_reserve: 2, max_ticks: 20 * 60 * 5 }
+        Self {
+            profile: MovementProfile::Optimal,
+            cruise_margin: 24,
+            land_radius: 3,
+            rocket_reserve: 2,
+            max_ticks: 20 * 60 * 5,
+        }
     }
 }

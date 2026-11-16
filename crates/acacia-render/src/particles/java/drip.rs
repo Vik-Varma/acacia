@@ -10,7 +10,15 @@ use super::types::Type;
 use crate::particles::collide::Blocks;
 
 impl Engine {
-    pub(super) fn drip_tick(&mut self, p: &mut Particle, blocks: &impl Blocks, fluid: Fluid, stage: DripStage, next: Option<Type>, sound: bool) {
+    pub(super) fn drip_tick(
+        &mut self,
+        p: &mut Particle,
+        blocks: &impl Blocks,
+        fluid: Fluid,
+        stage: DripStage,
+        next: Option<Type>,
+        sound: bool,
+    ) {
         p.previous = p.position;
         if stage == DripStage::CoolingHang {
             p.rgba[0] = 1.0;

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::time::{sleep_until, Instant};
+use tokio::time::{Instant, sleep_until};
 
 use super::lease::{AccountLease, Lease};
 
@@ -21,18 +21,31 @@ struct Held {
 
 impl Keeper {
     pub fn new(leases: Arc<dyn AccountLease>, holder: String, ttl: Duration) -> Self {
-        Self { leases, holder, ttl, held: None }
+        Self {
+            leases,
+            holder,
+            ttl,
+            held: None,
+        }
     }
 
     /// `Err` says why the bot may not play `account` now (held elsewhere, or the store failed).
     pub async fn acquire(&mut self, account: &str) -> Result<(), String> {
-        if self.held.as_ref().is_some_and(|h| h.lease.account == account) {
+        if self
+            .held
+            .as_ref()
+            .is_some_and(|h| h.lease.account == account)
+        {
             return Ok(());
         }
         let start = Instant::now();
         match self.leases.acquire(account, &self.holder, self.ttl).await {
             Ok(Some(lease)) => {
-                self.held = Some(Held { lease, expires: start + self.ttl, renew_at: start + self.ttl / 3 });
+                self.held = Some(Held {
+                    lease,
+                    expires: start + self.ttl,
+                    renew_at: start + self.ttl / 3,
+                });
                 Ok(())
             }
             Ok(None) => Err(format!("account {account} is leased by another bot")),
@@ -43,7 +56,9 @@ impl Keeper {
     /// Renews while polled and resolves once the lease is gone; pending forever if none is held.
     /// Cancel-safe: the schedule lives in `self`, so racing this against short phases still renews.
     pub async fn lost(&mut self) {
-        let Some(held) = self.held.as_mut() else { return std::future::pending().await };
+        let Some(held) = self.held.as_mut() else {
+            return std::future::pending().await;
+        };
         loop {
             sleep_until(held.renew_at).await;
             let start = Instant::now();

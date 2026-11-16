@@ -2,8 +2,8 @@ use acacia_physics::BlockPos;
 use acacia_world::{Mining, Tool};
 
 use super::equip::Destination;
-use crate::interact::{break_ticks, BreakConditions};
-use crate::interact::breaking::{enchantment_level, EFFICIENCY};
+use crate::interact::breaking::{EFFICIENCY, enchantment_level};
+use crate::interact::{BreakConditions, break_ticks};
 use crate::items::SlotRef;
 use crate::state::{Inventory, ItemStack};
 use crate::{ActionError, Bot};
@@ -18,21 +18,38 @@ impl Bot {
     /// tools the least worn wins. Physics bots only.
     pub fn best_tool_for(&self, pos: BlockPos) -> Option<SlotRef> {
         let (_, block) = self.block_at(pos)?;
-        let base = BreakConditions { tool: None, efficiency: 0, ..self.break_conditions() };
+        let base = BreakConditions {
+            tool: None,
+            efficiency: 0,
+            ..self.break_conditions()
+        };
         let items = &self.state.items;
         let spare = self.survival.tool_spare;
-        fastest_slot(&self.state.inventory, |item| items.name(item.network_id), &block.mining, base, spare).map(SlotRef::Main)
+        fastest_slot(
+            &self.state.inventory,
+            |item| items.name(item.network_id),
+            &block.mining,
+            base,
+            spare,
+        )
+        .map(SlotRef::Main)
     }
 
     /// Holds the best tool for the block at `pos` ([`Bot::best_tool_for`]); keeps the held item when
     /// nothing beats the hand. Returns the slot of the tool now held.
     pub async fn equip_best_tool(&mut self, pos: BlockPos) -> Result<Option<SlotRef>, ActionError> {
         if self.block_at(pos).is_none() {
-            return Err(ActionError::NotPossible(format!("{pos:?} is not loaded (physics bots only)")));
+            return Err(ActionError::NotPossible(format!(
+                "{pos:?} is not loaded (physics bots only)"
+            )));
         }
-        let Some(slot) = self.best_tool_for(pos) else { return Ok(None) };
+        let Some(slot) = self.best_tool_for(pos) else {
+            return Ok(None);
+        };
         self.equip(slot, Destination::Hand).await?;
-        Ok(Some(SlotRef::Main(self.state.inventory.selected_hotbar_slot)))
+        Ok(Some(SlotRef::Main(
+            self.state.inventory.selected_hotbar_slot,
+        )))
     }
 
     /// Tools with less durability left than `spare` (max durability − `Damage`) are not picked by
@@ -70,10 +87,20 @@ pub(crate) fn fastest_slot<'a>(
             if left < spare {
                 return None;
             }
-            let c = BreakConditions { tool: Some(tool), efficiency: enchantment_level(stack, EFFICIENCY), ..base };
+            let c = BreakConditions {
+                tool: Some(tool),
+                efficiency: enchantment_level(stack, EFFICIENCY),
+                ..base
+            };
             let ticks = break_ticks(mining, &c)?;
             let slot = i as u8;
-            (ticks < by_hand).then_some((ticks, u16::MAX - left, slot != held, slot >= Inventory::HOTBAR_SLOTS, slot))
+            (ticks < by_hand).then_some((
+                ticks,
+                u16::MAX - left,
+                slot != held,
+                slot >= Inventory::HOTBAR_SLOTS,
+                slot,
+            ))
         })
         .min()
         .map(|(.., slot)| slot)

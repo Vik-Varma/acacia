@@ -4,8 +4,8 @@
 
 use std::sync::OnceLock;
 
-use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
 use aes::Aes256;
+use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 
@@ -82,14 +82,19 @@ impl LanPacket {
         r.take(8)?;
         let packet = match id {
             ID_REQUEST => Self::Request,
-            ID_RESPONSE => Self::Response(unhex(r.bytes()?).ok_or_else(|| bad("response is not hex"))?),
+            ID_RESPONSE => {
+                Self::Response(unhex(r.bytes()?).ok_or_else(|| bad("response is not hex"))?)
+            }
             ID_MESSAGE => {
                 let recipient = r.u64()?;
                 // Vanilla hosts under-declare CONNECTRESPONSE lengths: the rest of the datagram is data.
                 let mut data = r.bytes()?.to_vec();
                 data.extend_from_slice(r.0);
                 r.0 = &[];
-                Self::Message { recipient, data: String::from_utf8(data).map_err(|_| bad("message is not UTF-8"))? }
+                Self::Message {
+                    recipient,
+                    data: String::from_utf8(data).map_err(|_| bad("message is not UTF-8"))?,
+                }
             }
             other => return Err(Error::Lan(format!("unknown packet id {other}"))),
         };
@@ -118,7 +123,9 @@ impl<'a> Reader<'a> {
     }
 
     fn u64(&mut self) -> Result<u64, Error> {
-        Ok(u64::from_le_bytes(self.take(8)?.try_into().expect("8 bytes")))
+        Ok(u64::from_le_bytes(
+            self.take(8)?.try_into().expect("8 bytes"),
+        ))
     }
 
     /// A u32-length-prefixed field, clamped to what is left (see the message quirk above).
@@ -162,7 +169,10 @@ fn hex(b: &[u8]) -> String {
 
 fn unhex(s: &[u8]) -> Option<Vec<u8>> {
     let s = std::str::from_utf8(s).ok()?;
-    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(s.get(i..i + 2)?, 16).ok()).collect()
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(s.get(i..i + 2)?, 16).ok())
+        .collect()
 }
 
 #[cfg(test)]
@@ -175,7 +185,10 @@ mod tests {
         for p in [
             LanPacket::Request,
             LanPacket::Response(vec![7, 1, 2, 0xff]),
-            LanPacket::Message { recipient: 42, data: "CONNECTREQUEST 1 v=0\r\n".into() },
+            LanPacket::Message {
+                recipient: 42,
+                data: "CONNECTREQUEST 1 v=0\r\n".into(),
+            },
         ] {
             assert_eq!(LanPacket::decode(&p.encode(sender)).unwrap(), (p, sender));
         }
@@ -187,8 +200,14 @@ mod tests {
         let d = LanPacket::Request.encode(1);
         assert_eq!(d.len(), 32 + 32);
         let plain = decrypt(&d[32..]).unwrap();
-        assert_eq!(plain, [20, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-        assert_eq!(hex(&key()[..4]), hex(&Sha256::digest([0xef, 0xbe, 0xad, 0xde, 0, 0, 0, 0])[..4]));
+        assert_eq!(
+            plain,
+            [20, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            hex(&key()[..4]),
+            hex(&Sha256::digest([0xef, 0xbe, 0xad, 0xde, 0, 0, 0, 0])[..4])
+        );
     }
 
     #[test]
@@ -206,6 +225,15 @@ mod tests {
         let mut datagram = mac(&p).to_vec();
         datagram.extend(encrypt(&p));
         let (packet, sender) = LanPacket::decode(&datagram).unwrap();
-        assert_eq!((packet, sender), (LanPacket::Message { recipient: 5, data: "CONNECTRESPONSE 1 v=0".into() }, 9));
+        assert_eq!(
+            (packet, sender),
+            (
+                LanPacket::Message {
+                    recipient: 5,
+                    data: "CONNECTRESPONSE 1 v=0".into()
+                },
+                9
+            )
+        );
     }
 }

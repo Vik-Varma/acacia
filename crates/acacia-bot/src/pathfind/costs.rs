@@ -53,7 +53,9 @@ pub const CLASSIC_STARTUP: f32 = 4.0;
 pub fn macro_ticks_per_block(e: &Envelope, profile: MovementProfile) -> f32 {
     let hop = match profile {
         MovementProfile::Optimal => 1.0 / e.hop_speed,
-        MovementProfile::Human => ((e.hop_ticks + HUMAN_JUMP) / (e.hop_ticks * e.hop_speed)).min(sprint(e)),
+        MovementProfile::Human => {
+            ((e.hop_ticks + HUMAN_JUMP) / (e.hop_ticks * e.hop_speed)).min(sprint(e))
+        }
     };
     (hop * 100.0).floor() / 100.0
 }
@@ -108,8 +110,16 @@ mod tests {
     #[test]
     fn fall_table_matches_baritone() {
         let e = &BEDROCK;
-        assert!((fall_ticks(e, 1.0) - 5.61).abs() < 0.05, "{}", fall_ticks(e, 1.0));
-        assert!((fall_ticks(e, 3.0) - 9.47).abs() < 0.05, "{}", fall_ticks(e, 3.0));
+        assert!(
+            (fall_ticks(e, 1.0) - 5.61).abs() < 0.05,
+            "{}",
+            fall_ticks(e, 1.0)
+        );
+        assert!(
+            (fall_ticks(e, 3.0) - 9.47).abs() < 0.05,
+            "{}",
+            fall_ticks(e, 3.0)
+        );
         assert!((jump_one_block(e) - 3.163).abs() < 0.05);
     }
 

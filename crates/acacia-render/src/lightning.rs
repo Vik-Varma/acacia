@@ -12,7 +12,12 @@ const SEGMENTS: usize = 8;
 pub const COLOR: [u8; 4] = [114, 114, 127, 76];
 
 /// The four sides of a segment: (right x+, right z+, left x+, left z+).
-const SIDES: [[bool; 4]; 4] = [[false, false, true, false], [true, false, true, true], [true, true, false, true], [false, true, false, false]];
+const SIDES: [[bool; 4]; 4] = [
+    [false, false, true, false],
+    [true, false, true, true],
+    [true, true, false, true],
+    [false, true, false, false],
+];
 
 /// `seed` is the bolt entity's (`LightningBolt.seed`, re-drawn on each flash).
 pub fn bolt(seed: i64) -> Vec<[Vec3; 4]> {
@@ -74,11 +79,20 @@ mod tests {
         let mut digest = Sha256::new();
         for seed in seeds {
             for v in bolt(seed).into_iter().flatten() {
-                v.to_array().iter().for_each(|c| digest.update(c.to_be_bytes()));
+                v.to_array()
+                    .iter()
+                    .for_each(|c| digest.update(c.to_be_bytes()));
             }
         }
-        let hex: String = digest.finalize().iter().map(|b| format!("{b:02x}")).collect();
-        assert_eq!(hex, "a9ed25caa50b9aa340faa4bb417b3d533b061f0dce66514e4bb212931444dee6");
+        let hex: String = digest
+            .finalize()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        assert_eq!(
+            hex,
+            "a9ed25caa50b9aa340faa4bb417b3d533b061f0dce66514e4bb212931444dee6"
+        );
     }
 
     #[test]
@@ -87,8 +101,16 @@ mod tests {
         // 4 layers × (8 trunk + 3 + 3 branch segments) × 4 sides.
         assert_eq!(quads.len(), 4 * 14 * 4);
         let ys = || quads.iter().flatten().map(|v| v.y);
-        assert_eq!((ys().fold(f32::MAX, f32::min), ys().fold(f32::MIN, f32::max)), (0.0, 128.0));
-        let foot = quads.iter().flatten().filter(|v| v.y == 0.0).map(|v| v.x.abs().max(v.z.abs())).fold(0.0, f32::max);
+        assert_eq!(
+            (ys().fold(f32::MAX, f32::min), ys().fold(f32::MIN, f32::max)),
+            (0.0, 128.0)
+        );
+        let foot = quads
+            .iter()
+            .flatten()
+            .filter(|v| v.y == 0.0)
+            .map(|v| v.x.abs().max(v.z.abs()))
+            .fold(0.0, f32::max);
         assert!(foot < 1.0, "the trunk ends at the strike: {foot}");
     }
 }

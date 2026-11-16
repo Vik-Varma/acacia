@@ -10,7 +10,8 @@ use socket2::{Domain, Protocol, Socket, Type};
 use tokio::net::UdpSocket;
 
 /// Where requests go until the interfaces are known.
-pub(super) const FALLBACK: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::BROADCAST), DISCOVERY_PORT);
+pub(super) const FALLBACK: SocketAddr =
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::BROADCAST), DISCOVERY_PORT);
 const ALL_NODES: Ipv6Addr = Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1);
 
 /// A dual-stack socket on 7551 (ephemeral if taken), IPv4-only when IPv6 is unavailable.
@@ -25,14 +26,19 @@ impl LanSocket {
             Ok(socket) => Ok(Self { socket, v6: true }),
             Err(e) => {
                 tracing::debug!("no IPv6 LAN socket, using IPv4: {e}");
-                Ok(Self { socket: bind(Domain::IPV4)?, v6: false })
+                Ok(Self {
+                    socket: bind(Domain::IPV4)?,
+                    v6: false,
+                })
             }
         }
     }
 
     pub(super) async fn send_to(&self, buf: &[u8], addr: SocketAddr) -> io::Result<usize> {
         let addr = match addr {
-            SocketAddr::V4(v4) if self.v6 => SocketAddr::new(IpAddr::V6(v4.ip().to_ipv6_mapped()), v4.port()),
+            SocketAddr::V4(v4) if self.v6 => {
+                SocketAddr::new(IpAddr::V6(v4.ip().to_ipv6_mapped()), v4.port())
+            }
             addr => addr,
         };
         self.socket.send_to(buf, addr).await
@@ -59,7 +65,10 @@ impl LanSocket {
                 _ => {}
             }
         }
-        Ok(domain.into_iter().map(|ip| SocketAddr::new(ip, DISCOVERY_PORT)).collect())
+        Ok(domain
+            .into_iter()
+            .map(|ip| SocketAddr::new(ip, DISCOVERY_PORT))
+            .collect())
     }
 }
 
@@ -70,7 +79,11 @@ fn bind(domain: Domain) -> io::Result<UdpSocket> {
     }
     socket.set_broadcast(true)?;
     socket.set_nonblocking(true)?;
-    let any: IpAddr = if domain == Domain::IPV6 { Ipv6Addr::UNSPECIFIED.into() } else { Ipv4Addr::UNSPECIFIED.into() };
+    let any: IpAddr = if domain == Domain::IPV6 {
+        Ipv6Addr::UNSPECIFIED.into()
+    } else {
+        Ipv4Addr::UNSPECIFIED.into()
+    };
     if let Err(e) = socket.bind(&SocketAddr::new(any, DISCOVERY_PORT).into()) {
         if e.kind() != io::ErrorKind::AddrInUse {
             return Err(e);
@@ -92,9 +105,21 @@ mod tests {
 
     #[test]
     fn subnet_broadcast_sets_host_bits() {
-        assert_eq!(subnet_broadcast(Ipv4Addr::new(192, 168, 1, 236), 24), Ipv4Addr::new(192, 168, 1, 255));
-        assert_eq!(subnet_broadcast(Ipv4Addr::new(10, 1, 2, 3), 8), Ipv4Addr::new(10, 255, 255, 255));
-        assert_eq!(subnet_broadcast(Ipv4Addr::new(10, 1, 2, 3), 32), Ipv4Addr::new(10, 1, 2, 3));
-        assert_eq!(subnet_broadcast(Ipv4Addr::new(10, 1, 2, 3), 0), Ipv4Addr::BROADCAST);
+        assert_eq!(
+            subnet_broadcast(Ipv4Addr::new(192, 168, 1, 236), 24),
+            Ipv4Addr::new(192, 168, 1, 255)
+        );
+        assert_eq!(
+            subnet_broadcast(Ipv4Addr::new(10, 1, 2, 3), 8),
+            Ipv4Addr::new(10, 255, 255, 255)
+        );
+        assert_eq!(
+            subnet_broadcast(Ipv4Addr::new(10, 1, 2, 3), 32),
+            Ipv4Addr::new(10, 1, 2, 3)
+        );
+        assert_eq!(
+            subnet_broadcast(Ipv4Addr::new(10, 1, 2, 3), 0),
+            Ipv4Addr::BROADCAST
+        );
     }
 }

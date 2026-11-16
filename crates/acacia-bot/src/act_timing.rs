@@ -27,7 +27,18 @@ pub enum Phase {
     PostTick,
 }
 
-const PHASES: [Phase; 10] = [Phase::Plan, Phase::Act, Phase::EquipSame, Phase::EquipSwitch, Phase::Aim, Phase::Admit, Phase::Echo, Phase::Mine, Phase::Restock, Phase::PostTick];
+const PHASES: [Phase; 10] = [
+    Phase::Plan,
+    Phase::Act,
+    Phase::EquipSame,
+    Phase::EquipSwitch,
+    Phase::Aim,
+    Phase::Admit,
+    Phase::Echo,
+    Phase::Mine,
+    Phase::Restock,
+    Phase::PostTick,
+];
 
 impl crate::Bot {
     pub fn act_timing(&self) -> &ActTiming {
@@ -65,7 +76,10 @@ impl ActTiming {
 
     /// One line per phase: count, total, mean, p50, p95 (ms).
     pub fn table(&self) -> String {
-        let mut out = format!("{:<12} {:>6} {:>9} {:>8} {:>8} {:>8}\n", "phase", "n", "total s", "mean ms", "p50 ms", "p95 ms");
+        let mut out = format!(
+            "{:<12} {:>6} {:>9} {:>8} {:>8} {:>8}\n",
+            "phase", "n", "total s", "mean ms", "p50 ms", "p95 ms"
+        );
         for p in PHASES {
             let mut v = self.samples(p).to_vec();
             if v.is_empty() {
@@ -75,7 +89,15 @@ impl ActTiming {
             let total: Duration = v.iter().sum();
             let ms = |d: Duration| d.as_secs_f64() * 1000.0;
             let at = |q: f64| v[((v.len() - 1) as f64 * q).round() as usize];
-            out += &format!("{:<12} {:>6} {:>9.1} {:>8.1} {:>8.1} {:>8.1}\n", format!("{p:?}"), v.len(), total.as_secs_f64(), ms(total) / v.len() as f64, ms(at(0.5)), ms(at(0.95)));
+            out += &format!(
+                "{:<12} {:>6} {:>9.1} {:>8.1} {:>8.1} {:>8.1}\n",
+                format!("{p:?}"),
+                v.len(),
+                total.as_secs_f64(),
+                ms(total) / v.len() as f64,
+                ms(at(0.5)),
+                ms(at(0.95))
+            );
         }
         out + &format!("switches {}, retries {}", self.switches(), self.retries)
     }

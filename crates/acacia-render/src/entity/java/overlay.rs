@@ -26,7 +26,11 @@ pub fn keep(hurt: bool, white: f32) -> f32 {
 
 /// `CreeperRenderer.getWhiteOverlayProgress`: flashing while it swells.
 pub fn creeper_white(swelling: f32) -> f32 {
-    if (swelling * 10.0) as i32 % 2 == 0 { 0.0 } else { swelling.clamp(0.5, 1.0) }
+    if (swelling * 10.0) as i32 % 2 == 0 {
+        0.0
+    } else {
+        swelling.clamp(0.5, 1.0)
+    }
 }
 
 /// Why an entity might shake: fully frozen in powder snow, or converting (a zombie drowning, a
@@ -44,7 +48,9 @@ pub fn shaking(kind: &str, s: Shake) -> bool {
     match kind.trim_start_matches("minecraft:") {
         // AbstractSkeletonRenderer: only its own conversion, not the frost.
         "skeleton" | "stray" | "wither_skeleton" | "bogged" | "parched" => s.converting,
-        "zombie" | "husk" | "drowned" | "zombie_villager" | "piglin" | "hoglin" => s.frozen || s.converting,
+        "zombie" | "husk" | "drowned" | "zombie_villager" | "piglin" | "hoglin" => {
+            s.frozen || s.converting
+        }
         "strider" => s.frozen || s.suffocating,
         _ => s.frozen,
     }
@@ -53,5 +59,6 @@ pub fn shaking(kind: &str, s: Shake) -> bool {
 /// Degrees `setupRotations` adds to the body's yaw of a shaking entity `age` ticks old (π × 0.4
 /// at most: Java adds radians-looking numbers to degrees).
 pub fn shake_degrees(age: f32) -> f32 {
-    (f64::from(age.floor() as i32 as f32 * 3.25).cos() * std::f64::consts::PI * f64::from(0.4f32)) as f32
+    (f64::from(age.floor() as i32 as f32 * 3.25).cos() * std::f64::consts::PI * f64::from(0.4f32))
+        as f32
 }

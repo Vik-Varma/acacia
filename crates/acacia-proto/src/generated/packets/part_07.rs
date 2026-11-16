@@ -561,7 +561,7 @@ pub struct ServerboundDiagnostics {
     pub memory_category_values: Vec<types::MemoryCategoryCounter>,
     pub entity_diagnostics: Vec<types::EntityDiagnosticTimingInfo>,
     pub system_diagnostics: Vec<types::SystemDiagnosticTimingInfo>,
-    pub system_categories: Vec<types::SystemCategory>,
+    pub system_categories: Option<Vec<types::SystemCategory>>,
     pub whisker_scopes: Vec<types::WhiskerScopeDataSummary>,
 }
 impl ServerboundDiagnostics {
@@ -618,13 +618,17 @@ impl ServerboundDiagnostics {
         })()
         .map_err(|e| e.at("ServerboundDiagnostics.system_diagnostics"))?;
         let f_system_categories = (|| -> Result<_> {
-            Ok({
-                let n = to_len(read_varint(r)?)?;
-                let mut v = Vec::with_capacity(cap(n, r));
-                for _ in 0..n {
-                    v.push(types::SystemCategory::read(r)?);
-                }
-                v
+            Ok(if read_bool(r)? {
+                Some({
+                    let n = to_len(read_varint(r)?)?;
+                    let mut v = Vec::with_capacity(cap(n, r));
+                    for _ in 0..n {
+                        v.push(types::SystemCategory::read(r)?);
+                    }
+                    v
+                })
+            } else {
+                None
             })
         })()
         .map_err(|e| e.at("ServerboundDiagnostics.system_categories"))?;
@@ -678,9 +682,15 @@ impl ServerboundDiagnostics {
         for x0 in self.system_diagnostics.iter() {
             x0.write(w);
         }
-        write_varint(w, self.system_categories.len() as u32);
-        for x0 in self.system_categories.iter() {
-            x0.write(w);
+        match &self.system_categories {
+            Some(x0) => {
+                write_bool(w, true);
+                write_varint(w, x0.len() as u32);
+                for x1 in x0.iter() {
+                    x1.write(w);
+                }
+            }
+            None => write_bool(w, false),
         }
         write_varint(w, self.whisker_scopes.len() as u32);
         for x0 in self.whisker_scopes.iter() {

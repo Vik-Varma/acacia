@@ -38,7 +38,10 @@ pub struct Doors {
 impl Doors {
     /// What the doors receive comes out of `arrivals`.
     pub fn new(arrivals: mpsc::UnboundedSender<Arrival>) -> Doors {
-        Doors { doors: HashMap::new(), arrivals }
+        Doors {
+            doors: HashMap::new(),
+            arrivals,
+        }
     }
 
     /// Opens a door on `ip` for `game` to be transferred through; returns its port.
@@ -46,13 +49,25 @@ impl Doors {
         let socket = Arc::new(UdpSocket::bind((ip, 0)).await?);
         let port = socket.local_addr()?.port();
         let reader = tokio::spawn(read(socket.clone(), port, self.arrivals.clone()));
-        self.doors.insert(port, Door { socket, reader, holder: Some(game), target: None });
+        self.doors.insert(
+            port,
+            Door {
+                socket,
+                reader,
+                holder: Some(game),
+                target: None,
+            },
+        );
         Ok(port)
     }
 
     /// `game`'s server transferred it: its door now leads to `target`.
     pub fn lead(&mut self, game: SocketAddr, target: (String, u16), now: Instant) {
-        if let Some(door) = self.doors.values_mut().find(|door| door.holder == Some(game)) {
+        if let Some(door) = self
+            .doors
+            .values_mut()
+            .find(|door| door.holder == Some(game))
+        {
             door.target = Some((target, now));
         }
     }
@@ -69,7 +84,11 @@ impl Doors {
 
     /// `game` left: its door stays only if it leads somewhere.
     pub fn left(&mut self, game: SocketAddr) {
-        for door in self.doors.values_mut().filter(|door| door.holder == Some(game)) {
+        for door in self
+            .doors
+            .values_mut()
+            .filter(|door| door.holder == Some(game))
+        {
             door.holder = None;
         }
     }
@@ -77,7 +96,12 @@ impl Doors {
     /// Closes the doors nobody needs: no holder, no target inside the window, and no game that
     /// came in through them (`in_use`) still connected.
     pub fn sweep(&mut self, now: Instant, in_use: impl Fn(u16) -> bool) {
-        let live: Vec<u16> = self.doors.keys().copied().filter(|&port| self.target(port, now).is_some()).collect();
+        let live: Vec<u16> = self
+            .doors
+            .keys()
+            .copied()
+            .filter(|&port| self.target(port, now).is_some())
+            .collect();
         self.doors.retain(|port, door| {
             let keep = door.holder.is_some() || live.contains(port) || in_use(*port);
             if !keep {
@@ -98,7 +122,10 @@ async fn read(socket: Arc<UdpSocket>, port: u16, tx: mpsc::UnboundedSender<Arriv
     loop {
         match socket.recv_from(&mut buf).await {
             Ok((n, from)) => {
-                if tx.send((port, from, Bytes::copy_from_slice(&buf[..n]))).is_err() {
+                if tx
+                    .send((port, from, Bytes::copy_from_slice(&buf[..n])))
+                    .is_err()
+                {
                     return;
                 }
             }
@@ -118,7 +145,11 @@ pub fn proxy_addr(game: SocketAddr, port: u16) -> io::Result<SocketAddr> {
 
 /// The address to bind a socket that will talk to `peer`: any port, in its address family.
 pub fn any_port(peer: SocketAddr) -> SocketAddr {
-    let any: IpAddr = if peer.is_ipv4() { Ipv4Addr::UNSPECIFIED.into() } else { Ipv6Addr::UNSPECIFIED.into() };
+    let any: IpAddr = if peer.is_ipv4() {
+        Ipv4Addr::UNSPECIFIED.into()
+    } else {
+        Ipv6Addr::UNSPECIFIED.into()
+    };
     SocketAddr::new(any, 0)
 }
 
@@ -126,7 +157,10 @@ pub fn any_port(peer: SocketAddr) -> SocketAddr {
 pub async fn resolve(host: &str, port: u16) -> io::Result<SocketAddr> {
     let mut found: Vec<SocketAddr> = tokio::net::lookup_host((host, port)).await?.collect();
     found.sort_by_key(|addr| !addr.is_ipv4());
-    found.first().copied().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, format!("{host}: no address")))
+    found
+        .first()
+        .copied()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, format!("{host}: no address")))
 }
 
 #[cfg(test)]
@@ -143,16 +177,33 @@ mod tests {
         let (mut doors, now) = (Doors::new(tx), Instant::now());
         let (first, second) = (addr(1001), addr(1002));
         let a = doors.open(Ipv4Addr::LOCALHOST.into(), first).await.unwrap();
-        let b = doors.open(Ipv4Addr::LOCALHOST.into(), second).await.unwrap();
-        assert_eq!((doors.target(a, now), doors.target(b, now)), (None, None), "no door leads anywhere before a transfer");
+        let b = doors
+            .open(Ipv4Addr::LOCALHOST.into(), second)
+            .await
+            .unwrap();
+        assert_eq!(
+            (doors.target(a, now), doors.target(b, now)),
+            (None, None),
+            "no door leads anywhere before a transfer"
+        );
 
         // Two games behind one address transfer at once: each door keeps its own target.
         doors.lead(first, ("lobby.example".into(), 19132), now);
         doors.lead(second, ("game.example".into(), 19133), now);
-        assert_eq!(doors.target(a, now + WINDOW), Some(("lobby.example".into(), 19132)));
-        assert_eq!(doors.target(a, now + WINDOW), Some(("lobby.example".into(), 19132)), "a second try still gets through");
+        assert_eq!(
+            doors.target(a, now + WINDOW),
+            Some(("lobby.example".into(), 19132))
+        );
+        assert_eq!(
+            doors.target(a, now + WINDOW),
+            Some(("lobby.example".into(), 19132)),
+            "a second try still gets through"
+        );
         assert_eq!(doors.target(b, now), Some(("game.example".into(), 19133)));
-        assert_eq!(doors.target(a, now + WINDOW + Duration::from_millis(1)), None);
+        assert_eq!(
+            doors.target(a, now + WINDOW + Duration::from_millis(1)),
+            None
+        );
     }
 
     #[tokio::test]
@@ -161,8 +212,14 @@ mod tests {
         let (mut doors, now) = (Doors::new(tx), Instant::now());
         let (stays, leaves, transfers) = (addr(1001), addr(1002), addr(1003));
         let kept = doors.open(Ipv4Addr::LOCALHOST.into(), stays).await.unwrap();
-        doors.open(Ipv4Addr::LOCALHOST.into(), leaves).await.unwrap();
-        let led = doors.open(Ipv4Addr::LOCALHOST.into(), transfers).await.unwrap();
+        doors
+            .open(Ipv4Addr::LOCALHOST.into(), leaves)
+            .await
+            .unwrap();
+        let led = doors
+            .open(Ipv4Addr::LOCALHOST.into(), transfers)
+            .await
+            .unwrap();
         doors.lead(transfers, ("game.example".into(), 19133), now);
         doors.left(leaves);
         doors.left(transfers);
@@ -172,7 +229,10 @@ mod tests {
         open.sort_unstable();
         let mut expected = vec![kept, led];
         expected.sort_unstable();
-        assert_eq!(open, expected, "a connected game's door and a door that leads somewhere stay");
+        assert_eq!(
+            open, expected,
+            "a connected game's door and a door that leads somewhere stay"
+        );
 
         // Past the window the door stays for as long as the game that came through it is connected.
         let late = now + WINDOW + Duration::from_secs(1);

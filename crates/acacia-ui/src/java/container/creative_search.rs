@@ -52,7 +52,12 @@ pub struct SearchBox {
 
 impl SearchBox {
     pub fn new(x: i32, y: i32) -> SearchBox {
-        SearchBox { x, y, blink_on: true, ..SearchBox::default() }
+        SearchBox {
+            x,
+            y,
+            blink_on: true,
+            ..SearchBox::default()
+        }
     }
 
     /// `setValue`: cut to the length limit, cursor and highlight to the end.
@@ -100,10 +105,15 @@ impl SearchBox {
         let show_cursor = self.blink_on && on_screen;
         let (text_x, text_y) = (self.x, self.y);
         let mut draw_x = text_x;
-        let rel_highlight = (self.highlight as i32 - self.display as i32).clamp(0, shown as i32) as usize;
+        let rel_highlight =
+            (self.highlight as i32 - self.display as i32).clamp(0, shown as i32) as usize;
         let head = |n: usize| -> String { displayed.chars().take(n).collect() };
         if shown > 0 {
-            let half = if on_screen { head(rel_cursor as usize) } else { displayed.clone() };
+            let half = if on_screen {
+                head(rel_cursor as usize)
+            } else {
+                displayed.clone()
+            };
             let width = font.width(&Text::literal(half.clone()));
             gui.text(Text::literal(half), draw_x, text_y, COLOR, true);
             draw_x += width + 1;
@@ -111,7 +121,11 @@ impl SearchBox {
         let insert = self.cursor < self.value.len() || self.value.len() >= MAX_LENGTH;
         let mut cursor_x = draw_x;
         if !on_screen {
-            cursor_x = if rel_cursor > 0 { text_x + WIDTH } else { text_x };
+            cursor_x = if rel_cursor > 0 {
+                text_x + WIDTH
+            } else {
+                text_x
+            };
         } else if insert {
             cursor_x -= 1;
             draw_x -= 1;
@@ -123,7 +137,13 @@ impl SearchBox {
         if rel_highlight as i32 != rel_cursor {
             let highlight_x = text_x + font.width(&Text::literal(head(rel_highlight)));
             let right = self.x + WIDTH;
-            gui.highlight(cursor_x.min(right), text_y - 1, (highlight_x - 1).min(right), text_y + 1 + 9, false);
+            gui.highlight(
+                cursor_x.min(right),
+                text_y - 1,
+                (highlight_x - 1).min(right),
+                text_y + 1 + 9,
+                false,
+            );
         }
         if show_cursor {
             if insert {

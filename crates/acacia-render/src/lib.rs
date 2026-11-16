@@ -12,7 +12,6 @@ mod cull;
 pub mod entity;
 pub mod fluid_view;
 pub mod glint;
-pub mod rope;
 mod gpu;
 pub mod item;
 pub mod java_mth;
@@ -23,8 +22,9 @@ pub mod look;
 pub mod lookpack;
 pub mod mesh;
 pub mod particles;
-pub mod shadows;
+pub mod rope;
 mod scene;
+pub mod shadows;
 pub mod sign_text;
 pub mod sky;
 pub mod weather;
@@ -38,11 +38,20 @@ pub use lookpack::LookPack;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("{path}: {source}")]
-    Io { path: String, source: std::io::Error },
+    Io {
+        path: String,
+        source: std::io::Error,
+    },
     #[error("{path}: {source}")]
-    Json { path: String, source: serde_json::Error },
+    Json {
+        path: String,
+        source: serde_json::Error,
+    },
     #[error("{path}: {source}")]
-    Image { path: String, source: image::ImageError },
+    Image {
+        path: String,
+        source: image::ImageError,
+    },
     #[error("{path}: {reason}")]
     LookPack { path: String, reason: String },
     #[error("no compatible GPU adapter: {0}")]

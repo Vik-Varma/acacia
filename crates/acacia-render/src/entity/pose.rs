@@ -50,10 +50,18 @@ impl Pose {
     }
 
     fn index(&mut self, bone: &Arc<str>) -> usize {
-        self.0.iter().position(|b| b.bone == *bone).unwrap_or_else(|| {
-            self.0.push(BonePose { bone: bone.clone(), rotation: [0.0; 3], position: [0.0; 3], scale: [1.0; 3] });
-            self.0.len() - 1
-        })
+        self.0
+            .iter()
+            .position(|b| b.bone == *bone)
+            .unwrap_or_else(|| {
+                self.0.push(BonePose {
+                    bone: bone.clone(),
+                    rotation: [0.0; 3],
+                    position: [0.0; 3],
+                    scale: [1.0; 3],
+                });
+                self.0.len() - 1
+            })
     }
 }
 
@@ -66,8 +74,13 @@ impl Mesh {
         let local = |(joint, name): (&Joint, &String)| {
             let posed = pose.get(name);
             let turn = from_fn(|i| joint.rotation[i] + posed.map_or(0.0, |p| p.rotation[i]));
-            let (moved, scale) = posed.map_or((Vec3::ZERO, Vec3::ONE), |p| (Vec3::from(p.position) / 16.0, Vec3::from(p.scale)));
-            Mat4::from_translation(joint.pivot + moved) * bake::rotation(turn) * Mat4::from_scale(scale) * Mat4::from_translation(-joint.pivot)
+            let (moved, scale) = posed.map_or((Vec3::ZERO, Vec3::ONE), |p| {
+                (Vec3::from(p.position) / 16.0, Vec3::from(p.scale))
+            });
+            Mat4::from_translation(joint.pivot + moved)
+                * bake::rotation(turn)
+                * Mat4::from_scale(scale)
+                * Mat4::from_translation(-joint.pivot)
         };
         let locals: Vec<Mat4> = self.joints.iter().zip(&self.bones).map(local).collect();
         let world = |index: usize| {
@@ -92,14 +105,20 @@ impl Mesh {
         if let Some(model) = &self.java {
             return super::java::mesh::hand(model, &java_poses(model, pose), left);
         }
-        let index = self.bones.iter().position(|b| b == if left { "leftarm" } else { "rightarm" })?;
+        let index = self
+            .bones
+            .iter()
+            .position(|b| b == if left { "leftarm" } else { "rightarm" })?;
         let posed = *self.skin(pose).get(index)?;
         Some(posed * Mat4::from_translation(self.joints[index].pivot))
     }
 }
 
 /// A Java model's poses in `pose`, or its rest poses when it carries none.
-fn java_poses<'a>(model: &super::java::Part, pose: &'a Pose) -> std::borrow::Cow<'a, super::java::Poses> {
+fn java_poses<'a>(
+    model: &super::java::Part,
+    pose: &'a Pose,
+) -> std::borrow::Cow<'a, super::java::Poses> {
     match &pose.1 {
         Some(p) if p.fits(model) => std::borrow::Cow::Borrowed(&**p),
         // Another model's poses (its wearer's, on an armour layer).
@@ -174,10 +193,21 @@ struct Play<'a, 's> {
 impl<'a> Play<'a, '_> {
     fn play(&mut self, name: &str, weight: f32, depth: usize) {
         let (models, definition) = (self.models, self.definition);
-        let Some(id) = definition.animations.get(name).filter(|_| weight != 0.0 && depth <= MAX_NESTING) else { return };
+        let Some(id) = definition
+            .animations
+            .get(name)
+            .filter(|_| weight != 0.0 && depth <= MAX_NESTING)
+        else {
+            return;
+        };
         if let Some(animation) = models.animations.animations.get(id) {
             self.apply(animation, weight);
-        } else if let Some(state) = models.animations.controllers.get(id).and_then(|c| self.state(c)) {
+        } else if let Some(state) = models
+            .animations
+            .controllers
+            .get(id)
+            .and_then(|c| self.state(c))
+        {
             for (name, condition) in &state.animations {
                 let share = condition.as_ref().map_or(1.0, |c| self.scope.num(c));
                 self.play(name, weight * share, depth + 1);
@@ -190,7 +220,10 @@ impl<'a> Play<'a, '_> {
     fn state(&mut self, controller: &'a AnimationController) -> Option<&'a State> {
         let mut state = controller.states.get(&controller.initial)?;
         for _ in 0..MAX_HOPS {
-            let taken = state.transitions.iter().find(|(_, condition)| self.scope.truthy(condition));
+            let taken = state
+                .transitions
+                .iter()
+                .find(|(_, condition)| self.scope.truthy(condition));
             match taken.and_then(|(to, _)| controller.states.get(to)) {
                 Some(next) => state = next,
                 None => break,
@@ -205,15 +238,27 @@ impl<'a> Play<'a, '_> {
         self.time.set(life - (self.scope.query)("delta_time").num());
         let mut time = animation.time.as_ref().map_or(life, |p| self.scope.num(p));
         if let Some(length) = animation.length.filter(|l| *l > 0.0) {
-            time = if animation.looped { time.rem_euclid(length) } else { time.min(length) };
+            time = if animation.looped {
+                time.rem_euclid(length)
+            } else {
+                time.min(length)
+            };
         }
         self.time.set(time);
         for (bone, tracks) in &animation.bones {
-            let rest = self.rest.and_then(|m| Some(m.joints[m.bones.iter().position(|b| **b == **bone)?].rotation)).unwrap_or_default();
+            let rest = self
+                .rest
+                .and_then(|m| Some(m.joints[m.bones.iter().position(|b| **b == **bone)?].rotation))
+                .unwrap_or_default();
             let index = self.pose.index(bone);
             if let Some(track) = &tracks.rotation {
                 let so_far = self.pose.0[index].rotation;
-                let value = track.at(time, from_fn(|i| rest[i] + so_far[i]), &mut self.scope, self.lerp);
+                let value = track.at(
+                    time,
+                    from_fn(|i| rest[i] + so_far[i]),
+                    &mut self.scope,
+                    self.lerp,
+                );
                 self.pose.0[index].rotation = from_fn(|i| so_far[i] + value[i] * weight);
             }
             if let Some(track) = &tracks.position {
@@ -224,7 +269,8 @@ impl<'a> Play<'a, '_> {
             if let Some(track) = &tracks.scale {
                 let so_far = self.pose.0[index].scale;
                 let value = track.at(time, so_far, &mut self.scope, self.lerp);
-                self.pose.0[index].scale = from_fn(|i| so_far[i] * (1.0 + (value[i] - 1.0) * weight));
+                self.pose.0[index].scale =
+                    from_fn(|i| so_far[i] * (1.0 + (value[i] - 1.0) * weight));
             }
         }
     }
@@ -236,7 +282,11 @@ impl EntityModels {
     /// state: `life_time`, `modified_distance_moved`, `modified_move_speed`, `target_x_rotation`
     /// and `target_y_rotation` (the head's pitch and its yaw against the body, in degrees).
     pub fn pose(&self, kind: &str, model: ModelId, query: &dyn Fn(&str) -> Value) -> Pose {
-        if let Some(java) = self.models.get(model as usize).and_then(|m| self.java.pose(model, &m.mesh, query)) {
+        if let Some(java) = self
+            .models
+            .get(model as usize)
+            .and_then(|m| self.java.pose(model, &m.mesh, query))
+        {
             return java;
         }
         let (time, lerp) = (Cell::new(0.0), Cell::new(0.0));
@@ -249,7 +299,15 @@ impl EntityModels {
         if let Some(definition) = self.kinds.get(kind) {
             let scope = self.scope(&ask);
             let rest = self.models.get(model as usize).map(|m| &m.mesh);
-            let mut play = Play { models: self, definition, rest, scope, time: &time, lerp: &lerp, pose };
+            let mut play = Play {
+                models: self,
+                definition,
+                rest,
+                scope,
+                time: &time,
+                lerp: &lerp,
+                pose,
+            };
             for script in &definition.scripts {
                 play.scope.run(script);
             }
@@ -264,8 +322,17 @@ impl EntityModels {
         }
         if pose.get("head").is_none() {
             // Kinds without a look animation still turn their head.
-            let rotation = [query("target_x_rotation").num(), query("target_y_rotation").num(), 0.0];
-            pose.0.push(BonePose { bone: "head".into(), rotation, position: [0.0; 3], scale: [1.0; 3] });
+            let rotation = [
+                query("target_x_rotation").num(),
+                query("target_y_rotation").num(),
+                0.0,
+            ];
+            pose.0.push(BonePose {
+                bone: "head".into(),
+                rotation,
+                position: [0.0; 3],
+                scale: [1.0; 3],
+            });
         }
         pose
     }

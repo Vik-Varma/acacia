@@ -32,11 +32,18 @@ pub fn bake(assets: &Path, out: &Path) -> Result<usize, Error> {
             if path.extension().is_none_or(|e| e != "png") {
                 continue;
             }
-            let Some(base_palette) = base_palette(&path) else { continue };
-            let base = bases.entry(base_palette.clone()).or_insert_with(|| palette(&palettes.join(format!("{base_palette}.png"))));
+            let Some(base_palette) = base_palette(&path) else {
+                continue;
+            };
+            let base = bases
+                .entry(base_palette.clone())
+                .or_insert_with(|| palette(&palettes.join(format!("{base_palette}.png"))));
             let Some(base) = base.as_ref() else { continue };
             let image = image::open(&path)?.into_rgba8();
-            let asset = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+            let asset = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
             for (id, target) in targets.iter().filter(|(_, t)| t.len() == base.len()) {
                 let to = out.join(baked_path(&layer_name, asset, id));
                 std::fs::create_dir_all(to.parent().expect("a file in a directory"))?;
@@ -50,14 +57,23 @@ pub fn bake(assets: &Path, out: &Path) -> Result<usize, Error> {
 
 /// The `palette.base_palette` of a texture's `.mcmeta`, as a path under `textures/palettes`.
 fn base_palette(texture: &Path) -> Option<String> {
-    let meta: serde_json::Value = serde_json::from_slice(&std::fs::read(format!("{}.mcmeta", texture.display())).ok()?).ok()?;
+    let meta: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(format!("{}.mcmeta", texture.display())).ok()?)
+            .ok()?;
     let id = meta["palette"]["base_palette"].as_str()?;
     Some(id.strip_prefix("minecraft:").unwrap_or(id).to_owned())
 }
 
 /// A palette image's pixels, row by row, as ARGB.
 fn palette(path: &Path) -> Option<Vec<u32>> {
-    Some(image::open(path).ok()?.into_rgba8().pixels().map(|p| argb(p.0)).collect())
+    Some(
+        image::open(path)
+            .ok()?
+            .into_rgba8()
+            .pixels()
+            .map(|p| argb(p.0))
+            .collect(),
+    )
 }
 
 fn argb([r, g, b, a]: [u8; 4]) -> u32 {
@@ -67,7 +83,12 @@ fn argb([r, g, b, a]: [u8; 4]) -> u32 {
 /// `PaletteMapping.create(base, target)` applied to every pixel, as `NativeImage.mappedCopy` does.
 fn mapped(image: &RgbaImage, base: &[u32], target: &[u32]) -> RgbaImage {
     let opaque = |c: u32| c | 0xFF00_0000;
-    let swaps: HashMap<u32, u32> = base.iter().zip(target).filter(|(k, _)| *k >> 24 != 0).map(|(k, t)| (opaque(*k), *t)).collect();
+    let swaps: HashMap<u32, u32> = base
+        .iter()
+        .zip(target)
+        .filter(|(k, _)| *k >> 24 != 0)
+        .map(|(k, t)| (opaque(*k), *t))
+        .collect();
     let mut out = image.clone();
     for p in out.pixels_mut() {
         let color = argb(p.0);
@@ -88,7 +109,9 @@ mod tests {
 
     #[test]
     fn swaps_base_colours_and_keeps_alpha_and_strangers() {
-        let image = RgbaImage::from_raw(3, 1, vec![10, 10, 10, 128, 20, 20, 20, 255, 10, 10, 10, 0]).unwrap();
+        let image =
+            RgbaImage::from_raw(3, 1, vec![10, 10, 10, 128, 20, 20, 20, 255, 10, 10, 10, 0])
+                .unwrap();
         let base = [argb([10, 10, 10, 255]), argb([0, 0, 0, 0])];
         let target = [argb([200, 100, 50, 255]), argb([1, 1, 1, 255])];
         let out = mapped(&image, &base, &target);

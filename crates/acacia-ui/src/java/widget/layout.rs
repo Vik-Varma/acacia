@@ -127,7 +127,11 @@ impl Cell {
     /// `AbstractChildWrapper.setY`: rounded.
     fn place_y(&mut self, ws: &mut Arena, y: i32, space: i32) {
         let most = (space - self.elem.h(ws) - self.settings.pad[3]) as f32;
-        let offset = java_round(lerp(self.settings.align[1], self.settings.pad[1] as f32, most));
+        let offset = java_round(lerp(
+            self.settings.align[1],
+            self.settings.pad[1] as f32,
+            most,
+        ));
         self.elem.set_y(ws, offset + y);
     }
 }
@@ -139,10 +143,18 @@ pub fn java_round(v: f32) -> i32 {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Kind {
-    Grid { row_spacing: i32, col_spacing: i32 },
-    Frame { min_w: i32, min_h: i32 },
+    Grid {
+        row_spacing: i32,
+        col_spacing: i32,
+    },
+    Frame {
+        min_w: i32,
+        min_h: i32,
+    },
     /// `EqualSpacingLayout`; `vertical` its orientation.
-    Equal { vertical: bool },
+    Equal {
+        vertical: bool,
+    },
 }
 
 pub struct Layout {
@@ -158,25 +170,73 @@ pub struct Layout {
 
 impl Layout {
     pub fn grid() -> Layout {
-        Layout { kind: Kind::Grid { row_spacing: 0, col_spacing: 0 }, x: 0, y: 0, w: 0, h: 0, cells: Vec::new(), defaults: Settings::default() }
+        Layout {
+            kind: Kind::Grid {
+                row_spacing: 0,
+                col_spacing: 0,
+            },
+            x: 0,
+            y: 0,
+            w: 0,
+            h: 0,
+            cells: Vec::new(),
+            defaults: Settings::default(),
+        }
     }
 
     /// `new FrameLayout(minW, minH)`: children centred.
     pub fn frame(min_w: i32, min_h: i32) -> Layout {
-        Layout { kind: Kind::Frame { min_w, min_h }, x: 0, y: 0, w: min_w, h: min_h, cells: Vec::new(), defaults: Settings { pad: [0; 4], align: [0.5, 0.5] } }
+        Layout {
+            kind: Kind::Frame { min_w, min_h },
+            x: 0,
+            y: 0,
+            w: min_w,
+            h: min_h,
+            cells: Vec::new(),
+            defaults: Settings {
+                pad: [0; 4],
+                align: [0.5, 0.5],
+            },
+        }
     }
 
     pub fn equal(w: i32, h: i32, vertical: bool) -> Layout {
-        Layout { kind: Kind::Equal { vertical }, x: 0, y: 0, w, h, cells: Vec::new(), defaults: Settings::default() }
+        Layout {
+            kind: Kind::Equal { vertical },
+            x: 0,
+            y: 0,
+            w,
+            h,
+            cells: Vec::new(),
+            defaults: Settings::default(),
+        }
     }
 
     pub fn spacing(mut self, rows: i32, cols: i32) -> Layout {
-        self.kind = Kind::Grid { row_spacing: rows, col_spacing: cols };
+        self.kind = Kind::Grid {
+            row_spacing: rows,
+            col_spacing: cols,
+        };
         self
     }
 
-    pub fn add(&mut self, elem: Elem, row: usize, col: usize, rows: usize, cols: usize, settings: Settings) {
-        self.cells.push(Cell { elem, settings, row, col, rows, cols });
+    pub fn add(
+        &mut self,
+        elem: Elem,
+        row: usize,
+        col: usize,
+        rows: usize,
+        cols: usize,
+        settings: Settings,
+    ) {
+        self.cells.push(Cell {
+            elem,
+            settings,
+            row,
+            col,
+            rows,
+            cols,
+        });
     }
 
     /// `FrameLayout.addChild` / `EqualSpacingLayout.addChild`.
@@ -213,7 +273,10 @@ impl Layout {
             c.elem.arrange(ws);
         }
         match self.kind {
-            Kind::Grid { row_spacing, col_spacing } => self.arrange_grid(ws, row_spacing, col_spacing),
+            Kind::Grid {
+                row_spacing,
+                col_spacing,
+            } => self.arrange_grid(ws, row_spacing, col_spacing),
             Kind::Frame { min_w, min_h } => {
                 let w = self.cells.iter().map(|c| c.w(ws)).fold(min_w, i32::max);
                 let h = self.cells.iter().map(|c| c.h(ws)).fold(min_h, i32::max);
@@ -230,8 +293,18 @@ impl Layout {
     }
 
     fn arrange_grid(&mut self, ws: &mut Arena, row_spacing: i32, col_spacing: i32) {
-        let max_row = self.cells.iter().map(|c| c.row + c.rows - 1).max().unwrap_or(0);
-        let max_col = self.cells.iter().map(|c| c.col + c.cols - 1).max().unwrap_or(0);
+        let max_row = self
+            .cells
+            .iter()
+            .map(|c| c.row + c.rows - 1)
+            .max()
+            .unwrap_or(0);
+        let max_col = self
+            .cells
+            .iter()
+            .map(|c| c.col + c.cols - 1)
+            .max()
+            .unwrap_or(0);
         let mut col_w = vec![0; max_col + 1];
         let mut row_h = vec![0; max_row + 1];
         for c in &self.cells {
@@ -254,9 +327,11 @@ impl Layout {
         }
         let (x, y) = (self.x, self.y);
         for c in &mut self.cells {
-            let aw = col_w[c.col..c.col + c.cols].iter().sum::<i32>() + col_spacing * (c.cols as i32 - 1);
+            let aw = col_w[c.col..c.col + c.cols].iter().sum::<i32>()
+                + col_spacing * (c.cols as i32 - 1);
             c.place_x(ws, x + col_x[c.col], aw);
-            let ah = row_h[c.row..c.row + c.rows].iter().sum::<i32>() + row_spacing * (c.rows as i32 - 1);
+            let ah = row_h[c.row..c.row + c.rows].iter().sum::<i32>()
+                + row_spacing * (c.rows as i32 - 1);
             c.place_y(ws, y + row_y[c.row], ah);
         }
         self.w = col_x[max_col] + col_w[max_col];
@@ -270,7 +345,11 @@ impl Layout {
         let primary = |c: &Cell, ws: &Arena| if vertical { c.h(ws) } else { c.w(ws) };
         let secondary = |c: &Cell, ws: &Arena| if vertical { c.w(ws) } else { c.h(ws) };
         let total: i32 = self.cells.iter().map(|c| primary(c, ws)).sum();
-        let max_secondary = self.cells.iter().map(|c| secondary(c, ws)).fold(if vertical { self.w } else { self.h }, i32::max);
+        let max_secondary = self
+            .cells
+            .iter()
+            .map(|c| secondary(c, ws))
+            .fold(if vertical { self.w } else { self.h }, i32::max);
         let remaining = (if vertical { self.h } else { self.w }) - total;
         let mut position = if vertical { self.y } else { self.x };
         let mut d = Divisor::new(remaining, self.cells.len() as i32 - 1);
@@ -280,13 +359,25 @@ impl Layout {
                 position += d.next_int();
             }
             let size = primary(c, ws);
-            if vertical { c.place_y(ws, position, size) } else { c.place_x(ws, position, size) }
+            if vertical {
+                c.place_y(ws, position, size)
+            } else {
+                c.place_x(ws, position, size)
+            }
             position += size;
         }
         for c in &mut self.cells {
-            if vertical { c.place_x(ws, secondary_pos, max_secondary) } else { c.place_y(ws, secondary_pos, max_secondary) }
+            if vertical {
+                c.place_x(ws, secondary_pos, max_secondary)
+            } else {
+                c.place_y(ws, secondary_pos, max_secondary)
+            }
         }
-        if vertical { self.w = max_secondary } else { self.h = max_secondary }
+        if vertical {
+            self.w = max_secondary
+        } else {
+            self.h = max_secondary
+        }
     }
 }
 
@@ -300,7 +391,21 @@ pub struct Divisor {
 
 impl Divisor {
     pub fn new(n: i32, d: i32) -> Divisor {
-        if d > 0 { Divisor { d, q: n / d, m: n % d, r: 0 } } else { Divisor { d, q: 0, m: 0, r: 0 } }
+        if d > 0 {
+            Divisor {
+                d,
+                q: n / d,
+                m: n % d,
+                r: 0,
+            }
+        } else {
+            Divisor {
+                d,
+                q: 0,
+                m: 0,
+                r: 0,
+            }
+        }
     }
     pub fn next_int(&mut self) -> i32 {
         let mut v = self.q;
@@ -322,13 +427,25 @@ pub struct Linear {
 
 impl Linear {
     pub fn new(vertical: bool, spacing: i32) -> Linear {
-        let grid = if vertical { Layout::grid().spacing(spacing, 0) } else { Layout::grid().spacing(0, spacing) };
-        Linear { grid, vertical, next: 0 }
+        let grid = if vertical {
+            Layout::grid().spacing(spacing, 0)
+        } else {
+            Layout::grid().spacing(0, spacing)
+        };
+        Linear {
+            grid,
+            vertical,
+            next: 0,
+        }
     }
     pub fn add(&mut self, elem: Elem, settings: Settings) {
         let i = self.next;
         self.next += 1;
-        if self.vertical { self.grid.add(elem, i, 0, 1, 1, settings) } else { self.grid.add(elem, 0, i, 1, 1, settings) }
+        if self.vertical {
+            self.grid.add(elem, i, 0, 1, 1, settings)
+        } else {
+            self.grid.add(elem, 0, i, 1, 1, settings)
+        }
     }
     pub fn add_default(&mut self, elem: Elem) {
         let s = self.grid.defaults;
@@ -364,7 +481,16 @@ impl RowHelper {
 
 /// `FrameLayout.alignInRectangle`.
 #[allow(clippy::too_many_arguments)]
-pub fn align_in_rect(e: &mut Elem, ws: &mut Arena, x: i32, y: i32, w: i32, h: i32, ax: f32, ay: f32) {
+pub fn align_in_rect(
+    e: &mut Elem,
+    ws: &mut Arena,
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+    ax: f32,
+    ay: f32,
+) {
     let ox = lerp(ax, 0.0, (w - e.w(ws)) as f32) as i32;
     e.set_x(ws, x + ox);
     let oy = lerp(ay, 0.0, (h - e.h(ws)) as f32) as i32;

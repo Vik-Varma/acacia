@@ -21,7 +21,14 @@ pub const WEST: Dir = 4;
 pub const EAST: Dir = 5;
 
 const FULL_BRIGHT: u32 = 0x00F0_00F0;
-const NORMALS: [[i32; 3]; 6] = [[0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0]];
+const NORMALS: [[i32; 3]; 6] = [
+    [0, -1, 0],
+    [0, 1, 0],
+    [0, 0, -1],
+    [0, 0, 1],
+    [-1, 0, 0],
+    [1, 0, 0],
+];
 /// Java's direction of each of the renderer's axis faces ([`super::quad::DIRS`] order).
 pub(super) const OF_FACE: [Dir; 6] = [EAST, WEST, UP, DOWN, SOUTH, NORTH];
 
@@ -44,8 +51,15 @@ pub(super) fn step(p: [i32; 3], d: Dir) -> [i32; 3] {
 /// `Direction.getApproximateNearest` of a quad's normal, up when it has none.
 pub fn facing(positions: &[[f32; 3]; 4]) -> Dir {
     let sub = |a: [f32; 3], b: [f32; 3]| [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-    let (a, b) = (sub(positions[1], positions[0]), sub(positions[2], positions[0]));
-    let n = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    let (a, b) = (
+        sub(positions[1], positions[0]),
+        sub(positions[2], positions[0]),
+    );
+    let n = [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ];
     let mut best = (UP, 0.0f32);
     for (d, normal) in NORMALS.iter().enumerate() {
         let along = n[0] * normal[0] as f32 + n[1] * normal[1] as f32 + n[2] * normal[2] as f32;
@@ -128,39 +142,74 @@ impl<W: LightWorld> Lighter<W> {
         let facing = facing(&q.positions);
         if q.ambient_occlusion && own.emission == 0 {
             let (brightness, coords) = self.ambient_occlusion(own, q.pos, &q.positions, facing);
-            return QuadOut { coords, grey: brightness.map(|b| scale(grey(b), directional)) };
+            return QuadOut {
+                coords,
+                grey: brightness.map(|b| scale(grey(b), directional)),
+            };
         }
         let coords = match q.cull {
             // The block's own state at its neighbour's light (`LevelRenderer.getLightCoords`).
             Some(d) => self.coords(own, step(q.pos, d)),
             None => {
-                let at = if shape(&q.positions, facing, own.full_collision).cubic { step(q.pos, facing) } else { q.pos };
+                let at = if shape(&q.positions, facing, own.full_collision).cubic {
+                    step(q.pos, facing)
+                } else {
+                    q.pos
+                };
                 self.coords(own, at)
             }
         };
-        QuadOut { coords: [coords; 4], grey: [grey(directional) as u32; 4] }
+        QuadOut {
+            coords: [coords; 4],
+            grey: [grey(directional) as u32; 4],
+        }
     }
 
     /// `prepareQuadAmbientOcclusion`: brightness before `ARGB.gray` and smooth light coords.
-    fn ambient_occlusion(&self, own: &LightFacts, pos: [i32; 3], positions: &[[f32; 3]; 4], face: Dir) -> ([f32; 4], [u32; 4]) {
+    fn ambient_occlusion(
+        &self,
+        own: &LightFacts,
+        pos: [i32; 3],
+        positions: &[[f32; 3]; 4],
+        face: Dir,
+    ) -> ([f32; 4], [u32; 4]) {
         let shape = shape(positions, face, own.full_collision);
         let base = if shape.cubic { step(pos, face) } else { pos };
         let adjacency = &ADJACENCY[usize::from(face)];
         let corner = |i: usize| step(base, adjacency.corners[i]);
         let sample = |p: [i32; 3]| (self.coords(&self.facts(p), p), self.shade(p));
-        let [(light0, shade0), (light1, shade1), (light2, shade2), (light3, shade3)] = [0, 1, 2, 3].map(|i| sample(corner(i)));
+        let [
+            (light0, shade0),
+            (light1, shade1),
+            (light2, shade2),
+            (light3, shade3),
+        ] = [0, 1, 2, 3].map(|i| sample(corner(i)));
         let permeable = |i: usize| self.facts(step(corner(i), face)).permeable();
         let (p0, p1, p2, p3) = (permeable(0), permeable(1), permeable(2), permeable(3));
         // Neither side open: Java reuses corner 0 for the diagonal, whichever diagonal it is.
-        let diagonal = |a: usize, b: usize, open: bool| if open { sample(step(corner(a), adjacency.corners[b])) } else { (light0, shade0) };
+        let diagonal = |a: usize, b: usize, open: bool| {
+            if open {
+                sample(step(corner(a), adjacency.corners[b]))
+            } else {
+                (light0, shade0)
+            }
+        };
         let (light02, shade02) = diagonal(0, 2, p2 || p0);
         let (light03, shade03) = diagonal(0, 3, p3 || p0);
         let (light12, shade12) = diagonal(1, 2, p2 || p1);
         let (light13, shade13) = diagonal(1, 3, p3 || p1);
         let next = step(pos, face);
         let next_state = self.facts(next);
-        let light_center = if shape.cubic || !next_state.solid_render { self.coords(&next_state, next) } else { self.coords(own, pos) };
-        let shade_center = if shape.cubic { self.shade(base) } else { self.shade(pos) };
+        let light_center = if shape.cubic || !next_state.solid_render {
+            self.coords(&next_state, next)
+        } else {
+            self.coords(own, pos)
+        };
+        let shade_center = if shape.cubic {
+            self.shade(base)
+        } else {
+            self.shade(pos)
+        };
         let ao = [
             (shade3 + shade0 + shade03 + shade_center) * 0.25,
             (shade2 + shade0 + shade02 + shade_center) * 0.25,
@@ -178,7 +227,8 @@ impl<W: LightWorld> Lighter<W> {
             if shape.partial {
                 let f = |i: usize| shape.bounds[usize::from(adjacency.weights[k][i])];
                 let w = [f(0) * f(1), f(2) * f(3), f(4) * f(5), f(6) * f(7)];
-                brightness[vertex] = (ao[0] * w[0] + ao[1] * w[1] + ao[2] * w[2] + ao[3] * w[3]).clamp(0.0, 1.0);
+                brightness[vertex] =
+                    (ao[0] * w[0] + ao[1] * w[1] + ao[2] * w[2] + ao[3] * w[3]).clamp(0.0, 1.0);
                 light[vertex] = weighted_blend(blended, w);
             } else {
                 brightness[vertex] = ao[k];
@@ -240,7 +290,14 @@ pub(super) fn shape(positions: &[[f32; 3]; 4], face: Dir, full: bool) -> Shape {
         }
     }
     let mut bounds = [0f32; 12];
-    for (index, value) in [(WEST, min[0]), (EAST, max[0]), (DOWN, min[1]), (UP, max[1]), (NORTH, min[2]), (SOUTH, max[2])] {
+    for (index, value) in [
+        (WEST, min[0]),
+        (EAST, max[0]),
+        (DOWN, min[1]),
+        (UP, max[1]),
+        (NORTH, min[2]),
+        (SOUTH, max[2]),
+    ] {
         bounds[usize::from(index)] = value;
         bounds[usize::from(index) + 6] = 1.0 - value;
     }
@@ -254,5 +311,9 @@ pub(super) fn shape(positions: &[[f32; 3]; 4], face: Dir, full: bool) -> Shape {
         WEST => (partial(1, 2), min[0] == max[0] && (min[0] < lo || full)),
         _ => (partial(1, 2), min[0] == max[0] && (max[0] > hi || full)),
     };
-    Shape { bounds, partial, cubic }
+    Shape {
+        bounds,
+        partial,
+        cubic,
+    }
 }

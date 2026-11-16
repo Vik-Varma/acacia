@@ -1,16 +1,17 @@
 //! The server packets that steer the simulation: teleports, corrections, knockback, effects, attributes.
 
 use acacia_client::proto::packets::{
-    ChangeDimension, CorrectPlayerMovePrediction, CorrectPlayerMovePredictionPredictionType, MobEffect, MobEffectEventId, MovePlayer, MovementEffect, Respawn,
-    SetEntityMotion, UpdateAttributes,
+    ChangeDimension, CorrectPlayerMovePrediction, CorrectPlayerMovePredictionPredictionType,
+    MobEffect, MobEffectEventId, MovePlayer, MovementEffect, Respawn, SetEntityMotion,
+    UpdateAttributes,
 };
 use acacia_client::proto::types::MovementEffectType;
 use acacia_client::proto::{DecodeError, Packet, RawPacket};
-use acacia_physics::constants::FREEZE_SPEED_MODIFIER;
 use acacia_physics::Vec3;
+use acacia_physics::constants::FREEZE_SPEED_MODIFIER;
 
 use super::rewind::Correction;
-use super::{Movement, VehicleCorrection, EYE_HEIGHT, SETBACK};
+use super::{EYE_HEIGHT, Movement, SETBACK, VehicleCorrection};
 use crate::state::Me;
 
 /// `Respawn` state carrying the position the player respawns at.
@@ -65,7 +66,8 @@ impl Movement {
         }
         let Some(st) = &mut self.physics else {
             // A teleport before movement starts still needs HandledTeleport, or BDS drops our inputs.
-            self.ack_teleport |= packet.id == MovePlayer::ID && u64::from(packet.decode::<MovePlayer>()?.runtime_id) == me.runtime_entity_id;
+            self.ack_teleport |= packet.id == MovePlayer::ID
+                && u64::from(packet.decode::<MovePlayer>()?.runtime_id) == me.runtime_entity_id;
             return Ok(());
         };
         match packet.id {
@@ -86,7 +88,15 @@ impl Movement {
                         self.current_on_landing = m.tick != 0;
                     } else {
                         let on_ground = st.on_ground;
-                        self.history.schedule(m.tick + 1, Correction { feet, delta: [0.0; 3], on_ground, teleport: true });
+                        self.history.schedule(
+                            m.tick + 1,
+                            Correction {
+                                feet,
+                                delta: [0.0; 3],
+                                on_ground,
+                                teleport: true,
+                            },
+                        );
                         self.ack_teleport = true;
                     }
                     self.teleports += 1;
@@ -118,28 +128,68 @@ impl Movement {
                     our_tick = self.tick, server_tick = c.tick, ours = ?st.pos, server = ?feet(&c.position),
                     delta = ?[c.delta.x, c.delta.y, c.delta.z], on_ground = c.on_ground, "movement correction"
                 );
-                let (feet, delta, on_ground) = (feet(&c.position), [c.delta.x, c.delta.y, c.delta.z], c.on_ground);
-                let ours = if c.tick == 0 { Some(st.pos) } else { self.history.position_at(c.tick) };
-                if ours.is_none_or(|p| p.iter().zip(feet).map(|(a, b)| (a - b) * (a - b)).sum::<f32>() > SETBACK * SETBACK) {
+                let (feet, delta, on_ground) = (
+                    feet(&c.position),
+                    [c.delta.x, c.delta.y, c.delta.z],
+                    c.on_ground,
+                );
+                let ours = if c.tick == 0 {
+                    Some(st.pos)
+                } else {
+                    self.history.position_at(c.tick)
+                };
+                if ours.is_none_or(|p| {
+                    p.iter()
+                        .zip(feet)
+                        .map(|(a, b)| (a - b) * (a - b))
+                        .sum::<f32>()
+                        > SETBACK * SETBACK
+                }) {
                     self.last_setback = Some(self.tick);
                 }
                 if c.tick == 0 {
                     st.apply_correction(feet, delta, on_ground);
                 } else {
-                    self.history.schedule(c.tick, Correction { feet, delta, on_ground, teleport: false });
+                    self.history.schedule(
+                        c.tick,
+                        Correction {
+                            feet,
+                            delta,
+                            on_ground,
+                            teleport: false,
+                        },
+                    );
                 }
                 self.corrections += 1;
             }
-            UpdateAttributes::ID if crate::state::leading_entity(packet) == Some(me.runtime_entity_id) => {
+            UpdateAttributes::ID
+                if crate::state::leading_entity(packet) == Some(me.runtime_entity_id) =>
+            {
                 let p: UpdateAttributes = packet.decode()?;
                 {
                     // Speed and Slowness arrive as modifiers on the movement attribute, and so do the sprint
                     // boost (multiplying) and freezing (adding), which the simulation applies itself.
-                    for a in p.attributes.iter().filter(|a| a.name == "minecraft:movement") {
-                        let amount = |name: &str| a.modifiers.iter().find(|m| m.name == name).map_or(0.0, |m| m.amount);
-                        let value = a.current /(1.0 + amount("Sprinting speed boost")) - amount("Freeze effect");
+                    for a in p
+                        .attributes
+                        .iter()
+                        .filter(|a| a.name == "minecraft:movement")
+                    {
+                        let amount = |name: &str| {
+                            a.modifiers
+                                .iter()
+                                .find(|m| m.name == name)
+                                .map_or(0.0, |m| m.amount)
+                        };
+                        let value = a.current / (1.0 + amount("Sprinting speed boost"))
+                            - amount("Freeze effect");
                         let freeze = amount("Freeze effect") / FREEZE_SPEED_MODIFIER;
-                        tracing::debug!(our_tick = self.tick, server_tick = p.tick, value, freeze, "movement attribute");
+                        tracing::debug!(
+                            our_tick = self.tick,
+                            server_tick = p.tick,
+                            value,
+                            freeze,
+                            "movement attribute"
+                        );
                         st.set_movement_attribute(value);
                         self.history.movement_attribute(p.tick, value);
                         // Our freeze steps per input tick, the server's per world tick: follow the server's.
@@ -160,8 +210,15 @@ impl Movement {
             }
             MovementEffect::ID => {
                 let e: MovementEffect = packet.decode()?;
-                if e.runtime_id == me.runtime_entity_id && e.effect_type == MovementEffectType::GLIDEBOOST {
-                    tracing::debug!(our_tick = self.tick, server_tick = e.tick, duration = e.effect_duration, "glide boost");
+                if e.runtime_id == me.runtime_entity_id
+                    && e.effect_type == MovementEffectType::GLIDEBOOST
+                {
+                    tracing::debug!(
+                        our_tick = self.tick,
+                        server_tick = e.tick,
+                        duration = e.effect_duration,
+                        "glide boost"
+                    );
                     self.server_glide_boost(e.effect_duration, e.tick);
                 }
             }
@@ -171,7 +228,10 @@ impl Movement {
                     tracing::debug!(our_tick = self.tick, server_tick = m.tick, velocity = ?m.velocity, "knockback");
                     // Knockback stamped with tick K moves the player on input tick K+1.
                     let velocity = [m.velocity.x, m.velocity.y, m.velocity.z];
-                    if m.tick == 0 || m.tick >= self.tick || !self.history.knockback(m.tick + 1, velocity) {
+                    if m.tick == 0
+                        || m.tick >= self.tick
+                        || !self.history.knockback(m.tick + 1, velocity)
+                    {
                         st.queue_knockback(velocity);
                     }
                 }

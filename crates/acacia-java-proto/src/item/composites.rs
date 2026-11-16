@@ -1,6 +1,9 @@
 //! Skippers for the multi-field component records in [`super::components`].
 
-use super::codecs::{Skipped, boolean, bytes, either, float, holder_set, list, optional, profile_properties, sound, string, text, varint};
+use super::codecs::{
+    Skipped, boolean, bytes, either, float, holder_set, list, optional, profile_properties, sound,
+    string, text, varint,
+};
 use super::{Components, MAX_DEPTH};
 use crate::{Error, nbt};
 

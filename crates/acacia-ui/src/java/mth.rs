@@ -44,7 +44,11 @@ const SIN_SCALE: f64 = 10430.378350470453;
 
 fn sin_table() -> &'static [f32] {
     static TABLE: std::sync::OnceLock<Vec<f32>> = std::sync::OnceLock::new();
-    TABLE.get_or_init(|| (0..65536).map(|i| (f64::from(i) / SIN_SCALE).sin() as f32).collect())
+    TABLE.get_or_init(|| {
+        (0..65536)
+            .map(|i| (f64::from(i) / SIN_SCALE).sin() as f32)
+            .collect()
+    })
 }
 
 /// `Mth.sin`: the 65536-entry table, indexed through Java's `(long)` cast.
@@ -183,12 +187,18 @@ mod tests {
         let mut r = JavaRandom::new(42);
         assert_eq!((r.next_int(), r.next_int_bound(10)), (-1_170_105_035, 3));
         let mut r = JavaRandom::new(0);
-        assert_eq!((r.next_int_bound(2), r.next_int_bound(3), r.next_float()), (1, 1, 0.240_536_39));
+        assert_eq!(
+            (r.next_int_bound(2), r.next_int_bound(3), r.next_float()),
+            (1, 1, 0.240_536_39)
+        );
     }
 
     #[test]
     fn floors_and_colours() {
-        assert_eq!((floor(-0.5), ceil(-0.5), floor(2.0), ceil(2.1)), (-1, 0, 2, 3));
+        assert_eq!(
+            (floor(-0.5), ceil(-0.5), floor(2.0), ceil(2.1)),
+            (-1, 0, 2, 3)
+        );
         assert_eq!(white(0.5), 0x7FFF_FFFF);
         assert_eq!(multiply(0x80FF_FFFF, 0xFF80_8080), 0x8080_8080);
         assert_eq!(lerp_discrete(0.0, 0, 10), 0);

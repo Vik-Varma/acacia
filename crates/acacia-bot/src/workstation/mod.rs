@@ -21,6 +21,7 @@ pub(crate) mod enchants;
 mod furnace;
 mod grid;
 mod grindstone;
+mod hand;
 mod held_grid;
 #[cfg(feature = "java")]
 mod java_book;
@@ -30,7 +31,6 @@ mod java_craft;
 mod java_station;
 #[cfg(feature = "java")]
 mod java_trade;
-mod hand;
 mod loom;
 mod pick;
 mod repair;
@@ -67,17 +67,28 @@ pub(super) enum StationStep<'a> {
 
 impl Bot {
     /// Opens the block at `pos` and checks that it shows one of `kinds`.
-    async fn open_station(&mut self, pos: BlockPos, kinds: &[WindowType]) -> Result<(), ActionError> {
+    async fn open_station(
+        &mut self,
+        pos: BlockPos,
+        kinds: &[WindowType],
+    ) -> Result<(), ActionError> {
         let open = self.open_container_at(pos).await?;
         if kinds.contains(&open.window_type) {
             return Ok(());
         }
         self.close_container().await?;
-        Err(ActionError::NotPossible(format!("the block at {pos:?} opened a {:?} window", open.window_type)))
+        Err(ActionError::NotPossible(format!(
+            "the block at {pos:?} opened a {:?} window",
+            open.window_type
+        )))
     }
 
     /// [`Bot::open_station`], then the look at the screen before the first click.
-    async fn open_station_and_look(&mut self, pos: BlockPos, kinds: &[WindowType]) -> Result<(), ActionError> {
+    async fn open_station_and_look(
+        &mut self,
+        pos: BlockPos,
+        kinds: &[WindowType],
+    ) -> Result<(), ActionError> {
         self.open_station(pos, kinds).await?;
         self.human_pause(human::SCREEN_OPEN_LOOK).await
     }
@@ -105,10 +116,17 @@ impl Bot {
 
     /// Moves `count` items accepted by `wanted` (identifier, metadata) from the main inventory
     /// into `to`, one click per source stack.
-    async fn put_matching(&mut self, wanted: impl Fn(&str, u32) -> bool, count: u16, to: SlotRef) -> Result<(), ActionError> {
+    async fn put_matching(
+        &mut self,
+        wanted: impl Fn(&str, u32) -> bool,
+        count: u16,
+        to: SlotRef,
+    ) -> Result<(), ActionError> {
         let sources = matching_slots(&self.state, &wanted);
         if sources.iter().map(|(_, n)| *n).sum::<u16>() < count {
-            return Err(ActionError::NotPossible(format!("not enough items for {to:?}: need {count}")));
+            return Err(ActionError::NotPossible(format!(
+                "not enough items for {to:?}: need {count}"
+            )));
         }
         let mut left = count;
         for (slot, available) in sources {
@@ -124,7 +142,11 @@ impl Bot {
 
     /// Sends the craft `plan` builds, or on Java does `step` and takes what the station offers.
     #[cfg_attr(not(feature = "java"), allow(unused_variables))]
-    async fn finish_station(&mut self, plan: impl Fn(&GameState) -> Result<(Craft, Vec<Op>), ActionError>, step: StationStep<'_>) -> Result<(), ActionError> {
+    async fn finish_station(
+        &mut self,
+        plan: impl Fn(&GameState) -> Result<(Craft, Vec<Op>), ActionError>,
+        step: StationStep<'_>,
+    ) -> Result<(), ActionError> {
         #[cfg(feature = "java")]
         if self.java().is_some() {
             return self.java_station_step(step).await;
@@ -151,7 +173,10 @@ impl Bot {
 }
 
 /// Main-inventory slots whose item `wanted` accepts, with their counts.
-pub(crate) fn matching_slots(state: &GameState, wanted: impl Fn(&str, u32) -> bool) -> Vec<(SlotRef, u16)> {
+pub(crate) fn matching_slots(
+    state: &GameState,
+    wanted: impl Fn(&str, u32) -> bool,
+) -> Vec<(SlotRef, u16)> {
     (0..Inventory::MAIN_SLOTS as u8)
         .map(SlotRef::Main)
         .filter_map(|slot| {
@@ -163,12 +188,19 @@ pub(crate) fn matching_slots(state: &GameState, wanted: impl Fn(&str, u32) -> bo
 }
 
 /// `stack` with its identifier, as craft results carry it.
-pub(crate) fn named(state: &GameState, stack: &ItemStack) -> Result<(String, ItemStack), ActionError> {
-    let name = state.items.name(stack.network_id).ok_or_else(|| ActionError::NotPossible(format!("item {} is not in the registry", stack.network_id)))?;
+pub(crate) fn named(
+    state: &GameState,
+    stack: &ItemStack,
+) -> Result<(String, ItemStack), ActionError> {
+    let name = state.items.name(stack.network_id).ok_or_else(|| {
+        ActionError::NotPossible(format!("item {} is not in the registry", stack.network_id))
+    })?;
     Ok((name.to_owned(), stack.clone()))
 }
 
 /// The occupied stack in `slot`.
 pub(crate) fn occupied(state: &GameState, slot: SlotRef) -> Result<&ItemStack, ActionError> {
-    slot.stack(state).filter(|s| !s.is_empty()).ok_or_else(|| ActionError::NotPossible(format!("{slot:?} is empty")))
+    slot.stack(state)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| ActionError::NotPossible(format!("{slot:?} is empty")))
 }

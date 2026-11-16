@@ -6,9 +6,9 @@ use super::journal::{self, Entry, Kind, WalkEnd};
 use super::plan::{self, Next};
 use super::status::{HoldWhy, Phase};
 use super::survey::Need;
-use crate::pathfind::process::{Act, Ctx, Event, Process, Want};
-use crate::pathfind::GotoOpts;
 use crate::ActionError;
+use crate::pathfind::GotoOpts;
+use crate::pathfind::process::{Act, Ctx, Event, Process, Want};
 
 /// Ticks of waiting before stations are asked again (they may have been refilled).
 const ASK_AGAIN: u64 = 600;
@@ -18,14 +18,20 @@ use super::wedged::ESCAPE_AFTER;
 fn cell_of(act: &Act) -> Option<acacia_physics::BlockPos> {
     match act {
         Act::Place { against, face, .. } => Some(face.adjacent(*against)),
-        Act::Break { pos } | Act::Fill { pos, .. } | Act::Use { pos, .. } | Act::Sign { pos, .. } | Act::UseOn { cell: pos, .. } => Some(*pos),
+        Act::Break { pos }
+        | Act::Fill { pos, .. }
+        | Act::Use { pos, .. }
+        | Act::Sign { pos, .. }
+        | Act::UseOn { cell: pos, .. } => Some(*pos),
         _ => None,
     }
 }
 
 /// `cell` is next to (or in) the body of a player standing at feet cell `feet`.
 fn beside(cell: acacia_physics::BlockPos, feet: acacia_physics::BlockPos) -> bool {
-    (cell[0] - feet[0]).abs() <= 1 && (cell[2] - feet[2]).abs() <= 1 && (feet[1]..=feet[1] + 1).contains(&cell[1])
+    (cell[0] - feet[0]).abs() <= 1
+        && (cell[2] - feet[2]).abs() <= 1
+        && (feet[1]..=feet[1] + 1).contains(&cell[1])
 }
 
 impl Process for Builder {
@@ -40,7 +46,17 @@ impl Process for Builder {
         self.sync(cx);
         // And cells it cleared of a wrong block, until built: path work bridged one back with dirt after every break
         // (live desert house, 154 breaks of one cell).
-        let built = || self.cells.iter().zip(&needs).filter(|(c, n)| !c.target.is_air() && (**n == Need::Done || (**n == Need::Place && self.cleared.contains(&c.pos)))).map(|(c, _)| c.pos);
+        let built = || {
+            self.cells
+                .iter()
+                .zip(&needs)
+                .filter(|(c, n)| {
+                    !c.target.is_air()
+                        && (**n == Need::Done
+                            || (**n == Need::Place && self.cleared.contains(&c.pos)))
+                })
+                .map(|(c, _)| c.pos)
+        };
         if built().count() != self.keep.len() {
             self.keep = std::sync::Arc::new(built().collect());
         }
@@ -124,8 +140,20 @@ impl Process for Builder {
                 _ => journal::Want::Hold,
             };
             let to_place = needs.iter().filter(|n| **n == Need::Place).count();
-            let saw = cell.and_then(|c| cx.look.block(c)).map(|v| format!("{}[{}]", v.name, v.props));
-            self.note(Entry::Tick { feet: cx.pos, want: kind, phase, why, cell, saw, claimed, taken, to_place });
+            let saw = cell
+                .and_then(|c| cx.look.block(c))
+                .map(|v| format!("{}[{}]", v.name, v.props));
+            self.note(Entry::Tick {
+                feet: cx.pos,
+                want: kind,
+                phase,
+                why,
+                cell,
+                saw,
+                claimed,
+                taken,
+                to_place,
+            });
         }
         if phase == Phase::Waiting {
             let since = *self.waiting_since.get_or_insert(self.tick);
@@ -141,7 +169,10 @@ impl Process for Builder {
     }
 
     fn opts(&self) -> GotoOpts {
-        let mut opts = GotoOpts { scaffold: self.job.scaffold.clone(), ..GotoOpts::default() };
+        let mut opts = GotoOpts {
+            scaffold: self.job.scaffold.clone(),
+            ..GotoOpts::default()
+        };
         // Stop near the stand's centre when the cell is beside the body: at the default 0.25 off, the body overlaps
         // it (live: a ladder cell beside its stand was never placed). Only there: arriving within 0.1 everywhere
         // cost two bots ~20% more time.
@@ -206,7 +237,13 @@ impl Process for Builder {
         };
         let cell = cell_of(act);
         let target = cell.and_then(|c| self.target(c)).map(|t| t.name.clone());
-        self.note(Entry::Acted { kind, cell, item, target, err: result.as_ref().err().map(|e| e.to_string()) });
+        self.note(Entry::Acted {
+            kind,
+            cell,
+            item,
+            target,
+            err: result.as_ref().err().map(|e| e.to_string()),
+        });
         match (act, result) {
             (Act::Place { against, face, .. }, Ok(())) => {
                 let cell = face.adjacent(*against);

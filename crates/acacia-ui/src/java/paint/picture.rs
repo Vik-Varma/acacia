@@ -14,10 +14,29 @@ use super::layers::Rect;
 impl Painter<'_> {
     pub(super) fn picture(&mut self, p: &Picture) {
         match p {
-            Picture::Entity { rect, .. } | Picture::Book { rect, .. } | Picture::Banner { rect, .. } | Picture::EndPortal { rect } => self.in_picture(p, *rect),
-            Picture::SpriteBlit { atlas, sprite, rect, uv } => {
-                let Some(s) = self.src.atlas_sprite(atlas, sprite) else { return };
-                self.prims(s, &[Prim { rect: *rect, uv: *uv, tile: None }], 0xFFFF_FFFF, QuadBlend::Alpha);
+            Picture::Entity { rect, .. }
+            | Picture::Book { rect, .. }
+            | Picture::Banner { rect, .. }
+            | Picture::EndPortal { rect } => self.in_picture(p, *rect),
+            Picture::SpriteBlit {
+                atlas,
+                sprite,
+                rect,
+                uv,
+            } => {
+                let Some(s) = self.src.atlas_sprite(atlas, sprite) else {
+                    return;
+                };
+                self.prims(
+                    s,
+                    &[Prim {
+                        rect: *rect,
+                        uv: *uv,
+                        tile: None,
+                    }],
+                    0xFFFF_FFFF,
+                    QuadBlend::Alpha,
+                );
             }
             Picture::Map { .. } | Picture::TooltipImage { .. } => {
                 let draws = self.src.picture_draws(p);
@@ -36,7 +55,9 @@ impl Painter<'_> {
             return;
         }
         let window = [x0, y0, x1, y1].map(|v| v as f32 * self.scale);
-        let Some(mut q) = self.src.picture(p, window) else { return };
+        let Some(mut q) = self.src.picture(p, window) else {
+            return;
+        };
         // The blit is in GUI pixels without the pose; `place_quad` scales and cuts it.
         q.rect = [x0, y0, x1, y1].map(|v| v as f32);
         self.poses.push(IDENTITY);

@@ -16,7 +16,10 @@ impl Aabb {
         let (x0, x1) = if x0 > x1 { (x1, x0) } else { (x0, x1) };
         let (y0, y1) = if y0 > y1 { (y1, y0) } else { (y0, y1) };
         let (z0, z1) = if z0 > z1 { (z1, z0) } else { (z0, z1) };
-        Self { min: [x0, y0, z0], max: [x1, y1, z1] }
+        Self {
+            min: [x0, y0, z0],
+            max: [x1, y1, z1],
+        }
     }
 
     /// The full unit cube of a block cell.
@@ -68,11 +71,15 @@ impl Aabb {
 
     /// Strict overlap by more than `INTERSECT_EPSILON` on every axis; touching faces do not intersect.
     pub fn intersects(&self, o: &Aabb) -> bool {
-        (0..3).all(|i| o.max[i] - self.min[i] > INTERSECT_EPSILON && self.max[i] - o.min[i] > INTERSECT_EPSILON)
+        (0..3).all(|i| {
+            o.max[i] - self.min[i] > INTERSECT_EPSILON && self.max[i] - o.min[i] > INTERSECT_EPSILON
+        })
     }
 
     /// True for empty, inverted or non-finite boxes (bedsim `BBHasZeroVolume`).
     pub fn is_empty(&self) -> bool {
-        (0..3).any(|i| !self.min[i].is_finite() || !self.max[i].is_finite() || self.min[i] >= self.max[i])
+        (0..3).any(|i| {
+            !self.min[i].is_finite() || !self.max[i].is_finite() || self.min[i] >= self.max[i]
+        })
     }
 }

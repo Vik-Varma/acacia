@@ -124,7 +124,13 @@ pub fn build_hot(state: &GameState, motion: &Motion, tick: u64) -> Hot {
     }
 }
 
-fn stack(state: &GameState, window: i32, slot: usize, s: &acacia_bot::state::ItemStack, names: bool) -> Stack {
+fn stack(
+    state: &GameState,
+    window: i32,
+    slot: usize,
+    s: &acacia_bot::state::ItemStack,
+    names: bool,
+) -> Stack {
     Stack {
         window,
         slot: slot as u8,
@@ -132,7 +138,11 @@ fn stack(state: &GameState, window: i32, slot: usize, s: &acacia_bot::state::Ite
         count: s.count,
         metadata: s.metadata,
         stack_id: s.stack_network_id,
-        name: if names { state.item_name(s).map(str::to_owned) } else { None },
+        name: if names {
+            state.item_name(s).map(str::to_owned)
+        } else {
+            None
+        },
         custom_name: s.custom_name.clone(),
     }
 }
@@ -144,18 +154,43 @@ pub fn build_cold(state: &GameState, names: bool) -> Cold {
     for (window, slot, s) in inv.iter().filter(|(w, _, _)| *w != Inventory::WINDOW_UI) {
         inventory.push(stack(state, window, slot, s, names));
     }
-    let cursor = Some(inv.cursor()).filter(|s| !s.is_empty()).map(|s| stack(state, Inventory::WINDOW_UI, 0, s, names));
-    let effects = state.player.effects.iter().map(|e| EffectSummary { id: e.id, amplifier: e.amplifier, duration: e.duration }).collect();
+    let cursor = Some(inv.cursor())
+        .filter(|s| !s.is_empty())
+        .map(|s| stack(state, Inventory::WINDOW_UI, 0, s, names));
+    let effects = state
+        .player
+        .effects
+        .iter()
+        .map(|e| EffectSummary {
+            id: e.id,
+            amplifier: e.amplifier,
+            duration: e.duration,
+        })
+        .collect();
     let players = state
         .player_list
         .iter()
-        .map(|p| Player { uuid: p.uuid, username: p.username.to_string(), xuid: p.xuid.to_string(), entity_unique_id: p.entity_unique_id })
+        .map(|p| Player {
+            uuid: p.uuid,
+            username: p.username.to_string(),
+            xuid: p.xuid.to_string(),
+            entity_unique_id: p.entity_unique_id,
+        })
         .collect();
-    Cold { inventory, cursor, effects, players, open_window: state.containers.open.as_ref().map(|c| c.window_id) }
+    Cold {
+        inventory,
+        cursor,
+        effects,
+        players,
+        open_window: state.containers.open.as_ref().map(|c| c.window_id),
+    }
 }
 
 pub fn build_full(state: &GameState, motion: &Motion, tick: u64) -> BotSnapshot {
-    BotSnapshot { hot: build_hot(state, motion, tick), cold: build_cold(state, false) }
+    BotSnapshot {
+        hot: build_hot(state, motion, tick),
+        cold: build_cold(state, false),
+    }
 }
 
 fn opt_len(s: &Option<String>) -> usize {
@@ -173,5 +208,8 @@ pub fn cold_heap(c: &Cold) -> usize {
         + c.cursor.as_ref().map_or(0, stack_heap)
         + c.effects.capacity() * size_of::<EffectSummary>()
         + c.players.capacity() * size_of::<Player>()
-        + c.players.iter().map(|p| p.username.capacity() + p.xuid.capacity()).sum::<usize>()
+        + c.players
+            .iter()
+            .map(|p| p.username.capacity() + p.xuid.capacity())
+            .sum::<usize>()
 }

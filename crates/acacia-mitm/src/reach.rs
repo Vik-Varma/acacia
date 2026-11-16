@@ -32,39 +32,75 @@ pub struct Dialed {
 pub type Arrived = (SocketAddr, Option<Bytes>);
 
 /// `route` is a transfer target to dial in place of `target`.
-pub async fn dial(account: Option<Account>, route: Option<(String, u16)>, target: Target) -> Result<Dialed, String> {
+pub async fn dial(
+    account: Option<Account>,
+    route: Option<(String, u16)>,
+    target: Target,
+) -> Result<Dialed, String> {
     let key = SigningKey::random(&mut rand_core::OsRng);
     let credentials = match &account {
-        Some(account) => Some(account.credentials(&key).await.map_err(|e| format!("online login: {e}"))?),
+        Some(account) => Some(
+            account
+                .credentials(&key)
+                .await
+                .map_err(|e| format!("online login: {e}"))?,
+        ),
         None => None,
     };
     let named = |host: String, port: u16| async move {
-        transfer::resolve(&host, port).await.map(Reach::Address).map_err(|e| format!("{host}:{port}: {e}"))
+        transfer::resolve(&host, port)
+            .await
+            .map(Reach::Address)
+            .map_err(|e| format!("{host}:{port}: {e}"))
     };
     let upstream = match (route, target) {
         (Some((host, port)), _) => named(host, port).await?,
         (None, Target::Address(server)) => Reach::Address(server),
         (None, Target::Realm { auth, id }) => {
             let account = account.as_ref().ok_or("a realm needs an online account")?;
-            match realm_route(&auth, account, id, None).await.map_err(|e| format!("realm {id}: {e}"))? {
+            match realm_route(&auth, account, id, None)
+                .await
+                .map_err(|e| format!("realm {id}: {e}"))?
+            {
                 RealmRoute::Address(address) => {
-                    let (host, port) = address.rsplit_once(':').ok_or_else(|| format!("realm address {address}"))?;
-                    named(host.to_owned(), port.parse().map_err(|_| format!("realm address {address}"))?).await?
+                    let (host, port) = address
+                        .rsplit_once(':')
+                        .ok_or_else(|| format!("realm address {address}"))?;
+                    named(
+                        host.to_owned(),
+                        port.parse()
+                            .map_err(|_| format!("realm address {address}"))?,
+                    )
+                    .await?
                 }
                 RealmRoute::Signaled(target) => {
-                    let token = credentials.as_ref().and_then(|c| c.multiplayer_token.clone()).ok_or("the account has no MultiplayerToken")?;
-                    let link = RawLink::dial(&target, &Identity::multiplayer(key.clone(), token), None).await;
+                    let token = credentials
+                        .as_ref()
+                        .and_then(|c| c.multiplayer_token.clone())
+                        .ok_or("the account has no MultiplayerToken")?;
+                    let link =
+                        RawLink::dial(&target, &Identity::multiplayer(key.clone(), token), None)
+                            .await;
                     Reach::Link(link.map_err(|e| format!("realm {id}: {e}"))?)
                 }
             }
         }
     };
-    Ok(Dialed { key, credentials, upstream })
+    Ok(Dialed {
+        key,
+        credentials,
+        upstream,
+    })
 }
 
 /// Carries a raw link's batches to the loop and the loop's to the link, until either side ends:
 /// the link closing, or the pair dropping its sender, after which what was queued still goes out.
-pub async fn carry(mut link: RawLink, game: SocketAddr, to_loop: mpsc::UnboundedSender<Arrived>, mut from_pair: mpsc::UnboundedReceiver<Bytes>) {
+pub async fn carry(
+    mut link: RawLink,
+    game: SocketAddr,
+    to_loop: mpsc::UnboundedSender<Arrived>,
+    mut from_pair: mpsc::UnboundedReceiver<Bytes>,
+) {
     loop {
         tokio::select! {
             batch = link.recv() => {

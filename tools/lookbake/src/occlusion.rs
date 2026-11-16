@@ -25,7 +25,9 @@ pub struct Shapes(HashMap<String, Occluding>);
 impl Shapes {
     /// `None` without a JDK 25: the look then keeps the renderer's own culling.
     pub fn export(java_dir: &Path) -> Result<Option<Shapes>, Error> {
-        let Some(exporter) = Exporter::prepare(java_dir)? else { return Ok(None) };
+        let Some(exporter) = Exporter::prepare(java_dir)? else {
+            return Ok(None);
+        };
         let out = exporter.output("BlockShapeExporter")?;
         Ok(Some(Shapes(serde_json::from_slice(&std::fs::read(out)?)?)))
     }
@@ -51,10 +53,26 @@ fn skip(java: &JavaState, block: u16) -> Skip {
     let name = java.name.as_str();
     match () {
         _ if name.ends_with("bars") || name.ends_with("glass_pane") => {
-            let sides = ["north", "south", "west", "east"].iter().enumerate().filter(|(_, d)| java.property(d) == Some("true")).fold(0, |s, (i, _)| s | 1 << (i + 2));
-            Skip::Bars { block, tagged: name.ends_with("bars"), sides }
+            let sides = ["north", "south", "west", "east"]
+                .iter()
+                .enumerate()
+                .filter(|(_, d)| java.property(d) == Some("true"))
+                .fold(0, |s, (i, _)| s | 1 << (i + 2));
+            Skip::Bars {
+                block,
+                tagged: name.ends_with("bars"),
+                sides,
+            }
         }
-        _ if name.ends_with("glass") || name.ends_with("grate") || matches!(name, "ice" | "blue_ice" | "frosted_ice" | "honey_block" | "slime_block" | "powder_snow") => Skip::Same { block },
+        _ if name.ends_with("glass")
+            || name.ends_with("grate")
+            || matches!(
+                name,
+                "ice" | "blue_ice" | "frosted_ice" | "honey_block" | "slime_block" | "powder_snow"
+            ) =>
+        {
+            Skip::Same { block }
+        }
         _ if name == "mangrove_roots" => Skip::SameVertical { block },
         _ => Skip::None,
     }
@@ -72,10 +90,23 @@ impl BlockNumbers {
 }
 
 /// `shape` interns face shapes as [`Cull::shape`].
-pub fn cull(shapes: &Shapes, java: &JavaState, numbers: &mut BlockNumbers, shape: impl FnOnce(FaceShapes) -> u16) -> Cull {
+pub fn cull(
+    shapes: &Shapes,
+    java: &JavaState,
+    numbers: &mut BlockNumbers,
+    shape: impl FnOnce(FaceShapes) -> u16,
+) -> Cull {
     let skip = skip(java, numbers.of(&java.name));
     match shapes.0.get(&java.key()) {
-        Some(o) => Cull { shape: shape(std::array::from_fn(|d| grid(&o.faces[d]))), whole: o.whole.iter().rev().fold(0, |w, &b| w << 1 | u8::from(b)), skip },
-        None => Cull { shape: 0, whole: 0, skip },
+        Some(o) => Cull {
+            shape: shape(std::array::from_fn(|d| grid(&o.faces[d]))),
+            whole: o.whole.iter().rev().fold(0, |w, &b| w << 1 | u8::from(b)),
+            skip,
+        },
+        None => Cull {
+            shape: 0,
+            whole: 0,
+            skip,
+        },
     }
 }

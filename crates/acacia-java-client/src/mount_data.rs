@@ -47,14 +47,27 @@ const SERIALIZER_BOOLEAN: i32 = 8;
 
 /// A type name without its namespace.
 pub(crate) fn short_name(kind: i32) -> &'static str {
-    let name = usize::try_from(kind).ok().and_then(|k| ENTITY_TYPES.get(k)).copied().unwrap_or("");
+    let name = usize::try_from(kind)
+        .ok()
+        .and_then(|k| ENTITY_TYPES.get(k))
+        .copied()
+        .unwrap_or("");
     name.strip_prefix("minecraft:").unwrap_or(name)
 }
 
 /// One data item's value when it has `serializer`.
-fn read_item<T>(body: &[u8], index: u8, serializer: i32, read: impl Fn(&mut &[u8]) -> Result<T, Error>) -> Result<Option<T>, Error> {
+fn read_item<T>(
+    body: &[u8],
+    index: u8,
+    serializer: i32,
+    read: impl Fn(&mut &[u8]) -> Result<T, Error>,
+) -> Result<Option<T>, Error> {
     let input = &mut &body[..];
-    if seek_data(input, index)? == Some(serializer) { read(input).map(Some) } else { Ok(None) }
+    if seek_data(input, index)? == Some(serializer) {
+        read(input).map(Some)
+    } else {
+        Ok(None)
+    }
 }
 
 /// The mount items one `SetEntityData` carried.
@@ -71,15 +84,28 @@ impl Synced {
         let name = short_name(kind);
         let flag = |index| read_item(body, index, SERIALIZER_BOOLEAN, |i| bool::read(i));
         let mut synced = Synced::default();
-        if matches!(name, "horse" | "donkey" | "mule" | "skeleton_horse" | "zombie_horse" | "camel" | "camel_husk") {
-            synced.standing = read_item(body, HORSE_FLAGS, SERIALIZER_BYTE, |i| u8::read(i))?.map(|f| f & HORSE_STANDING != 0);
+        if matches!(
+            name,
+            "horse"
+                | "donkey"
+                | "mule"
+                | "skeleton_horse"
+                | "zombie_horse"
+                | "camel"
+                | "camel_husk"
+        ) {
+            synced.standing = read_item(body, HORSE_FLAGS, SERIALIZER_BYTE, |i| u8::read(i))?
+                .map(|f| f & HORSE_STANDING != 0);
         }
         match name {
             "camel" | "camel_husk" => {
                 synced.dashing = flag(CAMEL_DASH)?;
-                synced.last_pose_change = read_item(body, CAMEL_POSE_CHANGE, SERIALIZER_LONG, read_varlong)?;
+                synced.last_pose_change =
+                    read_item(body, CAMEL_POSE_CHANGE, SERIALIZER_LONG, read_varlong)?;
             }
-            "pig" | "strider" => synced.boost = read_item(body, BOOST_TIME, SERIALIZER_INT, read_varint)?,
+            "pig" | "strider" => {
+                synced.boost = read_item(body, BOOST_TIME, SERIALIZER_INT, read_varint)?
+            }
             "nautilus" | "zombie_nautilus" => synced.dashing = flag(NAUTILUS_DASH)?,
             _ => {}
         }
@@ -144,7 +170,9 @@ impl World {
     /// Equipment and attributes of other entities; the player's own attributes are read in `Movement`.
     pub(crate) fn apply_mount_packet(&mut self, id: i32, input: &mut &[u8]) -> Result<(), Error> {
         let entity = read_varint(input)?;
-        let Some(Entity { mount, .. }) = self.entities.get_mut(&entity) else { return Ok(()) };
+        let Some(Entity { mount, .. }) = self.entities.get_mut(&entity) else {
+            return Ok(());
+        };
         match id {
             from::SET_EQUIPMENT => mount.read_equipment(input),
             from::UPDATE_ATTRIBUTES => mount.read_attributes(input),

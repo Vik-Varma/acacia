@@ -11,11 +11,21 @@ const MIN_MATCH: usize = 3;
 const MAX_MATCH: usize = 258;
 const END_OF_BLOCK: u32 = 256;
 
-const LENGTH_BASE: [u16; 29] = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258];
-const LENGTH_EXTRA: [u8; 29] = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0];
-const DIST_BASE: [u16; 30] =
-    [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577];
-const DIST_EXTRA: [u8; 30] = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13];
+const LENGTH_BASE: [u16; 29] = [
+    3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131,
+    163, 195, 227, 258,
+];
+const LENGTH_EXTRA: [u8; 29] = [
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0,
+];
+const DIST_BASE: [u16; 30] = [
+    1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537,
+    2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577,
+];
+const DIST_EXTRA: [u8; 30] = [
+    0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13,
+    13,
+];
 
 struct Bits<'a> {
     out: &'a mut BytesMut,
@@ -34,7 +44,10 @@ const FIXED: [(u16, u8); 288] = {
             256..=279 => (s - 256, 7),
             _ => (0xc0 + s - 280, 8),
         };
-        table[s as usize] = (((code as u32).reverse_bits() >> (32 - len)) as u16, len as u8);
+        table[s as usize] = (
+            ((code as u32).reverse_bits() >> (32 - len)) as u16,
+            len as u8,
+        );
         s += 1;
     }
     table
@@ -65,10 +78,16 @@ impl Bits<'_> {
     fn back_reference(&mut self, len: usize, dist: usize) {
         let l = LENGTH_BASE.partition_point(|&b| usize::from(b) <= len) - 1;
         self.symbol(257 + l as u32);
-        self.put((len - usize::from(LENGTH_BASE[l])) as u32, LENGTH_EXTRA[l].into());
+        self.put(
+            (len - usize::from(LENGTH_BASE[l])) as u32,
+            LENGTH_EXTRA[l].into(),
+        );
         let d = DIST_BASE.partition_point(|&b| usize::from(b) <= dist) - 1;
         self.code(d as u32, 5);
-        self.put((dist - usize::from(DIST_BASE[d])) as u32, DIST_EXTRA[d].into());
+        self.put(
+            (dist - usize::from(DIST_BASE[d])) as u32,
+            DIST_EXTRA[d].into(),
+        );
     }
 
     fn finish(self) {
@@ -78,7 +97,8 @@ impl Bits<'_> {
 }
 
 fn hash(at: &[u8]) -> usize {
-    (u32::from_le_bytes([at[0], at[1], at[2], 0]).wrapping_mul(2_654_435_761) >> (32 - HASH_BITS)) as usize
+    (u32::from_le_bytes([at[0], at[1], at[2], 0]).wrapping_mul(2_654_435_761) >> (32 - HASH_BITS))
+        as usize
 }
 
 /// Appends `input` (at most [`MAX_INPUT`] bytes) to `out` as one final raw deflate block.
@@ -99,7 +119,12 @@ pub fn compress(input: &[u8], out: &mut BytesMut) {
             let candidate = usize::from(head[h]);
             head[h] = (i + 1) as u16;
             if let Some(from) = candidate.checked_sub(1) {
-                let len = input[from..].iter().zip(&input[i..]).take(MAX_MATCH).take_while(|(a, b)| a == b).count();
+                let len = input[from..]
+                    .iter()
+                    .zip(&input[i..])
+                    .take(MAX_MATCH)
+                    .take_while(|(a, b)| a == b)
+                    .count();
                 if len >= MIN_MATCH {
                     bits.back_reference(len, i - from);
                     for j in i + 1..(i + len).min(last_hash) {
@@ -123,7 +148,9 @@ mod tests {
 
     fn inflate(data: &[u8]) -> Vec<u8> {
         let mut out = Vec::with_capacity(4 * MAX_INPUT);
-        let status = flate2::Decompress::new(false).decompress_vec(data, &mut out, flate2::FlushDecompress::Finish).unwrap();
+        let status = flate2::Decompress::new(false)
+            .decompress_vec(data, &mut out, flate2::FlushDecompress::Finish)
+            .unwrap();
         assert_eq!(status, flate2::Status::StreamEnd);
         out
     }
@@ -131,16 +158,36 @@ mod tests {
     fn zlib_fast(input: &[u8]) -> usize {
         let mut z = flate2::Compress::new(flate2::Compression::fast(), false);
         let mut out = Vec::with_capacity(input.len() + 64);
-        z.compress_vec(input, &mut out, flate2::FlushCompress::Finish).unwrap();
+        z.compress_vec(input, &mut out, flate2::FlushCompress::Finish)
+            .unwrap();
         out.len()
     }
 
     fn inputs() -> Vec<Vec<u8>> {
-        let noise: Vec<u8> = (0..MAX_INPUT as u32).map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8).collect();
-        let text = b"PlayerAuthInput position yaw pitch head_yaw move_vector input_data tick delta ".repeat(14);
-        let mut v = vec![Vec::new(), vec![0], vec![1, 2], vec![9; 3], vec![9; 4], vec![0xff; MAX_INPUT], text[..MAX_INPUT].to_vec(), noise.clone()];
+        let noise: Vec<u8> = (0..MAX_INPUT as u32)
+            .map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8)
+            .collect();
+        let text =
+            b"PlayerAuthInput position yaw pitch head_yaw move_vector input_data tick delta "
+                .repeat(14);
+        let mut v = vec![
+            Vec::new(),
+            vec![0],
+            vec![1, 2],
+            vec![9; 3],
+            vec![9; 4],
+            vec![0xff; MAX_INPUT],
+            text[..MAX_INPUT].to_vec(),
+            noise.clone(),
+        ];
         v.extend([MAX_INPUT - 1, 3, 4, 5].map(|n| vec![7; n]));
-        v.extend((0..40).map(|n| noise[..n * MAX_INPUT / 40].iter().zip(text.iter()).map(|(a, b)| if n % 3 == 0 { *a } else { a & 3 ^ b }).collect()));
+        v.extend((0..40).map(|n| {
+            noise[..n * MAX_INPUT / 40]
+                .iter()
+                .zip(text.iter())
+                .map(|(a, b)| if n % 3 == 0 { *a } else { a & 3 ^ b })
+                .collect()
+        }));
         v
     }
 
@@ -159,7 +206,12 @@ mod tests {
             let mut out = BytesMut::new();
             compress(&input, &mut out);
             let zlib = zlib_fast(&input);
-            assert!(out.len() <= zlib + zlib / 8 + 4, "len {}: {} vs zlib {zlib}", input.len(), out.len());
+            assert!(
+                out.len() <= zlib + zlib / 8 + 4,
+                "len {}: {} vs zlib {zlib}",
+                input.len(),
+                out.len()
+            );
         }
     }
 }
