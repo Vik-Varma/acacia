@@ -154,6 +154,7 @@ fn cached_full_chunk_fills_sections_from_held_and_delivered_blobs() {
         cache_enabled: true,
         blobs: vec![1, 2, 3],
         payload: Bytes::from_static(&[0]),
+        client_biome_update: false,
     };
     t.apply(&raw(&chunk)).unwrap();
     let view = t.view().unwrap();

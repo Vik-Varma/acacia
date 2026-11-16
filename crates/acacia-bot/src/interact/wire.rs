@@ -2,8 +2,8 @@
 
 use acacia_client::proto::manual::shield_item_id;
 use acacia_client::proto::packets::{
-    Animate, AnimateActionId, Interact, InteractActionId, InventoryTransaction, MobEquipment,
-    PlayerAction, PlayerAuthInputBlockActionItem,
+    Animate, AnimateActionId, AnimateHand, Interact, InteractActionId, InventoryTransaction,
+    MobEquipment, PlayerAction, PlayerAuthInputBlockActionItem,
 };
 use acacia_client::proto::types::{
     Action, BlockCoordinates, ItemExtraDataWithBlockingTick, ItemExtraDataWithBlockingTickHasNbt,
@@ -11,10 +11,12 @@ use acacia_client::proto::types::{
     ItemExtraDataWithoutBlockingTickHasNbt, ItemExtraDataWithoutBlockingTickNbt, ItemV4,
     ItemV4Extra, Transaction, TransactionLegacy, TransactionTransactionData,
     TransactionTransactionDataItemRelease, TransactionTransactionDataItemReleaseActionType,
-    TransactionTransactionDataItemUseOnEntity, TransactionTransactionDataItemUseOnEntityActionType,
-    TransactionTransactionType, TransactionUseItem, TransactionUseItemActionType,
-    TransactionUseItemClientCooldownState, TransactionUseItemClientPrediction,
-    TransactionUseItemHand, TransactionUseItemTriggerType, Vec3f, Vec3i, WindowID,
+    TransactionTransactionDataItemReleaseHand, TransactionTransactionDataItemUseOnEntity,
+    TransactionTransactionDataItemUseOnEntityActionType,
+    TransactionTransactionDataItemUseOnEntityHand, TransactionTransactionType, TransactionUseItem,
+    TransactionUseItemActionType, TransactionUseItemClientCooldownState,
+    TransactionUseItemClientPrediction, TransactionUseItemHand, TransactionUseItemTriggerType,
+    Vec3f, Vec3i, WindowID,
 };
 use acacia_physics::{BlockPos, Vec3};
 
@@ -118,6 +120,9 @@ pub(crate) fn swing(runtime_id: u64, source: Option<SwingSource>) -> Animate {
         data: 0.0,
         has_swing_source: source.is_some(),
         swing_source: source.map(|s| s.name().to_owned()),
+        // Protocol 2225 added the hand. Every swing here is the main hand's; what the vanilla client
+        // reports for an off-hand use has no capture behind it yet.
+        hand: AnimateHand::MainHand,
     }
 }
 
@@ -328,6 +333,12 @@ pub(crate) fn use_on_entity(
             entity_runtime_id: runtime_id,
             action_type,
             hotbar_slot: i32::from(hand.slot),
+            hand: match hand.hand {
+                TransactionUseItemHand::OffHand => {
+                    TransactionTransactionDataItemUseOnEntityHand::OffHand
+                }
+                _ => TransactionTransactionDataItemUseOnEntityHand::MainHand,
+            },
             held_item: hand.item,
             player_pos: vec3f(hand.eye),
             click_pos: vec3f(click),
@@ -342,6 +353,12 @@ pub(crate) fn release(hand: Hand) -> InventoryTransaction {
         TransactionTransactionData::ItemRelease(TransactionTransactionDataItemRelease {
             action_type: TransactionTransactionDataItemReleaseActionType::Release,
             hotbar_slot: i32::from(hand.slot),
+            hand: match hand.hand {
+                TransactionUseItemHand::OffHand => {
+                    TransactionTransactionDataItemReleaseHand::OffHand
+                }
+                _ => TransactionTransactionDataItemReleaseHand::MainHand,
+            },
             held_item: hand.item,
             head_pos: vec3f(hand.eye),
         }),

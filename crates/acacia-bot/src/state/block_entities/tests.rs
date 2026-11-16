@@ -69,6 +69,7 @@ fn full_chunk(x: i32, z: i32, nbts: &[Nbt]) -> RawPacket {
         cache_enabled: false,
         blobs: Vec::new(),
         payload: payload.into(),
+        client_biome_update: false,
     };
     raw(&c)
 }

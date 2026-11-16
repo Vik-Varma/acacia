@@ -151,6 +151,7 @@ mod tests {
             cache_enabled: false,
             blobs: Vec::new(),
             payload: Default::default(),
+            client_biome_update: false,
         })
     }
 

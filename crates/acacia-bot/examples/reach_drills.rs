@@ -243,6 +243,7 @@ fn attack(bot: &Bot, runtime_id: u64, click: [f32; 3]) -> InventoryTransaction {
                     entity_runtime_id: runtime_id,
                     action_type: TransactionTransactionDataItemUseOnEntityActionType::Attack,
                     hotbar_slot: i32::from(inv.selected_hotbar_slot),
+                    hand: acacia_client::proto::types::TransactionTransactionDataItemUseOnEntityHand::MainHand,
                     held_item: to_wire(inv.held()),
                     player_pos: v(bot.eye_position()),
                     click_pos: v(click),
