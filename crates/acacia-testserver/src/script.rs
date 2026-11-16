@@ -48,9 +48,9 @@ pub struct Script {
 }
 
 impl Script {
-    /// BDS 1.26.52 (local test server) from login to ~25 s after spawn, recorded from a bot's join.
+    /// BDS 1.26.63.1 (local test server, RakNet) from login to 30 s after spawn, recorded from a bot's join.
     pub fn bds_spawn() -> Self {
-        Self::decode(include_bytes!("../fixtures/bds-1.26.52.script"))
+        Self::decode(include_bytes!("../fixtures/bds-1.26.63.script"))
             .expect("bundled script decodes")
     }
 
