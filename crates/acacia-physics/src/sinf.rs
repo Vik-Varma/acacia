@@ -1,6 +1,14 @@
-//! glibc's `sinf`/`cosf` (sysdeps/ieee754/flt-32, the algorithm since 2.28), which Linux BDS links and builds
-//! its sine table with (`math::sin_table`). Reproduces all 65536 entries dumped from a live BDS 1.26.52.3, with
-//! and without fused multiply-adds (glibc picks an FMA build on FMA CPUs).
+//! The `sinf`/`cosf` the simulation uses, for move-relative and for the sine table (`math::sin_table`).
+//!
+//! By default this is glibc's (sysdeps/ieee754/flt-32, the algorithm since 2.28), which Linux BDS links:
+//! the same bits on every platform, so a simulation anywhere agrees with a Linux server. It reproduces all
+//! 65536 table entries dumped from a live BDS 1.26.52.3, with and without fused multiply-adds (glibc picks
+//! an FMA build on FMA CPUs).
+//!
+//! With the `system-sinf` feature it is the platform's own C runtime instead: what a client running on
+//! that platform computes. The Windows client imports both functions from the system's C runtime, so a
+//! Windows build with this feature computes what it does, and may differ from a Linux server in the last
+//! bit at some angles, as the vanilla Windows client then does too.
 
 struct SinCos {
     c: [f64; 5],
@@ -68,6 +76,22 @@ fn reduce(y: f32) -> (f64, f64, i32, &'static SinCos) {
 }
 
 pub(crate) fn sinf(y: f32) -> f32 {
+    if cfg!(feature = "system-sinf") {
+        y.sin()
+    } else {
+        glibc_sinf(y)
+    }
+}
+
+pub(crate) fn cosf(y: f32) -> f32 {
+    if cfg!(feature = "system-sinf") {
+        y.cos()
+    } else {
+        glibc_cosf(y)
+    }
+}
+
+fn glibc_sinf(y: f32) -> f32 {
     if top12(y) < top12(PIO4) {
         if top12(y) < top12(TINY) {
             return y;
@@ -82,7 +106,7 @@ pub(crate) fn sinf(y: f32) -> f32 {
     poly(x, x2, p, n)
 }
 
-pub(crate) fn cosf(y: f32) -> f32 {
+fn glibc_cosf(y: f32) -> f32 {
     if top12(y) < top12(PIO4) {
         if top12(y) < top12(TINY) {
             return 1.0;
@@ -107,15 +131,34 @@ mod tests {
     fn matches_glibc() {
         for i in 0..2_000_000 {
             let x = i as f32 * 7e-6 - 7.0;
-            assert_eq!(sinf(x).to_bits(), x.sin().to_bits(), "sinf({x})");
-            assert_eq!(cosf(x).to_bits(), x.cos().to_bits(), "cosf({x})");
+            assert_eq!(glibc_sinf(x).to_bits(), x.sin().to_bits(), "sinf({x})");
+            assert_eq!(glibc_cosf(x).to_bits(), x.cos().to_bits(), "cosf({x})");
         }
     }
 
     #[test]
     fn small_arguments() {
-        assert_eq!(sinf(1e-5), 1e-5);
-        assert_eq!(cosf(1e-5), 1.0);
-        assert_eq!(sinf(0.0), 0.0);
+        assert_eq!(glibc_sinf(1e-5), 1e-5);
+        assert_eq!(glibc_cosf(1e-5), 1.0);
+        assert_eq!(glibc_sinf(0.0), 0.0);
+    }
+
+    /// The feature decides which one the simulation calls; an angle where the two could differ would
+    /// need a platform whose runtime isn't glibc, so this pins only the routing.
+    #[test]
+    fn the_feature_chooses_the_platform_runtime() {
+        let x = 0.33161256_f32; // 19 degrees
+        let expected = if cfg!(feature = "system-sinf") {
+            x.sin()
+        } else {
+            glibc_sinf(x)
+        };
+        assert_eq!(sinf(x).to_bits(), expected.to_bits());
+        let expected = if cfg!(feature = "system-sinf") {
+            x.cos()
+        } else {
+            glibc_cosf(x)
+        };
+        assert_eq!(cosf(x).to_bits(), expected.to_bits());
     }
 }

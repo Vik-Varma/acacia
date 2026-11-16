@@ -10,6 +10,10 @@ rust-version.workspace = true
 [features]
 # `registry_world`: the `WorldView` of a chunk view or a server's level, from acacia-world's registry.
 acacia-world = ["dep:acacia-world"]
+# Sine and cosine from the platform's own C runtime, as a client running on that platform computes
+# them, instead of the port of glibc's that matches a Linux server everywhere. On Windows that is the
+# runtime the vanilla client imports `sinf` and `cosf` from. On Linux it is glibc: the same bits.
+system-sinf = []
 
 [dependencies]
 acacia-world = { workspace = true, optional = true }
