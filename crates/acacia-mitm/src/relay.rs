@@ -52,6 +52,9 @@ pub struct Relay {
     credentials: Option<LoginCredentials>,
     game_key: Option<p384::PublicKey>,
     game_sent_disconnect: bool,
+    /// How many batches the game and the server have sent, for the capture.
+    game_batches: u64,
+    server_batches: u64,
     log: Option<SessionLog>,
     /// The proxy's address as the game reaches it, when transfers are followed.
     transfer_to: Option<SocketAddr>,
@@ -90,6 +93,8 @@ impl Relay {
             credentials,
             game_key: None,
             game_sent_disconnect: false,
+            game_batches: 0,
+            server_batches: 0,
             log,
             transfer_to: None,
             chain,
@@ -114,7 +119,12 @@ impl Relay {
 
     fn record(&self, from_game: bool, raw: &RawPacket) {
         if let Some(log) = &self.log {
-            log.packet(from_game, raw);
+            let batch = if from_game {
+                self.game_batches
+            } else {
+                self.server_batches
+            };
+            log.packet(from_game, batch, raw);
         }
     }
 
@@ -133,6 +143,7 @@ impl Relay {
     /// Records a game message and re-batches what the interceptors let through for the server,
     /// Login re-signed.
     pub fn on_game_message(&mut self, msg: &[u8]) -> Result<Out, String> {
+        self.game_batches += 1;
         let packets = self
             .game
             .decode(msg)
@@ -182,6 +193,7 @@ impl Relay {
     /// Records a server message and returns the game messages to send: a new one after each packet
     /// that switches the codec.
     pub fn on_server_message(&mut self, msg: &[u8]) -> Result<Out, String> {
+        self.server_batches += 1;
         let mut packets = Vec::new();
         self.up_codec
             .decode(msg, &mut packets)

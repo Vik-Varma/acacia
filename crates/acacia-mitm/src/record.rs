@@ -1,7 +1,8 @@
 //! The capture: one JSON object per line, `t` = ms since the proxy started, `session` = which
 //! connection of a game it belongs to (counted from 0; a followed transfer starts a new one).
-//! Packets: `dir` (`C>S` = from the game), `id`, `len`, `name` (acacia-proto's struct name), `raw`
-//! (hex body) and `proto_error` when acacia-proto can't parse a body (keys print sorted, so `dir`
+//! Packets: `dir` (`C>S` = from the game), `batch` (which of that side's batches the packet came
+//! in, counted from 1: packets that share it left together), `id`, `len`, `name` (acacia-proto's
+//! struct name), `raw` (hex body) and `proto_error` when acacia-proto can't parse a body (keys print sorted, so `dir`
 //! stays first for line-prefix parsers like mitm_trace). Login has a structural `summary` instead
 //! of `raw` (login.rs). Events: `connected`, `login`, `spawned`, `transfer` (`to`: where the game was
 //! sent before the proxy pointed it at itself), `closed`.
@@ -169,9 +170,9 @@ impl SessionLog {
         self.write(named(entry, raw.id));
     }
 
-    pub fn packet(&self, from_game: bool, raw: &RawPacket) {
+    pub fn packet(&self, from_game: bool, batch: u64, raw: &RawPacket) {
         let mut entry = named(
-            json!({ "dir": dir(from_game), "id": raw.id, "len": raw.body.len(), "raw": hex::encode(&raw.body) }),
+            json!({ "dir": dir(from_game), "batch": batch, "id": raw.id, "len": raw.body.len(), "raw": hex::encode(&raw.body) }),
             raw.id,
         );
         if raw.body.len() <= MAX_DECODED
