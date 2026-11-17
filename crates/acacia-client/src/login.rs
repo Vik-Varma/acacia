@@ -23,34 +23,10 @@ pub(crate) fn build_login(
     mouse_input: bool,
     adjust: Option<ClientDataFn>,
 ) -> (SigningKey, Vec<u8>, Identity) {
-    let adjusted = |mut client: ClientData| {
-        if let Some(adjust) = adjust {
-            adjust(&mut client);
-        }
-        client
-    };
-    let dressed = |client: ClientData| {
-        let current_input_mode = if mouse_input {
-            acacia_auth::login::INPUT_MODE_MOUSE
-        } else {
-            client.current_input_mode
-        };
-        let client = ClientData {
-            current_input_mode,
-            ..client
-        };
-        match skin {
-            Some(skin) => ClientData { skin, ..client },
-            None => client,
-        }
-    };
     match login {
         Login::Offline { name } => {
             let key = offline_key;
-            let client = dressed(ClientData {
-                nonce,
-                ..adjusted(ClientData::default_for(&name, server, GAME_VERSION))
-            });
+            let client = client_data(&name, server, nonce, skin, mouse_input, adjust);
             let request = acacia_auth::build_offline_connection_request(&name, &key, &client);
             (
                 key,
@@ -62,14 +38,14 @@ pub(crate) fn build_login(
             )
         }
         Login::Online { credentials, key } => {
-            let client = dressed(ClientData {
+            let client = client_data(
+                &credentials.display_name,
+                server,
                 nonce,
-                ..adjusted(ClientData::default_for(
-                    &credentials.display_name,
-                    server,
-                    GAME_VERSION,
-                ))
-            });
+                skin,
+                mouse_input,
+                adjust,
+            );
             let request = acacia_auth::build_connection_request(&credentials, &key, &client);
             let identity = Identity {
                 display_name: credentials.display_name,
@@ -78,6 +54,30 @@ pub(crate) fn build_login(
             (key, request, identity)
         }
     }
+}
+
+/// The client data a login as `display_name` signs: the defaults, then `adjust`, then the nonce,
+/// `mouse_input` and `skin`.
+pub(crate) fn client_data(
+    display_name: &str,
+    server: &str,
+    nonce: Option<String>,
+    skin: Option<Skin>,
+    mouse_input: bool,
+    adjust: Option<ClientDataFn>,
+) -> ClientData {
+    let mut client = ClientData::default_for(display_name, server, GAME_VERSION);
+    if let Some(adjust) = adjust {
+        adjust(&mut client);
+    }
+    client.nonce = nonce;
+    if mouse_input {
+        client.current_input_mode = acacia_auth::login::INPUT_MODE_MOUSE;
+    }
+    if let Some(skin) = skin {
+        client.skin = skin;
+    }
+    client
 }
 
 #[cfg(test)]

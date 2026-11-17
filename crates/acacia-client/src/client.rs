@@ -6,22 +6,23 @@ use acacia_auth::LoginCredentials;
 use acacia_nethernet::Identity as NetIdentity;
 use acacia_session::blob_store::BlobStore;
 use acacia_session::pack_store::PackStore;
-use acacia_session::{DisconnectReason, Session, SessionConfig};
+use acacia_session::{DisconnectReason, LinkConfig, Session, SessionConfig};
 use p384::ecdsa::SigningKey;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::blob_cache::BlobCache;
-use crate::driver::{Command, Driver};
+use crate::carried::{CarriedLogin, Carrier};
+use crate::driver::{Command, Driver, Wire};
 use crate::filter::PacketFilter;
 use crate::friend::FriendJoin;
 use crate::lan::LanServer;
-use crate::login::build_login;
+use crate::login::{Identity, build_login, client_data};
 use crate::pack_cache;
 use crate::packet_trace::PacketTrace;
 use crate::route;
 use crate::signaling::SignalingTarget;
 use crate::socks5::Socks5Proxy;
-use crate::transport::resolve;
+use crate::transport::{resolve, with_port};
 use crate::{Client, ClientSender, ConnectError};
 
 /// Which transport to join over.
@@ -65,6 +66,8 @@ pub struct ClientBuilder {
     skin: Option<acacia_auth::login::Skin>,
     mouse_input: bool,
     client_data: Option<ClientDataFn>,
+    /// Carries the connection in place of a socket ([`ClientBuilder::carried`]).
+    carrier: Option<Carrier>,
     /// Held by the connection; dropping it leaves the friend's Xbox session.
     friend_session: Option<oneshot::Sender<()>>,
     blob_cache: BlobCache,
@@ -93,6 +96,7 @@ impl ClientBuilder {
             skin: None,
             mouse_input: false,
             client_data: None,
+            carrier: None,
             friend_session: None,
             blob_cache: BlobCache::Memory,
             blob_payloads: false,
@@ -146,6 +150,14 @@ impl ClientBuilder {
         adjust: impl FnOnce(&mut acacia_auth::ClientData) + Send + 'static,
     ) -> Self {
         self.client_data = Some(Box::new(adjust));
+        self
+    }
+
+    /// Has `carrier` carry the connection: it owns the transport and the keys and logs in with
+    /// what it is told ([`CarriedLogin`]); everything after the key exchange stays here. Offline
+    /// logins only.
+    pub fn carried(mut self, carrier: Carrier) -> Self {
+        self.carrier = Some(carrier);
         self
     }
 
@@ -281,7 +293,10 @@ impl ClientBuilder {
     }
 
     /// Connects, logs in and resolves once the player has spawned.
-    pub async fn connect(self) -> Result<Client, ConnectError> {
+    pub async fn connect(mut self) -> Result<Client, ConnectError> {
+        if let Some(carrier) = self.carrier.take() {
+            return self.connect_carried(carrier).await;
+        }
         // Made here, not with the Login: a NetherNet offer is signed by the same key.
         let offline_key = SigningKey::random(&mut rand_core::OsRng);
         let net_identity = match &self.login {
@@ -342,45 +357,162 @@ impl ClientBuilder {
             max_batch_bytes: self.max_batch_bytes,
         };
         let session = Session::new(cfg, addr, Instant::now());
-
-        let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
-        let (ev_tx, ev_rx) = crate::event_queue::channel(self.event_capacity);
-        let (spawn_tx, spawn_rx) = oneshot::channel();
-        let trace = PacketTrace::default();
-        let driver = Driver {
+        let started = Started {
             session,
             wire: route.wire,
-            transport: route.transport,
-            commands: cmd_rx,
-            events: ev_tx,
-            spawned: Some(spawn_tx),
-            filter: self.filter,
-            trace: trace.clone(),
-            capacity: self.event_capacity,
-            proxy: self.proxy.clone(),
-            _signaling: route.keepalive,
-            _friend_session: self.friend_session,
+            transport: Some(route.transport),
+            carried: None,
+            signaling: route.keepalive,
+            identity,
+            blob_store,
         };
-        tokio::spawn(driver.run());
+        spawn(
+            started,
+            self.filter,
+            self.event_capacity,
+            self.proxy,
+            self.friend_session,
+            self.login_timeout,
+        )
+        .await
+    }
 
-        let result = tokio::time::timeout(self.login_timeout, spawn_rx).await;
-        match result {
-            Ok(Ok(Ok(runtime_entity_id))) => Ok(Client {
-                sender: ClientSender {
-                    commands: cmd_tx,
-                    identity: Arc::new(identity),
-                },
-                events: ev_rx,
-                runtime_entity_id,
-                blob_store,
-                trace,
-            }),
-            Ok(Ok(Err(reason))) => Err(ConnectError::Disconnected(reason)),
-            Ok(Err(_)) => Err(ConnectError::Disconnected(DisconnectReason::LocalClose)),
-            Err(_) => {
-                let _ = cmd_tx.send(Command::Close);
-                Err(ConnectError::Timeout)
-            }
+    /// [`ClientBuilder::connect`] over a [`Carrier`]: no socket is opened and nothing is signed
+    /// here.
+    async fn connect_carried(mut self, carrier: Carrier) -> Result<Client, ConnectError> {
+        let Login::Offline { name } = &self.login else {
+            return Err(ConnectError::Io(std::io::Error::other(
+                "a carried connection logs in offline",
+            )));
+        };
+        let name = name.clone();
+        let account = format!("offline:{name}");
+        let blob_store = self.blob_cache.open(&account, self.blob_payloads);
+        let client = client_data(
+            &name,
+            &with_port(&self.server),
+            self.nonce.take(),
+            self.skin.take(),
+            self.mouse_input,
+            self.client_data.take(),
+        );
+        let login = CarriedLogin {
+            protocol: acacia_session::proto::PROTOCOL_VERSION,
+            identity: acacia_auth::login::offline_identity(&name),
+            display_name: name.clone(),
+            client_data: serde_json::to_string(&client).map_err(std::io::Error::other)?,
+        };
+        if carrier.login.send(login).is_err() {
+            return Err(ConnectError::Disconnected(DisconnectReason::LocalClose));
+        }
+        let cfg = SessionConfig {
+            link: LinkConfig::Carried,
+            // The carrier holds the connection's key and has sent the login; neither is used.
+            key: SigningKey::random(&mut rand_core::OsRng),
+            login_request: Vec::new(),
+            chunk_radius: self.chunk_radius,
+            auto_respawn: self.auto_respawn,
+            initialize_on_spawn: self.initialize_on_spawn,
+            blob_store: blob_store.clone(),
+            pack_store: self
+                .pack_store
+                .unwrap_or_else(|| pack_cache::open(self.pack_cache_dir.as_deref(), &account)),
+            strict: self.strict,
+            max_batch_bytes: self.max_batch_bytes,
+        };
+        // The address is the RakNet link's; a carried link has none.
+        let nowhere = std::net::SocketAddr::from(([0, 0, 0, 0], 0));
+        let started = Started {
+            session: Session::new(cfg, nowhere, Instant::now()),
+            wire: Wire::Carried(carrier.outbound),
+            transport: None,
+            carried: Some(carrier.inbound),
+            signaling: None,
+            identity: Identity {
+                display_name: name,
+                xuid: String::new(),
+            },
+            blob_store,
+        };
+        spawn(
+            started,
+            self.filter,
+            self.event_capacity,
+            self.proxy,
+            self.friend_session,
+            self.login_timeout,
+        )
+        .await
+    }
+}
+
+/// A connection ready for its task.
+struct Started {
+    session: Session,
+    wire: Wire,
+    transport: Option<crate::transport::Transport>,
+    carried: Option<mpsc::UnboundedReceiver<crate::carried::Carried>>,
+    signaling: Option<crate::signaling::Keepalive>,
+    identity: Identity,
+    blob_store: Option<Arc<dyn BlobStore>>,
+}
+
+/// Runs the connection's task and waits for the player to spawn.
+async fn spawn(
+    started: Started,
+    filter: PacketFilter,
+    event_capacity: usize,
+    proxy: Option<Socks5Proxy>,
+    friend_session: Option<oneshot::Sender<()>>,
+    login_timeout: Duration,
+) -> Result<Client, ConnectError> {
+    let Started {
+        session,
+        wire,
+        transport,
+        carried,
+        signaling,
+        identity,
+        blob_store,
+    } = started;
+    let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
+    let (ev_tx, ev_rx) = crate::event_queue::channel(event_capacity);
+    let (spawn_tx, spawn_rx) = oneshot::channel();
+    let trace = PacketTrace::default();
+    let driver = Driver {
+        session,
+        wire,
+        transport,
+        carried,
+        commands: cmd_rx,
+        events: ev_tx,
+        spawned: Some(spawn_tx),
+        filter,
+        trace: trace.clone(),
+        capacity: event_capacity,
+        proxy,
+        _signaling: signaling,
+        _friend_session: friend_session,
+    };
+    tokio::spawn(driver.run());
+
+    let result = tokio::time::timeout(login_timeout, spawn_rx).await;
+    match result {
+        Ok(Ok(Ok(runtime_entity_id))) => Ok(Client {
+            sender: ClientSender {
+                commands: cmd_tx,
+                identity: Arc::new(identity),
+            },
+            events: ev_rx,
+            runtime_entity_id,
+            blob_store,
+            trace,
+        }),
+        Ok(Ok(Err(reason))) => Err(ConnectError::Disconnected(reason)),
+        Ok(Err(_)) => Err(ConnectError::Disconnected(DisconnectReason::LocalClose)),
+        Err(_) => {
+            let _ = cmd_tx.send(Command::Close);
+            Err(ConnectError::Timeout)
         }
     }
 }

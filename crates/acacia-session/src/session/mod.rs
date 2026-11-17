@@ -98,6 +98,8 @@ enum Stage {
 /// RakNet or message [`LinkConfig`].
 pub struct Session {
     link: Link,
+    /// A carrier has done the login's keyed steps and closes the transport itself (link.rs).
+    carried: bool,
     codec: BatchCodec,
     stage: Stage,
     key: SigningKey,
@@ -124,6 +126,7 @@ pub struct Session {
 
 impl Session {
     pub fn new(cfg: SessionConfig, server: SocketAddr, now: Instant) -> Self {
+        let carried = matches!(cfg.link, LinkConfig::Carried);
         let link = Link::new(cfg.link, server, now);
         let mut codec = if link.is_message() {
             BatchCodec::without_header()
@@ -133,6 +136,7 @@ impl Session {
         codec.set_max_decompressed(cfg.max_batch_bytes);
         let mut session = Self {
             link,
+            carried,
             codec,
             stage: Stage::Connecting,
             key: cfg.key,
@@ -245,7 +249,7 @@ impl Session {
         }
         // RakNet tells the server itself; a message link needs the game-level goodbye, or the
         // server keeps the player until it times out (and kicks the rejoin with ServerIdConflict).
-        if reason == DisconnectReason::LocalClose && self.link.is_message() {
+        if reason == DisconnectReason::LocalClose && self.link.is_message() && !self.carried {
             self.send(&Disconnect {
                 reason: DisconnectFailReason::Disconnected,
                 hide_disconnect_reason: true,
@@ -264,9 +268,11 @@ impl Session {
             let result = match event {
                 raknet::Event::Connected { .. } => {
                     self.stage = Stage::LoggingIn;
-                    self.send(&RequestNetworkSettings {
-                        client_protocol: PROTOCOL_VERSION,
-                    });
+                    if !self.carried {
+                        self.send(&RequestNetworkSettings {
+                            client_protocol: PROTOCOL_VERSION,
+                        });
+                    }
                     Ok(None)
                 }
                 raknet::Event::Message(msg) => self.handle_batch(&msg),

@@ -10,6 +10,7 @@ use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::Event;
+use crate::carried::Carried;
 use crate::event_queue::EventSender;
 use crate::filter::PacketFilter;
 use crate::pack_fetch;
@@ -38,12 +39,17 @@ pub(crate) enum Wire {
     RakNet,
     /// The session's game messages travel over a WebRTC data channel.
     NetherNet(Box<NetherNetWire>),
+    /// The session's batches go to a carrier that owns the connection (carried.rs).
+    Carried(mpsc::UnboundedSender<Bytes>),
 }
 
 pub(crate) struct Driver {
     pub session: Session,
     pub wire: Wire,
-    pub transport: Transport,
+    /// The socket; a carried connection has none.
+    pub transport: Option<Transport>,
+    /// What a carrier received, for [`Wire::Carried`].
+    pub carried: Option<mpsc::UnboundedReceiver<Carried>>,
     pub commands: mpsc::UnboundedReceiver<Command>,
     pub events: EventSender,
     pub spawned: Option<oneshot::Sender<SpawnResult>>,
@@ -137,13 +143,21 @@ impl Driver {
                     }
                     None
                 }
-                r = self.transport.recv_from(&mut buf), if can_read => match r {
+                r = recv_from(self.transport.as_ref(), &mut buf), if can_read => match r {
                     Ok((range, source)) => {
                         tracing::trace!(len = range.len(), flags = buf[range.start], "datagram");
                         handle_datagram(&mut self.session, &mut self.wire, source, &buf[range]);
                         None
                     }
                     Err(e) => Some(DisconnectReason::Io(e.to_string())),
+                },
+                batch = next_carried(self.carried.as_mut()), if can_read => match batch {
+                    Some(Carried::Batch(batch)) => {
+                        self.session.handle_message(Instant::now(), batch);
+                        None
+                    }
+                    Some(Carried::Closed(why)) => Some(DisconnectReason::Io(why)),
+                    None => Some(DisconnectReason::Io("the carrier has gone".into())),
                 },
                 cmd = self.commands.recv() => {
                     match cmd {
@@ -174,7 +188,7 @@ impl Driver {
     fn poll_timeout(&self) -> Option<Instant> {
         let session = self.session.poll_timeout();
         match &self.wire {
-            Wire::RakNet => session,
+            Wire::RakNet | Wire::Carried(_) => session,
             Wire::NetherNet(conn) => session.into_iter().chain(conn.poll_timeout()).min(),
         }
     }
@@ -203,7 +217,15 @@ impl Driver {
         match &mut self.wire {
             Wire::RakNet => {
                 while let Some(datagram) = self.session.poll_transmit(now) {
-                    self.transport.send(&datagram).await?;
+                    if let Some(transport) = &self.transport {
+                        transport.send(&datagram).await?;
+                    }
+                }
+            }
+            Wire::Carried(outbound) => {
+                while let Some(batch) = self.session.poll_transmit(now) {
+                    // Fails only if the carrier has gone, which its inbound end reports.
+                    let _ = outbound.send(batch);
                 }
             }
             Wire::NetherNet(conn) => {
@@ -217,7 +239,9 @@ impl Driver {
                 }
                 while let Some((target, datagram)) = conn.poll_datagram(now) {
                     // A server lists candidates we may not be able to reach (other families, LANs).
-                    if let Err(e) = self.transport.send_to(&datagram, target).await {
+                    if let Some(transport) = &self.transport
+                        && let Err(e) = transport.send_to(&datagram, target).await
+                    {
                         tracing::trace!(%target, "send failed: {e}");
                     }
                 }
@@ -281,10 +305,31 @@ fn handle_datagram(session: &mut Session, wire: &mut Wire, source: SocketAddr, d
     let now = Instant::now();
     match wire {
         Wire::RakNet => session.handle_datagram(now, Bytes::copy_from_slice(data)),
+        // A carried connection has no socket to read datagrams from.
+        Wire::Carried(_) => {}
         Wire::NetherNet(conn) => {
             conn.handle_datagram(now, source, data);
             deliver_messages(session, &mut conn.conn, now);
         }
+    }
+}
+
+/// The socket's next datagram; never, without a socket.
+async fn recv_from(
+    transport: Option<&Transport>,
+    buf: &mut [u8],
+) -> std::io::Result<(std::ops::Range<usize>, SocketAddr)> {
+    match transport {
+        Some(transport) => transport.recv_from(buf).await,
+        None => std::future::pending().await,
+    }
+}
+
+/// What the carrier received next; never, without a carrier.
+async fn next_carried(carried: Option<&mut mpsc::UnboundedReceiver<Carried>>) -> Option<Carried> {
+    match carried {
+        Some(carried) => carried.recv().await,
+        None => std::future::pending().await,
     }
 }
 

@@ -14,6 +14,7 @@
 
 mod actions;
 mod blob_cache;
+mod carried;
 mod client;
 mod driver;
 mod event_queue;
@@ -48,6 +49,7 @@ pub use acacia_session::blob_store::{BlobStore, MemoryBlobStore};
 pub use acacia_session::pack_store::{EveryPack, MemoryPackStore, PackStore};
 pub use acacia_session::{DisconnectReason, Reason, Violation, proto};
 pub use blob_cache::DiskBlobStore;
+pub use carried::{Carried, CarriedLogin, Carrier};
 pub use client::{ClientBuilder, Login, TransportKind};
 pub use filter::PacketFilter;
 pub use friend::FriendJoin;
